@@ -282,17 +282,15 @@ class OverviewData
     Random.new(seed).rand(0..12)
   end
 
-  def mock_pod_ports(p)
-    return [] unless p["running"]
-
-    case p["name"].to_s.sum % 6
-    when 0 then [80, 443]
-    when 1 then [8080]
-    when 2 then [5432]
-    when 3 then [6379]
-    when 4 then [3000]
-    else        []
-    end
+  # mock_pod_ports — intentionally empty.
+  #
+  # The PAT plane's /pods (listing) endpoint does NOT return ports —
+  # only the per-pod detail does. Fabricating numbers here based on
+  # the pod name (the old behaviour) made postgres look like it ran
+  # on :80 and redis on :8080. Until the listing API surfaces ports,
+  # we render "—" honestly.
+  def mock_pod_ports(_p)
+    []
   end
 
   def format_age(created_at)

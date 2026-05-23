@@ -29,7 +29,12 @@ class Components::Overview::PodsTable < Components::Base
   end
 
   def view_template
-    section(class: "flex flex-col gap-3") do
+    # Whole section is one `kv-filter` scope — the filter input
+    # walks the rows in BOTH desktop_table (<tr>) AND mobile_list
+    # (<article>). Each row carries `data-key` (the searchable blob:
+    # name + scope + resource + image + kind + status) so the
+    # controller doesn't have to know about table vs card layout.
+    section(class: "flex flex-col gap-3", data: { controller: "kv-filter" }) do
       heading
       toolbar
       desktop_table
@@ -95,6 +100,10 @@ class Components::Overview::PodsTable < Components::Base
         type: "search",
         name: "filter",
         placeholder: "filter by name, scope or image…",
+        data: {
+          kv_filter_target: "input",
+          action: "input->kv-filter#filter"
+        },
         class: "flex-1 bg-transparent border-0 outline-none text-[12px] text-voodu-text placeholder:text-voodu-muted-2"
       )
     end
@@ -114,9 +123,15 @@ class Components::Overview::PodsTable < Components::Base
         end
         tbody do
           if @pods.empty?
-            empty_row
+            empty_row("no pods match.")
           else
             @pods.each { |pod| pod_row(pod) }
+            # Hidden by default — kv-filter unhides it when the search
+            # input zeroes every other row. Lives inside <tbody> so the
+            # colspan spans the table.
+            tr(hidden: true, data: { kv_filter_target: "empty" }) do
+              td(colspan: 7, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no pods match the filter." }
+            end
           end
         end
       end
@@ -131,19 +146,41 @@ class Components::Overview::PodsTable < Components::Base
       if @pods.empty?
         div(class: "py-8 text-center text-voodu-muted text-[12px] border border-voodu-border bg-voodu-surface") { "no pods match." }
       else
-        @pods.each { |pod| render Components::Overview::PodCard.new(pod: pod) }
+        @pods.each do |pod|
+          # Wrap each card in a data-kv-filter-target row so the mobile
+          # list filters in lockstep with the desktop table.
+          div(
+            data: {
+              kv_filter_target: "row",
+              key: pod_search_blob(pod),
+              value: pod[:image].to_s.downcase
+            }
+          ) do
+            render Components::Overview::PodCard.new(pod: pod)
+          end
+        end
       end
     end
   end
 
-  def empty_row
+  def empty_row(msg)
     tr do
-      td(colspan: 7, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no pods match." }
+      td(colspan: 7, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { msg }
     end
   end
 
+  # pod_row — each <tr> exposes `data-key` (the searchable blob,
+  # already lowercased) so the kv-filter controller can do plain
+  # `.includes(query)` without re-walking the cells.
   def pod_row(pod)
-    tr(class: "border-b border-voodu-border last:border-b-0 hover:bg-voodu-surface-2 transition-colors") do
+    tr(
+      class: "border-b border-voodu-border last:border-b-0 hover:bg-voodu-surface-2 transition-colors",
+      data: {
+        kv_filter_target: "row",
+        key: pod_search_blob(pod),
+        value: pod[:image].to_s.downcase
+      }
+    ) do
       pod_cell(pod)
       status_cell(pod)
       cpu_cell(pod)
@@ -152,6 +189,16 @@ class Components::Overview::PodsTable < Components::Base
       age_cell(pod)
       ports_cell(pod)
     end
+  end
+
+  # pod_search_blob — combined haystack for the kv-filter controller.
+  # Anything a "find me that pod" query might reasonably match goes in:
+  # full name, scope, resource, image, kind, status.
+  def pod_search_blob(pod)
+    [
+      pod[:name], pod[:scope], pod[:resource_name],
+      pod[:image], pod[:kind], pod[:status]
+    ].compact.join(" ").downcase
   end
 
   # pod_cell — compound identity column. Two-tier display:
@@ -215,10 +262,15 @@ class Components::Overview::PodsTable < Components::Base
     td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-muted") { pod[:age] || "—" }
   end
 
+  # ports_cell — tight column. Wide port lists (e.g. [80, 443, 8080,
+  # 9090]) ellipsis instead of pushing the action / age columns
+  # around. Hover tooltip shows the full list.
   def ports_cell(pod)
-    td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-text-2") do
-      ports = pod[:ports]
-      ports.present? ? ports.join(",") : "—"
+    ports = pod[:ports]
+    label = ports.present? ? ports.join(",") : "—"
+
+    td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-text-2 max-w-[140px]") do
+      span(class: "block truncate whitespace-nowrap", title: label) { label }
     end
   end
 

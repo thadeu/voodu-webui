@@ -24,3 +24,6 @@ application.register("clipboard", ClipboardController)
 
 import KvFilterController from "./kv_filter_controller"
 application.register("kv-filter", KvFilterController)
+
+import LogStreamController from "./log_stream_controller"
+application.register("log-stream", LogStreamController)

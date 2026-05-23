@@ -37,6 +37,51 @@
   font-display: swap;
 }
 
+/* ── Log stream rows ──
+ *
+ * One CSS class so the live tail keeps rendering thousands of nodes
+ * cheaply — no per-row inline grid declaration. The Stimulus controller
+ * only sets dynamic colours (level border, pod accent) per row;
+ * everything else inherits from here.
+ *
+ * `.log-wrap` toggled on the parent <list> by the Wrap button: switches
+ * the body cell from ellipsis to word-break. The grid template stays
+ * the same.
+ */
+
+.log-row {
+  display: grid;
+  grid-template-columns: auto auto auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 1px 12px 1px 10px;
+  border-left: 2px solid var(--voodu-border-2);
+  font-family: var(--voodu-font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.log-wrap .log-row {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-row .log-ts    { color: var(--voodu-muted-2); white-space: nowrap; }
+.log-row .log-level {
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  align-self: center;
+}
+.log-row .log-pod   { white-space: nowrap; }
+.log-row .log-ip    { color: var(--voodu-muted); white-space: nowrap; }
+.log-row .log-body  { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.log-wrap .log-row .log-body { text-overflow: clip; }
+
 /* ── Animations ──
  *
  *  voodu-pulse — used by StatusDot for live states (running, online,

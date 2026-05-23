@@ -54,11 +54,38 @@ module Voodu
       data.is_a?(Hash) ? (data["pod"] || data) : data
     end
 
-    # Logs are special — the controller streams chunked. For M4's
-    # polling-mode logs view we ask for the last N lines (no follow)
-    # and re-poll. M5+ can switch to a streaming response.
+    # Logs — non-follow snapshot. Returns the last `tail` lines as a
+    # single string. Use for "show me what's in the buffer right now"
+    # paths (one-off render, no live update).
     def logs(name, tail: 200)
       raw_get("pods/#{CGI.escape(name)}/logs", params: { tail: tail })
+    end
+
+    # Logs — follow stream. The PAT plane keeps the chunked transfer
+    # open until the container exits or the caller disconnects; each
+    # raw chunk (may be a partial line, multiple lines, etc.) is
+    # yielded to the supplied block.
+    #
+    # The caller is responsible for line buffering. We deliberately do
+    # NOT split on \n here — the controller streams via
+    # ActionController::Live and wants to flush bytes ASAP, and the
+    # client (browser) does its own line assembly anyway.
+    #
+    # Timeout is bumped to `nil` (no read timeout) because follow
+    # streams are intentionally long-lived; the default 6s would cut
+    # the first idle minute.
+    def logs_stream(name, follow: true, tail: 20, &on_chunk)
+      raise ArgumentError, "block required" unless on_chunk
+
+      streaming_conn.get("/api/pat/v1/pods/#{CGI.escape(name)}/logs",
+                         { follow: follow, tail: tail }) do |req|
+        req.options.on_data = proc do |chunk, _overall, _env|
+          on_chunk.call(chunk)
+        end
+      end
+      nil
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
     end
 
     private
@@ -68,6 +95,19 @@ module Voodu
         f.request  :url_encoded
         f.response :json, content_type: /\bjson$/
         f.options.timeout      = @timeout
+        f.options.open_timeout = @timeout
+        f.headers["Authorization"] = "Bearer #{@island.pat}"
+        f.headers["User-Agent"]    = "voodu-webui/0.1"
+      end
+    end
+
+    # Separate Faraday connection for log follow streams: no read
+    # timeout (follow holds the socket open indefinitely), no JSON
+    # middleware (the body is text/plain chunked). Otherwise identical
+    # to the main `conn`.
+    def streaming_conn
+      @streaming_conn ||= Faraday.new(url: @island.endpoint) do |f|
+        f.options.timeout      = nil
         f.options.open_timeout = @timeout
         f.headers["Authorization"] = "Bearer #{@island.pat}"
         f.headers["User-Agent"]    = "voodu-webui/0.1"
