@@ -78,6 +78,12 @@ class OverviewData
     @pods_raw.count { |p| p["running"] }
   end
 
+  # scopes — sorted unique list of scope names across all pods.
+  # Surfaced in the Pods page subline ("5 scopes: clowk-vd, data, …").
+  def scopes
+    @pods_raw.map { |p| p["scope"] }.compact.uniq.sort
+  end
+
   # Host facts surfaced in the subtitle / topbar. Mocked where the
   # PAT plane doesn't yet supply them.
   def cores
@@ -212,19 +218,27 @@ class OverviewData
 
   # prepare_pod — normalise the PAT-plane pod record + decorate with
   # mocked fields the API doesn't expose yet.
+  #
+  # Carries the identity tuple (scope / resource_name / replica_id)
+  # alongside the legacy `name` so the table can render the compound
+  # display ("scope/name.replica") without re-parsing.
   def prepare_pod(p)
     status = pod_status_sym(p)
 
     {
-      name:        p["name"],
-      image:       p["image"],
-      status:      status,
-      cpu_pct:     mock_pod_cpu(p),
-      mem_used_mb: mock_pod_mem(p)[:used],
-      mem_total_mb: mock_pod_mem(p)[:total],
-      restarts:    mock_pod_restarts(p),
-      age:         format_age(p["created_at"]),
-      ports:       mock_pod_ports(p)
+      name:          p["name"],
+      scope:         p["scope"],
+      resource_name: p["resource_name"],
+      replica_id:    p["replica_id"],
+      kind:          p["kind"],
+      image:         p["image"],
+      status:        status,
+      cpu_pct:       mock_pod_cpu(p),
+      mem_used_mb:   mock_pod_mem(p)[:used],
+      mem_total_mb:  mock_pod_mem(p)[:total],
+      restarts:      mock_pod_restarts(p),
+      age:           format_age(p["created_at"]),
+      ports:         mock_pod_ports(p)
     }
   end
 

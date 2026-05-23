@@ -18,3 +18,9 @@ application.register("dropdown", DropdownController)
 
 import MobileNavController from "./mobile_nav_controller"
 application.register("mobile-nav", MobileNavController)
+
+import ClipboardController from "./clipboard_controller"
+application.register("clipboard", ClipboardController)
+
+import KvFilterController from "./kv_filter_controller"
+application.register("kv-filter", KvFilterController)

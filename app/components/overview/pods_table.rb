@@ -89,12 +89,12 @@ class Components::Overview::PodsTable < Components::Base
   end
 
   def filter_input
-    div(class: "flex items-center gap-2 px-2.5 h-7 rounded-voodu-sm border border-voodu-border bg-voodu-surface flex-1 max-w-[420px] text-voodu-muted") do
+    div(class: "flex items-center gap-2 px-2.5 h-7 border border-voodu-border bg-voodu-surface flex-1 max-w-[420px] text-voodu-muted") do
       render Icon::FunnelOutline.new(class: "w-3 h-3 shrink-0")
       input(
         type: "search",
         name: "filter",
-        placeholder: "filter by name or image…",
+        placeholder: "filter by name, scope or image…",
         class: "flex-1 bg-transparent border-0 outline-none text-[12px] text-voodu-text placeholder:text-voodu-muted-2"
       )
     end
@@ -154,11 +154,29 @@ class Components::Overview::PodsTable < Components::Base
     end
   end
 
+  # pod_cell — compound identity column. Two-tier display:
+  #
+  #   scope/resource_name.replica_id      ← clickable, scope muted
+  #   image (mono muted, truncated)
+  #
+  # Clicking either line opens the pod detail page.
   def pod_cell(pod)
     td(class: "px-3 py-2.5") do
-      div(class: "flex flex-col gap-0.5 leading-tight") do
-        span(class: "font-voodu-mono font-semibold text-voodu-text") { pod[:name] }
-        span(class: "font-voodu-mono text-[10.5px] text-voodu-muted") { pod[:image] || "—" }
+      a(
+        href: "/pods/#{CGI.escape(pod[:name])}",
+        class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-accent-2 transition-colors"
+      ) do
+        span(class: "font-voodu-mono text-[13px] font-semibold text-voodu-text whitespace-nowrap") do
+          if pod[:scope]
+            span(class: "text-voodu-muted font-medium") { pod[:scope] }
+            span(class: "text-voodu-muted font-medium") { "/" }
+          end
+          plain pod[:resource_name] || pod[:name]
+          if pod[:replica_id]
+            span(class: "text-voodu-muted font-normal") { ".#{pod[:replica_id]}" }
+          end
+        end
+        span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0") { pod[:image] || "—" }
       end
     end
   end

@@ -41,8 +41,18 @@ module Voodu
 
     def stats         = get("stats")
     def pods          = get("pods")
-    def pod(name)     = get("pods/#{CGI.escape(name)}")
     def restart(name) = post("pods/#{CGI.escape(name)}/restart")
+
+    # pod — fetches a single container's detail. The PAT plane envelopes
+    # this one differently than `pods`: the response is
+    # `{ data: { pod: {...} } }`, so after our base `handle()` unwraps
+    # `data`, we still need to peel `pod`. Other endpoints (stats, pods)
+    # put their primary payload directly in `data` and leave the unwrap
+    # to the caller — that's why this is the only spot doing it.
+    def pod(name)
+      data = get("pods/#{CGI.escape(name)}")
+      data.is_a?(Hash) ? (data["pod"] || data) : data
+    end
 
     # Logs are special — the controller streams chunked. For M4's
     # polling-mode logs view we ask for the last N lines (no follow)

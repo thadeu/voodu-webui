@@ -54,12 +54,11 @@ class Components::Layouts::Sidebar < Components::Base
   private
 
   def brand
-    div(class: "flex items-center gap-2 px-4 py-3 border-b border-voodu-border") do
-      # Voodu mark — gradient V (matches inspiration logo).
-      div(class: "h-6 w-6 rounded-voodu-sm bg-gradient-to-br from-voodu-accent-2 to-voodu-accent", aria: { hidden: "true" })
+    div(class: "flex items-center gap-2.5 px-3.5 py-3 border-b border-voodu-border") do
+      render Components::UI::Logo.new(size: 22)
       div(class: "flex flex-col leading-tight flex-1") do
-        span(class: "font-semibold text-sm text-voodu-text") { "voodu" }
-        span(class: "font-voodu-mono text-[10.5px] text-voodu-muted") { "v0.13" }
+        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight") { "Voodu" }
+        span(class: "font-voodu-mono text-[10.5px] text-voodu-muted -mt-px") { "v0.13" }
       end
     end
   end

@@ -12,11 +12,12 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   root "dashboard#index"
 
-  # Pods — index + per-name restart action.
+  # Pods — index + per-name show + per-name restart action.
   # Container names contain dots ("clowk-web.a3f9") so we relax the
   # path constraint that would otherwise treat the trailing token
   # as a format extension.
   get  "/pods", to: "pods#index"
+  get  "/pods/:name", to: "pods#show", as: :pod, constraints: { name: %r{[^/]+} }
   post "/pods/:name/restart", to: "pods#restart", as: :restart_pod, constraints: { name: %r{[^/]+} }
 
   # Logs — index (pod picker) + per-pod tail. Same constraint.

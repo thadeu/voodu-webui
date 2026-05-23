@@ -1,140 +1,134 @@
 # frozen_string_literal: true
 
-# Views::Pods::Index — dense table of every container the active
-# island reports. Each row: status dot, name (mono), kind, image,
-# CPU mini-bar, memory mini-bar, age, restart button.
+# Views::Pods::Index — full pod list page.
 #
-# Three-state pattern:
-#   - no island selected   → NoIslandState
-#   - client raised        → ErrorState
-#   - happy                → table
+# Header carries the status breakdown (X running · Y restarting · Z
+# stopped) plus the list of distinct scopes detected. Body reuses
+# Components::Overview::PodsTable (same widget the dashboard uses)
+# so the table look stays consistent between Overview and the
+# dedicated /pods page.
 class Views::Pods::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, pods: [], error: nil)
+  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
-    @pods           = pods
-    @error          = error
+    @data           = data
+    @active_tab     = active_tab
+    @updated_at     = updated_at
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island
+      current_path: @current_path, islands: @islands,
+      current_island: @current_island, updated_at: @updated_at
     ) do
-      div(class: "mx-auto max-w-6xl px-6 py-6 flex flex-col gap-5") do
-        header_block
-
-        if @current_island.nil?
-          render Components::UI::NoIslandState.new
-        elsif @error
-          render Components::UI::ErrorState.new(error: @error)
-        elsif @pods.empty?
-          empty_pods
-        else
-          pods_table
-        end
+      if @current_island.nil?
+        render Components::UI::NoIslandState.new
+      else
+        body
       end
     end
   end
 
   private
 
-  def header_block
-    div(class: "flex items-baseline justify-between") do
-      div(class: "flex flex-col gap-1") do
-        h1(class: "text-2xl font-semibold text-voodu-text") { "Pods" }
-        p(class: "text-voodu-text-2 text-sm") do
-          if @current_island
-            plain "#{@pods.size} container#{'s' unless @pods.size == 1} on "
-            span(class: "font-voodu-mono text-voodu-accent-2") { @current_island.name }
-          end
-        end
-      end
-      render(Components::UI::Button.new(tag: :a, variant: :ghost, size: :sm, href: pods_path)) { "Refresh" }
+  def body
+    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+      error_banner if @data&.error
+      page_header
+      render Components::Overview::PodsTable.new(
+        pods: @data.pods(filter_status: tab_to_status),
+        total: @data.pods_total,
+        active_tab: @active_tab
+      )
     end
   end
 
-  def empty_pods
-    div(class: "py-12 text-center text-voodu-muted text-sm") { "no containers reported." }
+  def error_banner
+    div(class: "px-3 py-2 border border-voodu-red/40 bg-voodu-red-dim text-voodu-red text-[12.5px] flex items-center gap-2") do
+      render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
+      span { "Couldn't reach the server — showing mocked values. " }
+      span(class: "font-voodu-mono opacity-80") { @data.error.message }
+    end
   end
 
-  def pods_table
-    div(class: "border border-voodu-border rounded-voodu-md overflow-hidden bg-voodu-surface") do
-      table(class: "w-full text-[12.5px]") do
-        thead(class: "border-b border-voodu-border bg-voodu-bg-2") do
-          tr do
-            %w[status name kind image restarts age actions].each do |col|
-              th(class: "text-left px-3 py-2 text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted") { col }
-            end
-          end
-        end
-
-        tbody do
-          @pods.each { |pod| pod_row(pod) }
-        end
+  # page_header — H1 + status counts subline + Refresh button.
+  def page_header
+    div(class: "flex flex-wrap items-end justify-between gap-3 vmd:gap-4") do
+      div(class: "min-w-0") do
+        h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Pods" }
+        page_sub
+      end
+      div(class: "flex items-center gap-2 shrink-0") do
+        refresh_btn
       end
     end
   end
 
-  def pod_row(pod)
-    status = pod_status(pod)
+  # page_sub — "● 11 running · ● 1 restarting · ● 2 stopped · 5
+  # scopes: clowk-vd, data, monitoring, edge, backup". Scopes line is
+  # hidden below vd-md to keep mobile single-line.
+  def page_sub
+    counts = status_counts
+    scopes = @data.scopes
 
-    tr(class: "border-b border-voodu-border last:border-b-0 hover:bg-voodu-surface-2") do
-      td(class: "px-3 py-2") { render Components::UI::StatusDot.new(status: status) }
+    div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
+      stat_bit("var(--voodu-green)", "running",    counts[:running])
+      dot_sep
+      stat_bit("var(--voodu-amber)", "restarting", counts[:restarting])
+      dot_sep
+      stat_bit("var(--voodu-muted)", "stopped",    counts[:stopped])
 
-      td(class: "px-3 py-2") do
-        span(class: "font-voodu-mono text-voodu-text") { pod["name"] }
+      next if scopes.empty?
+
+      span(class: "hidden vmd:contents") do
+        dot_sep
+        span do
+          plain "#{scopes.size} scope#{'s' unless scopes.size == 1}: "
+          span(class: "font-voodu-mono text-voodu-text-2") { scopes.join(", ") }
+        end
       end
-
-      td(class: "px-3 py-2 text-voodu-text-2") { pod["kind"] || "—" }
-
-      td(class: "px-3 py-2") do
-        span(class: "font-voodu-mono text-voodu-text-2 text-[11px]") { pod["image"] || "—" }
-      end
-
-      td(class: "px-3 py-2 font-voodu-mono text-voodu-text-2") { (pod["restarts"] || 0).to_s }
-
-      td(class: "px-3 py-2 text-voodu-muted text-[11px]") { format_age(pod["created_at"]) }
-
-      td(class: "px-3 py-2 text-right") { restart_form(pod) }
     end
   end
 
-  def restart_form(pod)
-    return if pod["kind"].present? && !pod["kind"].in?(%w[deployment statefulset])
+  def stat_bit(color, label, count)
+    span(class: "inline-flex items-center gap-1.5") do
+      span(class: "inline-block w-1.5 h-1.5 rounded-full", style: "background: #{color};")
+      span(class: "font-voodu-mono text-voodu-text-2") { count.to_s }
+      span { label }
+    end
+  end
 
-    form(
-      action: "/pods/#{CGI.escape(pod['name'])}/restart",
-      method: "post",
-      class: "inline-flex",
-      data: { turbo_confirm: "Restart #{pod['name']}?", turbo: false }
+  def dot_sep
+    span(
+      class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
+      aria: { hidden: "true" }
+    )
+  end
+
+  def refresh_btn
+    a(
+      href: "#{helpers.request.path}?refresh=1",
+      data: { turbo: false },
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-voodu-sm border border-voodu-border text-voodu-text-2 hover:bg-voodu-surface-3 hover:text-voodu-text"
-      ) { "Restart" }
+      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
+      span { "Refresh" }
     end
   end
 
-  def pod_status(pod)
-    return :running if pod["running"]
-
-    :stopped
+  def status_counts
+    all = @data.pods(filter_status: nil)
+    {
+      running:    all.count { |p| p[:status] == :running },
+      restarting: all.count { |p| p[:status] == :restarting },
+      stopped:    all.count { |p| p[:status] == :stopped }
+    }
   end
 
-  def format_age(created_at)
-    return "—" if created_at.blank?
+  def tab_to_status
+    return nil if @active_tab == :all
 
-    t = Time.zone.parse(created_at.to_s)
-    distance = Time.current - t
-    case distance
-    when 0..59 then "#{distance.to_i}s"
-    when 60..3599 then "#{(distance / 60).to_i}m"
-    when 3600..86_399 then "#{(distance / 3600).to_i}h"
-    else "#{(distance / 86_400).to_i}d"
-    end
-  rescue ArgumentError, TypeError
-    "—"
+    @active_tab
   end
 end
