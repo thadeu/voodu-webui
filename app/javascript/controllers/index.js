@@ -15,3 +15,6 @@ application.register("toast", ToastController)
 
 import DropdownController from "./dropdown_controller"
 application.register("dropdown", DropdownController)
+
+import MobileNavController from "./mobile_nav_controller"
+application.register("mobile-nav", MobileNavController)

@@ -89,10 +89,20 @@
   --voodu-red-dim:   #f8717122;
   --voodu-blue:      #60a5fa;
 
-  /* ── Radius ── */
-  --voodu-r-sm: 4px;
-  --voodu-r-md: 6px;
-  --voodu-r-lg: 8px;
+  /* ── Radius ──
+   *
+   * Voodu's brand language is *square corners*. Every rectangle
+   * (cards, buttons, inputs, pills, kbd chips, tabs, bars) renders
+   * with sharp edges — only the geometrically circular pieces
+   * (StatusDot, Avatar, dot indicators) get `rounded-full`, which
+   * is Tailwind's native utility and is unaffected by these tokens.
+   *
+   * If a future design pass wants soft corners somewhere, raise the
+   * specific token below — don't override at the call site.
+   */
+  --voodu-r-sm: 0;
+  --voodu-r-md: 0;
+  --voodu-r-lg: 0;
 
   /* ── Shadow ── */
   --voodu-shadow-inset: 0 1px 0 0 rgba(255, 255, 255, 0.025) inset;
@@ -158,4 +168,26 @@
   /* Animations */
   --animate-voodu-pulse: voodu-pulse 2.4s ease-in-out infinite;
   --animate-voodu-spin:  voodu-spin 0.9s linear infinite;
+
+  /* ── Custom breakpoints (match the inspiration's media queries) ──
+   *
+   * The dashboard chrome flips at two specific widths the design
+   * was sized around:
+   *
+   *   vmd = 1100px   below: drawer sidebar + card list of pods.
+   *                  at/above: in-flow sidebar + pods table.
+   *
+   *   vlg = 1280px   below: topbar drops region/uptime chips and
+   *                  the Cmd-K hint to keep the bar single-line.
+   *                  at/above: full topbar with all chips.
+   *
+   * Tailwind 4 picks these up automatically — `vmd:flex`,
+   * `hidden vmd:flex`, etc. — without touching the default
+   * `md`/`lg`/`xl` prefixes (which the styleguide still uses).
+   *
+   * Names are intentionally hyphen-free; Tailwind 4 doesn't reliably
+   * emit utilities for breakpoint keys that contain a hyphen.
+   */
+  --breakpoint-vmd: 1100px;
+  --breakpoint-vlg: 1280px;
 }

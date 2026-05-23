@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Tailwind 4 source globs.
+ *
+ * Default scan picks up .html, .erb, .js, .jsx, .ts, .tsx. Phlex
+ * components ARE Ruby files (.rb), so without this directive Tailwind
+ * never sees the utility classes embedded inside `class:` attrs and
+ * tree-shakes them out at build time. Result: classes like
+ * `vd-md:flex` are missing from the compiled CSS even though they
+ * appear all over the component source.
+ */
+@source "../../components/**/*.rb";
+@source "../../views/**/*.rb";
+
 /* Theme — Voodu CSS vars + Tailwind @theme mapping. */
 @import "./voodu/theme.css";
 

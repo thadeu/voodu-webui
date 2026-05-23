@@ -57,6 +57,20 @@ class Island < ApplicationRecord
     :online
   end
 
+  # The two fields below are surfaced in the topbar as informational
+  # chips ("region fra1.hetzner", "uptime 41d 2h"). The PAT plane
+  # doesn't expose them today — once it does, replace these with
+  # cached values written after each /stats fetch.
+  def region
+    "local"
+  end
+
+  def uptime
+    # Stable per record so the topbar doesn't change every refresh.
+    days = ((created_at || Time.current) - Time.current).abs.to_i / 86_400
+    "#{days}d 0h"
+  end
+
   private
 
   # normalize_endpoint — turn operator-friendly input into a fully-

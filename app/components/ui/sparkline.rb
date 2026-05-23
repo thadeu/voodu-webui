@@ -30,7 +30,7 @@ class Components::UI::Sparkline < Components::Base
     pts = points
     d_line = path_for(pts)
     d_area = "#{d_line} L #{pts.last[0]} #{@height} L #{pts.first[0]} #{@height} Z"
-    gid = "voodu-spark-#{@color.delete('#')}"
+    gid = gradient_id
 
     svg(
       width: "100%", height: @height,
@@ -59,6 +59,24 @@ class Components::UI::Sparkline < Components::Base
   end
 
   private
+
+  # gradient_id — stable SVG-safe id derived from the color string.
+  #
+  # The naive `color.delete('#')` worked only for hex literals — when
+  # callers pass CSS vars like "var(--voodu-accent)" the id becomes
+  # `voodu-spark-var(--voodu-accent)`, whose unbalanced parens crash
+  # the browser's `url(#…)` parser silently. Result: the gradient
+  # element renders but the area path's `fill` references nothing,
+  # so it falls back to its default (none / black) — the "no fill,
+  # only stroke" look you'd see on the rendered cards.
+  #
+  # MD5 hash truncated to 8 chars gives a deterministic, alphanumeric
+  # id that's collision-safe for any palette the design will ship
+  # (4 cards × N colors << 2^32). The `voodu-spark-` prefix is kept
+  # so DOM inspectors stay legible.
+  def gradient_id
+    "voodu-spark-#{Digest::MD5.hexdigest(@color)[0, 8]}"
+  end
 
   def points
     pad = 4

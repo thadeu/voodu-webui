@@ -1,93 +1,153 @@
 # frozen_string_literal: true
 
-# Views::Dashboard::Index — root "/" overview.
+# Views::Dashboard::Index — Overview screen.
 #
-# Three-state pattern matching the rest:
-#   - no island        → NoIslandState
-#   - controller error → ErrorState
-#   - happy            → 4 summary cards
-#
-# The cards show host CPU + memory sparklines, pod count, and a
-# rolling "controller status" badge. M5+ can add more cards (last
-# deploy, alerts) when the upstream data exists.
+# Three-state pattern:
+#   - no island       → NoIslandState
+#   - controller err  → ErrorState banner inline above the (mocked) body
+#   - happy           → header + stat cards (auto-fit grid) + pods section
 class Views::Dashboard::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, stats: nil, pods: [], error: nil)
+  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
-    @stats          = stats
-    @pods           = pods
-    @error          = error
+    @data           = data
+    @active_tab     = active_tab
+    @updated_at     = updated_at
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island
+      current_path: @current_path,
+      islands: @islands,
+      current_island: @current_island,
+      updated_at: @updated_at
     ) do
-      div(class: "mx-auto max-w-6xl px-6 py-6 flex flex-col gap-5") do
-        header_block
-
-        if @current_island.nil?
-          render Components::UI::NoIslandState.new
-        elsif @error
-          render Components::UI::ErrorState.new(error: @error)
-        else
-          overview_cards
-        end
+      if @current_island.nil?
+        render Components::UI::NoIslandState.new
+      else
+        overview_body
       end
     end
   end
 
   private
 
-  def header_block
-    div(class: "flex items-baseline justify-between") do
-      div(class: "flex flex-col gap-1") do
-        h1(class: "text-2xl font-semibold text-voodu-text") { "Overview" }
-        if @current_island
-          p(class: "text-voodu-text-2 text-sm") do
-            plain "Live snapshot of "
-            span(class: "font-voodu-mono text-voodu-accent-2") { @current_island.name }
-          end
+  def overview_body
+    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+      error_banner if @data&.error
+      page_header
+      stat_cards
+      pods_section
+    end
+  end
+
+  def error_banner
+    div(
+      class: "px-3 py-2 border border-voodu-red/40 bg-voodu-red-dim text-voodu-red text-[12.5px] flex items-center gap-2"
+    ) do
+      render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
+      span { "Couldn't reach the server — showing mocked values. " }
+      span(class: "font-voodu-mono opacity-80") { @data.error.message }
+    end
+  end
+
+  # page_header — flex-wrap means the action buttons "Open logs +
+  # Refresh all" stay inline on wide viewports and naturally fall to
+  # a new line when there isn't room. Matches the inspiration's
+  # `pageHead` style.
+  def page_header
+    div(class: "flex flex-wrap items-end justify-between gap-3 vmd:gap-4") do
+      div(class: "min-w-0") do
+        h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Overview" }
+        page_sub
+      end
+      div(class: "flex items-center gap-2 shrink-0") do
+        open_logs_btn
+        refresh_all_btn
+      end
+    end
+  end
+
+  # page_sub — "name · 11 of 14 pods running · load avg X / X / X".
+  # The load-avg segment is hidden below vd-md (matches inspiration:
+  # `{!isMobile && (...)}`).
+  def page_sub
+    div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
+      span(class: "font-voodu-mono") { @current_island.name }
+      dot_sep
+      span { "#{@data.pods_running_count} of #{@data.pods_total} pods running" }
+
+      # Load avg only on 1100+ — mobile drops it to keep one line.
+      span(class: "hidden vmd:contents") do
+        dot_sep
+        span do
+          plain "load avg "
+          span(class: "font-voodu-mono text-voodu-text-2") { "#{@data.load_1} / #{@data.load_5} / #{@data.load_15}" }
         end
       end
     end
   end
 
-  def overview_cards
-    host = @stats&.dig("host") || {}
-    running_count = @pods.count { |p| p["running"] }
+  def dot_sep
+    span(
+      class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
+      aria: { hidden: "true" }
+    )
+  end
 
-    div(class: "grid grid-cols-2 md:grid-cols-4 gap-4") do
-      stat_card("Running pods", running_count.to_s, "of #{@pods.size}", "var(--voodu-green)")
-      stat_card("Host CPU",     pct(host["cpu_percent"]), "instantaneous", "var(--voodu-accent)")
-      stat_card("Host memory",  mem(host["mem_used_bytes"], host["mem_total_bytes"]), "in use", "var(--voodu-blue)")
-      stat_card("Island",       @current_island.name, @current_island.host, "var(--voodu-text)", mono: true)
+  def open_logs_btn
+    a(
+      href: "/logs",
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
+      span { "Open logs" }
     end
   end
 
-  def stat_card(label, value, sub, color, mono: false)
-    render(Components::UI::Card.new) do
-      div(class: "flex flex-col gap-2") do
-        span(class: "text-[10.5px] uppercase tracking-wider text-voodu-muted") { label }
-        span(
-          class: tokens("text-xl", mono ? "font-voodu-mono" : "font-semibold"),
-          style: "color: #{color};"
-        ) { value }
-        span(class: "text-[11px] text-voodu-muted") { sub }
+  # refresh_all_btn — explicit cache-bypass. The query string asks
+  # the controller to wipe the snapshot cache for this island before
+  # rendering, so the operator can force a fresh round-trip even
+  # within the TTL window.
+  def refresh_all_btn
+    a(
+      href: "#{helpers.root_path}?refresh=1",
+      data: { turbo: false },
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
+    ) do
+      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
+      span { "Refresh all" }
+    end
+  end
+
+  # stat_cards — auto-fit grid (the inspiration's `metricsGrid`
+  # pattern). The browser packs as many cards as fit in 190px
+  # minimum tracks, then equalises. No breakpoint juggling needed:
+  # 1 col on narrow phones, 2 in mid mobile, 3-4 on tablet, 4 on
+  # desktop.
+  def stat_cards
+    div(
+      class: "grid gap-3",
+      style: "grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));"
+    ) do
+      @data.stat_cards.each do |card|
+        render Components::Overview::StatCard.new(**card)
       end
     end
   end
 
-  def pct(v)
-    return "—" if v.nil?
-
-    "#{v.round(1)}%"
+  def pods_section
+    render Components::Overview::PodsTable.new(
+      pods: @data.pods(filter_status: tab_to_status),
+      total: @data.pods_total,
+      active_tab: @active_tab
+    )
   end
 
-  def mem(used, total)
-    return "—" if used.nil? || total.nil? || total.zero?
+  def tab_to_status
+    return nil if @active_tab == :all
 
-    "#{(used.to_f / 1024**3).round(1)}/#{(total.to_f / 1024**3).round(1)} GB"
+    @active_tab
   end
 end

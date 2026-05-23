@@ -24,6 +24,7 @@ Rails.application.routes.draw do
   get "/logs/:name", to: "logs#show", as: :pod_logs, constraints: { name: %r{[^/]+} }
 
   get "/metrics",  to: "metrics#index"
+  get "/alerts",   to: "alerts#index"
   get "/settings", to: "settings#index"
 
   resources :islands, only: [:index, :new, :create, :show, :destroy] do

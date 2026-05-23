@@ -20,6 +20,7 @@ class Components::Layouts::Sidebar < Components::Base
     { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: "/pods" },
     { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: "/logs" },
     { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: "/metrics" },
+    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: "/alerts", badge: :alerts_count },
     { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: "/settings" }
   ].freeze
 
@@ -31,7 +32,15 @@ class Components::Layouts::Sidebar < Components::Base
 
   def view_template
     aside(
-      class: "flex w-[220px] flex-col border-r border-voodu-border bg-voodu-surface",
+      class: tokens(
+        # Default (< 1100px): off-canvas drawer that slides in via the
+        # mobile-nav controller. Lifts above content with a shadow.
+        "fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] -translate-x-full transition-transform duration-200 shadow-2xl",
+        # 1100px+: in-flow rail of the parent flex container.
+        "vmd:static vmd:translate-x-0 vmd:w-[232px] vmd:max-w-none vmd:z-auto vmd:transition-none vmd:shadow-none",
+        "flex flex-col border-r border-voodu-border bg-voodu-surface"
+      ),
+      data: { mobile_nav_target: "sidebar" },
       aria: { label: "Sidebar" }
     ) do
       brand
@@ -58,11 +67,11 @@ class Components::Layouts::Sidebar < Components::Base
   def islands_section
     div(class: "flex flex-col gap-1 px-2 pt-3") do
       div(class: "flex items-center justify-between px-2 py-1") do
-        span(class: "text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted") { "Islands" }
+        span(class: "text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted") { "Servers" }
         a(
           href: "/islands/new",
           class: "p-1 rounded text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
-          aria: { label: "Add island" }
+          aria: { label: "Add server" }
         ) do
           render Icon::PlusOutline.new(class: "w-3 h-3")
         end
@@ -80,7 +89,7 @@ class Components::Layouts::Sidebar < Components::Base
 
   def empty_islands
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2") do
-      plain "no islands yet."
+      plain "no servers yet."
       br
       a(href: "/islands/new", class: "text-voodu-accent-2 hover:underline") { "add one →" }
     end
@@ -125,6 +134,7 @@ class Components::Layouts::Sidebar < Components::Base
   def nav_item(item)
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
+    badge_count = nav_badge_count(item[:badge])
 
     a(
       href: item[:path],
@@ -136,6 +146,21 @@ class Components::Layouts::Sidebar < Components::Base
     ) do
       render icon_klass.new(class: "w-3.5 h-3.5 shrink-0")
       span(class: "flex-1 text-left") { item[:label] }
+
+      if badge_count&.positive?
+        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10.5px] font-medium rounded-full bg-voodu-red text-white") { badge_count.to_s }
+      end
+    end
+  end
+
+  # nav_badge_count — resolves a symbolic badge key (e.g. :alerts_count)
+  # into the integer to display. Today every count is mock; once the
+  # observability API surfaces real counts we plug them here.
+  def nav_badge_count(key)
+    return nil unless key
+
+    case key
+    when :alerts_count then 2 # TODO: real alerts feed
     end
   end
 
