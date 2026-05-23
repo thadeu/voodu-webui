@@ -10,5 +10,27 @@ Rails.application.routes.draw do
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   # Defines the root path route ("/")
-  # root "posts#index"
+  root "dashboard#index"
+
+  # Pods — index + per-name restart action.
+  # Container names contain dots ("clowk-web.a3f9") so we relax the
+  # path constraint that would otherwise treat the trailing token
+  # as a format extension.
+  get  "/pods", to: "pods#index"
+  post "/pods/:name/restart", to: "pods#restart", as: :restart_pod, constraints: { name: %r{[^/]+} }
+
+  # Logs — index (pod picker) + per-pod tail. Same constraint.
+  get "/logs", to: "logs#index"
+  get "/logs/:name", to: "logs#show", as: :pod_logs, constraints: { name: %r{[^/]+} }
+
+  get "/metrics",  to: "metrics#index"
+  get "/settings", to: "settings#index"
+
+  resources :islands, only: [:index, :new, :create, :show, :destroy] do
+    member do
+      post :select
+    end
+  end
+
+  get "/styleguide", to: "styleguide#index"
 end

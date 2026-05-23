@@ -1,0 +1,161 @@
+/* Voodu WebUI — Brand Theme
+ *
+ * Two layers:
+ *
+ *   1. :root  — CSS custom properties (the source of truth). Tokens
+ *      mirror the design inspiration exactly: deep navy bg, layered
+ *      surface colors, purple accent (#7c5cff), traffic-light
+ *      semantics for status. Dark-first; no light mode shipped in M0.
+ *
+ *   2. @theme — Tailwind 4 mapping. Every var also surfaces as a
+ *      Tailwind utility (bg-voodu-surface, text-voodu-muted, etc.)
+ *      so component code can use either CSS vars OR utility classes
+ *      and stay coherent.
+ *
+ * Fonts: Geist + Geist Mono, self-hosted from public/fonts/voodu/.
+ * Source files come from the `geist` npm package and are copied at
+ * `pnpm install` time via the `fonts:copy` postinstall script. Both
+ * are variable-axis woff2 (~70 KB each) — covers every weight 100..900
+ * in a single request, no CDN dependency, no FOIT/FOUT from a third
+ * party going down. `font-display: swap` keeps first paint instant
+ * while the woff2 loads.
+ */
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/voodu/Geist-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/voodu/GeistMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Animations ──
+ *
+ *  voodu-pulse — used by StatusDot for live states (running, online,
+ *  restarting). Subtle opacity breathe rather than a scale pop so it
+ *  reads as "alive" without grabbing the eye.
+ *
+ *  voodu-spin  — used by Spinner. Standard linear rotation.
+ *
+ *  Exposed as Tailwind utilities via @theme below (`animate-voodu-*`).
+ */
+@keyframes voodu-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes voodu-spin {
+  to { transform: rotate(360deg); }
+}
+
+:root {
+  /* ── Backgrounds (deep → surfaces) ── */
+  --voodu-bg:        #0a0d14;
+  --voodu-bg-2:      #0c1018;
+  --voodu-surface:   #11161f;
+  --voodu-surface-2: #161c27;
+  --voodu-surface-3: #1c2330;
+
+  /* ── Borders ── */
+  --voodu-border:    #1f2632;
+  --voodu-border-2:  #29303f;
+
+  /* ── Text ── */
+  --voodu-text:    #e8e8ee;
+  --voodu-text-2:  #b4b4c0;
+  --voodu-muted:   #7a7a88;
+  --voodu-muted-2: #5a5a66;
+
+  /* ── Accent: Voodu purple ── */
+  --voodu-accent:      #7c5cff;
+  --voodu-accent-2:    #9a82ff;
+  --voodu-accent-dim:  #7c5cff22;
+  --voodu-accent-line: #7c5cff66;
+
+  /* ── Semantic / status (traffic-light family) ── */
+  --voodu-green:     #34d399;
+  --voodu-green-dim: #34d39922;
+  --voodu-amber:     #fbbf24;
+  --voodu-amber-dim: #fbbf2422;
+  --voodu-red:       #f87171;
+  --voodu-red-dim:   #f8717122;
+  --voodu-blue:      #60a5fa;
+
+  /* ── Radius ── */
+  --voodu-r-sm: 4px;
+  --voodu-r-md: 6px;
+  --voodu-r-lg: 8px;
+
+  /* ── Shadow ── */
+  --voodu-shadow-inset: 0 1px 0 0 rgba(255, 255, 255, 0.025) inset;
+  --voodu-shadow-pop:   0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--voodu-border);
+
+  /* ── Fonts ── */
+  --voodu-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --voodu-font-mono: "Geist Mono", ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  /* ── Base sizing ── */
+  --voodu-font-size-base: 13px;
+  --voodu-line-height:    1.45;
+}
+
+/* ── Tailwind @theme mapping ──
+ * Surfaces every CSS var as a Tailwind utility token. Pattern: a CSS
+ * var named `--voodu-foo` becomes `--color-voodu-foo` here, which
+ * Tailwind 4 picks up to generate `bg-voodu-foo`, `text-voodu-foo`,
+ * `border-voodu-foo`, etc. Keep the lists in lockstep with :root above.
+ */
+@theme {
+  /* Backgrounds */
+  --color-voodu-bg:        var(--voodu-bg);
+  --color-voodu-bg-2:      var(--voodu-bg-2);
+  --color-voodu-surface:   var(--voodu-surface);
+  --color-voodu-surface-2: var(--voodu-surface-2);
+  --color-voodu-surface-3: var(--voodu-surface-3);
+
+  /* Borders */
+  --color-voodu-border:   var(--voodu-border);
+  --color-voodu-border-2: var(--voodu-border-2);
+
+  /* Text */
+  --color-voodu-text:    var(--voodu-text);
+  --color-voodu-text-2:  var(--voodu-text-2);
+  --color-voodu-muted:   var(--voodu-muted);
+  --color-voodu-muted-2: var(--voodu-muted-2);
+
+  /* Accent */
+  --color-voodu-accent:      var(--voodu-accent);
+  --color-voodu-accent-2:    var(--voodu-accent-2);
+  --color-voodu-accent-dim:  var(--voodu-accent-dim);
+  --color-voodu-accent-line: var(--voodu-accent-line);
+
+  /* Semantic */
+  --color-voodu-green:     var(--voodu-green);
+  --color-voodu-green-dim: var(--voodu-green-dim);
+  --color-voodu-amber:     var(--voodu-amber);
+  --color-voodu-amber-dim: var(--voodu-amber-dim);
+  --color-voodu-red:       var(--voodu-red);
+  --color-voodu-red-dim:   var(--voodu-red-dim);
+  --color-voodu-blue:      var(--voodu-blue);
+
+  /* Radius */
+  --radius-voodu-sm: var(--voodu-r-sm);
+  --radius-voodu-md: var(--voodu-r-md);
+  --radius-voodu-lg: var(--voodu-r-lg);
+
+  /* Fonts */
+  --font-voodu-sans: var(--voodu-font-sans);
+  --font-voodu-mono: var(--voodu-font-mono);
+
+  /* Animations */
+  --animate-voodu-pulse: voodu-pulse 2.4s ease-in-out infinite;
+  --animate-voodu-spin:  voodu-spin 0.9s linear infinite;
+}

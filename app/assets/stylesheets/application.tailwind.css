@@ -1,1 +1,52 @@
 @import "tailwindcss";
+
+/* Theme — Voodu CSS vars + Tailwind @theme mapping. */
+@import "./voodu/theme.css";
+
+/* ── Global resets / base ── */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--voodu-bg);
+  color: var(--voodu-text);
+  font-family: var(--voodu-font-sans);
+  font-size: var(--voodu-font-size-base);
+  line-height: var(--voodu-line-height);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01"; /* Geist character variants */
+}
+
+::selection {
+  background: var(--voodu-accent-dim);
+  color: var(--voodu-accent-2);
+}
+
+/* Scrollbars — slim, blend with surfaces. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a36;
+  border-radius: 8px;
+  border: 2px solid var(--voodu-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #393948;
+}

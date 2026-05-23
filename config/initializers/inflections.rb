@@ -10,7 +10,8 @@
 #   inflect.uncountable %w( fish sheep )
 # end
 
-# These inflection rules are supported but not enabled by default:
-# ActiveSupport::Inflector.inflections(:en) do |inflect|
-#   inflect.acronym "RESTful"
-# end
+# Acronyms — required so Zeitwerk can resolve `app/components/ui/foo.rb`
+# as `Components::UI::Foo` (not `Components::Ui::Foo`). Mirrors clowk.
+ActiveSupport::Inflector.inflections(:en) do |inflect|
+  inflect.acronym "UI"
+end
