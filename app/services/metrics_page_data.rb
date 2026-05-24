@@ -70,10 +70,16 @@ class MetricsPageData
              end
 
       {
-        label:  spec[:label],
-        color:  spec[:color],
-        unit:   unit,
-        points: points
+        label:   spec[:label],
+        color:   spec[:color],
+        unit:    unit,
+        points:  points,
+        # current — the unaggregated latest value, scaled to the
+        # chart's unit so the headline doesn't shift when the
+        # operator switches range pills. Matches the rightmost
+        # raw sample (which can differ from series.last when the
+        # rightmost bucket aggregates many samples).
+        current: latest_scaled(spec[:metric], spec[:scale])
       }
     end
   end
@@ -218,6 +224,38 @@ class MetricsPageData
       end
     else
       points
+    end
+  end
+
+  # latest_scaled — fetches the API's `latest` (unaggregated current
+  # raw value) and applies the same per-chart scale that points went
+  # through. Returns nil when the API didn't ship a latest (cold
+  # boot before first sample). ChartCard then falls back to
+  # series.last for that one render.
+  def latest_scaled(metric, scale)
+    raw = if @scope_kind == "pod"
+            pod = pod_record
+            scope = pod && (pod["scope"] || pod[:scope])
+            name  = pod && (pod["resource_name"] || pod[:resource_name])
+            @metrics.latest_for(source: :pod, metric: metric, range: @range,
+                                scope: scope, name: name, pod: @scope_id)
+          else
+            @metrics.latest_for(source: :system, metric: metric, range: @range)
+          end
+
+    return nil if raw.nil?
+
+    case scale
+    when :percent      then raw
+    when :bytes_to_mb  then raw / 1_000_000.0
+    when :bytes_to_gb  then raw / 1_000_000_000.0
+    when :bytes_auto
+      # Use the same divisor as the chart's first point's unit so
+      # headline + axis labels speak the same dialect. Re-derive
+      # via the max heuristic — cheap, deterministic.
+      divisor, _ = pick_byte_unit(raw.abs)
+      raw / divisor
+    else raw
     end
   end
 

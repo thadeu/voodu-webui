@@ -42,7 +42,7 @@ class MetricsData
 
     formatter = formatter_for(metric)
 
-    Array(payload["series"]).map do |p|
+    points = Array(payload["series"]).map do |p|
       val = p["value"].to_f
       {
         ts:        p["ts"],
@@ -50,6 +50,34 @@ class MetricsData
         formatted: formatter.call(val)
       }
     end
+
+    # Append the literal latest sample as the rightmost point so
+    # the chart's last dot matches the headline. The bucketed
+    # series may aggregate the latest sample into a multi-sample
+    # bucket whose AVG diverges from the actual latest value
+    # (e.g. last bucket = [8%, 10%, 16.7%] → avg 11.3, but the
+    # operator's "current" is 16.7). Appending the literal latest
+    # gives the rendered chart a final dot at the same y the
+    # headline is showing.
+    #
+    # Skip when latest is missing (older controller, cold boot)
+    # or when it's already at/before the last bucket's ts (no
+    # gain from duplicating). Hover tooltip shows the unaggregated
+    # value with its real timestamp.
+    if (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
+      last_bucket_ts = points.last && points.last[:ts]
+
+      if last_bucket_ts.nil? || latest["ts"] > last_bucket_ts
+        latest_val = latest["value"].to_f
+        points << {
+          ts:        latest["ts"],
+          value:     latest_val,
+          formatted: formatter.call(latest_val)
+        }
+      end
+    end
+
+    points
   end
 
   # series_for — legacy shape: bare `[Float]` for callers that
@@ -59,6 +87,30 @@ class MetricsData
   def series_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
     points_for(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
       .map { |p| p[:value] }
+  end
+
+  # latest_for — the SINGLE most recent unaggregated sample from
+  # the query window. Distinct from `points_for(...).last[:value]`
+  # because the chart points are bucket aggregates (avg over an
+  # interval); on long ranges the rightmost bucket smooths the
+  # real current value with N preceding samples, so the headline
+  # "CPU 54.1%" would shift to "CPU 5.7%" just by switching the
+  # range pill from 1h to 6h — confusing.
+  #
+  # Returns the raw Float or nil when the window has no samples.
+  # Callers (OverviewData / PodDetailData headlines) use this for
+  # the big number; the chart keeps its bucketed series for
+  # visualisation.
+  def latest_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
+    return nil if @client.nil?
+
+    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
+    return nil unless payload.is_a?(Hash)
+
+    latest = payload["latest"]
+    return nil unless latest.is_a?(Hash)
+
+    latest["value"].to_f
   end
 
   # raw_payload exposes the full envelope (series + interval + truncated

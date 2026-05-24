@@ -107,6 +107,7 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       render Components::UI::StatusDot.new(status: island.status || :stopped)
+
       div(class: "min-w-0 flex-1 flex flex-col leading-tight") do
         span(
           class: tokens(
@@ -114,9 +115,11 @@ class Components::Layouts::Sidebar < Components::Base
             selected ? "font-semibold text-voodu-accent-2" : "font-medium text-voodu-text"
           )
         ) { island.name }
+
         span(class: "font-voodu-mono text-[10.5px] text-voodu-muted truncate") do
           count = island.pods_count
           suffix = count.nil? ? "— pods" : "#{count} pods"
+
           "#{island.host} · #{suffix}"
         end
       end

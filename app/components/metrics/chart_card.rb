@@ -19,12 +19,19 @@
 #   │ └───────────────────────────────────────────────────────┘ │
 #   └───────────────────────────────────────────────────────────┘
 class Components::Metrics::ChartCard < Components::Base
-  def initialize(label:, color:, unit:, points:, range_ms:)
+  # current — the unaggregated "right now" value from
+  # MetricsPageData (server-side latest field). When nil, falls
+  # back to series.last's bucket-aggregated value. The fallback
+  # only kicks in for cold-boot when the API hasn't shipped a
+  # latest yet; otherwise the headline tracks the literal latest
+  # sample and stays stable across range pills.
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil)
     @label    = label
     @color    = color
     @unit     = unit
     @points   = Array(points)
     @range_ms = range_ms
+    @current  = current
   end
 
   def view_template
@@ -46,6 +53,14 @@ class Components::Metrics::ChartCard < Components::Base
   # header — colored label + big current value + right-aligned
   # min/avg/max strip. Matches pages-metrics.jsx ChartCard
   # (lines 358-398) layout.
+  #
+  # Headline current value preference order:
+  #   1. @current — set explicitly by the caller from the API's
+  #                 unaggregated `latest` field. Stable across
+  #                 range pills (the whole point).
+  #   2. series.last value — bucket-aggregated; only used when
+  #                 the API didn't ship a latest (cold boot or
+  #                 older controller).
   def header
     s = stats
 
@@ -56,7 +71,7 @@ class Components::Metrics::ChartCard < Components::Base
       ) { @label }
 
       span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
-        plain format_current(s[:current])
+        plain format_current(@current || s[:current])
         span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
       end
 

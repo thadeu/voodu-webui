@@ -73,9 +73,18 @@ class PodDetailData
   # the payload), the values render as "0 B" with sub "no data"
   # — same graceful degradation pattern as the limit-less memory.
   def stat_cards
+    # CPU + Memory pass the memoised series — same fetch that
+    # cpu_pct / mem_used_mb already pulled to derive the
+    # headline value. Keeps the headline number in lock-step
+    # with the rightmost dot on the chart.
+    #
+    # NET I/O + BLOCK I/O headline stays as CUMULATIVE bytes
+    # since container start (different question from the rate
+    # chart). Chart shows delta-per-tick — `*_delta_bytes`
+    # series is what the operator wants to see fluctuating.
     [
-      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", series_for_metric("cpu_percent")),
-      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  series_for_metric("mem_usage_bytes")),
+      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_series),
+      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  mem_series),
       stat_card("NET I/O",   :SignalOutline,      net_total_label,  "",      net_sub, "var(--voodu-amber)",  series_for_metric("net_rx_delta_bytes")),
       stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label,  "",      blk_sub, "var(--voodu-green)",  series_for_metric("block_read_delta_bytes"))
     ]
@@ -103,6 +112,29 @@ class PodDetailData
       # one replica's runtime.
       pod:    @name
     )
+  end
+
+  # cpu_series / mem_series — memoised so both the headline (which
+  # reads the last point) and the chart payload (which renders the
+  # whole series) share the same fetch. Rails.cache makes a
+  # second MetricsData call cheap, but in-instance memoization
+  # avoids even that round-trip.
+  def cpu_series
+    @cpu_series ||= series_for_metric("cpu_percent")
+  end
+
+  def mem_series
+    @mem_series ||= series_for_metric("mem_usage_bytes")
+  end
+
+  # latest_value — last point's raw value, or `fallback` when the
+  # series is empty (cold boot, sampler hasn't ticked yet, or pod
+  # too short-lived to have produced a sample). Mirror of
+  # OverviewData#latest_value.
+  def latest_value(series, fallback)
+    return fallback.to_f if series.blank?
+
+    series.last[:value].to_f
   end
 
   # The full age string for the header chip.
@@ -199,8 +231,19 @@ class PodDetailData
   # readers return 0/nil and the cards render "—" instead of
   # fabricated numbers.
 
+  # cpu_pct — unaggregated current value from /metrics?latest, with
+  # /pods snapshot as the cold-boot fallback. Reads via latest_for
+  # rather than series.last because bucket aggregation on long
+  # ranges (6h, 24h, 7d) smooths the current value with the rest
+  # of the rightmost bucket — switching range pills shouldn't
+  # change "what's CPU right now".
   def cpu_pct
-    @raw&.dig("stats", "usage", "cpu_percent").to_f.round(1)
+    fallback = @raw&.dig("stats", "usage", "cpu_percent").to_f
+    latest   = @metrics.latest_for(
+      source: :pod, metric: "cpu_percent", range: "1h",
+      scope: scope, name: resource_name, pod: @name
+    )
+    (latest || fallback).to_f.round(1)
   end
 
   def cpu_sub
@@ -210,15 +253,19 @@ class PodDetailData
     declared.present? ? "limit #{declared}" : "no limit declared"
   end
 
-  # mem_used_mb / mem_limit_mb — derived from `stats.usage.memory_*`
-  # in bytes. 1024-based MB to match `free -m` / `docker stats`.
-  # Returns 0 when the field is absent so the formatter can decide
-  # what to render (label / "—").
+  # mem_used_mb — unaggregated current bytes from /metrics?latest,
+  # with /pods snapshot as the cold-boot fallback. Same rationale
+  # as cpu_pct above: stable across range pills.
   def mem_used_mb
-    bytes = @raw&.dig("stats", "usage", "memory_usage_bytes").to_i
+    fallback = @raw&.dig("stats", "usage", "memory_usage_bytes").to_f
+    latest   = @metrics.latest_for(
+      source: :pod, metric: "mem_usage_bytes", range: "1h",
+      scope: scope, name: resource_name, pod: @name
+    )
+    bytes = (latest || fallback).to_f
     return 0 if bytes.zero?
 
-    (bytes.to_f / (1024 * 1024)).round
+    (bytes / (1024 * 1024)).round
   end
 
   # mem_limit_mb prefers the manifest-declared limit (limits.memory_bytes)

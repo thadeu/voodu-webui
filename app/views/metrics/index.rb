@@ -178,7 +178,8 @@ class Views::Metrics::Index < Views::Base
           color:    c[:color],
           unit:     c[:unit],
           points:   c[:points],
-          range_ms: @data.range_ms
+          range_ms: @data.range_ms,
+          current:  c[:current]
         )
       end
     end

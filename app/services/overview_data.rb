@@ -249,27 +249,36 @@ class OverviewData
   # ── Stat cards ──────────────────────────────────────────────────
 
   def stat_cpu
-    pct = host_cpu_pct
+    series  = @metrics.points_for(source: :system, metric: "cpu_percent", range: "1h")
+    # Use latest_for (server's unaggregated current) — the bucketed
+    # series's last point would shift values when the operator
+    # switches range pills. Fallback to /system "now" on cold boot.
+    current = @metrics.latest_for(source: :system, metric: "cpu_percent", range: "1h") || host_cpu_pct
+
     {
       label: "CPU", icon: :CpuChipOutline,
-      value: format("%.1f", pct), unit: "%",
+      value: format("%.1f", current), unit: "%",
       sub: cores.positive? ? "#{cores} cores · load #{load_1}" : "—",
       color: "var(--voodu-accent)",
-      series: @metrics.points_for(source: :system, metric: "cpu_percent", range: "1h"),
+      series: series,
       delta: nil
     }
   end
 
   def stat_memory
-    used  = host_mem_used_gb
-    total = host_mem_total_gb
-    pct   = total.zero? ? 0 : (used / total * 100).round
+    series        = @metrics.points_for(source: :system, metric: "mem_used_bytes", range: "1h")
+    current_bytes = @metrics.latest_for(source: :system, metric: "mem_used_bytes", range: "1h") ||
+                    @system&.dig("mem", "used_bytes").to_f
+    used          = current_bytes / 1024**3
+    total         = host_mem_total_gb
+    pct           = total.zero? ? 0 : (used / total * 100).round
+
     {
       label: "MEMORY", icon: :CircleStackOutline,
       value: format("%.1f", used), unit: "GB",
       sub: total.positive? ? "of #{format('%.0f', total)} GB · #{pct}%" : "—",
       color: "var(--voodu-blue)",
-      series: @metrics.points_for(source: :system, metric: "mem_used_bytes", range: "1h"),
+      series: series,
       delta: nil
     }
   end
@@ -280,17 +289,33 @@ class OverviewData
   # entry, which is `/` (the root mount, the universally-meaningful
   # one). Future multi-mount expansion adds a picker; shape stays.
   def stat_disk
-    used  = disk_used_gb
-    total = disk_total_gb
-    pct   = total.zero? ? 0 : (used.to_f / total * 100).round
+    series        = @metrics.points_for(source: :system, metric: "disk_used_bytes", range: "1h")
+    current_bytes = @metrics.latest_for(source: :system, metric: "disk_used_bytes", range: "1h") ||
+                    @system&.dig("disk", 0, "used_bytes").to_f
+    used          = (current_bytes / 1024**3).round
+    total         = disk_total_gb
+    pct           = total.zero? ? 0 : (used.to_f / total * 100).round
+
     {
       label: "DISK", icon: :ServerStackOutline,
       value: used.to_s, unit: "GB",
       sub: total.positive? ? "of #{total} GB · #{pct}%" : "—",
       color: "var(--voodu-green)",
-      series: @metrics.points_for(source: :system, metric: "disk_used_bytes", range: "1h"),
+      series: series,
       delta: nil
     }
+  end
+
+  # latest_value — last point's raw value from a time series, or
+  # the given fallback when the series is empty (controller just
+  # booted, sampler hasn't ticked yet). Keeps the headline number
+  # in lock-step with the rightmost dot on the chart instead of
+  # diverging from a /system "right now" reading taken at request
+  # time.
+  def latest_value(series, fallback)
+    return fallback.to_f if series.blank?
+
+    series.last[:value].to_f
   end
 
   # ── Helpers ─────────────────────────────────────────────────────
