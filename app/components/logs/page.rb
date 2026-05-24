@@ -101,12 +101,23 @@ class Components::Logs::Page < Components::Base
   # a single pod (matches the Pod show page's "← All pods" pattern).
   def page_header
     div(class: "flex flex-col gap-3") do
-      back_link if @pod_name && !@drawer
+      back_link if show_back_link?
       div do
         h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Logs" }
         sub_line
       end
     end
+  end
+
+  # show_back_link? — three gates:
+  #   - we have a pod_name (back-link target is /pods/<name>)
+  #   - we're NOT in drawer mode (drawer has its own close X)
+  #   - the operator actually came from the pod detail page
+  #     (controller checks Referer; in-page picker navigation
+  #     leaves @back_to_pod false so the link doesn't redirect
+  #     to a page the operator wasn't on)
+  def show_back_link?
+    @pod_name && !@drawer && @back_to_pod
   end
 
   def back_link
