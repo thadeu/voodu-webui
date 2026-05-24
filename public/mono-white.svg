@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
 <defs><mask id="eyes"><rect width="200" height="200" fill="white"/>
 <rect x="82" y="97" width="14" height="5" rx="1" fill="black"/><rect x="104" y="97" width="14" height="5" rx="1" fill="black"/></mask></defs>
-<g fill="#FF5C8A" mask="url(#eyes)">
-<g stroke="#FF5C8A" stroke-width="1.5" opacity="0.42" fill="none"><line x1="100" y1="100" x2="100" y2="44"/><line x1="100" y1="100" x2="148.5" y2="72"/><line x1="100" y1="100" x2="148.5" y2="128"/><line x1="100" y1="100" x2="100" y2="156"/><line x1="100" y1="100" x2="51.5" y2="128"/><line x1="100" y1="100" x2="51.5" y2="72"/></g>
+<g fill="#FFFFFF" mask="url(#eyes)">
+<g stroke="#FFFFFF" stroke-width="1.5" opacity="0.42" fill="none">
+<line x1="100" y1="100" x2="100" y2="44"/><line x1="100" y1="100" x2="148.5" y2="72"/><line x1="100" y1="100" x2="148.5" y2="128"/><line x1="100" y1="100" x2="100" y2="156"/><line x1="100" y1="100" x2="51.5" y2="128"/><line x1="100" y1="100" x2="51.5" y2="72"/></g>
 <polygon points="100,30 112.12,37 112.12,51 100,58 87.88,51 87.88,37"/>
 <polygon points="148.5,58 160.62,65 160.62,79 148.5,86 136.37,79 136.37,65"/>
 <polygon points="148.5,114 160.62,121 160.62,135 148.5,142 136.37,135 136.37,121"/>

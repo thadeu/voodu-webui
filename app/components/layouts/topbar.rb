@@ -30,7 +30,10 @@ class Components::Layouts::Topbar < Components::Base
 
   def view_template
     header(
-      class: "flex h-14 items-center gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none",
+      # min-w-0 lets children with `truncate` actually shrink; without
+      # it flexbox happily lets a long island name push the right
+      # cluster (search + updated pill) past the viewport edge.
+      class: "flex h-14 items-center gap-2 vmd:gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none min-w-0",
       role: "banner"
     ) do
       hamburger
@@ -40,7 +43,11 @@ class Components::Layouts::Topbar < Components::Base
         no_island_hint
       end
 
-      div(class: "flex-1")
+      # Spacer — only on desktop. On mobile the breadcrumb keeps its
+      # `flex-1` and fills the space itself; adding a second flex-1
+      # spacer here would split the row 50/50 and push the right
+      # cluster off-screen (the bug we just fixed).
+      div(class: "hidden vmd:block flex-1")
       search_box
       search_icon
       updated_pill if @current_island && @updated_at

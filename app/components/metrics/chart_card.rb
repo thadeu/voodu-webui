@@ -70,9 +70,19 @@ class Components::Metrics::ChartCard < Components::Base
         style: "color: #{@color};"
       ) { @label }
 
+      # Render number + unit. For percent metrics the unit is part
+      # of the formatted string (so we can show "<0.01%" without
+      # the magnitude tier rendering "<0.01" with a separate "%"
+      # span looking like "<0.01 %"). For everything else the
+      # number stays plain and the unit hangs in its own muted
+      # span.
       span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
-        plain format_current(@current || s[:current])
-        span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+        if percent_unit?
+          plain format_current(@current || s[:current])
+        else
+          plain format_current(@current || s[:current])
+          span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+        end
       end
 
       div(class: "flex-1")
@@ -90,21 +100,32 @@ class Components::Metrics::ChartCard < Components::Base
     end
   end
 
-  # format_current — always 1 decimal, regardless of unit. The
-  # inspiration's `toFixed(meta.unit === '%' ? 0 : 1)` shortcut
-  # rounded CPU% to whole numbers, which hid sub-1% activity
-  # (a pod at 0.1% read as "0%" in the headline while the tooltip
-  # correctly showed 0.1%). Operator prefers consistent precision.
+  # format_current — magnitude-adaptive headline. Percent metrics
+  # go through MetricFormat.percent so sub-1% values keep enough
+  # precision to be honest (0.05% instead of "0.0%"); other
+  # metrics use MetricFormat.number (the unit hangs in a separate
+  # muted span — see header).
   def format_current(v)
     return "—" if v.nil?
 
-    v.round(1).to_s
+    percent_unit? ? MetricFormat.percent(v) : MetricFormat.number(v)
   end
 
+  # format_value — min/avg/max chips. Same logic as format_current
+  # so the headline + chips agree on precision (no more "current 0.0
+  # · avg 0.0 · max 0.0" lying about a chart that clearly varies).
   def format_value(v)
     return "—" if v.nil?
 
-    v.round(1).to_s
+    percent_unit? ? MetricFormat.percent(v) : MetricFormat.number(v)
+  end
+
+  # percent_unit? — whether the headline + chip formatters should
+  # bake the `%` into the formatted string. True only for actual
+  # percent units; "MB"/"GB"/"" stay number-only with the unit
+  # rendered in its own span.
+  def percent_unit?
+    @unit == "%"
   end
 
   # stats — current/min/avg/max in one pass over the series. Same

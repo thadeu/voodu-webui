@@ -22,10 +22,16 @@ class Components::Overview::PodsTable < Components::Base
     { id: :stopped,    label: "Stopped",    status: :stopped,    color: "var(--voodu-muted)" }
   ].freeze
 
-  def initialize(pods:, total:, active_tab: :all)
-    @pods       = pods
-    @total      = total
-    @active_tab = active_tab
+  # show_heading — Overview embeds this table as one of multiple
+  # sections, so it wants the H2 "Pods" label as a section break.
+  # The dedicated /pods page already shows an H1 "Pods" via its
+  # own page_header — passing `show_heading: false` suppresses
+  # the redundant H2 there.
+  def initialize(pods:, total:, active_tab: :all, show_heading: true)
+    @pods         = pods
+    @total        = total
+    @active_tab   = active_tab
+    @show_heading = show_heading
   end
 
   def view_template
@@ -35,7 +41,7 @@ class Components::Overview::PodsTable < Components::Base
     # name + scope + resource + image + kind + status) so the
     # controller doesn't have to know about table vs card layout.
     section(class: "flex flex-col gap-3", data: { controller: "kv-filter" }) do
-      heading
+      heading if @show_heading
       toolbar
       desktop_table
       mobile_list
@@ -51,15 +57,20 @@ class Components::Overview::PodsTable < Components::Base
     end
   end
 
+  # toolbar — tabs + filter input.
+  # On mobile (< vmd) the two stack vertically so neither overflows
+  # the viewport. Tabs also become horizontally scrollable on very
+  # narrow widths so the four status buttons stay reachable instead
+  # of being pushed off-screen by the filter input.
   def toolbar
-    div(class: "flex items-center gap-3") do
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2.5 vmd:gap-3") do
       tabs
       filter_input
     end
   end
 
   def tabs
-    div(class: "flex items-center gap-1") do
+    div(class: "flex items-center gap-1 overflow-x-auto -mx-3.5 px-3.5 vmd:mx-0 vmd:px-0 vmd:overflow-visible") do
       STATUS_TABS.each { |tab| tab_button(tab) }
     end
   end
@@ -72,7 +83,10 @@ class Components::Overview::PodsTable < Components::Base
     a(
       href: href,
       class: tokens(
-        "inline-flex items-center gap-2 px-2.5 h-7 text-[12px] rounded-voodu-sm border transition-colors",
+        # shrink-0 keeps each tab readable even when the row is
+        # tight — they overflow horizontally instead of squeezing
+        # their labels (see tabs's overflow-x-auto on mobile).
+        "inline-flex items-center gap-2 px-2.5 h-7 text-[12px] rounded-voodu-sm border transition-colors shrink-0",
         active ? "border-voodu-border bg-voodu-surface text-voodu-text" : "border-transparent text-voodu-text-2 hover:bg-voodu-surface hover:text-voodu-text"
       )
     ) do
@@ -94,7 +108,11 @@ class Components::Overview::PodsTable < Components::Base
   end
 
   def filter_input
-    div(class: "flex items-center gap-2 px-2.5 h-7 border border-voodu-border bg-voodu-surface flex-1 max-w-[420px] text-voodu-muted") do
+    # On mobile (stacked layout) the input takes full width — no
+    # max-w cap, since the tabs row above already used the width
+    # budget. On vmd+ the cap returns so the input doesn't grow
+    # wider than its useful reading length.
+    div(class: "flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-full vmd:flex-1 vmd:max-w-[420px] text-voodu-muted") do
       render Icon::FunnelOutline.new(class: "w-3 h-3 shrink-0")
       input(
         type: "search",

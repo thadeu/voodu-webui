@@ -36,10 +36,16 @@ class Views::Pods::Index < Views::Base
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
       error_banner if @data&.error
       page_header
+      # show_heading: false — the page_header above already renders
+      # the H1 "Pods" + status counts. Letting PodsTable draw its
+      # own H2 "Pods" right under it stacks two identical labels
+      # (the Overview screen doesn't have this problem because its
+      # H1 is "Overview").
       render Components::Overview::PodsTable.new(
         pods: @data.pods(filter_status: tab_to_status),
         total: @data.pods_total,
-        active_tab: @active_tab
+        active_tab: @active_tab,
+        show_heading: false
       )
     end
   end

@@ -28,9 +28,19 @@ class Components::Overview::PodCard < Components::Base
 
   private
 
+  # header_row — name + image stack on the left, status pill on the
+  # right. The left stack is wrapped in an <a> so the operator can
+  # tap anywhere on the title region to open the pod detail page
+  # (mobile-mode equivalent of the desktop table's clickable name
+  # column). Status pill is kept OUTSIDE the link to avoid nesting
+  # interactives — and footer buttons (Logs/Restart) are siblings
+  # for the same reason.
   def header_row
     div(class: "flex items-start gap-3") do
-      div(class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1") do
+      a(
+        href: helpers.pod_path(name: @pod[:name]),
+        class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-accent-2 transition-colors"
+      ) do
         span(class: "text-[14px] font-semibold text-voodu-text truncate") { @pod[:name] }
         span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate") { @pod[:image] || "—" }
       end
@@ -103,15 +113,45 @@ class Components::Overview::PodCard < Components::Base
     span(class: "text-[10px] font-semibold uppercase tracking-wider text-voodu-muted") { text }
   end
 
+  # footer_row — ports on the left, action cluster on the right.
+  # Wide port lists (e.g. rabbitmq's 8 ports) would push the
+  # actions off-screen; the ports span truncates with a tooltip
+  # showing the full list. `min-w-0` on the span + `shrink-0` on
+  # the actions container is the standard "let me truncate me but
+  # not them" flex pattern.
   def footer_row
-    div(class: "flex items-center gap-2 pt-2.5 border-t border-voodu-border") do
-      span(class: "font-voodu-mono text-[11px] text-voodu-muted") do
-        ports = @pod[:ports]
-        ports.present? ? ":#{ports.join(',')}" : "—"
+    div(class: "flex items-center gap-2 pt-2.5 border-t border-voodu-border min-w-0") do
+      span(
+        class: "font-voodu-mono text-[11px] text-voodu-muted truncate min-w-0 flex-1",
+        title: ports_label
+      ) { ports_label }
+      div(class: "flex items-center gap-2 shrink-0") do
+        open_pod_btn
+        logs_btn
+        restart_btn
       end
-      div(class: "flex-1")
-      logs_btn
-      restart_btn
+    end
+  end
+
+  def ports_label
+    ports = @pod[:ports]
+    ports.present? ? ":#{ports.join(',')}" : "—"
+  end
+
+  # open_pod_btn — icon-only affordance opening the pod detail page.
+  # Sits to the LEFT of Logs/Restart as a clearer "view this pod"
+  # signal than the (also-clickable) header_row title. Icon-only
+  # keeps the footer from getting crowded on narrow viewports; the
+  # cube icon matches the sidebar's Pods nav entry so the meaning
+  # carries.
+  def open_pod_btn
+    a(
+      href: helpers.pod_path(name: @pod[:name]),
+      aria: { label: "Open pod" },
+      title: "Open pod",
+      class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 hover:bg-voodu-surface-3 hover:text-voodu-text"
+    ) do
+      render Icon::CubeOutline.new(class: "w-3.5 h-3.5")
     end
   end
 

@@ -300,17 +300,17 @@ class Components::Metrics::Chart < Components::Base
     end
   end
 
-  # format_axis_number — Y-axis label compaction. Matches the
-  # inspiration's fmtNumber: "1k" for >= 1000, no decimal for >=
-  # 10, one decimal otherwise. Keeps labels short so they don't
-  # crowd the 38-pixel left gutter.
+  # format_axis_number — Y-axis label compaction. "Nk" for >=1000
+  # keeps labels short in the 38-pixel left gutter; below 1000 we
+  # defer to MetricFormat.number so sub-1 values keep enough
+  # precision to read as more than "0.0" (otherwise a chart with
+  # peaks at 0.05 had every gridline labelled "0.0", masking the
+  # actual scale).
   def format_axis_number(v)
     abs = v.abs
     return "#{(v / 1000.0).round(1)}k" if abs >= 1000
-    return v.round.to_s                if abs >= 100
-    return v.round.to_s                if abs >= 10
 
-    v.round(1).to_s
+    MetricFormat.number(v)
   end
 
   # nice_ceil — rounds a max value up to a "nice" axis ceiling

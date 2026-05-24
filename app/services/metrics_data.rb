@@ -136,7 +136,10 @@ class MetricsData
   def formatter_for(metric)
     case metric
     when "cpu_percent"
-      ->(v) { format("%.1f%%", v) }
+      # Adaptive precision — sub-1% values keep 2 decimals so an
+      # idle pod doesn't read as a flat "0.0%" line. See
+      # MetricFormat for the magnitude tiers.
+      MetricFormat.method(:percent)
 
     when /\Amem_/, /\Adisk_/
       method(:format_bytes)
