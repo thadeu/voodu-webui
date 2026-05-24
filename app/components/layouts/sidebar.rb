@@ -25,7 +25,7 @@ class Components::Layouts::Sidebar < Components::Base
     { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
     { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
     { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
-    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
+    # { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
     { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
   ].freeze
 
