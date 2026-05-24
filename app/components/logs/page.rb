@@ -214,6 +214,23 @@ class Components::Logs::Page < Components::Base
     end
   end
 
+  # follow_btn + wrap_btn — both true toggles. Visual state lives
+  # in JS: log_stream_controller.js#refreshToggleButton swaps two
+  # class sets (TOGGLE_ACTIVE_CLASSES vs TOGGLE_INACTIVE_CLASSES,
+  # defined alongside the same constants in the JS file) based on
+  # the live state. Same chrome both buttons share when active —
+  # purple-dim chip — so the pair reads coherently in the toolbar.
+  #
+  # Markup boots with the ACTIVE class list because both toggles
+  # default to true (follow on, wrap on). Connect() in the
+  # controller calls refreshToggleButton(target, true/false) so
+  # any future default flip is one place.
+  #
+  # Why class swap instead of Tailwind `data-[active=true]:*`
+  # variants? Tailwind 4's source scanner didn't reliably emit
+  # those CSS rules for our setup; class swap is portable and
+  # explicit. Less elegant but works everywhere.
+
   def follow_btn
     button(
       type: "button",
@@ -222,27 +239,59 @@ class Components::Logs::Page < Components::Base
         action: "click->log-stream#toggleFollow",
         active: "true"
       },
-      class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium"
+      # Both class sets MUST stay reachable to Tailwind's source
+      # scanner — listing them inline here (rather than building
+      # the string in JS) is what keeps both purple AND neutral
+      # variants in the final CSS bundle.
+      class: "inline-flex items-center gap-1.5 px-3 h-8 border text-[12px] font-medium border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
     ) do
-      span(
-        class: "inline-block w-1.5 h-1.5 rounded-full animate-voodu-pulse",
-        style: "background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
-      )
+      # Live dot — green + pulsing when Follow is active, muted +
+      # static when toggled off. CSS-driven via the parent button's
+      # [data-active] attribute (see .voodu-live-dot in theme.css),
+      # so the JS toggle that already flips data-active also drives
+      # the dot state — no extra target needed.
+      span(class: "voodu-live-dot")
       span { "Follow" }
     end
   end
 
+  # wrap_btn — defaults to ACTIVE. Long log lines (JSON dumps,
+  # stack traces) wrap by default; toggle off when the operator
+  # wants raw line geometry with horizontal scroll.
   def wrap_btn
     button(
       type: "button",
       data: {
         log_stream_target: "wrap",
         action: "click->log-stream#toggleWrap",
-        active: "false"
+        active: "true"
       },
-      class: "inline-flex items-center px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+      class: "inline-flex items-center px-3 h-8 border text-[12px] font-medium border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
     ) { "Wrap" }
   end
+
+  # tailwind_source_anchor — invisible div whose only purpose is to
+  # hold the INACTIVE toggle classes as a string so the Tailwind
+  # source scanner keeps them in the bundle. The buttons start
+  # ACTIVE, so without this anchor the inactive classes would never
+  # appear in the rendered HTML at boot and the JIT compiler would
+  # tree-shake them out. The JS toggle then would set classNames
+  # that have no matching CSS.
+  #
+  # Don't render this — it's only here so the strings exist in the
+  # .rb source for the @source scanner to pick up. (Phlex requires
+  # something callable; we never invoke it.)
+  #
+  # If you remove this method, also remove the same strings from
+  # log_stream_controller.js's TOGGLE_INACTIVE_CLASSES — otherwise
+  # the inactive state will fall back to unstyled.
+  TOGGLE_INACTIVE_CLASSES_FOR_TAILWIND_SOURCE = [
+    "border-voodu-border",
+    "bg-voodu-surface",
+    "text-voodu-text-2",
+    "hover:bg-voodu-surface-2",
+    "hover:text-voodu-text"
+  ].freeze
 
   def pause_btn
     button(

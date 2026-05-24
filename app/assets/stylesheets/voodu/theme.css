@@ -82,6 +82,36 @@
 .log-row .log-body  { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .log-wrap .log-row .log-body { text-overflow: clip; }
 
+/* ── Live indicator dot ──
+ *
+ * Used inside the Follow toggle in the log viewer. The dot's color
+ * + animation reflect whether the parent button is active (live) or
+ * not — driven by the [data-active] attribute the JS already flips
+ * in refreshToggleButton, so this is pure CSS state.
+ *
+ * Active   → green, pulsing — signals "watching live."
+ * Inactive → muted, static  — signals "follow paused / off."
+ *
+ * Sits as a sibling rule to the chip's class swap so the same
+ * `data-active` toggle drives both the chrome AND the dot, without
+ * the JS having to know about a second target.
+ */
+.voodu-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--voodu-muted-2);
+  box-shadow: none;
+  animation: none;
+}
+
+[data-active="true"] .voodu-live-dot {
+  background: var(--voodu-green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);
+  animation: voodu-pulse 2.4s ease-in-out infinite;
+}
+
 /* ── Animations ──
  *
  *  voodu-pulse — used by StatusDot for live states (running, online,

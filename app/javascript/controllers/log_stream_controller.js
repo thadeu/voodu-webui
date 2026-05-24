@@ -1,5 +1,24 @@
 import { Controller } from "@hotwired/stimulus"
 
+// Toggle button class sets — MUST stay in sync with the same
+// strings rendered in app/components/logs/page.rb (TOGGLE_INACTIVE_
+// CLASSES_FOR_TAILWIND_SOURCE is the anchor that keeps the inactive
+// classes in the Tailwind bundle). Active = purple-dim chip,
+// Inactive = neutral surface chip.
+const TOGGLE_ACTIVE_CLASSES = [
+  "border-voodu-accent-line",
+  "bg-voodu-accent-dim",
+  "text-voodu-accent-2"
+]
+
+const TOGGLE_INACTIVE_CLASSES = [
+  "border-voodu-border",
+  "bg-voodu-surface",
+  "text-voodu-text-2",
+  "hover:bg-voodu-surface-2",
+  "hover:text-voodu-text"
+]
+
 // LogStreamController — live tail viewer.
 //
 // Two modes selected by the `streamUrl` data value:
@@ -38,7 +57,13 @@ export default class extends Controller {
     this.visibleCount  = 0
     this.paused        = false
     this.follow        = true
-    this.wrap          = false
+    // Wrap defaults to true — long log lines (JSON dumps, stack
+    // traces, multi-KB payloads) wrap on the viewport instead of
+    // forcing horizontal scroll. Operators who want raw geometry
+    // toggle it off. Markup in page.rb#wrap_btn renders the active
+    // chrome at boot; the listTarget.classList line below makes
+    // sure the actual CSS behaviour matches.
+    this.wrap          = true
     this.query         = ""
     this.activeLevels  = new Set(["HTTP", "INFO", "WARN", "ERROR"])
     this.userScrolled  = false
@@ -54,6 +79,14 @@ export default class extends Controller {
       : Object.keys(POD_PROFILES)
 
     this.updateSources()
+
+    // Apply the initial wrap state to the list element. The button
+    // chrome in page.rb#wrap_btn already renders the active chip;
+    // this line is what actually flips the CSS so long lines wrap
+    // on first paint instead of after the first toggle click.
+    if (this.hasListTarget) {
+      this.listTarget.classList.toggle("log-wrap", this.wrap)
+    }
 
     if (this.streaming) {
       this.openStream()
@@ -402,6 +435,14 @@ export default class extends Controller {
 
   refreshToggleButton(btn, active) {
     btn.dataset.active = active ? "true" : "false"
+
+    if (active) {
+      btn.classList.remove(...TOGGLE_INACTIVE_CLASSES)
+      btn.classList.add(...TOGGLE_ACTIVE_CLASSES)
+    } else {
+      btn.classList.remove(...TOGGLE_ACTIVE_CLASSES)
+      btn.classList.add(...TOGGLE_INACTIVE_CLASSES)
+    }
   }
 
   refreshLevelButton(btn, active, level) {
