@@ -52,6 +52,7 @@ class Components::Layouts::Sidebar < Components::Base
       islands_section
       nav_section
       div(class: "flex-1")
+      footer_nav
       # footer
     end
   end
@@ -134,11 +135,13 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
-  # nav_section — the primary nav. Hidden when there's no island to
-  # scope the links to (every nav item lives under /:tenant_key, so
-  # without one there's nothing meaningful to link to). Tenant-less
-  # surfaces (e.g. /islands) still get the islands_section above —
-  # that's the operator's only meaningful action there anyway.
+  # nav_section — the primary nav. Hidden only when the registry is
+  # genuinely empty (no islands at all → there's nowhere any link
+  # could meaningfully point). On tenant-LESS surfaces with islands
+  # present (e.g. /islands) the nav stays visible, scoped to the
+  # first island as a safe default — otherwise the sidebar leaves
+  # a huge vertical gap between Servers and the bottom-pinned
+  # footer entries.
   def nav_section
     return if nav_tenant_key.nil?
 
@@ -153,11 +156,15 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   # nav_tenant_key — the tenant_key the nav items should resolve to.
-  # On tenant-scoped pages it's the active island; on tenant-less
-  # pages (/islands, /islands/new) the sidebar gracefully hides nav
-  # (see nav_section's early return).
+  # Preference order:
+  #   1. Active island (tenant-scoped pages).
+  #   2. First registered island (tenant-LESS pages like /islands
+  #      — keeps the operator's "jump back into a server" affordance
+  #      visible from the registry page).
+  #   3. nil (true empty state, onboarding flow) — nav section
+  #      hides itself entirely.
   def nav_tenant_key
-    @current_island&.key
+    (@current_island || @islands.first)&.key
   end
 
   # nav_item — active state is the design beta's signature: purple
@@ -211,6 +218,38 @@ class Components::Layouts::Sidebar < Components::Base
     return @current_path == href if item[:path] == :tenant_root
 
     @current_path.start_with?(href)
+  end
+
+  # footer_nav — tenant-LESS links pinned to the bottom of the
+  # sidebar. Today just "Servers" (the registry / management page);
+  # future entries (Help, Profile, Logout) hang off here too.
+  # Visually mirrors nav_section but without the "Navigation"
+  # section heading — these are utility links, not the primary
+  # site map.
+  def footer_nav
+    div(class: "flex flex-col gap-px px-2.5 pb-3 pt-2 border-t border-voodu-border") do
+      footer_nav_item(
+        label:  "Servers",
+        href:   helpers.islands_path,
+        icon:   :ServerStackOutline,
+        active: @current_path.start_with?("/islands")
+      )
+    end
+  end
+
+  def footer_nav_item(label:, href:, icon:, active:)
+    icon_klass = Icon.const_get(icon)
+    a(
+      href: href,
+      "aria-current": (active ? "page" : nil),
+      class: tokens(
+        "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
+        active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-text"
+      )
+    ) do
+      render icon_klass.new(class: "w-3.5 h-3.5 shrink-0")
+      span(class: "flex-1 text-left") { label }
+    end
   end
 
   def footer

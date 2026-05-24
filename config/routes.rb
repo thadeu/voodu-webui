@@ -13,7 +13,7 @@ Rails.application.routes.draw do
   # root because it's the bootstrapping surface ("I have no islands
   # yet, how do I add one?"). Once an island exists, every other
   # route lives under /:tenant_key/.
-  resources :islands, only: [:index, :new, :create, :destroy]
+  resources :islands, only: [:index, :new, :create, :edit, :update, :destroy]
 
   # Bare root — if any islands exist, ApplicationController redirects
   # to /<first-island-key>/; otherwise lands on /islands/new.

@@ -85,4 +85,45 @@ class IslandHealth
   end
 
   private_class_method :probe
+
+  # probe! — uncached, error-preserving preflight check used by
+  # IslandsController#create. Returns nil on success; on failure
+  # returns a SHORT human string ("Unauthorized — token rejected",
+  # "Connection refused", "Timed out", …) suitable for the modal's
+  # "Connection failed" banner.
+  #
+  # Why not just call `probe` + look up the cached :offline?
+  #   - probe caches; the registration form needs an answer for THIS
+  #     specific (endpoint, PAT) combination right now, not a stale
+  #     read for some other island that happens to share the same id.
+  #   - The form wants the REAL error class to render a useful
+  #     message; probe collapses everything to a boolean.
+  #
+  # The island doesn't need to be persisted; we synthesize a
+  # Voodu::Client directly.
+  def self.probe!(island)
+    Voodu::Client.new(island).system
+    nil
+  rescue Voodu::Client::Error => e
+    humanize_error(e)
+  rescue StandardError => e
+    "#{e.class.name.demodulize}: #{e.message}"
+  end
+
+  # humanize_error — Voodu::Client::Error's :message carries the
+  # transport detail (HTTP status, Faraday class, etc.). We rewrap
+  # the common cases so the form banner reads like operator-speak
+  # instead of stack-trace-speak.
+  def self.humanize_error(err)
+    msg = err.message.to_s
+    case msg
+    when /401|Unauthorized/i then "Agent rejected the token (401 Unauthorized). Double-check the PAT."
+    when /403|Forbidden/i    then "Agent rejected the token (403 Forbidden). The PAT lacks the required scope."
+    when /ECONNREFUSED|connection refused/i then "Connection refused. Is the voodu agent running and the port reachable?"
+    when /timeout|timed out/i then "Connection timed out. The host is reachable but the agent didn't answer in time."
+    when /Failed to open TCP|no route/i then "Couldn't reach the host. Check the endpoint URL and firewall."
+    else
+      "Couldn't reach the agent: #{msg.truncate(160)}"
+    end
+  end
 end

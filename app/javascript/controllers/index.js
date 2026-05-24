@@ -4,9 +4,6 @@
 
 import { application } from "./application"
 
-import HelloController from "./hello_controller"
-application.register("hello", HelloController)
-
 import PollingController from "./polling_controller"
 application.register("polling", PollingController)
 
@@ -36,3 +33,9 @@ application.register("sparkline-tooltip", SparklineTooltipController)
 
 import MetricsChartController from "./metrics_chart_controller"
 application.register("metrics-chart", MetricsChartController)
+
+import ModalController from "./modal_controller"
+application.register("modal", ModalController)
+
+import PatRevealController from "./pat_reveal_controller"
+application.register("pat-reveal", PatRevealController)

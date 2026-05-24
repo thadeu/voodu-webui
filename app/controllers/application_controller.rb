@@ -32,17 +32,19 @@ class ApplicationController < ActionController::Base
   # call sites tidy: `metrics_path` Just Works instead of every
   # callsite having to remember `metrics_path(tenant_key: current_island.key)`.
   #
-  # Routes that explicitly pass `tenant_key: nil` (e.g. /islands)
-  # override this — tenant-less routes don't accept the param at all,
-  # so Rails drops it silently. Routes that pass their own
-  # `tenant_key:` (e.g. the sidebar switcher building a URL for a
-  # DIFFERENT island) also win — caller's value wins over the default.
+  # We read `request.path_parameters` (the params that came from the
+  # ROUTE itself) instead of `params` (route + query + body), so a
+  # stale `?tenant_key=…` query string doesn't get re-propagated into
+  # tenant-less URLs (e.g. clicking "Edit" on /islands would otherwise
+  # generate /islands/:id/edit?tenant_key=<stale> if the operator
+  # arrived with that param in the URL).
+  #
+  # Routes that pass their own `tenant_key:` (e.g. the sidebar
+  # switcher building a URL for a DIFFERENT island) win — caller's
+  # value wins over the default.
   def default_url_options
-    if params[:tenant_key].present?
-      { tenant_key: params[:tenant_key] }
-    else
-      {}
-    end
+    key = request.path_parameters[:tenant_key]
+    key.present? ? { tenant_key: key } : {}
   end
 
   private
