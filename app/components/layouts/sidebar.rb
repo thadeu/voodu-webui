@@ -47,7 +47,7 @@ class Components::Layouts::Sidebar < Components::Base
       islands_section
       nav_section
       div(class: "flex-1")
-      footer
+      # footer
     end
   end
 
