@@ -80,7 +80,7 @@ class Components::Layouts::Sidebar < Components::Base
       render img(src: "/mono-white-512.png", alt: "Clowk", class: "h-7.5 w-auto", aria: { hidden: "true" })
 
       div(class: "flex flex-col leading-tight flex-1") do
-        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight") { "Clowk pods" }
+        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight") { "Clowk Voodu" }
       end
     end
   end

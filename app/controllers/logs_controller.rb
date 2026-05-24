@@ -29,10 +29,11 @@ class LogsController < ApplicationController
   def show
     view = Views::Logs::Show.new(
       **dashboard_context.merge(
-        updated_at: Time.current,
-        pod_name:   params[:name],
-        drawer:     drawer_embed?,
-        pods:       drawer_embed? ? [] : pods_for_picker
+        updated_at:  Time.current,
+        pod_name:    params[:name],
+        drawer:      drawer_embed?,
+        pods:        drawer_embed? ? [] : pods_for_picker,
+        back_to_pod: came_from_pod_page?(params[:name])
       )
     )
 
@@ -115,6 +116,29 @@ class LogsController < ApplicationController
 
   def pods_for_picker_cache_key
     "voodu:logs_pods:v1:island:#{current_island.id}"
+  end
+
+  # came_from_pod_page? — true when the Referer header points at the
+  # pod detail page for THIS pod (the "View logs" button on the
+  # pod's header is the only edge that leads here that way). Used
+  # to decide whether to render the "← Back to pod" affordance.
+  #
+  # When the operator arrives via the in-page picker dropdown
+  # (Logs index → select pod), the Referer is /<key>/logs or
+  # /<key>/logs/<other-name> — the back-link would either redirect
+  # to /pods/<name> the operator wasn't on, or feel like a dead-end.
+  # So we suppress it.
+  #
+  # Referer can be missing (privacy extensions, manual URL paste,
+  # opening from another origin) — in that case we conservatively
+  # hide the link too, since there's no proven "back" context.
+  def came_from_pod_page?(pod_name)
+    ref = request.referer.to_s
+    return false if ref.blank? || pod_name.blank?
+
+    URI.parse(ref).path.match?(%r{\A/[^/]+/pods/#{Regexp.escape(pod_name)}\z})
+  rescue URI::InvalidURIError
+    false
   end
 
   def set_stream_headers

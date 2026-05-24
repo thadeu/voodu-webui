@@ -158,7 +158,7 @@ class Views::Metrics::Index < Views::Base
 
   def toolbar
     div(class: "flex items-center gap-2.5 flex-wrap") do
-      render Components::Metrics::ScopePicker.new(
+      render Components::Metrics::PodPicker.new(
         scope_kind:     @data&.scope_kind || "host",
         scope_id:       @data&.scope_id,
         current_island: @current_island,

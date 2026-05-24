@@ -28,10 +28,18 @@ class Components::Logs::Page < Components::Base
   # ALSO suppressed because the drawer's header already names
   # the pod and the operator's mental model is "I'm peeking at
   # THIS pod's logs."
-  def initialize(pod_name: nil, drawer: false, pods: [])
-    @pod_name = pod_name
-    @drawer   = drawer
-    @pods     = Array(pods)
+  #
+  # back_to_pod: — render the "← Back to pod" link above the
+  # heading. The controller sets this to true ONLY when the
+  # Referer is the matching /<key>/pods/<name> page (the
+  # "View logs" button on the pod detail header). Switching
+  # pods via the in-page picker leaves it false so the link
+  # doesn't point at a page the operator wasn't on.
+  def initialize(pod_name: nil, drawer: false, pods: [], back_to_pod: false)
+    @pod_name    = pod_name
+    @drawer      = drawer
+    @pods        = Array(pods)
+    @back_to_pod = back_to_pod
   end
 
   def view_template
