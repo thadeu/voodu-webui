@@ -1,45 +1,19 @@
 // Auto-registered Stimulus controllers.
-// Run `bin/rails stimulus:manifest:update` after generating new ones,
-// or maintain this list by hand (small enough to be obvious).
+//
+// The `import controllers from "./**/*_controller.js"` glob is handled
+// by the esbuild-rails plugin (see esbuild.config.mjs) — equivalent of
+// `eagerLoadControllersFrom` from importmap-rails. Adding a new
+// `*_controller.js` under app/javascript/controllers/ is enough; no
+// manual import + register line to maintain.
+//
+// Naming contract: filename `foo_bar_controller.js` registers as
+// `foo-bar` (esbuild-rails kebabs the snake_case stem). Use
+// `data-controller="foo-bar"` to bind.
 
-// Import and register all your controllers from the importmap via controllers/**/*_controller
 import { application } from "./application"
 
-import PollingController from "./polling_controller"
-application.register("polling", PollingController)
+import controllers from "./**/*_controller.js"
 
-import ToastController from "./toast_controller"
-application.register("toast", ToastController)
-
-import DropdownController from "./dropdown_controller"
-application.register("dropdown", DropdownController)
-
-import MobileNavController from "./mobile_nav_controller"
-application.register("mobile-nav", MobileNavController)
-
-import ClipboardController from "./clipboard_controller"
-application.register("clipboard", ClipboardController)
-
-import KvFilterController from "./kv_filter_controller"
-application.register("kv-filter", KvFilterController)
-
-import LogStreamController from "./log_stream_controller"
-application.register("log-stream", LogStreamController)
-
-import UpdatedAtController from "./updated_at_controller"
-application.register("updated-at", UpdatedAtController)
-
-import SparklineTooltipController from "./sparkline_tooltip_controller"
-application.register("sparkline-tooltip", SparklineTooltipController)
-
-import MetricsChartController from "./metrics_chart_controller"
-application.register("metrics-chart", MetricsChartController)
-
-import ModalController from "./modal_controller"
-application.register("modal", ModalController)
-
-import PatRevealController from "./pat_reveal_controller"
-application.register("pat-reveal", PatRevealController)
-
-import ConfirmableController from "./confirmable_controller"
-application.register("confirmable", ConfirmableController)
+controllers.forEach((controller) => {
+  application.register(controller.name, controller.module.default)
+})
