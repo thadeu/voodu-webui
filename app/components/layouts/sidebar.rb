@@ -63,7 +63,6 @@ class Components::Layouts::Sidebar < Components::Base
       islands_section
       nav_section
       div(class: "flex-1")
-      footer_nav
       # footer
     end
   end
@@ -108,6 +107,11 @@ class Components::Layouts::Sidebar < Components::Base
       else
         div(class: "flex flex-col gap-px") do
           list.each { |island| island_row(island) }
+          # Always render — /islands is also where Edit/Remove live.
+          # Even when every island fits in the MRU window, this link
+          # is the operator's only sidebar-side path to the
+          # management page. (Earlier attempts to gate this on
+          # @islands.size > MAX hid the registry behind extra clicks.)
           see_all_link
         end
       end
@@ -272,38 +276,6 @@ class Components::Layouts::Sidebar < Components::Base
     return @current_path == href if item[:path] == :tenant_root
 
     @current_path.start_with?(href)
-  end
-
-  # footer_nav — tenant-LESS links pinned to the bottom of the
-  # sidebar. Today just "Servers" (the registry / management page);
-  # future entries (Help, Profile, Logout) hang off here too.
-  # Visually mirrors nav_section but without the "Navigation"
-  # section heading — these are utility links, not the primary
-  # site map.
-  def footer_nav
-    div(class: "flex flex-col gap-px px-2.5 pb-3 pt-2 border-t border-voodu-border") do
-      footer_nav_item(
-        label:  "Servers",
-        href:   helpers.islands_path,
-        icon:   :ServerStackOutline,
-        active: @current_path.start_with?("/islands")
-      )
-    end
-  end
-
-  def footer_nav_item(label:, href:, icon:, active:)
-    icon_klass = Icon.const_get(icon)
-    a(
-      href: href,
-      "aria-current": (active ? "page" : nil),
-      class: tokens(
-        "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-text"
-      )
-    ) do
-      render icon_klass.new(class: "w-3.5 h-3.5 shrink-0")
-      span(class: "flex-1 text-left") { label }
-    end
   end
 
   def footer
