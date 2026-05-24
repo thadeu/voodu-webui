@@ -38,7 +38,7 @@ class Components::Layouts::Sidebar < Components::Base
         "fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] -translate-x-full transition-transform duration-200 shadow-2xl",
         # 1100px+: in-flow rail of the parent flex container.
         "vmd:static vmd:translate-x-0 vmd:w-[232px] vmd:max-w-none vmd:z-auto vmd:transition-none vmd:shadow-none",
-        "flex flex-col border-r border-voodu-border bg-voodu-surface"
+        "flex flex-col border-r border-voodu-border bg-voodu-bg-2"
       ),
       data: { mobile_nav_target: "sidebar" },
       aria: { label: "Sidebar" }

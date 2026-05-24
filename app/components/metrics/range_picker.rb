@@ -8,7 +8,7 @@
 # active scope params so the operator can range-flip without
 # losing their scope selection.
 class Components::Metrics::RangePicker < Components::Base
-  RANGES = %w[5m 15m 1h 6h 24h 7d 30d].freeze
+  RANGES = %w[5m 15m 1h 6h 24h 7d].freeze
 
   def initialize(range:)
     @range = range

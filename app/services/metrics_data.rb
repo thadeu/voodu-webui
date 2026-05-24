@@ -51,28 +51,26 @@ class MetricsData
       }
     end
 
-    # Append the literal latest sample as the rightmost point so
-    # the chart's last dot matches the headline. The bucketed
-    # series may aggregate the latest sample into a multi-sample
-    # bucket whose AVG diverges from the actual latest value
-    # (e.g. last bucket = [8%, 10%, 16.7%] → avg 11.3, but the
-    # operator's "current" is 16.7). Appending the literal latest
-    # gives the rendered chart a final dot at the same y the
-    # headline is showing.
+    # Append the LATEST sample as the rightmost point. Reads from
+    # the shared latest cache (NOT payload["latest"]) so the chart's
+    # last dot is the same value across every range pill — the
+    # bucketed series may have been cached against this range
+    # 60s ago, while a different range pill just refreshed the
+    # shared latest 5s ago. Always using the shared cell keeps
+    # headline + rightmost dot in lock-step across ranges.
     #
-    # Skip when latest is missing (older controller, cold boot)
-    # or when it's already at/before the last bucket's ts (no
-    # gain from duplicating). Hover tooltip shows the unaggregated
+    # Skip when no latest is cached (cold boot before first fetch)
+    # or when its ts isn't newer than the last bucket point — no
+    # gain from duplicating. Hover tooltip shows the unaggregated
     # value with its real timestamp.
-    if (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
+    if (latest_record = read_shared_latest(source, metric, scope, name, pod))
       last_bucket_ts = points.last && points.last[:ts]
 
-      if last_bucket_ts.nil? || latest["ts"] > last_bucket_ts
-        latest_val = latest["value"].to_f
+      if last_bucket_ts.nil? || latest_record[:ts] > last_bucket_ts
         points << {
-          ts:        latest["ts"],
-          value:     latest_val,
-          formatted: formatter.call(latest_val)
+          ts:        latest_record[:ts],
+          value:     latest_record[:value],
+          formatted: formatter.call(latest_record[:value])
         }
       end
     end
@@ -89,28 +87,31 @@ class MetricsData
       .map { |p| p[:value] }
   end
 
-  # latest_for — the SINGLE most recent unaggregated sample from
-  # the query window. Distinct from `points_for(...).last[:value]`
-  # because the chart points are bucket aggregates (avg over an
-  # interval); on long ranges the rightmost bucket smooths the
-  # real current value with N preceding samples, so the headline
-  # "CPU 54.1%" would shift to "CPU 5.7%" just by switching the
-  # range pill from 1h to 6h — confusing.
+  # latest_for — the SINGLE most recent unaggregated sample,
+  # independent of range. Reads from a SHARED cache cell so that
+  # 1h and 6h pills serve the same number — without this, each
+  # range had its own cache entry captured at a different moment
+  # and the headline jumped 8.6 ↔ 9.3 just by switching pills.
   #
-  # Returns the raw Float or nil when the window has no samples.
-  # Callers (OverviewData / PodDetailData headlines) use this for
-  # the big number; the chart keeps its bucketed series for
-  # visualisation.
+  # If the shared cell is empty (cold boot before first
+  # /metrics fetch), this method triggers a fetch which side-
+  # effects the shared cell, then reads it.
+  #
+  # Returns the raw Float or nil when there's no data.
   def latest_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
     return nil if @client.nil?
 
-    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
-    return nil unless payload.is_a?(Hash)
+    if (rec = read_shared_latest(source, metric, scope, name, pod))
+      return rec[:value]
+    end
 
-    latest = payload["latest"]
-    return nil unless latest.is_a?(Hash)
+    # Cold miss: fall through to range-based fetch — its `fetch`
+    # side-effect populates the shared cell. Subsequent reads
+    # from any range hit the populated cell.
+    fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
 
-    latest["value"].to_f
+    rec = read_shared_latest(source, metric, scope, name, pod)
+    rec && rec[:value]
   end
 
   # raw_payload exposes the full envelope (series + interval + truncated
@@ -174,33 +175,88 @@ class MetricsData
   # higher-level error banner on those pages already handles the
   # "can't reach controller" case.
   def fetch(source:, metric:, range:, interval:, scope:, name:, pod:)
-    Rails.cache.fetch(cache_key(source, metric, range, interval, scope, name, pod), expires_in: CACHE_TTL) do
-      @client.metrics(
-        source:   source,
-        metric:   metric,
-        range:    range,
-        interval: interval,
-        scope:    scope,
-        name:     name,
-        pod:      pod
-      )
+    # One hash carries ALL params that go to the API; the cache
+    # key digests it. Adding a new param (`agg=max`, `format=json`,
+    # …) becomes a one-line change here — no separate cache_key
+    # signature to update. The whole "remember to add the param to
+    # the cache key" footgun goes away.
+    query = {
+      source: source, metric: metric, range: range, interval: interval,
+      scope: scope, name: name, pod: pod
+    }
+
+    Rails.cache.fetch(cache_key(query), expires_in: CACHE_TTL) do
+      # Network round-trip — only happens on cache MISS.
+      payload = @client.metrics(**query)
+
+      # Side-effect: publish the latest to the SHARED cell so all
+      # other range pills + latest_for() see the same value.
+      # MUST be inside the cache.fetch block so we only write on
+      # miss; writing on cache-hit would overwrite a fresher
+      # shared latest (from another range's fetch) with our own
+      # stale payload, defeating the whole point of the shared
+      # cell.
+      if payload.is_a?(Hash) && (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
+        Rails.cache.write(
+          latest_cache_key(identity_from(query)),
+          { ts: latest["ts"], value: latest["value"].to_f },
+          expires_in: CACHE_TTL
+        )
+      end
+
+      payload
     end
   rescue Voodu::Client::Error => e
     Rails.logger.warn("metrics: #{source}/#{metric} #{range}: #{e.class} #{e.message}")
     nil
   end
 
-  # cache_key — namespaced per (island, source, metric, range,
-  # interval, scope, name, pod). Two browser tabs viewing the same
-  # chart share the cache; switching range / replica bypasses;
-  # another island gets its own cell.
-  def cache_key(source, metric, range, interval, scope, name, pod)
-    [
-      "voodu:metrics:v1",
-      "island:#{@island.id}",
-      source, metric, range, interval,
-      scope || "_", name || "_",
-      pod   || "_"
-    ].join(":")
+  # read_shared_latest — reads the no-range, no-interval cache cell
+  # populated by `fetch` as a side-effect. Returns `{ts:, value:}`
+  # or nil. Used by both latest_for (headline) and points_for
+  # (chart's appended rightmost dot) so both surfaces show the
+  # same number regardless of which range pill the operator is on.
+  def read_shared_latest(source, metric, scope, name, pod)
+    Rails.cache.read(latest_cache_key(
+      source: source, metric: metric, scope: scope, name: name, pod: pod
+    ))
   end
+
+  # ── Cache keys (content-addressed) ─────────────────────────────
+  #
+  # Both keys are SHA256(sorted query) prefixed with a namespace +
+  # island id. Two requests with the SAME params (regardless of
+  # hash order) hit the same cell; ANY param change invalidates
+  # cleanly. Adding a new query param requires zero changes here.
+
+  def cache_key(query)
+    "voodu:metrics:v1:island:#{@island.id}:#{digest(query)}"
+  end
+
+  def latest_cache_key(identity)
+    "voodu:metrics_latest:v1:island:#{@island.id}:#{digest(identity)}"
+  end
+
+  # identity_from — strips the range/interval (and any future
+  # bucket-shape param) from a query, leaving only the fields
+  # that identify WHICH series the latest belongs to. That's
+  # what makes the shared latest stable across range pills.
+  IDENTITY_KEYS = %i[source metric scope name pod].freeze
+
+  def identity_from(query)
+    query.slice(*IDENTITY_KEYS)
+  end
+
+  # digest — stable hash of a params hash. Sorts keys + drops nils
+  # before serialising so:
+  #   - {a:1,b:2} and {b:2,a:1} produce the same digest
+  #   - {a:1,b:nil} and {a:1} produce the same digest (consistent
+  #     handling of "param not set")
+  # 16 hex chars (64 bits) is plenty for collision-resistance at
+  # the scale of cache entries we'll ever hold.
+  def digest(params)
+    normalized = params.compact.transform_keys(&:to_s).sort.to_h.to_query
+    Digest::SHA256.hexdigest(normalized)[0, 16]
+  end
+
 end
