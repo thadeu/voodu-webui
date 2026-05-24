@@ -109,7 +109,7 @@ class Views::Metrics::Index < Views::Base
   # current scope. Matches the inspiration's conditional render.
   def pod_actions
     a(
-      href: "/logs/#{CGI.escape(@data.scope_id)}",
+      href: helpers.pod_logs_path(name: @data.scope_id),
       class: btn_secondary_classes
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
@@ -117,7 +117,7 @@ class Views::Metrics::Index < Views::Base
     end
 
     a(
-      href: "/pods/#{CGI.escape(@data.scope_id)}",
+      href: helpers.pod_path(name: @data.scope_id),
       class: btn_secondary_classes
     ) do
       render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")

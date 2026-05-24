@@ -50,9 +50,9 @@ class Components::Logs::Page < Components::Base
 
   def stream_url
     if @pod_name
-      "/logs/#{CGI.escape(@pod_name)}/stream?follow=true&tail=50"
+      "#{helpers.pod_log_stream_path(name: @pod_name)}?follow=true&tail=50"
     else
-      "/logs/stream?follow=true&tail=50"
+      "#{helpers.logs_stream_path}?follow=true&tail=50"
     end
   end
 
@@ -71,7 +71,7 @@ class Components::Logs::Page < Components::Base
 
   def back_link
     a(
-      href: "/pods/#{CGI.escape(@pod_name)}",
+      href: helpers.pod_path(name: @pod_name),
       class: "inline-flex items-center gap-1.5 self-start text-[12.5px] text-voodu-text-2 hover:text-voodu-text"
     ) do
       render Icon::ArrowLeftOutline.new(class: "w-3.5 h-3.5")
@@ -124,7 +124,7 @@ class Components::Logs::Page < Components::Base
   def pod_chip
     short = short_pod(@pod_name)
     a(
-      href: "/logs",
+      href: helpers.logs_path,
       class: "inline-flex items-center gap-1 px-2 py-[2px] border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 font-voodu-mono text-[11px] no-underline ml-1",
       aria: { label: "Clear pod filter" }
     ) do

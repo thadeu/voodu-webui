@@ -30,7 +30,7 @@ class Components::Pods::Header < Components::Base
 
   def back_link
     a(
-      href: "/pods",
+      href: helpers.pods_path,
       class: "inline-flex items-center gap-1.5 self-start text-[12.5px] text-voodu-text-2 hover:text-voodu-text"
     ) do
       render Icon::ArrowLeftOutline.new(class: "w-3.5 h-3.5")
@@ -104,7 +104,7 @@ class Components::Pods::Header < Components::Base
 
   def view_logs_btn
     a(
-      href: "/logs/#{CGI.escape(@data.name)}",
+      href: helpers.pod_logs_path(name: @data.name),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
@@ -116,7 +116,7 @@ class Components::Pods::Header < Components::Base
     name = @data.name
 
     form(
-      action: "/pods/#{CGI.escape(name)}/restart", method: "post",
+      action: helpers.restart_pod_path(name: name), method: "post",
       data: { turbo_confirm: "Restart #{name}?", turbo: false },
       class: "inline-flex"
     ) do

@@ -209,7 +209,7 @@ class Components::Overview::PodsTable < Components::Base
   def pod_cell(pod)
     td(class: "px-3 py-2.5") do
       a(
-        href: "/pods/#{CGI.escape(pod[:name])}",
+        href: helpers.pod_path(name: pod[:name]),
         class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-accent-2 transition-colors"
       ) do
         span(class: "font-voodu-mono text-[13px] font-semibold text-voodu-text whitespace-nowrap") do

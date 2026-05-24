@@ -117,7 +117,7 @@ class Components::Overview::PodCard < Components::Base
 
   def logs_btn
     a(
-      href: "/logs/#{CGI.escape(@pod[:name])}",
+      href: helpers.pod_logs_path(name: @pod[:name]),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3 h-3")
@@ -129,7 +129,7 @@ class Components::Overview::PodCard < Components::Base
     return unless @pod[:status].in?(%i[running restarting])
 
     form(
-      action: "/pods/#{CGI.escape(@pod[:name])}/restart", method: "post",
+      action: helpers.restart_pod_path(name: @pod[:name]), method: "post",
       data: { turbo_confirm: "Restart #{@pod[:name]}?", turbo: false },
       class: "inline-flex"
     ) do

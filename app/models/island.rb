@@ -24,12 +24,20 @@ class Island < ApplicationRecord
   encrypts :pat_ciphertext
 
   before_validation :normalize_endpoint
+  before_validation :ensure_key, on: :create
 
   validates :name, presence: true, uniqueness: true, length: { maximum: 64 }
   validates :endpoint, presence: true, format: {
     with: %r{\Ahttps?://[^/]+:\d+}, message: "could not be normalised to scheme://host:port"
   }
   validates :pat_ciphertext, presence: true
+  validates :key, presence: true, uniqueness: true, format: { with: /\A[a-zA-Z0-9]{6}\z/ }
+
+  # URL key alphabet. base62 (0-9, A-Z, a-z) chosen over base64 because
+  # `/+=` are URL-significant and url-safe-base64 (`-_`) adds visual
+  # noise. base62 is the sweet spot for hand-typeable + URL-clean.
+  KEY_ALPHABET = ("0".."9").to_a + ("A".."Z").to_a + ("a".."z").to_a
+  KEY_LENGTH   = 6
 
   # Convenience accessor — read/write as `island.pat` even though
   # the column is named pat_ciphertext (the name tells anyone reading
@@ -142,7 +150,36 @@ class Island < ApplicationRecord
     Rails.cache.write(uptime_cache_key(island.id), seconds.to_i, expires_in: ttl)
   end
 
+  # generate_unique_key — picks a random 6-char base62 string that
+  # isn't already used. Race-safe enough for a single-operator WebUI:
+  # the unique index on `key` is the real guard; this loop just keeps
+  # collisions from turning into RecordNotUnique exceptions at save.
+  # At 6 chars (~56 bits) the loop runs once in practice — even with
+  # 10k islands the first attempt collision probability is ~10^-12.
+  def self.generate_unique_key
+    loop do
+      candidate = Array.new(KEY_LENGTH) { KEY_ALPHABET.sample }.join
+      break candidate unless exists?(key: candidate)
+    end
+  end
+
+  # to_param — Rails uses this to interpolate the model into routes.
+  # Returning `key` instead of `id` means the URL stays opaque even
+  # when we use `island_path(island)` (rather than building the URL
+  # by hand). The route constraint matches the same shape.
+  def to_param
+    key
+  end
+
   private
+
+  # ensure_key — populates `key` on first save so the validation
+  # passes. Idempotent: never overwrites an existing key (immutable
+  # by design — keys land in operators' browser bookmarks, can't
+  # silently change).
+  def ensure_key
+    self.key ||= self.class.generate_unique_key
+  end
 
   # normalize_endpoint — turn operator-friendly input into a fully-
   # qualified URL the HTTP client can consume.

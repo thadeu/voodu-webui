@@ -13,6 +13,20 @@
 #     from Rails.cache; no network round-trip.
 #   - `?refresh=1` (the "Refresh all" button) → bypasses + repopulates.
 class DashboardController < ApplicationController
+  # Bare-root entry. No tenant_key in the URL — bounce the operator
+  # to the first available island, or to /islands/new if they haven't
+  # registered any yet. Keeps `/` a meaningful URL without having to
+  # encode "no island context" all over the dashboard.
+  skip_before_action :require_tenant!, only: :redirect_to_default
+
+  def redirect_to_default
+    if (island = Island.order(:name).first)
+      redirect_to tenant_root_path(tenant_key: island.key)
+    else
+      redirect_to new_island_path
+    end
+  end
+
   def index
     @data = OverviewData.new(
       voodu_client, current_island,

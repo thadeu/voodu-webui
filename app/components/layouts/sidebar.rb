@@ -15,13 +15,18 @@
 # Footer pinned to the bottom shows a placeholder user identity (no
 # auth in M0; M-future fills this with the real operator).
 class Components::Layouts::Sidebar < Components::Base
+  # NAV_ITEMS — the :path key maps to a route HELPER name (resolved
+  # at render-time against the current request's tenant_key via
+  # ApplicationController#default_url_options). Keeping helpers
+  # instead of literal strings means future renames (`/metrics` →
+  # `/observe/metrics`) are a one-line routes.rb change.
   NAV_ITEMS = [
-    { id: :overview, label: "Overview", icon: :Squares2x2Outline,   path: "/" },
-    { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: "/pods" },
-    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: "/logs" },
-    { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: "/metrics" },
-    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: "/alerts", badge: :alerts_count },
-    { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: "/settings" }
+    { id: :overview, label: "Overview", icon: :Squares2x2Outline,   path: :tenant_root },
+    { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
+    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
+    { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
+    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
+    { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
   ].freeze
 
   def initialize(current_path: "/", islands: [], current_island: nil)
@@ -69,7 +74,7 @@ class Components::Layouts::Sidebar < Components::Base
       div(class: "flex items-center justify-between px-2 pt-1 pb-0.5") do
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
         a(
-          href: "/islands/new",
+          href: helpers.new_island_path,
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
           aria: { label: "Add server" }
         ) do
@@ -91,15 +96,19 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2") do
       plain "no servers yet."
       br
-      a(href: "/islands/new", class: "text-voodu-accent-2 hover:underline") { "add one →" }
+      a(href: helpers.new_island_path, class: "text-voodu-accent-2 hover:underline") { "add one →" }
     end
   end
 
   def island_row(island)
     selected = @current_island && island.id == @current_island.id
 
+    # Switching island = URL swap. Always lands on Overview of the
+    # target island (matches the old POST /islands/:id/select
+    # behavior — see IslandsController history). No session write
+    # needed: the URL itself encodes the context.
     a(
-      href: "/islands/#{island.id}",
+      href: helpers.tenant_root_path(tenant_key: island.key),
       class: tokens(
         # min-h-11 (44px) matches inspiration's serverRow touch target.
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
@@ -126,7 +135,14 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
+  # nav_section — the primary nav. Hidden when there's no island to
+  # scope the links to (every nav item lives under /:tenant_key, so
+  # without one there's nothing meaningful to link to). Tenant-less
+  # surfaces (e.g. /islands) still get the islands_section above —
+  # that's the operator's only meaningful action there anyway.
   def nav_section
+    return if nav_tenant_key.nil?
+
     nav(class: "flex flex-col gap-1.5 px-2.5 pt-3.5", aria: { label: "Primary" }) do
       div(class: "px-2 pt-1 pb-0.5") do
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Navigation" }
@@ -137,6 +153,14 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
+  # nav_tenant_key — the tenant_key the nav items should resolve to.
+  # On tenant-scoped pages it's the active island; on tenant-less
+  # pages (/islands, /islands/new) the sidebar gracefully hides nav
+  # (see nav_section's early return).
+  def nav_tenant_key
+    @current_island&.key
+  end
+
   # nav_item — active state is the design beta's signature: purple
   # `accent-dim` fill with the matching `accent-line` border and
   # `accent-2` text. Idle items are muted (text-2) with a subtle
@@ -145,9 +169,10 @@ class Components::Layouts::Sidebar < Components::Base
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
+    href = helpers.public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
 
     a(
-      href: item[:path],
+      href: href,
       "aria-current": (active ? "page" : nil),
       class: tokens(
         # min-h-10 (40px) matches inspiration's navBtn touch target.
@@ -177,12 +202,16 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
-  # nav_active? — exact match for "/", prefix match for others so
-  # /pods AND /pods/foo both highlight the Pods entry.
+  # nav_active? — compares the current request path against the
+  # nav item's resolved URL. Overview matches exactly (the tenant
+  # root is the parent of every other tenant route, so prefix-
+  # matching would always hit). Everything else uses prefix match
+  # so /<key>/pods AND /<key>/pods/foo both highlight Pods.
   def nav_active?(item)
-    return @current_path == "/" if item[:path] == "/"
+    href = helpers.public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
+    return @current_path == href if item[:path] == :tenant_root
 
-    @current_path.start_with?(item[:path])
+    @current_path.start_with?(href)
   end
 
   def footer

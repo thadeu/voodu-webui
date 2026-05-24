@@ -40,7 +40,7 @@ class Views::Islands::New < Views::Base
 
   def form_block
     form(
-      action: "/islands", method: "post",
+      action: helpers.islands_path, method: "post",
       class: "flex flex-col gap-5", data: { turbo: false }
     ) do
       input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
@@ -88,7 +88,7 @@ class Views::Islands::New < Views::Base
 
       div(class: "flex items-center gap-3 pt-2") do
         render(Components::UI::Button.new(variant: :primary, type: :submit)) { "Register island" }
-        render(Components::UI::Button.new(tag: :a, variant: :ghost, href: "/islands")) { "Cancel" }
+        render(Components::UI::Button.new(tag: :a, variant: :ghost, href: helpers.islands_path)) { "Cancel" }
       end
     end
   end

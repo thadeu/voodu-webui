@@ -1,11 +1,24 @@
 # frozen_string_literal: true
 
-# IslandsController — register / list / select / delete the VPSs the
-# WebUI talks to. The "Add island" form is the single onboarding
-# touch point: operator pastes endpoint URL + PAT, hits create, and
-# the sidebar lights up.
+# IslandsController — register / list / delete the VPSs the WebUI
+# talks to.
+#
+# This controller lives OUTSIDE the tenant-scoped routes (no
+# `:tenant_key` in the URL) because:
+#
+#   - `/islands/new` must be reachable when the operator has zero
+#     islands — there's no key to scope under yet.
+#   - Listing + removing islands is the bootstrapping plane, not a
+#     per-tenant operation.
+#
+# Switching between islands is no longer a controller action — it's
+# a pure URL swap (the sidebar/topbar overwrites the `:tenant_key`
+# segment with the target island's key). That's why the old `:select`
+# member action is gone.
 class IslandsController < ApplicationController
-  before_action :set_island, only: [:show, :destroy, :select]
+  skip_before_action :require_tenant!
+
+  before_action :set_island, only: [:destroy]
 
   def index
     @islands = Island.order(:name)
@@ -20,40 +33,18 @@ class IslandsController < ApplicationController
   def create
     @island = Island.new(island_params)
     if @island.save
-      session[:current_island_id] = @island.id
-      redirect_to root_path, notice: "Island #{@island.name} registered."
+      # Land the operator on the new island's overview. The URL itself
+      # encodes the island context — no session write needed.
+      redirect_to tenant_root_path(tenant_key: @island.key),
+                  notice: "Island #{@island.name} registered."
     else
-      render Views::Islands::New.new(current_path: current_path, island: @island), status: :unprocessable_entity
+      render Views::Islands::New.new(current_path: current_path, island: @island),
+             status: :unprocessable_entity
     end
-  end
-
-  def show
-    session[:current_island_id] = @island.id
-    redirect_to root_path
-  end
-
-  # POST /islands/:id/select — switch to a different island. Always
-  # lands on Overview (root_path) rather than preserving the current
-  # page because:
-  #
-  #   1. The per-page snapshots (pods table, logs, pod detail) are
-  #      island-scoped — staying on /pods after a switch shows a
-  #      brief "loading"/cold-cache state for an island the
-  #      operator hasn't touched recently.
-  #   2. Overview is the always-warm landing page that fetches
-  #      /system + /pods on every render — guaranteed live data
-  #      for the new island in one round-trip.
-  #   3. Mental model match: "switching island" reads as "start
-  #      over on this island", not "translate my current path to
-  #      the other island."
-  def select
-    session[:current_island_id] = @island.id
-    redirect_to root_path
   end
 
   def destroy
     @island.destroy
-    session.delete(:current_island_id) if session[:current_island_id] == @island.id
     redirect_to islands_path, notice: "Island removed."
   end
 

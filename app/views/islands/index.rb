@@ -30,7 +30,7 @@ class Views::Islands::Index < Views::Base
         h1(class: "text-2xl font-semibold text-voodu-text") { "Islands" }
         p(class: "text-voodu-text-2") { "Each island = one voodu controller this WebUI talks to." }
       end
-      render(Components::UI::Button.new(tag: :a, variant: :primary, href: "/islands/new")) { "Add island" }
+      render(Components::UI::Button.new(tag: :a, variant: :primary, href: helpers.new_island_path)) { "Add island" }
     end
   end
 
@@ -40,7 +40,7 @@ class Views::Islands::Index < Views::Base
         div(class: "h-10 w-10 rounded-voodu-md bg-voodu-accent-dim", aria: { hidden: "true" })
         p(class: "text-voodu-text-2") { "No islands registered yet." }
         p(class: "text-voodu-muted text-sm") { "Add the first one to start monitoring." }
-        render(Components::UI::Button.new(tag: :a, variant: :primary, href: "/islands/new")) { "Add island" }
+        render(Components::UI::Button.new(tag: :a, variant: :primary, href: helpers.new_island_path)) { "Add island" }
       end
     end
   end
@@ -78,13 +78,14 @@ class Views::Islands::Index < Views::Base
 
   def card_footer(island)
     div(class: "flex items-center gap-2 justify-end") do
-      form_tag("/islands/#{island.id}/select", method: :post, data: { turbo: false }) do
-        button(
-          type: "submit",
-          class: "inline-flex items-center px-2.5 py-1 text-[11px] rounded-voodu-sm border border-voodu-border text-voodu-text-2 hover:bg-voodu-surface-2"
-        ) { "Select" }
-      end
-      form_tag("/islands/#{island.id}", method: :delete, data: { turbo_confirm: "Remove #{island.name}?", turbo: false }) do
+      # "Open" — URL swap to this island's overview. The old "Select"
+      # POST is gone since islands now live in the URL itself (no
+      # session state to mutate).
+      a(
+        href: helpers.tenant_root_path(tenant_key: island.key),
+        class: "inline-flex items-center px-2.5 py-1 text-[11px] rounded-voodu-sm border border-voodu-border text-voodu-text-2 hover:bg-voodu-surface-2"
+      ) { "Open" }
+      form_tag(helpers.island_path(id: island.id), method: :delete, data: { turbo_confirm: "Remove #{island.name}?", turbo: false }) do
         button(
           type: "submit",
           class: "inline-flex items-center px-2.5 py-1 text-[11px] rounded-voodu-sm border border-voodu-red/30 text-voodu-red hover:bg-voodu-red-dim"
