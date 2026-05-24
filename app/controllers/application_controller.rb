@@ -145,6 +145,19 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  # drawer_embed? — true when this request was fetched by
+  # Components::UI::Drawer to populate its panel body. Set by either:
+  #   - `?embed=1` query (used by the canonical href so it's
+  #     bookmarkable + reproducible in curl)
+  #   - `X-Drawer-Embed: 1` header (set by drawer_controller.js)
+  #
+  # Controllers gate on this to render with `layout: false` and to
+  # pass `drawer: true` into the view so back-links/chrome get
+  # suppressed.
+  def drawer_embed?
+    params[:embed].present? || request.headers["X-Drawer-Embed"].present?
+  end
+
   # voodu_client — Faraday-backed wrapper around the current_island's
   # PAT plane. Controllers that need to hit the controller use this:
   #

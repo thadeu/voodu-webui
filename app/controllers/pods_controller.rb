@@ -33,12 +33,16 @@ class PodsController < ApplicationController
       force_refresh: params[:refresh].present?
     )
 
-    render Views::Pods::Show.new(
+    view = Views::Pods::Show.new(
       **dashboard_context.merge(
-        data: @data,
-        updated_at: @data.updated_at
+        data:       @data,
+        updated_at: @data.updated_at,
+        drawer:     drawer_embed?
       )
     )
+
+    # Embed mode = drawer fetch → bare body markup, no Rails layout.
+    drawer_embed? ? render(view, layout: false) : render(view)
   end
 
   def restart

@@ -107,19 +107,34 @@ class Views::Metrics::Index < Views::Base
 
   # pod_actions — Logs + Open pod buttons only when a pod is the
   # current scope. Matches the inspiration's conditional render.
+  # pod_actions — Logs + Open pod for the active scope. Both wrap
+  # the destination in a right-side Drawer so the operator can peek
+  # without losing chart context. Cmd-click still opens the full
+  # page in a new tab (Components::UI::Drawer's trigger is an
+  # anchor, not a button — see its docs).
   def pod_actions
-    a(
-      href: helpers.pod_logs_path(name: @data.scope_id),
-      class: btn_secondary_classes
-    ) do
+    render(Components::UI::Drawer.new(
+      title:    "Logs · #{@data.scope_id}",
+      src:      "#{helpers.pod_logs_path(name: @data.scope_id)}?embed=1",
+      open_url: helpers.pod_logs_path(name: @data.scope_id),
+      trigger_attrs: { class: btn_secondary_classes }
+    )) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
       span { "Logs" }
     end
 
-    a(
-      href: helpers.pod_path(name: @data.scope_id),
-      class: btn_secondary_classes
-    ) do
+    # Pod drawer defaults narrower (30vw vs 40vw for Logs) — the
+    # drawer-mode Pods::Show drops the duplicate stat cards, so it
+    # has less to show; a thinner drawer keeps more of the Metrics
+    # page visible at the same time. Resizable handle still lets
+    # the operator override either way.
+    render(Components::UI::Drawer.new(
+      title:    "Pod · #{@data.scope_id}",
+      src:      "#{helpers.pod_path(name: @data.scope_id)}?embed=1",
+      open_url: helpers.pod_path(name: @data.scope_id),
+      width:    "30vw",
+      trigger_attrs: { class: btn_secondary_classes }
+    )) do
       render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
       span { "Open pod" }
     end

@@ -12,13 +12,18 @@
 # Title is mono with the scope half muted and the .replica_id suffix
 # in a lighter weight so the eye lands on the resource_name.
 class Components::Pods::Header < Components::Base
-  def initialize(data:)
-    @data = data
+  # drawer: true → embedded inside Components::UI::Drawer (Metrics
+  # page's "Open pod" peek). Hides "All pods" back_link — the
+  # drawer's own X / open-in-new-tab affordances cover the close
+  # and the "I want the full page" intents.
+  def initialize(data:, drawer: false)
+    @data   = data
+    @drawer = drawer
   end
 
   def view_template
     div(class: "flex flex-col gap-3") do
-      back_link
+      back_link unless @drawer
       div(class: "flex flex-wrap items-start gap-4") do
         identity_block
         action_buttons
@@ -95,9 +100,13 @@ class Components::Pods::Header < Components::Base
     raw_nets.values.first
   end
 
+  # action_buttons — View logs + Restart on the full page; only
+  # Restart inside the drawer (the operator opened the drawer from
+  # Metrics — "View logs" would be redundant with the separate Logs
+  # drawer already living in the same toolbar).
   def action_buttons
     div(class: "flex items-center gap-2 shrink-0") do
-      view_logs_btn
+      view_logs_btn unless @drawer
       restart_btn
     end
   end

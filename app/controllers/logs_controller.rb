@@ -22,9 +22,17 @@ class LogsController < ApplicationController
   end
 
   def show
-    render Views::Logs::Show.new(
-      **dashboard_context.merge(updated_at: Time.current, pod_name: params[:name])
+    view = Views::Logs::Show.new(
+      **dashboard_context.merge(
+        updated_at: Time.current,
+        pod_name:   params[:name],
+        drawer:     drawer_embed?
+      )
     )
+
+    # In embed mode skip the Rails layout entirely — the drawer's
+    # injectHTML expects bare body markup (no <html>/<head>/etc).
+    drawer_embed? ? render(view, layout: false) : render(view)
   end
 
   # stream — single-pod tail. Proxies /api/pat/v1/pods/:name/logs.

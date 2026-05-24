@@ -16,8 +16,14 @@
 # its mock generator for a fetch/SSE subscribe — everything else
 # (filters, follow, paused, counters) is structural and stays.
 class Components::Logs::Page < Components::Base
-  def initialize(pod_name: nil)
+  # drawer: true → embedded inside Components::UI::Drawer (Metrics
+  # page's "Logs" peek). Suppresses the "back to pod" link — the
+  # drawer's own header already has a close + open-in-new-tab,
+  # so "back to pod" would be a dead-end (the page outside the
+  # drawer is still the Metrics page, not Pod detail).
+  def initialize(pod_name: nil, drawer: false)
     @pod_name = pod_name
+    @drawer   = drawer
   end
 
   def view_template
@@ -61,7 +67,7 @@ class Components::Logs::Page < Components::Base
   # a single pod (matches the Pod show page's "← All pods" pattern).
   def page_header
     div(class: "flex flex-col gap-3") do
-      back_link if @pod_name
+      back_link if @pod_name && !@drawer
       div do
         h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Logs" }
         sub_line
