@@ -64,12 +64,12 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def islands_section
-    div(class: "flex flex-col gap-1 px-2 pt-3") do
-      div(class: "flex items-center justify-between px-2 py-1") do
-        span(class: "text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted") { "Servers" }
+    div(class: "flex flex-col gap-1.5 px-2.5 pt-3.5") do
+      div(class: "flex items-center justify-between px-2 pt-1 pb-0.5") do
+        span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
         a(
           href: "/islands/new",
-          class: "p-1 rounded text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
+          class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
           aria: { label: "Add server" }
         ) do
           render Icon::PlusOutline.new(class: "w-3 h-3")
@@ -100,8 +100,9 @@ class Components::Layouts::Sidebar < Components::Base
     a(
       href: "/islands/#{island.id}",
       class: tokens(
-        "flex items-center gap-2 px-2 py-1.5 border rounded-voodu-sm transition-colors",
-        selected ? "bg-voodu-accent-dim border-voodu-accent-line" : "border-transparent hover:bg-voodu-surface-2"
+        # min-h-11 (44px) matches inspiration's serverRow touch target.
+        "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
+        selected ? "bg-voodu-accent-dim border-voodu-accent-line" : "border-transparent hover:bg-[#ffffff08]"
       )
     ) do
       render Components::UI::StatusDot.new(status: island.status || :stopped)
@@ -120,9 +121,9 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def nav_section
-    nav(class: "flex flex-col gap-1 px-2 pt-4", aria: { label: "Primary" }) do
-      div(class: "px-2 py-1") do
-        span(class: "text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted") { "Navigation" }
+    nav(class: "flex flex-col gap-1.5 px-2.5 pt-3.5", aria: { label: "Primary" }) do
+      div(class: "px-2 pt-1 pb-0.5") do
+        span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Navigation" }
       end
       div(class: "flex flex-col gap-px") do
         NAV_ITEMS.each { |item| nav_item(item) }
@@ -130,6 +131,10 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
+  # nav_item — active state is the design beta's signature: purple
+  # `accent-dim` fill with the matching `accent-line` border and
+  # `accent-2` text. Idle items are muted (text-2) with a subtle
+  # hover that doesn't pretend to be a click target.
   def nav_item(item)
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
@@ -139,15 +144,18 @@ class Components::Layouts::Sidebar < Components::Base
       href: item[:path],
       "aria-current": (active ? "page" : nil),
       class: tokens(
-        "flex items-center gap-2.5 px-2.5 py-1.5 rounded-voodu-sm text-[12.5px] transition-colors",
-        active ? "bg-voodu-surface-2 text-voodu-text font-medium" : "text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+        # min-h-10 (40px) matches inspiration's navBtn touch target.
+        "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
+        active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-text"
       )
     ) do
       render icon_klass.new(class: "w-3.5 h-3.5 shrink-0")
       span(class: "flex-1 text-left") { item[:label] }
 
       if badge_count&.positive?
-        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10.5px] font-medium rounded-full bg-voodu-red text-white") { badge_count.to_s }
+        # Subtle red-tinted badge — softer than a solid red pill,
+        # matches the inspiration's `navBadge` dim/text palette.
+        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red") { badge_count.to_s }
       end
     end
   end
