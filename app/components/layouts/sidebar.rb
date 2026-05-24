@@ -114,7 +114,9 @@ class Components::Layouts::Sidebar < Components::Base
           )
         ) { island.name }
         span(class: "font-voodu-mono text-[10.5px] text-voodu-muted truncate") do
-          "#{island.host} · #{island.pods_count || 0} pods"
+          count = island.pods_count
+          suffix = count.nil? ? "— pods" : "#{count} pods"
+          "#{island.host} · #{suffix}"
         end
       end
     end

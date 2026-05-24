@@ -6,13 +6,18 @@
 # via `raw` so Spec/Network/Env/Labels cards can render bypass — no
 # field renaming, no curated subsets, no surprises.
 #
-# Decorations on top of the raw payload (the API doesn't ship them yet):
-#   - 4 sparkline series for CPU / Memory / NetRx / NetTx, deterministic
-#     per pod name so they don't flicker across refreshes.
-#   - synth current values for the 4 stat cards' big numbers.
+# Real values (from the joined `stats` block at /pods/:name):
+#   - CPU%, memory used, memory limit (declared)
 #
-# When the cluster API eventually exposes real history, drop the
-# `mock_*` calls below — view + cards keep working unchanged.
+# Decorations (the API doesn't ship them yet):
+#   - sparkline time series — synthesised from the current value;
+#     server has no history to consume.
+#
+# Cards dropped vs older mockups (NET RX / NET TX) — the controller's
+# UsageStats doesn't surface per-container network throughput; the
+# previous code synthesised them from cpu_pct which gave operators
+# fake numbers that LOOKED live. Better to omit a card than show
+# fabricated data. Reintroduce when stats.go grows network fields.
 class PodDetailData
   CACHE_TTL = 10.seconds
 
@@ -54,15 +59,20 @@ class PodDetailData
     :stopped
   end
 
-  # The four stat-card payloads (same shape Components::Overview::StatCard
-  # consumes). Period "5m" — the detail view shows a finer-grained
-  # window than the dashboard's "1h".
+  # Stat-card payloads (same shape Components::Overview::StatCard
+  # consumes). Two cards — CPU + Memory — both real from the joined
+  # `stats` block on /pods/:name.
+  #
+  # NET RX / NET TX cards removed — the controller's UsageStats
+  # doesn't surface per-pod network throughput today; the prior
+  # code derived them from cpu_pct, giving operators fake numbers
+  # that looked authoritative. Auto-fit grid rebalances cleanly to
+  # 2 cards side-by-side. Reintroduce when /stats grows network
+  # fields per pod.
   def stat_cards
     [
-      stat_card("CPU",    :CpuChipOutline,    "%.1f" % cpu_pct,  "%",    "last 5m",         "var(--voodu-accent)", cpu_pct),
-      stat_card("MEMORY", :CircleStackOutline, mem_used.to_s,    mem_unit, mem_sub,         "var(--voodu-blue)",   mem_used.to_f),
-      stat_card("NET RX", :SignalOutline,      "%.1f" % net_rx,  "Mbps", "inbound traffic", "var(--voodu-green)",  net_rx * 10),
-      stat_card("NET TX", :SignalOutline,      "%.1f" % net_tx,  "Mbps", "outbound traffic","var(--voodu-amber)",  net_tx * 10)
+      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_pct),
+      stat_card("MEMORY", :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",   mem_used_mb.to_f)
     ]
   end
 
@@ -147,53 +157,70 @@ class PodDetailData
     }
   end
 
-  # ── Mock decorations (deterministic per pod name) ───────────────
+  # ── Stat readers (real, from the joined `stats` block) ─────────
+  #
+  # The controller's /pods/{name} response now carries `stats.usage.*`
+  # (live cgroup sample) and `stats.limits.*` (manifest-declared
+  # limits). When stats is absent — controller older than W6, pod
+  # stopped, race with delete, orphan filtered by collector — the
+  # readers return 0/nil and the cards render "—" instead of
+  # fabricated numbers.
 
   def seed = @name.to_s.sum
 
   def cpu_pct
-    return 0.0 unless status_sym == :running
-
-    Random.new(seed).rand(0.5..28.0)
+    @raw&.dig("stats", "usage", "cpu_percent").to_f.round(1)
   end
 
-  def mem_used
-    return 0 unless status_sym == :running
+  def cpu_sub
+    return "pod stopped" if status_sym != :running
 
-    Random.new(seed + 1).rand(32..256)
+    declared = @raw&.dig("stats", "limits", "cpu")
+    declared.present? ? "limit #{declared}" : "no limit declared"
   end
 
-  def mem_total
-    return nil unless status_sym == :running
+  # mem_used_mb / mem_limit_mb — derived from `stats.usage.memory_*`
+  # in bytes. 1024-based MB to match `free -m` / `docker stats`.
+  # Returns 0 when the field is absent so the formatter can decide
+  # what to render (label / "—").
+  def mem_used_mb
+    bytes = @raw&.dig("stats", "usage", "memory_usage_bytes").to_i
+    return 0 if bytes.zero?
 
-    [256, 512, 1024].sample(random: Random.new(seed + 2))
+    (bytes.to_f / (1024 * 1024)).round
+  end
+
+  # mem_limit_mb prefers the manifest-declared limit (limits.memory_bytes)
+  # over the runtime cgroup limit (usage.memory_limit_bytes). Reason:
+  # when no manifest limit is declared, docker's cgroup limit equals
+  # the host's total memory (gopsutil/cgroup semantics), which is
+  # meaningless at the per-pod level. Manifest limit is what the
+  # operator actually configured — the right denominator to compare
+  # usage against. Nil when neither is set.
+  def mem_limit_mb
+    bytes = @raw&.dig("stats", "limits", "memory_bytes").to_i
+    return nil if bytes.zero?
+
+    (bytes.to_f / (1024 * 1024)).round
+  end
+
+  def mem_used_label
+    return "—" if mem_used_mb.zero? && status_sym != :running
+
+    mem_used_mb.to_s
   end
 
   def mem_unit
-    return "" if mem_total.nil?
-
-    "/ #{mem_total} MB"
+    mem_limit_mb.nil? ? "MB" : "/ #{mem_limit_mb} MB"
   end
 
   def mem_sub
-    return "pod stopped" if status_sym != :running
-    return "—" if mem_total.nil? || mem_total.zero?
+    return "pod stopped"        if status_sym != :running
+    return "no limit declared"  if mem_limit_mb.nil?
+    return "—"                  if mem_limit_mb.zero?
 
-    pct = (mem_used.to_f / mem_total * 100).round
-
+    pct = (mem_used_mb.to_f / mem_limit_mb * 100).round
     "#{pct}% of limit"
-  end
-
-  def net_rx
-    return 0.0 unless status_sym == :running
-
-    (cpu_pct * 0.6).round(1)
-  end
-
-  def net_tx
-    return 0.0 unless status_sym == :running
-
-    (cpu_pct * 0.3).round(1)
   end
 
   def synth_series(base)

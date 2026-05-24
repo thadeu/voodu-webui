@@ -199,6 +199,13 @@ class OverviewData
     # process is alive. Warm the IslandHealth cache so the sidebar
     # and topbar render :online without spending their own probe.
     IslandHealth.warm(@island, online: true)
+
+    # Warm the sidebar's pods-count badge ("0 pods" → real count).
+    # TTL slightly longer than the snapshot's 10s so the sidebar
+    # doesn't briefly blank out between page renders within the
+    # same browsing session. Stale-after-expiry behaviour is OK
+    # because the next overview render rewrites it.
+    Island.write_pods_count(@island, @pods_raw.size)
   rescue Voodu::Client::Error => e
     # Don't poison the cache with a failure — let the next request
     # retry. Operators iterating on a misconfigured PAT shouldn't have
@@ -354,12 +361,36 @@ class OverviewData
       kind:          p["kind"],
       image:         p["image"],
       status:        status,
-      cpu_pct:       mock_pod_cpu(p),
-      mem_used_mb:   mock_pod_mem(p)[:used],
-      mem_total_mb:  mock_pod_mem(p)[:total],
+      cpu_pct:       extract_cpu_pct(p),
+      mem_used_mb:   extract_mem_mb(p, "memory_usage_bytes"),
+      mem_total_mb:  extract_mem_mb(p, "memory_limit_bytes"),
       age:           format_age(p["created_at"]),
       ports:         extract_ports(p)
     }
+  end
+
+  # extract_cpu_pct — real per-container CPU% from the stats block
+  # the controller now joins into /pods?detail=true. Path:
+  #   pod.stats.usage.cpu_percent  (float, 0..100ish)
+  #
+  # Returns 0.0 when the stats block is absent — happens for stopped
+  # pods (no live cgroup), orphan pods filtered out by the collector,
+  # or in the brief window after the controller starts and before
+  # the docker stats daemon has its first sample.
+  def extract_cpu_pct(p)
+    p.dig("stats", "usage", "cpu_percent").to_f.round(1)
+  end
+
+  # extract_mem_mb — converts a bytes value at the given JSON path
+  # into MB (1024-based, matching `free -m` and the StatCard header
+  # convention) rounded to the integer the table renders. Returns
+  # nil when the path is absent so the renderer can show "—"
+  # instead of "0 MB" for stopped/orphan pods.
+  def extract_mem_mb(p, key)
+    bytes = p.dig("stats", "usage", key)
+    return nil if bytes.nil? || bytes.to_i.zero?
+
+    (bytes.to_f / (1024 * 1024)).round
   end
 
   # extract_ports — pulls unique container port numbers out of the
@@ -392,22 +423,12 @@ class OverviewData
     end + [base]
   end
 
-  def mock_pod_cpu(p)
-    # Deterministic by pod name so each row reads stable across refresh.
-    return 0.0 unless p["running"]
-
-    seed = p["name"].to_s.sum
-    Random.new(seed).rand(0.5..28.0).round(1)
-  end
-
-  def mock_pod_mem(p)
-    return { used: nil, total: nil } unless p["running"]
-
-    seed = p["name"].to_s.sum + 1
-    total = [256, 512, 768, 1024, 2048, 4096].sample(random: Random.new(seed))
-    used  = Random.new(seed + 2).rand((total * 0.1).to_i..(total * 0.85).to_i)
-    { used: used, total: total }
-  end
+  # mock_pod_cpu / mock_pod_mem — deleted. Per-pod CPU% and memory
+  # usage come from the joined `stats` block in /pods?detail=true
+  # now (see extract_cpu_pct / extract_mem_mb above). The controller
+  # runs one batch `docker stats` sample as part of the enrichment
+  # and attaches the result to each PodDetail — fixed cost regardless
+  # of pod count.
 
   # mock_pod_restarts — deleted. The "restarts" column was removed
   # from PodsTable + PodCard; once the controller surfaces a real

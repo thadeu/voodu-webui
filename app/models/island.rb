@@ -44,11 +44,28 @@ class Island < ApplicationRecord
     endpoint
   end
 
-  # M3: stubbed at 0. M4 caches the latest pod count after each
-  # /pods fetch so the sidebar shows live counts without spamming
-  # the controller on every page render.
+  # pods_count — total pod count, read from a Rails.cache key
+  # OverviewData warms after its /pods fetch. Returns nil when no
+  # snapshot exists (e.g. operator has never opened the dashboard
+  # for this island since boot) — sidebar renders "—" instead of a
+  # misleading 0.
+  #
+  # Cache TTL slightly longer than the overview snapshot (10s) so
+  # the sidebar mirrors the operator's freshest data without
+  # briefly blanking out between page renders within a session.
   def pods_count
-    0
+    Rails.cache.read(self.class.pods_count_cache_key(id))
+  end
+
+  # Class-level cache-key + writer so OverviewData (and any future
+  # consumer) can warm the count by id alone, without needing an
+  # Island instance. Same id-keyed pattern IslandHealth uses.
+  def self.pods_count_cache_key(island_id)
+    "voodu:pods_count:v1:island:#{island_id}"
+  end
+
+  def self.write_pods_count(island, count, ttl: 30.seconds)
+    Rails.cache.write(pods_count_cache_key(island.id), count.to_i, expires_in: ttl)
   end
 
   # status — :online | :offline. Read from IslandHealth's cache.
