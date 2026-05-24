@@ -140,8 +140,12 @@ class Components::UI::Drawer < Components::Base
   end
 
   def panel_header
+    # h-14 aligns with the topbar + sidebar brand so the three
+    # bottom-borders draw one continuous line across the viewport
+    # when the drawer is open. Width is the only axis that varies
+    # between the three shell regions — the top row is unified.
     header(
-      class: "flex items-center gap-2 px-4 h-12 border-b border-voodu-border bg-voodu-surface shrink-0"
+      class: "flex items-center gap-2 px-4 h-14 border-b border-voodu-border bg-voodu-surface shrink-0"
     ) do
       h2(
         id: panel_title_id,

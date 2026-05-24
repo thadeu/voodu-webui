@@ -70,7 +70,13 @@ class Components::Layouts::Sidebar < Components::Base
   private
 
   def brand
-    div(class: "flex items-center gap-2.5 px-3.5 py-3 border-b border-voodu-border") do
+    # h-14 — every top-row (sidebar brand, topbar, drawer header)
+    # uses the same height so the bottom-border draws one
+    # continuous line across the viewport. Padding shifts from
+    # py-3 to inline `h-14` because content height varies (logo +
+    # text vs single-line title vs chips) and we want the SHELL
+    # height to be the source of truth, not the content.
+    div(class: "flex items-center gap-2.5 px-3.5 h-14 border-b border-voodu-border shrink-0") do
       render img(src: "/mono-white-512.png", alt: "Clowk", class: "h-7.5 w-auto", aria: { hidden: "true" })
 
       div(class: "flex flex-col leading-tight flex-1") do
