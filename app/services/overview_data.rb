@@ -255,7 +255,7 @@ class OverviewData
       value: format("%.1f", pct), unit: "%",
       sub: cores.positive? ? "#{cores} cores · load #{load_1}" : "—",
       color: "var(--voodu-accent)",
-      series: @metrics.series_for(source: :system, metric: "cpu_percent", range: "1h"),
+      series: @metrics.points_for(source: :system, metric: "cpu_percent", range: "1h"),
       delta: nil
     }
   end
@@ -269,7 +269,7 @@ class OverviewData
       value: format("%.1f", used), unit: "GB",
       sub: total.positive? ? "of #{format('%.0f', total)} GB · #{pct}%" : "—",
       color: "var(--voodu-blue)",
-      series: @metrics.series_for(source: :system, metric: "mem_used_bytes", range: "1h"),
+      series: @metrics.points_for(source: :system, metric: "mem_used_bytes", range: "1h"),
       delta: nil
     }
   end
@@ -288,7 +288,7 @@ class OverviewData
       value: used.to_s, unit: "GB",
       sub: total.positive? ? "of #{total} GB · #{pct}%" : "—",
       color: "var(--voodu-green)",
-      series: @metrics.series_for(source: :system, metric: "disk_used_bytes", range: "1h"),
+      series: @metrics.points_for(source: :system, metric: "disk_used_bytes", range: "1h"),
       delta: nil
     }
   end

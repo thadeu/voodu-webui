@@ -14,10 +14,10 @@
 #   │     ▁▂▃▄▆▅▇▆█▅▆▇▆▅▇           │   sparkline (full width, bottom)
 #   └────────────────────────────────┘
 #
-# `series` is the sparkline data (30 numerics). When the API doesn't
-# expose history, callers fabricate a series so the UI stays visually
-# complete — Overview#fetch_overview is the canonical place that
-# decides real-vs-mock.
+# `series` is the sparkline data — an Array of rich points
+# `[{ts:, value:, formatted:}]` from MetricsData#points_for. Empty
+# array (cold boot, controller offline, no data yet) hides the
+# chart cleanly via Sparkline's `return if points.size < 2`.
 class Components::Overview::StatCard < Components::Base
   def initialize(label:, icon:, value:, unit:, sub:, color:, series:, period: "1h", delta: nil)
     @label  = label
@@ -26,7 +26,7 @@ class Components::Overview::StatCard < Components::Base
     @unit   = unit
     @sub    = sub
     @color  = color
-    @series = series
+    @series = series  # Array of {ts:, value:, formatted:} hashes
     @period = period
     @delta  = delta  # e.g. "↑ 2.4%" — nil hides the change badge
   end
@@ -83,7 +83,7 @@ class Components::Overview::StatCard < Components::Base
     return if @series.blank?
 
     render Components::UI::Sparkline.new(
-      data: @series, color: @color, height: 56, stroke: 1.5
+      points: @series, color: @color, height: 56, stroke: 1.5
     )
   end
 end

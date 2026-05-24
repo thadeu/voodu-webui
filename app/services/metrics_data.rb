@@ -23,24 +23,42 @@ class MetricsData
     @island = island
   end
 
-  # series_for — returns a bare array of Float values, ready to
-  # pass to Components::UI::Sparkline's `data:` kwarg. The chart
-  # doesn't render timestamps (sparklines are intentionally
-  # axisless — the StatCard's `period` chip already tells the
-  # operator the range), so we drop the `ts` and keep `value`s.
+  # points_for — returns rich points `[{ts:, value:, formatted:}]`
+  # the new Sparkline consumes. Each point carries the original
+  # timestamp + value + a human-readable string formatted for the
+  # metric (`12.5%`, `512 MB`, `1.2 GB`, …) so the hover tooltip
+  # doesn't have to know whether the metric is a percentage or a
+  # byte count — that knowledge lives here, where the metric name
+  # is in scope.
   #
   # Returns `[]` on any failure (controller offline, metric
-  # unknown, etc.) so the caller's `if series.present?` guard in
-  # the view degrades cleanly to "show the headline number,
-  # no sparkline."
-  def series_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
+  # unknown, etc.) so callers' `if points.present?` guard in the
+  # view degrades cleanly to "show the headline number, no chart."
+  def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
     return [] if @client.nil?
 
     payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name)
     return [] unless payload.is_a?(Hash)
 
-    points = Array(payload["series"])
-    points.map { |p| p["value"].to_f }
+    formatter = formatter_for(metric)
+
+    Array(payload["series"]).map do |p|
+      val = p["value"].to_f
+      {
+        ts:        p["ts"],
+        value:     val,
+        formatted: formatter.call(val)
+      }
+    end
+  end
+
+  # series_for — legacy shape: bare `[Float]` for callers that
+  # haven't moved to points_for yet. Kept so the migration to the
+  # rich Sparkline can land in one repo without breaking
+  # intermediate states. New code should prefer points_for.
+  def series_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
+    points_for(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name)
+      .map { |p| p[:value] }
   end
 
   # raw_payload exposes the full envelope (series + interval + truncated
@@ -53,6 +71,50 @@ class MetricsData
   end
 
   private
+
+  # formatter_for — returns a callable that renders a metric value
+  # as the operator-readable string the tooltip shows. Decisions
+  # match the StatCard headline units (pod show: cpu_sub shows
+  # `limit 0.5`; mem_used_label shows `512 MB` — tooltip must
+  # speak the same dialect).
+  #
+  # Centralising here means a new metric needs ONE change (this
+  # case statement) — Sparkline / Stimulus don't know about units.
+  def formatter_for(metric)
+    case metric
+    when "cpu_percent"
+      ->(v) { format("%.1f%%", v) }
+
+    when /\Amem_/, /\Adisk_/
+      method(:format_bytes)
+
+    when /_delta_bytes\z/
+      # Delta-per-tick rate — show as bytes/15s? Keep absolute
+      # bytes for now since the chart timeline already implies the
+      # period; user reads "100 MB in this bucket" naturally.
+      method(:format_bytes)
+
+    when /_bytes\z/
+      method(:format_bytes)
+
+    else
+      ->(v) { v.round(2).to_s }
+    end
+  end
+
+  # format_bytes — decimal kB/MB/GB matching `docker stats` (the
+  # CLI operators already use). Mirror of PodDetailData#format_bytes
+  # because tooltip rendering goes through this service.
+  def format_bytes(b)
+    b = b.to_f
+    return "0 B"                                       if b.zero?
+    return "#{b.round} B"                              if b < 1_000
+    return "#{(b / 1_000.0).round(1)} kB"              if b < 1_000_000
+    return "#{(b / 1_000_000.0).round(1)} MB"          if b < 1_000_000_000
+    return "#{(b / 1_000_000_000.0).round(1)} GB"      if b < 1_000_000_000_000
+
+    "#{(b / 1_000_000_000_000.0).round(1)} TB"
+  end
 
   # fetch — Rails.cache-backed wrapper around Voodu::Client#metrics.
   # Errors are swallowed (return nil) so a flaky chart doesn't

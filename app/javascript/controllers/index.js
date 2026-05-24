@@ -30,3 +30,6 @@ application.register("log-stream", LogStreamController)
 
 import UpdatedAtController from "./updated_at_controller"
 application.register("updated-at", UpdatedAtController)
+
+import SparklineTooltipController from "./sparkline_tooltip_controller"
+application.register("sparkline-tooltip", SparklineTooltipController)

@@ -91,7 +91,7 @@ class PodDetailData
   # guard hides the sparkline cleanly — honest empty space is
   # better than a fake fluctuating line.
   def series_for_metric(metric)
-    @metrics.series_for(
+    @metrics.points_for(
       source: :pod,
       metric: metric,
       range:  "1h",
