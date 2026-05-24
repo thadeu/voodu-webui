@@ -79,11 +79,25 @@ class Components::Overview::StatCard < Components::Base
     ) { @delta }
   end
 
+  # sparkline — uses the SAME rendering engine as the big charts
+  # on the /metrics page (Components::Metrics::Chart) just in
+  # compact mode (axes hidden). This unifies the chart look across
+  # Overview / Pod show / Metrics — same gradient + smooth curve
+  # + hover crosshair + tooltip everywhere.
+  #
+  # range_ms defaults to 1h since StatCards on Overview always
+  # request the 1h range from MetricsData.
   def sparkline
     return if @series.blank?
 
-    render Components::UI::Sparkline.new(
-      points: @series, color: @color, height: 56, stroke: 1.5
+    render Components::Metrics::Chart.new(
+      points:   @series,
+      color:    @color,
+      unit:     @unit,
+      label:    @label,
+      range_ms: 60 * 60 * 1000,
+      height:   56,
+      axes:     false
     )
   end
 end

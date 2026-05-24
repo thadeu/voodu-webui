@@ -33,3 +33,6 @@ application.register("updated-at", UpdatedAtController)
 
 import SparklineTooltipController from "./sparkline_tooltip_controller"
 application.register("sparkline-tooltip", SparklineTooltipController)
+
+import MetricsChartController from "./metrics_chart_controller"
+application.register("metrics-chart", MetricsChartController)

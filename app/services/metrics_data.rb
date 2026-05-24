@@ -34,10 +34,10 @@ class MetricsData
   # Returns `[]` on any failure (controller offline, metric
   # unknown, etc.) so callers' `if points.present?` guard in the
   # view degrades cleanly to "show the headline number, no chart."
-  def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
+  def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
     return [] if @client.nil?
 
-    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name)
+    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
     return [] unless payload.is_a?(Hash)
 
     formatter = formatter_for(metric)
@@ -56,8 +56,8 @@ class MetricsData
   # haven't moved to points_for yet. Kept so the migration to the
   # rich Sparkline can land in one repo without breaking
   # intermediate states. New code should prefer points_for.
-  def series_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
-    points_for(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name)
+  def series_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
+    points_for(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
       .map { |p| p[:value] }
   end
 
@@ -121,15 +121,16 @@ class MetricsData
   # poison the parent OverviewData/PodDetailData fetch. The
   # higher-level error banner on those pages already handles the
   # "can't reach controller" case.
-  def fetch(source:, metric:, range:, interval:, scope:, name:)
-    Rails.cache.fetch(cache_key(source, metric, range, interval, scope, name), expires_in: CACHE_TTL) do
+  def fetch(source:, metric:, range:, interval:, scope:, name:, pod:)
+    Rails.cache.fetch(cache_key(source, metric, range, interval, scope, name, pod), expires_in: CACHE_TTL) do
       @client.metrics(
         source:   source,
         metric:   metric,
         range:    range,
         interval: interval,
         scope:    scope,
-        name:     name
+        name:     name,
+        pod:      pod
       )
     end
   rescue Voodu::Client::Error => e
@@ -138,15 +139,16 @@ class MetricsData
   end
 
   # cache_key — namespaced per (island, source, metric, range,
-  # interval, scope, name). Two browser tabs viewing the same chart
-  # share the cache; switching range bypasses; another island gets
-  # its own cell.
-  def cache_key(source, metric, range, interval, scope, name)
+  # interval, scope, name, pod). Two browser tabs viewing the same
+  # chart share the cache; switching range / replica bypasses;
+  # another island gets its own cell.
+  def cache_key(source, metric, range, interval, scope, name, pod)
     [
       "voodu:metrics:v1",
       "island:#{@island.id}",
       source, metric, range, interval,
-      scope || "_", name || "_"
+      scope || "_", name || "_",
+      pod   || "_"
     ].join(":")
   end
 end

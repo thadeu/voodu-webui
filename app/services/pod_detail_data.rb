@@ -96,7 +96,12 @@ class PodDetailData
       metric: metric,
       range:  "1h",
       scope:  scope,
-      name:   resource_name
+      name:   resource_name,
+      # `pod:` pins the series to this specific replica (container).
+      # Without it, the chart would aggregate across siblings —
+      # confusing on the pod show page which is explicitly about
+      # one replica's runtime.
+      pod:    @name
     )
   end
 

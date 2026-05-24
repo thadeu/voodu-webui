@@ -82,10 +82,11 @@ module Voodu
     #       { "ts" => "2026-05-24T09:00:00Z", "value" => 12.4 },
     #       { "ts" => "2026-05-24T09:01:00Z", "value" => 13.1 }
     #     ] }
-    def metrics(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
+    def metrics(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
       params = { source: source, metric: metric, range: range, interval: interval }
       params[:scope] = scope if scope.present?
       params[:name]  = name  if name.present?
+      params[:pod]   = pod   if pod.present?
       get("metrics", params)
     end
 

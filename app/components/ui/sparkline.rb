@@ -127,14 +127,23 @@ class Components::UI::Sparkline < Components::Base
     end
   end
 
+  # path_for — Catmull-Rom → cubic bezier smoothing.
+  #
+  # Same JS→Ruby porting gotcha as Components::Metrics::Chart:
+  # `pts[-1]` in Ruby returns the last element, NOT nil. The
+  # naive `pts[i - 1] || pts[i]` fallback never triggers, and
+  # the curve's first segment derives its control point from the
+  # span between the first and last points — bowing the line
+  # out of the chart box at the start. Explicit bounds checks
+  # below.
   def path_for(pts)
     d = "M #{pts[0][0]} #{pts[0][1]}"
 
     (0...pts.size - 1).each do |i|
-      p0 = pts[i - 1] || pts[i]
+      p0 = i.zero? ? pts[i] : pts[i - 1]
       p1 = pts[i]
       p2 = pts[i + 1]
-      p3 = pts[i + 2] || p2
+      p3 = (i + 2 < pts.size) ? pts[i + 2] : p2
 
       cp1x = p1[0] + (p2[0] - p0[0]) / 6.0
       cp1y = p1[1] + (p2[1] - p0[1]) / 6.0
