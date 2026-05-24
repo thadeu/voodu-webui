@@ -21,9 +21,17 @@ class Components::Logs::Page < Components::Base
   # drawer's own header already has a close + open-in-new-tab,
   # so "back to pod" would be a dead-end (the page outside the
   # drawer is still the Metrics page, not Pod detail).
-  def initialize(pod_name: nil, drawer: false)
+  # pods: — full pod list (compact, no :detail) used to populate
+  # the Components::Logs::PodPicker dropdown. When [] / nil the
+  # picker is suppressed entirely (avoids rendering a dropdown
+  # with only "All pods" inside). In drawer mode the picker is
+  # ALSO suppressed because the drawer's header already names
+  # the pod and the operator's mental model is "I'm peeking at
+  # THIS pod's logs."
+  def initialize(pod_name: nil, drawer: false, pods: [])
     @pod_name = pod_name
     @drawer   = drawer
+    @pods     = Array(pods)
   end
 
   def view_template
@@ -47,8 +55,26 @@ class Components::Logs::Page < Components::Base
       }
     ) do
       page_header
+      pod_picker_row if show_pod_picker?
       toolbar
       viewport
+    end
+  end
+
+  # show_pod_picker? — only on the full-page surface AND when we've
+  # got real pods to populate the dropdown. Drawer mode hides it
+  # (the drawer's title is already pod-specific) and empty `pods`
+  # avoids showing a picker with only the "All pods" row.
+  def show_pod_picker?
+    !@drawer && @pods.any?
+  end
+
+  # pod_picker_row — its own toolbar row (matches the Metrics page
+  # layout where the scope picker sits in a dedicated row between
+  # page-head and the chart toolbar).
+  def pod_picker_row
+    div(class: "flex items-center gap-2 flex-wrap") do
+      render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
     end
   end
 

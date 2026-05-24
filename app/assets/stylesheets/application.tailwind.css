@@ -62,3 +62,23 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #393948;
 }
+
+/* Utility: scrollbar-hidden — auto-overflow without the visible
+ * scrollbar chrome. Matches the native-macOS behaviour where the
+ * scroll affordance is the trackpad/wheel itself, not a permanent
+ * UI element. Apply to dropdowns, modal bodies, drawer panels —
+ * anywhere a scrollbar would steal pixels from a tight surface.
+ *
+ *   Firefox:   scrollbar-width: none (standard)
+ *   WebKit:    ::-webkit-scrollbar { display: none } (Safari/Chrome)
+ *
+ * Element still scrolls via wheel/trackpad/keyboard; only the
+ * visual chrome is suppressed.
+ */
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -18,7 +18,12 @@ class LogsController < ApplicationController
   include ActionController::Live
 
   def index
-    render Views::Logs::Index.new(**dashboard_context.merge(updated_at: Time.current))
+    render Views::Logs::Index.new(
+      **dashboard_context.merge(
+        updated_at: Time.current,
+        pods:       pods_for_picker
+      )
+    )
   end
 
   def show
@@ -26,7 +31,8 @@ class LogsController < ApplicationController
       **dashboard_context.merge(
         updated_at: Time.current,
         pod_name:   params[:name],
-        drawer:     drawer_embed?
+        drawer:     drawer_embed?,
+        pods:       drawer_embed? ? [] : pods_for_picker
       )
     )
 
@@ -86,6 +92,30 @@ class LogsController < ApplicationController
   end
 
   private
+
+  # pods_for_picker — compact pod list (no `?detail=true` — we only
+  # need name/scope/resource_name/replica_id/image/status to render
+  # the dropdown rows). Cached 30s by island; same pattern
+  # MetricsPageData uses to keep its scope picker cheap.
+  #
+  # Errors swallowed → empty list → the picker is suppressed by
+  # Components::Logs::Page#show_pod_picker?. A flaky /pods call
+  # shouldn't break the log viewer itself.
+  def pods_for_picker
+    return [] if voodu_client.nil?
+
+    Rails.cache.fetch(pods_for_picker_cache_key, expires_in: 30.seconds) do
+      payload = voodu_client.pods(detail: false)
+      Array(payload && payload["pods"])
+    end
+  rescue Voodu::Client::Error => e
+    Rails.logger.warn("logs#pods_for_picker: #{e.class} #{e.message}")
+    []
+  end
+
+  def pods_for_picker_cache_key
+    "voodu:logs_pods:v1:island:#{current_island.id}"
+  end
 
   def set_stream_headers
     response.headers["Content-Type"]      = "text/plain; charset=utf-8"
