@@ -25,14 +25,25 @@ class Components::Layouts::Sidebar < Components::Base
     { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
     { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
     { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
-    # { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
+    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
     { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
   ].freeze
 
-  def initialize(current_path: "/", islands: [], current_island: nil)
-    @current_path   = current_path
-    @islands        = islands
-    @current_island = current_island
+  # @islands           — every island the operator has registered.
+  #                      Used by the topbar's switcher and to decide
+  #                      whether the "See all" footer link appears.
+  # @recent_islands    — MRU subset (cap 6) that we actually render
+  #                      in the SERVERS section. When nil we read it
+  #                      lazily from `helpers.recent_islands` so most
+  #                      callers don't have to plumb it through
+  #                      (dashboard_context doesn't carry it — see
+  #                      ApplicationController#dashboard_context for
+  #                      why).
+  def initialize(current_path: "/", islands: [], recent_islands: nil, current_island: nil)
+    @current_path    = current_path
+    @islands         = islands
+    @recent_islands  = recent_islands
+    @current_island  = current_island
   end
 
   def view_template
@@ -72,7 +83,16 @@ class Components::Layouts::Sidebar < Components::Base
   def islands_section
     div(class: "flex flex-col gap-1.5 px-2.5 pt-3.5") do
       div(class: "flex items-center justify-between px-2 pt-1 pb-0.5") do
-        span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
+        # Section label + total count. Count is the FULL registry
+        # (@islands.size), not the MRU window — gives the operator
+        # a "you've got more than what's shown" hint that justifies
+        # the See all link below.
+        span(class: "inline-flex items-baseline gap-1.5") do
+          span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
+          if @islands.any?
+            span(class: "font-voodu-mono text-[10.5px] text-voodu-muted-2") { "(#{@islands.size})" }
+          end
+        end
         a(
           href: helpers.new_island_path,
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
@@ -82,13 +102,47 @@ class Components::Layouts::Sidebar < Components::Base
         end
       end
 
-      if @islands.empty?
+      list = recent_islands_to_render
+      if list.empty?
         empty_islands
       else
         div(class: "flex flex-col gap-px") do
-          @islands.each { |island| island_row(island) }
+          list.each { |island| island_row(island) }
+          see_all_link
         end
       end
+    end
+  end
+
+  # recent_islands_to_render — explicit-injection (constructor)
+  # wins; otherwise pull from the controller's helper. The
+  # controller-side method already handles "no session yet" and
+  # "session contains deleted ids", so we can blindly use whatever
+  # it returns. Falls back to @islands for components instantiated
+  # without a request context (e.g. styleguide previews).
+  def recent_islands_to_render
+    return @recent_islands if @recent_islands
+
+    begin
+      helpers.recent_islands
+    rescue NoMethodError
+      @islands
+    end
+  end
+
+  # see_all_link — "See all →" anchor that mirrors an island_row's
+  # touch target so it reads as part of the SERVERS list, not a
+  # disconnected footer. Shown unconditionally after the MRU
+  # window because /islands is also where Edit/Remove live —
+  # useful even when every island fits in the recent slots.
+  def see_all_link
+    a(
+      href: helpers.islands_path,
+      class: "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-accent-2 transition-colors"
+    ) do
+      render Icon::ServerStackOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+      span(class: "flex-1") { "See all servers" }
+      render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted shrink-0")
     end
   end
 
