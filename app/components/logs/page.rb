@@ -77,12 +77,24 @@ class Components::Logs::Page < Components::Base
     !@drawer && @pods.any?
   end
 
-  # pod_picker_row — its own toolbar row (matches the Metrics page
-  # layout where the scope picker sits in a dedicated row between
-  # page-head and the chart toolbar).
+  # pod_picker_row — its own row above the toolbar (matches the
+  # Metrics page layout where the scope picker sits in a dedicated
+  # row between page-head and the chart toolbar). Suppressed in
+  # drawer mode and when @pods is empty (see show_pod_picker?).
   def pod_picker_row
     div(class: "flex items-center gap-2 flex-wrap") do
       render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
+    end
+  end
+
+  # toolbar — filter input + level pills + follow/wrap/pause/clear.
+  # Single row that works for both full-page and drawer surfaces.
+  def toolbar
+    div(class: "flex flex-wrap items-center gap-2") do
+      filter_input
+      level_pills
+      div(class: "flex-1")
+      actions
     end
   end
 
@@ -193,16 +205,6 @@ class Components::Logs::Page < Components::Base
     dash = left.rindex("-")
     base = dash ? left[(dash + 1)..] : left
     "#{base}#{name[dot..]}"
-  end
-
-  # toolbar — filter input + level pills + follow/wrap/pause/clear.
-  def toolbar
-    div(class: "flex flex-wrap items-center gap-2") do
-      filter_input
-      level_pills
-      div(class: "flex-1")
-      actions
-    end
   end
 
   def filter_input

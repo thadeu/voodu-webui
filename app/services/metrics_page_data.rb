@@ -130,16 +130,7 @@ class MetricsPageData
   # so we don't pay the inspect cost for the scope picker). Cached
   # by Rails.cache via the wrapper.
   def all_pods
-    @all_pods ||= begin
-      payload = Rails.cache.fetch(pods_cache_key, expires_in: 30.seconds) do
-        @client.pods(detail: false)
-      end
-
-      Array(payload && payload["pods"])
-    rescue Voodu::Client::Error => e
-      Rails.logger.warn("metrics_page: pods fetch: #{e.class} #{e.message}")
-      []
-    end
+    @all_pods ||= IslandPods.compact(@client, @island)
   end
 
   private
@@ -271,7 +262,4 @@ class MetricsPageData
     [1_000_000_000.0, "GB"]
   end
 
-  def pods_cache_key
-    "voodu:metrics_pods:v1:island:#{@island.id}"
-  end
 end

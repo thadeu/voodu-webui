@@ -94,28 +94,12 @@ class LogsController < ApplicationController
 
   private
 
-  # pods_for_picker — compact pod list (no `?detail=true` — we only
-  # need name/scope/resource_name/replica_id/image/status to render
-  # the dropdown rows). Cached 30s by island; same pattern
-  # MetricsPageData uses to keep its scope picker cheap.
-  #
-  # Errors swallowed → empty list → the picker is suppressed by
-  # Components::Logs::Page#show_pod_picker?. A flaky /pods call
-  # shouldn't break the log viewer itself.
+  # pods_for_picker — compact pod list for the PodPicker dropdown.
+  # Delegates to IslandPods.compact so Metrics + Logs share one
+  # cache cell (avoids double round-trips when the operator
+  # bounces between the two surfaces).
   def pods_for_picker
-    return [] if voodu_client.nil?
-
-    Rails.cache.fetch(pods_for_picker_cache_key, expires_in: 30.seconds) do
-      payload = voodu_client.pods(detail: false)
-      Array(payload && payload["pods"])
-    end
-  rescue Voodu::Client::Error => e
-    Rails.logger.warn("logs#pods_for_picker: #{e.class} #{e.message}")
-    []
-  end
-
-  def pods_for_picker_cache_key
-    "voodu:logs_pods:v1:island:#{current_island.id}"
+    IslandPods.compact(voodu_client, current_island)
   end
 
   # came_from_pod_page? — true when the Referer header points at the
