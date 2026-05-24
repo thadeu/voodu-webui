@@ -32,11 +32,23 @@ class IslandsController < ApplicationController
     redirect_to root_path
   end
 
-  # POST /islands/:id/select — UI affordance to switch islands without
-  # navigating away from the current page (M5 wires a dropdown to this).
+  # POST /islands/:id/select — switch to a different island. Always
+  # lands on Overview (root_path) rather than preserving the current
+  # page because:
+  #
+  #   1. The per-page snapshots (pods table, logs, pod detail) are
+  #      island-scoped — staying on /pods after a switch shows a
+  #      brief "loading"/cold-cache state for an island the
+  #      operator hasn't touched recently.
+  #   2. Overview is the always-warm landing page that fetches
+  #      /system + /pods on every render — guaranteed live data
+  #      for the new island in one round-trip.
+  #   3. Mental model match: "switching island" reads as "start
+  #      over on this island", not "translate my current path to
+  #      the other island."
   def select
     session[:current_island_id] = @island.id
-    redirect_back fallback_location: root_path
+    redirect_to root_path
   end
 
   def destroy

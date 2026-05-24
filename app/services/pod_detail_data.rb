@@ -60,19 +60,23 @@ class PodDetailData
   end
 
   # Stat-card payloads (same shape Components::Overview::StatCard
-  # consumes). Two cards — CPU + Memory — both real from the joined
-  # `stats` block on /pods/:name.
+  # consumes). Four cards in W7+: CPU / MEMORY / NET I/O / BLOCK I/O
+  # — all real from the joined `stats` block on /pods/:name.
   #
-  # NET RX / NET TX cards removed — the controller's UsageStats
-  # doesn't surface per-pod network throughput today; the prior
-  # code derived them from cpu_pct, giving operators fake numbers
-  # that looked authoritative. Auto-fit grid rebalances cleanly to
-  # 2 cards side-by-side. Reintroduce when /stats grows network
-  # fields per pod.
+  # NET I/O + BLOCK I/O show CUMULATIVE bytes since container start
+  # (matching `docker stats` columns). The headline is the total
+  # combined (rx+tx, read+write); the sub-line splits direction so
+  # operators see both sides without two cards per metric.
+  #
+  # When the controller is older than W7 (no NET/BLOCK fields on
+  # the payload), the values render as "0 B" with sub "no data"
+  # — same graceful degradation pattern as the limit-less memory.
   def stat_cards
     [
-      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_pct),
-      stat_card("MEMORY", :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",   mem_used_mb.to_f)
+      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_pct),
+      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",   mem_used_mb.to_f),
+      stat_card("NET I/O",   :SignalOutline,      net_total_label,  "",      net_sub, "var(--voodu-amber)",  net_total_pct),
+      stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label,  "",      blk_sub, "var(--voodu-green)",  blk_total_pct)
     ]
   end
 
@@ -221,6 +225,91 @@ class PodDetailData
 
     pct = (mem_used_mb.to_f / mem_limit_mb * 100).round
     "#{pct}% of limit"
+  end
+
+  # ── NET I/O ─────────────────────────────────────────────────────
+  #
+  # Cumulative since container start, from /pods/:name's joined
+  # stats block. Headline is rx+tx total; sub-line splits direction
+  # with arrows (↓ rx, ↑ tx) matching `docker stats` rendering.
+
+  def net_rx_bytes
+    @raw&.dig("stats", "usage", "net_rx_bytes").to_i
+  end
+
+  def net_tx_bytes
+    @raw&.dig("stats", "usage", "net_tx_bytes").to_i
+  end
+
+  def net_total_label
+    bytes = net_rx_bytes + net_tx_bytes
+    bytes.zero? && status_sym != :running ? "—" : format_bytes(bytes)
+  end
+
+  def net_sub
+    return "pod stopped" if status_sym != :running
+    return "no data"     if net_rx_bytes.zero? && net_tx_bytes.zero?
+
+    "↓ #{format_bytes(net_rx_bytes)}  ↑ #{format_bytes(net_tx_bytes)}"
+  end
+
+  def net_total_pct
+    # Sparkline series amplitude. Capped at 100 because the synth
+    # generator clamps to that range; this just scales the chart.
+    # Log scale so a card with 4 GB and one with 4 MB don't both
+    # look like flat ceilings — small movements still visible.
+    bytes = net_rx_bytes + net_tx_bytes
+    return 0 if bytes.zero?
+
+    [Math.log10(bytes.to_f), 9.0].min * 10
+  end
+
+  # ── BLOCK I/O ──────────────────────────────────────────────────
+  #
+  # Same pattern as NET I/O — read+write cumulative bytes since
+  # container start. ↓ read, ↑ write in the sub-line matches
+  # operator's eye (read = bytes coming IN to the process from
+  # disk; write = bytes going OUT to disk).
+
+  def blk_read_bytes
+    @raw&.dig("stats", "usage", "block_read_bytes").to_i
+  end
+
+  def blk_write_bytes
+    @raw&.dig("stats", "usage", "block_write_bytes").to_i
+  end
+
+  def blk_total_label
+    bytes = blk_read_bytes + blk_write_bytes
+    bytes.zero? && status_sym != :running ? "—" : format_bytes(bytes)
+  end
+
+  def blk_sub
+    return "pod stopped" if status_sym != :running
+    return "no data"     if blk_read_bytes.zero? && blk_write_bytes.zero?
+
+    "↓ #{format_bytes(blk_read_bytes)}  ↑ #{format_bytes(blk_write_bytes)}"
+  end
+
+  def blk_total_pct
+    bytes = blk_read_bytes + blk_write_bytes
+    return 0 if bytes.zero?
+
+    [Math.log10(bytes.to_f), 9.0].min * 10
+  end
+
+  # format_bytes — same units `docker stats` uses (decimal kB/MB/GB
+  # for I/O, even though memory uses binary MiB/GiB). Matches what
+  # an operator running `docker stats` sees alongside the WebUI.
+  def format_bytes(b)
+    b = b.to_i
+    return "0 B"                  if b.zero?
+    return "#{b} B"               if b < 1000
+    return "#{(b / 1000.0).round(1)} kB"     if b < 1_000_000
+    return "#{(b / 1_000_000.0).round(1)} MB" if b < 1_000_000_000
+    return "#{(b / 1_000_000_000.0).round(1)} GB" if b < 1_000_000_000_000
+
+    "#{(b / 1_000_000_000_000.0).round(1)} TB"
   end
 
   def synth_series(base)

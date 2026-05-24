@@ -108,20 +108,38 @@ class Island < ApplicationRecord
     self[:infra].presence
   end
 
-  # uptime — stale fallback derived from the Island record's
-  # created_at, used only on pages that haven't fetched /system
-  # (every page except Overview today). The Overview view passes
-  # the LIVE uptime from OverviewData#uptime_label into the topbar
-  # explicitly, overriding this method.
+  # uptime — humanized "Nd Nh" string surfaced in the topbar chip.
   #
-  # The whole reason this still exists is so non-Overview pages
-  # render SOMETHING in the chip rather than blank. Once every page
-  # has a system snapshot, this can be removed.
+  # Source of truth: the host uptime cached by OverviewData after
+  # its /system fetch (see Island.write_uptime_seconds). Reading
+  # from the cache means EVERY page (pods, logs, pod show, etc.)
+  # gets the live uptime — not just Overview — without each page
+  # needing to fetch /system itself.
+  #
+  # Falls back to "—" when no snapshot exists yet (operator hasn't
+  # opened Overview for this island this session). Better to show
+  # an honest dash than a fabricated count from the WebUI record's
+  # created_at, which used to read as "host uptime" but really
+  # meant "how long since you registered this island here."
   def uptime
-    return "—" if created_at.nil?
+    secs = Rails.cache.read(self.class.uptime_cache_key(id))
+    return "—" if secs.nil? || secs <= 0
 
-    days = ((Time.current - created_at).to_i / 86_400).abs
-    "#{days}d 0h"
+    days  = secs / 86_400
+    hours = (secs % 86_400) / 3600
+    "#{days}d #{hours}h"
+  end
+
+  # Class-level cache-key + writer so OverviewData (the canonical
+  # writer) can warm the value by id alone, without needing an
+  # Island instance. Same id-keyed shape used by IslandHealth and
+  # write_pods_count above.
+  def self.uptime_cache_key(island_id)
+    "voodu:uptime:v1:island:#{island_id}"
+  end
+
+  def self.write_uptime_seconds(island, seconds, ttl: 30.seconds)
+    Rails.cache.write(uptime_cache_key(island.id), seconds.to_i, expires_in: ttl)
   end
 
   private

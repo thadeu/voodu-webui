@@ -56,11 +56,23 @@ class OverviewData
     parts.join(" · ")
   end
 
-  # The four StatCard payloads — passed straight as kwargs to
+  # Stat-card payloads — passed straight as kwargs to
   # Components::Overview::StatCard.new(...).
+  #
+  # Three cards in W7+: CPU / MEMORY / DISK. The NETWORK card was
+  # removed because host-level network rate (the sum over all NICs)
+  # double-counts container traffic (eth0 → docker0 → veth*) and
+  # rarely told the operator anything actionable. Per-pod NET I/O
+  # lives on the pod show page now, where it's authoritative
+  # (`docker stats` per-container counters).
+  #
+  # The DISK card also changed shape: previously showed "I/O MB/s"
+  # (which was rate-from-deltas and rarely the question being asked)
+  # — now shows "X GB used of Y GB" (the "is the box about to run
+  # out of disk?" question that actually matters).
   def stat_cards
     [
-      stat_cpu, stat_memory, stat_disk, stat_network
+      stat_cpu, stat_memory, stat_disk
     ]
   end
 
@@ -206,6 +218,12 @@ class OverviewData
     # same browsing session. Stale-after-expiry behaviour is OK
     # because the next overview render rewrites it.
     Island.write_pods_count(@island, @pods_raw.size)
+
+    # Warm the topbar's uptime chip. Same cache pattern — every
+    # page (Pods, Logs, pod show, …) reads from this key without
+    # needing to fetch /system itself. Without this warm, the
+    # topbar uptime would show "—" on every non-Overview page.
+    Island.write_uptime_seconds(@island, uptime_seconds)
   rescue Voodu::Client::Error => e
     # Don't poison the cache with a failure — let the next request
     # retry. Operators iterating on a misconfigured PAT shouldn't have
@@ -255,39 +273,21 @@ class OverviewData
     }
   end
 
-  # Disk card carries two signals: throughput (the headline number,
-  # "MB/s") and usage (the sub-line, "184 GB used of 500 GB"). Both
-  # come from /system — disk[0] is the `/` mount (controller picks
-  # which one to surface), io is the aggregate across all devices.
+  # Disk card — usage only. Headline is the used count, sub-line
+  # is the limit + percent. /system payload carries disk[] (slice
+  # for forward-compat with multi-mount); we surface the first
+  # entry, which is `/` (the root mount, the universally-meaningful
+  # one). Future multi-mount expansion adds a picker; shape stays.
   def stat_disk
-    io_total_bps = disk_io_total_bytes_per_sec
-    mb_per_sec   = (io_total_bps / 1_000_000.0).round
-    used_gb      = disk_used_gb
-    total_gb     = disk_total_gb
+    used  = disk_used_gb
+    total = disk_total_gb
+    pct   = total.zero? ? 0 : (used.to_f / total * 100).round
     {
-      label: "DISK I/O", icon: :ServerStackOutline,
-      value: mb_per_sec.to_s, unit: "MB/s",
-      sub: total_gb.positive? ? "#{used_gb} GB used of #{total_gb} GB" : "—",
+      label: "DISK", icon: :ServerStackOutline,
+      value: used.to_s, unit: "GB",
+      sub: total.positive? ? "of #{total} GB · #{pct}%" : "—",
       color: "var(--voodu-green)",
-      series: synth_series(mb_per_sec.clamp(0, 100)),
-      delta: nil
-    }
-  end
-
-  # Network throughput — aggregated Rx + Tx in Mbps for the headline,
-  # split direction in the sub-line. Bytes → Mbps = bytes * 8 / 1e6.
-  def stat_network
-    rx_bps  = @system&.dig("net", "rx_bytes_per_sec").to_f
-    tx_bps  = @system&.dig("net", "tx_bytes_per_sec").to_f
-    rx_mbps = (rx_bps * 8 / 1_000_000.0).round(1)
-    tx_mbps = (tx_bps * 8 / 1_000_000.0).round(1)
-    total   = (rx_mbps + tx_mbps).round(1)
-    {
-      label: "NETWORK", icon: :SignalOutline,
-      value: format("%.1f", total), unit: "Mbps",
-      sub: "↑ #{tx_mbps}  ↓ #{rx_mbps} Mbps",
-      color: "var(--voodu-amber)",
-      series: synth_series(total.clamp(0, 100)),
+      series: synth_series(pct.clamp(0, 100)),
       delta: nil
     }
   end
@@ -330,15 +330,12 @@ class OverviewData
     (bytes / 1024**3).round
   end
 
-  # disk_io_total_bytes_per_sec — read + write throughput summed.
-  # The StatCard headline (one number) is more informative than
-  # two; the sub-line could expand to split when we want that
-  # detail (out of W2 scope).
-  def disk_io_total_bytes_per_sec
-    r = @system&.dig("io", "read_bytes_per_sec").to_f
-    w = @system&.dig("io", "write_bytes_per_sec").to_f
-    r + w
-  end
+  # disk_io_total_bytes_per_sec — deleted in W7. Host-level disk
+  # I/O rate was removed from /system because the rate-from-deltas
+  # approach was confusing (mix of physical + LVM + loop devices),
+  # and "is the disk filling up?" — the question operators
+  # actually ask — is answered by disk_used_gb/disk_total_gb.
+  # Per-pod block I/O is now on UsageStats; pod show renders it.
 
   # prepare_pod — normalise the PAT-plane pod record + decorate with
   # mocked fields the API doesn't expose yet.
