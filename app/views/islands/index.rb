@@ -340,22 +340,24 @@ class Views::Islands::Index < Views::Base
   end
 
   def remove_form(island)
-    form(
-      action: helpers.island_path(island), method: "post",
-      data: { turbo_confirm: "Remove #{island.name}?", turbo: false },
-      class: "inline-flex"
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
-      input(type: "hidden", name: "_method", value: "delete")
-      button(
-        type: "submit",
-        title: "Remove server",
+    render(Components::UI::Confirmable.new(
+      title:         "Remove server",
+      message:       %(Permanently remove "#{island.name}" from the registry? You can re-add it later.),
+      confirm_label: "Remove",
+      danger:        true,
+      icon:          :TrashOutline,
+      form: {
+        action: helpers.island_path(island),
+        method: :delete
+      },
+      trigger: {
+        title:        "Remove server",
         "aria-label": "Remove #{island.name}",
-        class: "inline-flex items-center gap-1.5 px-2.5 h-8 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
-      ) do
-        render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
-        span(class: "hidden vmd:inline") { "Remove" }
-      end
+        class:        "inline-flex items-center gap-1.5 px-2.5 h-8 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
+      }
+    )) do
+      render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
+      span(class: "hidden vmd:inline") { "Remove" }
     end
   end
 

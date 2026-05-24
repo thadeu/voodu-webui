@@ -168,19 +168,23 @@ class Components::Overview::PodCard < Components::Base
   def restart_btn
     return unless @pod[:status].in?(%i[running restarting])
 
-    form(
-      action: helpers.restart_pod_path(name: @pod[:name]), method: "post",
-      data: { turbo_confirm: "Restart #{@pod[:name]}?", turbo: false },
-      class: "inline-flex"
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
-      ) do
-        render Icon::ArrowPathOutline.new(class: "w-3 h-3")
-        span { "Restart" }
-      end
+    render(Components::UI::Confirmable.new(
+      title:         "Restart pod",
+      message:       %(Restart "#{@pod[:name]}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
+      confirm_label: "Restart",
+      icon:          :ArrowPathOutline,
+      form: {
+        action: helpers.restart_pod_path(name: @pod[:name]),
+        method: :post
+      },
+      trigger: {
+        title:        "Restart pod",
+        "aria-label": "Restart #{@pod[:name]}",
+        class:        "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
+      }
+    )) do
+      render Icon::ArrowPathOutline.new(class: "w-3 h-3")
+      span { "Restart" }
     end
   end
 

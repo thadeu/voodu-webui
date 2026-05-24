@@ -2,6 +2,7 @@
 // Run `bin/rails stimulus:manifest:update` after generating new ones,
 // or maintain this list by hand (small enough to be obvious).
 
+// Import and register all your controllers from the importmap via controllers/**/*_controller
 import { application } from "./application"
 
 import PollingController from "./polling_controller"
@@ -39,3 +40,6 @@ application.register("modal", ModalController)
 
 import PatRevealController from "./pat_reveal_controller"
 application.register("pat-reveal", PatRevealController)
+
+import ConfirmableController from "./confirmable_controller"
+application.register("confirmable", ConfirmableController)

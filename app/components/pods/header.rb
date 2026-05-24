@@ -115,19 +115,23 @@ class Components::Pods::Header < Components::Base
   def restart_btn
     name = @data.name
 
-    form(
-      action: helpers.restart_pod_path(name: name), method: "post",
-      data: { turbo_confirm: "Restart #{name}?", turbo: false },
-      class: "inline-flex"
-    ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
-      button(
-        type: "submit",
-        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
-      ) do
-        render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-        span { "Restart pod" }
-      end
+    render(Components::UI::Confirmable.new(
+      title:         "Restart pod",
+      message:       %(Restart "#{name}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
+      confirm_label: "Restart pod",
+      icon:          :ArrowPathOutline,
+      form: {
+        action: helpers.restart_pod_path(name: name),
+        method: :post
+      },
+      trigger: {
+        title:        "Restart pod",
+        "aria-label": "Restart #{name}",
+        class:        "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
+      }
+    )) do
+      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
+      span { "Restart pod" }
     end
   end
 end
