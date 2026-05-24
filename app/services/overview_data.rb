@@ -123,8 +123,12 @@ class OverviewData
       return
     end
 
-    @stats      = @client.stats
-    @pods_raw   = @client.pods["pods"] || []
+    @stats = @client.stats
+    # detail=true asks the controller for the enriched list (ports,
+    # env, networks, restart_policy …). Same payload `vd describe pod`
+    # consumes. The CLI/WebUI parity work guarantees the response is
+    # byte-identical across the two planes.
+    @pods_raw   = @client.pods(detail: true)["pods"] || []
     @updated_at = Time.current
 
     Rails.cache.write(
@@ -222,6 +226,10 @@ class OverviewData
   # Carries the identity tuple (scope / resource_name / replica_id)
   # alongside the legacy `name` so the table can render the compound
   # display ("scope/name.replica") without re-parsing.
+  #
+  # Ports come from the enriched detail (the response now uses
+  # ?detail=true): payload carries `ports: [{container: "80/tcp"}, …]`.
+  # We extract the container number (before `/`) + dedup.
   def prepare_pod(p)
     status = pod_status_sym(p)
 
@@ -238,8 +246,20 @@ class OverviewData
       mem_total_mb:  mock_pod_mem(p)[:total],
       restarts:      mock_pod_restarts(p),
       age:           format_age(p["created_at"]),
-      ports:         mock_pod_ports(p)
+      ports:         extract_ports(p)
     }
+  end
+
+  # extract_ports — pulls unique container port numbers out of the
+  # PodDetail payload. Input: `ports: [{"container": "80/tcp"}, ...]`.
+  # Strips protocol suffix; dedupes preserving order. When ports
+  # isn't present (compact response, or pod with no ports), returns [].
+  def extract_ports(p)
+    raw = Array(p["ports"])
+    raw.filter_map do |entry|
+      container = entry.is_a?(Hash) ? (entry["container"] || entry[:container]) : entry
+      container.to_s.split("/").first.presence
+    end.uniq
   end
 
   def pod_status_sym(p)
@@ -282,16 +302,10 @@ class OverviewData
     Random.new(seed).rand(0..12)
   end
 
-  # mock_pod_ports — intentionally empty.
-  #
-  # The PAT plane's /pods (listing) endpoint does NOT return ports —
-  # only the per-pod detail does. Fabricating numbers here based on
-  # the pod name (the old behaviour) made postgres look like it ran
-  # on :80 and redis on :8080. Until the listing API surfaces ports,
-  # we render "—" honestly.
-  def mock_pod_ports(_p)
-    []
-  end
+  # mock_pod_ports — deleted. Ports come from `extract_ports(p)` now
+  # that the WebUI calls `/pods?detail=true`. Method kept as `nil`
+  # tombstone for grep history.
+  def mock_pod_ports(_p) = []
 
   def format_age(created_at)
     return "—" if created_at.blank?

@@ -20,13 +20,15 @@ Rails.application.routes.draw do
   get  "/pods/:name", to: "pods#show", as: :pod, constraints: { name: %r{[^/]+} }
   post "/pods/:name/restart", to: "pods#restart", as: :restart_pod, constraints: { name: %r{[^/]+} }
 
-  # Logs — index (multi-source) + per-pod viewer + live stream proxy.
-  # `/logs/:name/stream` opens the PAT plane's `?follow=true` and
-  # forwards chunks verbatim (chunked text/plain) so the Stimulus
-  # log-stream controller can subscribe via fetch + ReadableStream.
-  get "/logs", to: "logs#index"
-  get "/logs/:name", to: "logs#show", as: :pod_logs, constraints: { name: %r{[^/]+} }
-  get "/logs/:name/stream", to: "logs#stream", as: :pod_log_stream, constraints: { name: %r{[^/]+} }
+  # Logs — multi-source viewer + per-pod viewer + two live stream
+  # proxies. `/logs/stream` MUST be registered before `/logs/:name`
+  # so the matcher catches the literal first — otherwise `:name`
+  # would swallow `stream` and the multi-source endpoint would render
+  # the show page (HTML, wrong content-type for a stream subscriber).
+  get "/logs",              to: "logs#index"
+  get "/logs/stream",       to: "logs#stream_all",  as: :logs_stream
+  get "/logs/:name",        to: "logs#show",        as: :pod_logs,       constraints: { name: %r{[^/]+} }
+  get "/logs/:name/stream", to: "logs#stream",      as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 
   get "/metrics",  to: "metrics#index"
   get "/alerts",   to: "alerts#index"

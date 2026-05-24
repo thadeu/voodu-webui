@@ -26,12 +26,18 @@ class Components::Logs::Page < Components::Base
       data: {
         controller: "log-stream",
         log_stream_pod_value:        @pod_name.to_s,
-        # Stream URL is set ONLY when scoped to a pod — the Stimulus
-        # controller branches on this value: present → fetch the real
-        # PAT-plane proxy at /logs/:name/stream; absent → mock generator
-        # (the multi-source /logs view stays mock until the API exposes
-        # multi-pod aggregation).
-        log_stream_stream_url_value: @pod_name ? "/logs/#{CGI.escape(@pod_name)}/stream?follow=true&tail=50" : ""
+        # Stream URL routes:
+        #
+        #   - With pod_name → /logs/:name/stream
+        #     (proxies /api/pat/v1/pods/:name/logs — one pod tail)
+        #   - Without       → /logs/stream
+        #     (proxies /api/pat/v1/logs — server-side fan-out across
+        #     every pod, each line prefixed with [pod-name])
+        #
+        # Same JS controller handles both — the multi-source response
+        # carries `[pod-name] ` line prefixes that the parser strips
+        # to attribute each line to its origin pod.
+        log_stream_stream_url_value: stream_url
       }
     ) do
       page_header
@@ -41,6 +47,14 @@ class Components::Logs::Page < Components::Base
   end
 
   private
+
+  def stream_url
+    if @pod_name
+      "/logs/#{CGI.escape(@pod_name)}/stream?follow=true&tail=50"
+    else
+      "/logs/stream?follow=true&tail=50"
+    end
+  end
 
   # page_header — H1 "Logs" + live counters subline, with a "back to
   # pod detail" link above the heading when the viewer is scoped to

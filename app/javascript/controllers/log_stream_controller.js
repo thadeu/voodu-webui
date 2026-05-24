@@ -453,14 +453,27 @@ export default class extends Controller {
 // space; otherwise "—". When the upstream evolves to ship structured
 // log lines, replace this with the real parser.
 
-const ISO_RE       = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s+(.*)$/
-const HTTP_REQ_RE  = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\S+)/
-const HTTP_RES_RE  = /(\d{3})\s+(\d+)ms\b/
-const IPV4_RE      = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/
+const ISO_RE        = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s+(.*)$/
+const HTTP_REQ_RE   = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\S+)/
+const HTTP_RES_RE   = /(\d{3})\s+(\d+)ms\b/
+const IPV4_RE       = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/
+// Multi-source line prefix: handleLogsMulti tags every line with
+// the pod that produced it. Stripped here so the row renders with
+// the right pod color + the body stays readable.
+const POD_PREFIX_RE = /^\[([^\]]+)\] (.*)$/
 
-function parseLogLine(raw, podName) {
+function parseLogLine(raw, fallbackPod) {
   let line = raw
   let ts = new Date()
+  let pod = fallbackPod
+
+  // Strip `[pod-name] ` first — when present that's the canonical
+  // attribution from the multi-source stream and trumps the URL pod.
+  const prefixMatch = line.match(POD_PREFIX_RE)
+  if (prefixMatch) {
+    pod  = prefixMatch[1]
+    line = prefixMatch[2]
+  }
 
   const isoMatch = line.match(ISO_RE)
   if (isoMatch) {
@@ -475,14 +488,14 @@ function parseLogLine(raw, podName) {
   // HTTP request
   const reqMatch = line.match(HTTP_REQ_RE)
   if (reqMatch) {
-    return { id: nextId(), ts, pod: podName, ip, level: "HTTP", type: "request",
+    return { id: nextId(), ts, pod, ip, level: "HTTP", type: "request",
              method: reqMatch[1], path: reqMatch[2] }
   }
 
   // HTTP response shape (rare in raw container logs but our CLI uses it)
   const resMatch = line.match(HTTP_RES_RE)
   if (resMatch) {
-    return { id: nextId(), ts, pod: podName, ip, level: "HTTP", type: "response",
+    return { id: nextId(), ts, pod, ip, level: "HTTP", type: "response",
              status: parseInt(resMatch[1], 10), durationMs: parseInt(resMatch[2], 10) }
   }
 
@@ -490,7 +503,7 @@ function parseLogLine(raw, podName) {
   if (/\b(ERROR|FATAL|panic)\b/i.test(line)) level = "ERROR"
   else if (/\b(WARN|WARNING)\b/i.test(line)) level = "WARN"
 
-  return { id: nextId(), ts, pod: podName, ip, level, type: "message", message: line }
+  return { id: nextId(), ts, pod, ip, level, type: "message", message: line }
 }
 
 let _id = 1

@@ -40,8 +40,20 @@ module Voodu
     end
 
     def stats         = get("stats")
-    def pods          = get("pods")
     def restart(name) = post("pods/#{CGI.escape(name)}/restart")
+
+    # pods — listing. `detail: true` asks the controller to enrich each
+    # row with the full PodDetail shape server-side (env, networks,
+    # ports, state, …), giving the WebUI the same payload `vd describe
+    # pod` consumes via a single round-trip. Without it the response
+    # is the compact list (cheaper, used by surfaces that only need
+    # name / kind / scope).
+    #
+    # The flag is opt-in to keep `vd get pods` and the dashboard
+    # header — which only render compact info — paying the cheap cost.
+    def pods(detail: false)
+      get("pods", detail ? { detail: "true" } : nil)
+    end
 
     # pod — fetches a single container's detail. The PAT plane envelopes
     # this one differently than `pods`: the response is
@@ -61,9 +73,9 @@ module Voodu
       raw_get("pods/#{CGI.escape(name)}/logs", params: { tail: tail })
     end
 
-    # Logs — follow stream. The PAT plane keeps the chunked transfer
-    # open until the container exits or the caller disconnects; each
-    # raw chunk (may be a partial line, multiple lines, etc.) is
+    # Logs — single-pod follow stream. The PAT plane keeps the chunked
+    # transfer open until the container exits or the caller disconnects;
+    # each raw chunk (may be a partial line, multiple lines, etc.) is
     # yielded to the supplied block.
     #
     # The caller is responsible for line buffering. We deliberately do
@@ -79,6 +91,34 @@ module Voodu
 
       streaming_conn.get("/api/pat/v1/pods/#{CGI.escape(name)}/logs",
                          { follow: follow, tail: tail }) do |req|
+        req.options.on_data = proc do |chunk, _overall, _env|
+          on_chunk.call(chunk)
+        end
+      end
+      nil
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
+    end
+
+    # Logs — multi-pod tail. Server-side fan-out across every pod
+    # matching the (kind, scope, name) filter; the controller
+    # multiplexes their lines into one chunked stream, each line
+    # prefixed with `[pod-name] ` so the browser can attribute it back.
+    #
+    # Empty filter → every pod on the host. Same vocabulary as
+    # `pods(detail: false)`, just applied to logs.
+    #
+    # Same chunk semantics as logs_stream — yields raw bytes, caller
+    # buffers + splits.
+    def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, &on_chunk)
+      raise ArgumentError, "block required" unless on_chunk
+
+      params = { follow: follow, tail: tail }
+      params[:scope] = scope if scope.present?
+      params[:kind]  = kind  if kind.present?
+      params[:name]  = name  if name.present?
+
+      streaming_conn.get("/api/pat/v1/logs", params) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|
           on_chunk.call(chunk)
         end
@@ -114,8 +154,8 @@ module Voodu
       end
     end
 
-    def get(path)
-      resp = conn.get("/api/pat/v1/#{path}")
+    def get(path, params = nil)
+      resp = conn.get("/api/pat/v1/#{path}", params)
       handle(resp)
     rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
       raise TransportError, e.message
