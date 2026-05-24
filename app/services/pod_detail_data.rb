@@ -32,6 +32,7 @@ class PodDetailData
     @raw        = nil
     @error      = nil
     @updated_at = Time.current
+    @metrics    = MetricsData.new(client, island)
 
     fetch!
   end
@@ -73,11 +74,30 @@ class PodDetailData
   # — same graceful degradation pattern as the limit-less memory.
   def stat_cards
     [
-      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_pct),
-      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",   mem_used_mb.to_f),
-      stat_card("NET I/O",   :SignalOutline,      net_total_label,  "",      net_sub, "var(--voodu-amber)",  net_total_pct),
-      stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label,  "",      blk_sub, "var(--voodu-green)",  blk_total_pct)
+      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", series_for_metric("cpu_percent")),
+      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  series_for_metric("mem_usage_bytes")),
+      stat_card("NET I/O",   :SignalOutline,      net_total_label,  "",      net_sub, "var(--voodu-amber)",  series_for_metric("net_rx_delta_bytes")),
+      stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label,  "",      blk_sub, "var(--voodu-green)",  series_for_metric("block_read_delta_bytes"))
     ]
+  end
+
+  # series_for_metric — pulls real time-series via MetricsData
+  # scoped to this pod's (scope, name). Aggregation on (scope, name)
+  # means the chart survives container restarts (replica_id is
+  # regenerated per spawn; (scope, name) is the stable identity).
+  #
+  # Returns [] when /metrics has no data yet (cold boot, controller
+  # offline, never sampled). StatCard's `return if @series.blank?`
+  # guard hides the sparkline cleanly — honest empty space is
+  # better than a fake fluctuating line.
+  def series_for_metric(metric)
+    @metrics.series_for(
+      source: :pod,
+      metric: metric,
+      range:  "1h",
+      scope:  scope,
+      name:   resource_name
+    )
   end
 
   # The full age string for the header chip.
@@ -153,11 +173,15 @@ class PodDetailData
     "voodu:pod_detail:v1:island:#{@island.id}:pod:#{@name}"
   end
 
-  def stat_card(label, icon, value, unit, sub, color, base_for_series)
+  # stat_card — series is now an Array of real Float values from
+  # MetricsData (caller passes via the last positional arg).
+  # Renamed positional from `base_for_series` to `series` since we
+  # no longer synthesise anything — what comes in IS the chart data.
+  def stat_card(label, icon, value, unit, sub, color, series)
     {
       label:, icon:, value:, unit:, sub:, color:,
       period: "5m", delta: nil,
-      series: synth_series(base_for_series)
+      series: series
     }
   end
 
@@ -169,8 +193,6 @@ class PodDetailData
   # stopped, race with delete, orphan filtered by collector — the
   # readers return 0/nil and the cards render "—" instead of
   # fabricated numbers.
-
-  def seed = @name.to_s.sum
 
   def cpu_pct
     @raw&.dig("stats", "usage", "cpu_percent").to_f.round(1)
@@ -312,14 +334,10 @@ class PodDetailData
     "#{(b / 1_000_000_000_000.0).round(1)} TB"
   end
 
-  def synth_series(base)
-    b = base.to_f.clamp(0, 100)
-    rng = Random.new(b.round * 17 + 3 + seed)
-    (0..38).map do |i|
-      jitter = rng.rand(-6.0..6.0)
-      ((b + jitter) + Math.sin(i / 4.0) * 4).clamp(0, 100)
-    end + [b]
-  end
+  # synth_series — deleted in M2.C4. Real time-series via
+  # MetricsData replaced this; when /metrics returns empty (cold
+  # boot, controller offline, no data yet) the StatCard's own
+  # `return if @series.blank?` guard hides the sparkline cleanly.
 
   def format_age(iso)
     return "—" if iso.blank?

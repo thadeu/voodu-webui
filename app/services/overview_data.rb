@@ -44,6 +44,7 @@ class OverviewData
     @updated_at = Time.current
     @error      = nil
     @cache_hit  = false
+    @metrics    = MetricsData.new(client, island)
     fetch!
   end
 
@@ -254,7 +255,7 @@ class OverviewData
       value: format("%.1f", pct), unit: "%",
       sub: cores.positive? ? "#{cores} cores · load #{load_1}" : "—",
       color: "var(--voodu-accent)",
-      series: synth_series(pct),
+      series: @metrics.series_for(source: :system, metric: "cpu_percent", range: "1h"),
       delta: nil
     }
   end
@@ -268,7 +269,7 @@ class OverviewData
       value: format("%.1f", used), unit: "GB",
       sub: total.positive? ? "of #{format('%.0f', total)} GB · #{pct}%" : "—",
       color: "var(--voodu-blue)",
-      series: synth_series(pct),
+      series: @metrics.series_for(source: :system, metric: "mem_used_bytes", range: "1h"),
       delta: nil
     }
   end
@@ -287,7 +288,7 @@ class OverviewData
       value: used.to_s, unit: "GB",
       sub: total.positive? ? "of #{total} GB · #{pct}%" : "—",
       color: "var(--voodu-green)",
-      series: synth_series(pct.clamp(0, 100)),
+      series: @metrics.series_for(source: :system, metric: "disk_used_bytes", range: "1h"),
       delta: nil
     }
   end
@@ -409,16 +410,11 @@ class OverviewData
     :stopped
   end
 
-  # Synthesise sparkline series — stable per current value so a
-  # refresh that returns the same number doesn't redraw the curve.
-  def synth_series(current)
-    base = current.to_f.clamp(0, 100)
-    rng = Random.new(base.round * 17 + 3)
-    (0..28).map do |i|
-      jitter = rng.rand(-8.0..8.0)
-      ((base + jitter) + Math.sin(i / 4.0) * 5).clamp(0, 100)
-    end + [base]
-  end
+  # synth_series — deleted in M2.C4. Real time-series via
+  # MetricsData replaced this; when /metrics returns empty (cold
+  # boot, controller offline, no data yet) the StatCard's own
+  # `return if @series.blank?` guard hides the sparkline cleanly.
+  # Honest empty state > fake fluctuation.
 
   # mock_pod_cpu / mock_pod_mem — deleted. Per-pod CPU% and memory
   # usage come from the joined `stats` block in /pods?detail=true

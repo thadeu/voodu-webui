@@ -61,6 +61,34 @@ module Voodu
     #   data.net.{rx_bytes_per_sec, tx_bytes_per_sec}
     def system = get("system")
 
+    # metrics — time-series chart data backed by the controller's
+    # NDJSON store (see internal/metrics on the Go side).
+    #
+    #   source:   "system" | "pod"     — required
+    #   metric:   "cpu_percent" | "mem_usage_bytes" | ...
+    #             — see internal/metrics/reader.go metricExtractors
+    #   range:    "1h" | "24h" | "7d"  (default 1h)
+    #   interval: "auto" | "15s" | "1m" | ... (default auto)
+    #   scope/name: pod-only filters; aggregation groups on
+    #             (scope, name) so charts survive container restarts.
+    #
+    # Response shape (data slice — handle() unwraps the envelope):
+    #
+    #   { "metric" => "cpu_percent",
+    #     "interval_seconds" => 60,
+    #     "available_from" => "2026-05-17T10:00:00Z",
+    #     "truncated" => false,
+    #     "series" => [
+    #       { "ts" => "2026-05-24T09:00:00Z", "value" => 12.4 },
+    #       { "ts" => "2026-05-24T09:01:00Z", "value" => 13.1 }
+    #     ] }
+    def metrics(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
+      params = { source: source, metric: metric, range: range, interval: interval }
+      params[:scope] = scope if scope.present?
+      params[:name]  = name  if name.present?
+      get("metrics", params)
+    end
+
     # pods — listing. `detail: true` asks the controller to enrich each
     # row with the full PodDetail shape server-side (env, networks,
     # ports, state, …), giving the WebUI the same payload `vd describe
