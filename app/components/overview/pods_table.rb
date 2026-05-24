@@ -116,7 +116,7 @@ class Components::Overview::PodsTable < Components::Base
       table(class: "w-full text-[12.5px] border-collapse") do
         thead(class: "bg-voodu-bg-2") do
           tr do
-            %w[pod status cpu memory restarts age ports].each do |col|
+            %w[pod status cpu memory age ports].each do |col|
               th(class: "text-left px-3 py-2 text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted border-b border-voodu-border") { col }
             end
           end
@@ -130,7 +130,7 @@ class Components::Overview::PodsTable < Components::Base
             # input zeroes every other row. Lives inside <tbody> so the
             # colspan spans the table.
             tr(hidden: true, data: { kv_filter_target: "empty" }) do
-              td(colspan: 7, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no pods match the filter." }
+              td(colspan: 6, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no pods match the filter." }
             end
           end
         end
@@ -165,7 +165,7 @@ class Components::Overview::PodsTable < Components::Base
 
   def empty_row(msg)
     tr do
-      td(colspan: 7, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { msg }
+      td(colspan: 6, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { msg }
     end
   end
 
@@ -185,7 +185,6 @@ class Components::Overview::PodsTable < Components::Base
       status_cell(pod)
       cpu_cell(pod)
       memory_cell(pod)
-      restarts_cell(pod)
       age_cell(pod)
       ports_cell(pod)
     end
@@ -254,9 +253,10 @@ class Components::Overview::PodsTable < Components::Base
     end
   end
 
-  def restarts_cell(pod)
-    td(class: "px-3 py-2.5 font-voodu-mono text-voodu-text-2") { (pod[:restarts] || 0).to_s }
-  end
+  # restarts_cell removed — the column was a fabricated number (the
+  # PAT plane's /pods doesn't expose a restart count today; was a
+  # mock). Bring it back once the controller surfaces a real count
+  # per replica.
 
   def age_cell(pod)
     td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-muted") { pod[:age] || "—" }

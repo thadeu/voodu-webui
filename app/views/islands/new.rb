@@ -66,6 +66,26 @@ class Views::Islands::New < Views::Base
         )
       end
 
+      # Region + infra are operator metadata — they don't talk to
+      # the controller. Two columns on wide viewports, stacked on
+      # narrow. Both optional; the topbar collapses chips that are
+      # blank, so leaving them empty is a valid choice.
+      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-5") do
+        render Components::Form::Group.new(label: "Region", hint: "Optional. Free-form (fra1, us-east-1, homelab).") do
+          render Components::Form::Input.new(
+            type: "text", name: "island[region]", value: @island.region == "—" ? nil : @island.region,
+            placeholder: "fra1"
+          )
+        end
+
+        render Components::Form::Group.new(label: "Infra", hint: "Optional. Where it runs (hetzner, aws, bare-metal).") do
+          render Components::Form::Input.new(
+            type: "text", name: "island[infra]", value: @island.infra,
+            placeholder: "hetzner"
+          )
+        end
+      end
+
       div(class: "flex items-center gap-3 pt-2") do
         render(Components::UI::Button.new(variant: :primary, type: :submit)) { "Register island" }
         render(Components::UI::Button.new(tag: :a, variant: :ghost, href: "/islands")) { "Cancel" }

@@ -28,6 +28,15 @@ class LogsController < ApplicationController
   end
 
   # stream — single-pod tail. Proxies /api/pat/v1/pods/:name/logs.
+  #
+  # Error handling philosophy:
+  #   We DON'T write the upstream error inline as a fake log line —
+  #   that surfaced in the operator's feed as `[stream error] Net::
+  #   ReadTimeout` polluting the log view. Instead we log it server-
+  #   side (Rails.logger) and close the stream cleanly. The Stimulus
+  #   log-stream controller handles the EOF by surfacing a "stream
+  #   broke" toast + offering to reconnect; that's the right UX
+  #   layer for connection failures, not the log buffer itself.
   def stream
     return write_no_island if voodu_client.nil?
 
@@ -37,7 +46,7 @@ class LogsController < ApplicationController
       response.stream.write(chunk)
     end
   rescue Voodu::Client::Error => e
-    safe_write("\n[stream error] #{e.message}\n")
+    Rails.logger.warn("logs#stream: #{e.class} #{e.message}")
   rescue ActionController::Live::ClientDisconnected
     # Browser closed the tab / navigated away. Normal teardown.
   ensure
@@ -62,7 +71,7 @@ class LogsController < ApplicationController
       response.stream.write(chunk)
     end
   rescue Voodu::Client::Error => e
-    safe_write("\n[stream error] #{e.message}\n")
+    Rails.logger.warn("logs#stream_all: #{e.class} #{e.message}")
   rescue ActionController::Live::ClientDisconnected
   ensure
     response.stream.close
@@ -91,6 +100,9 @@ class LogsController < ApplicationController
     response.stream.close
   end
 
+  # safe_write — defensive shim around response.stream.write that
+  # swallows the two normal disconnect errors. Kept in case future
+  # branches need to write a status message at teardown.
   def safe_write(text)
     response.stream.write(text)
   rescue IOError, ActionController::Live::ClientDisconnected

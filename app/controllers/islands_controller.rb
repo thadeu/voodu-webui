@@ -52,6 +52,10 @@ class IslandsController < ApplicationController
   end
 
   def island_params
-    params.require(:island).permit(:name, :endpoint, :pat_ciphertext)
+    # region + infra are free-text metadata the operator types at
+    # registration — they don't drive any controller behavior, they
+    # just decorate the topbar ("fra1 · hetzner"). Both nullable;
+    # the topbar collapses chips that are blank.
+    params.require(:island).permit(:name, :endpoint, :pat_ciphertext, :region, :infra)
   end
 end

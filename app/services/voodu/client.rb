@@ -42,6 +42,25 @@ module Voodu
     def stats         = get("stats")
     def restart(name) = post("pods/#{CGI.escape(name)}/restart")
 
+    # system — host-level snapshot: CPU%, memory, disk usage, disk I/O
+    # rate, network rate, uptime, kernel. Powers the Overview header
+    # and StatCards (replaces the silent-nil reads of @stats.dig("host", ...)
+    # that always coerced to 0).
+    #
+    # IO + Net rates are deltas server-side — the first request after
+    # the controller starts returns 0 for those fields (no baseline).
+    # Subsequent calls populate them. The cache TTL on the WebUI side
+    # is short enough that two consecutive page loads see real numbers.
+    #
+    # Shape (see internal/systemstats.Snapshot in clowk-voodu):
+    #   data.host.{hostname, kernel, uptime_seconds, boot_time}
+    #   data.cpu.{percent, cores, load_1, load_5, load_15}
+    #   data.mem.{used_bytes, total_bytes, available_bytes}
+    #   data.disk[].{mount, used_bytes, total_bytes}
+    #   data.io.{read_bytes_per_sec, write_bytes_per_sec}
+    #   data.net.{rx_bytes_per_sec, tx_bytes_per_sec}
+    def system = get("system")
+
     # pods — listing. `detail: true` asks the controller to enrich each
     # row with the full PodDetail shape server-side (env, networks,
     # ports, state, …), giving the WebUI the same payload `vd describe

@@ -21,11 +21,12 @@
 # the sidebar + backdrop + hamburger button all hang off one
 # coordinated controller (see mobile_nav_controller.js).
 class Components::Layouts::Dashboard < Components::Base
-  def initialize(current_path: "/", islands: [], current_island: nil, updated_at: nil)
+  def initialize(current_path: "/", islands: [], current_island: nil, updated_at: nil, uptime: nil)
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
     @updated_at     = updated_at
+    @uptime         = uptime
   end
 
   def view_template
@@ -43,7 +44,8 @@ class Components::Layouts::Dashboard < Components::Base
         render Components::Layouts::Topbar.new(
           current_island: @current_island,
           islands: @islands,
-          updated_at: @updated_at
+          updated_at: @updated_at,
+          uptime: @uptime
         )
         main(class: "flex-1 overflow-auto") { yield }
       end

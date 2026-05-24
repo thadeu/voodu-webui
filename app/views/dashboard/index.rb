@@ -21,7 +21,8 @@ class Views::Dashboard::Index < Views::Base
       current_path: @current_path,
       islands: @islands,
       current_island: @current_island,
-      updated_at: @updated_at
+      updated_at: @updated_at,
+      uptime: @data&.uptime_label
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new
@@ -52,10 +53,16 @@ class Views::Dashboard::Index < Views::Base
     end
   end
 
-  # page_header — flex-wrap means the action buttons "Open logs +
-  # Refresh all" stay inline on wide viewports and naturally fall to
-  # a new line when there isn't room. Matches the inspiration's
-  # `pageHead` style.
+  # page_header — flex-wrap means the action buttons stay inline on
+  # wide viewports and naturally fall to a new line when there
+  # isn't room. Matches the inspiration's `pageHead` style.
+  #
+  # "Refresh all" was removed — the topbar "updated Ns ago" chip is
+  # the refresh affordance now (click bypasses the cache). Operators
+  # were misreading the prominent purple button as "restart all
+  # pods" which it never was; folding the action into the chip
+  # makes the cause-and-effect obvious ("update" → "click to update
+  # again").
   def page_header
     div(class: "flex flex-wrap items-end justify-between gap-3 vmd:gap-4") do
       div(class: "min-w-0") do
@@ -64,7 +71,6 @@ class Views::Dashboard::Index < Views::Base
       end
       div(class: "flex items-center gap-2 shrink-0") do
         open_logs_btn
-        refresh_all_btn
       end
     end
   end
@@ -103,21 +109,6 @@ class Views::Dashboard::Index < Views::Base
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
       span { "Open logs" }
-    end
-  end
-
-  # refresh_all_btn — explicit cache-bypass. The query string asks
-  # the controller to wipe the snapshot cache for this island before
-  # rendering, so the operator can force a fresh round-trip even
-  # within the TTL window.
-  def refresh_all_btn
-    a(
-      href: "#{helpers.root_path}?refresh=1",
-      data: { turbo: false },
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
-    ) do
-      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-      span { "Refresh all" }
     end
   end
 

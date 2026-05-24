@@ -38,13 +38,14 @@ class Components::Overview::PodCard < Components::Base
     end
   end
 
-  # 2×2 grid: CPU / MEMORY / RESTARTS / AGE — same layout the
-  # inspiration's `ss.cardStats` produces with `grid-template-columns: 1fr 1fr`.
+  # 3-up grid: CPU / MEMORY / AGE. Restarts was removed alongside
+  # the desktop table column — the value was synthetic (no wire
+  # source) and operators reading a fake number is worse than the
+  # column being absent.
   def stats_grid
     div(class: "grid grid-cols-2 gap-2.5") do
       cpu_stat
       memory_stat
-      restarts_stat
       age_stat
     end
   end
@@ -89,16 +90,7 @@ class Components::Overview::PodCard < Components::Base
     end
   end
 
-  def restarts_stat
-    div(class: "flex flex-col gap-1") do
-      stat_label("Restarts")
-      r = @pod[:restarts] || 0
-      span(
-        class: "font-voodu-mono text-[13px]",
-        style: "color: #{r.positive? ? 'var(--voodu-amber)' : 'var(--voodu-text)'};"
-      ) { r.to_s }
-    end
-  end
+  # restarts_stat removed — see stats_grid comment.
 
   def age_stat
     div(class: "flex flex-col gap-1") do

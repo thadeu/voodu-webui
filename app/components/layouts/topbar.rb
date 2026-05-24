@@ -16,10 +16,16 @@
 #   ≥ 1280px (full desktop)
 #     servers › name · pill · region · uptime ………… search [⌘K] · updated 25s ago
 class Components::Layouts::Topbar < Components::Base
-  def initialize(current_island: nil, islands: [], updated_at: nil)
+  def initialize(current_island: nil, islands: [], updated_at: nil, uptime: nil)
     @current_island = current_island
     @islands        = islands
     @updated_at     = updated_at
+    # uptime is the LIVE host uptime label, sourced from /system on
+    # the Overview page. Other pages don't fetch /system, so they
+    # pass nil and we fall back to the (stale) Island#uptime — until
+    # those pages get their own snapshots, this keeps the chip
+    # non-blank but operators know the Overview is the live source.
+    @uptime         = uptime
   end
 
   def view_template
@@ -73,8 +79,8 @@ class Components::Layouts::Topbar < Components::Base
 
       # Chips collapse on < 1280px to keep the topbar single-line.
       span(class: "hidden vlg:contents") do
-        chip("region", @current_island.region)
-        chip("uptime", @current_island.uptime)
+        region_chip
+        chip("uptime", @uptime || @current_island.uptime)
       end
     end
   end
@@ -128,6 +134,33 @@ class Components::Layouts::Topbar < Components::Base
     end
   end
 
+  # region_chip — compound chip rendering when EITHER region or
+  # infra is set:
+  #   region only  →  "region fra1"
+  #   infra only   →  "infra hetzner"
+  #   both         →  "region fra1 · hetzner"
+  #   neither      →  chip collapses entirely (no DOM)
+  #
+  # Compound form mirrors the design beta "fra1.hetzner" hint
+  # without forcing the operator to pre-format it themselves.
+  def region_chip
+    region = @current_island.region
+    region = nil if region == "—"
+    infra  = @current_island.infra
+
+    return if region.nil? && infra.nil?
+
+    label = region && infra ? "region" : (region ? "region" : "infra")
+    value =
+      if region && infra
+        "#{region} · #{infra}"
+      else
+        region || infra
+      end
+
+    chip(label, value)
+  end
+
   def no_island_hint
     span(class: "text-voodu-muted text-xs") { "no server selected" }
   end
@@ -160,11 +193,36 @@ class Components::Layouts::Topbar < Components::Base
     end
   end
 
-  # updated_pill — compact on mobile (just dot + "25s" + refresh icon);
-  # full label on 1100+. Animated pulse on the dot matches inspiration.
+  # updated_pill — the entire chip is now clickable and IS the
+  # refresh affordance (the old "Refresh all" button is gone — too
+  # easy to read as "restart all pods", which it never did).
+  #
+  # Click navigates to `?refresh=1` which the dashboard controller
+  # turns into a cache-bypass on OverviewData. The url uses the
+  # current request path so the chip works on every page that
+  # honors `?refresh=1`.
+  #
+  # The "Ns ago" text is driven by the `updated-at` Stimulus
+  # controller — ticks every 1s without server polling. The Rails
+  # render only sets the initial ISO timestamp; JavaScript handles
+  # the human label client-side.
+  #
+  # Visual:
+  #   ● updated  25s ago  ⟳
+  #   dot       label       icon
+  #
+  # The dot still animates (pulse), signaling "this is live data."
+  # The hover state on the whole anchor underlines the affordance.
   def updated_pill
-    span(
-      class: "inline-flex items-center gap-2 px-1 vmd:px-2.5 h-8 border border-voodu-border bg-voodu-surface text-[11.5px] text-voodu-muted shrink-0"
+    a(
+      href: refresh_href,
+      data: {
+        controller: "updated-at",
+        action: "click->updated-at#refresh",
+        updated_at_iso_value: @updated_at.iso8601
+      },
+      title: "Click to refresh — bypasses the snapshot cache",
+      class: "inline-flex items-center gap-2 px-1 vmd:px-2.5 h-8 border border-voodu-border bg-voodu-surface text-[11.5px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text shrink-0"
     ) do
       span(
         class: "inline-block rounded-full animate-voodu-pulse",
@@ -172,24 +230,22 @@ class Components::Layouts::Topbar < Components::Base
       )
       span(class: "hidden vmd:inline") { "updated" }
       span(class: "font-voodu-mono text-voodu-text-2") do
-        plain seconds_label
+        span(data: { updated_at_target: "label" }) { "now" }
         span(class: "hidden vmd:inline") { " ago" }
       end
-      button(
-        type: "button",
-        class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text",
-        aria: { label: "Refresh now" }
-      ) do
+      span(class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted") do
         render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
       end
     end
   end
 
-  # seconds_label — "25s ago" on vd-md+, "25s" on mobile.
-  def seconds_label
-    return "—" unless @updated_at
-
-    secs = (Time.current - @updated_at).to_i.abs
-    secs.zero? ? "now" : "#{secs}s"
+  # refresh_href — preserves the current request path AND existing
+  # query string (status filter, etc.), only setting/replacing
+  # `refresh=1`. So clicking refresh on `/pods?status=running` lands
+  # on `/pods?status=running&refresh=1` — filters survive the
+  # refresh, only the snapshot cache gets invalidated.
+  def refresh_href
+    params = helpers.request.query_parameters.merge(refresh: 1)
+    "#{helpers.request.path}?#{params.to_query}"
   end
 end

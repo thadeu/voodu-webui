@@ -52,15 +52,17 @@ class Views::Pods::Index < Views::Base
     end
   end
 
-  # page_header — H1 + status counts subline + Refresh button.
+  # page_header — H1 + status counts subline.
+  #
+  # The Refresh button was removed alongside the Overview's
+  # "Refresh all" — the topbar "updated Ns ago" chip is now the
+  # single refresh affordance across every page. Click bypasses
+  # the page's snapshot cache.
   def page_header
     div(class: "flex flex-wrap items-end justify-between gap-3 vmd:gap-4") do
       div(class: "min-w-0") do
         h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Pods" }
         page_sub
-      end
-      div(class: "flex items-center gap-2 shrink-0") do
-        refresh_btn
       end
     end
   end
@@ -104,17 +106,6 @@ class Views::Pods::Index < Views::Base
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
       aria: { hidden: "true" }
     )
-  end
-
-  def refresh_btn
-    a(
-      href: "#{helpers.request.path}?refresh=1",
-      data: { turbo: false },
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) do
-      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-      span { "Refresh" }
-    end
   end
 
   def status_counts
