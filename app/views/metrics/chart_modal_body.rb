@@ -3,28 +3,36 @@
 # Views::Metrics::ChartModalBody — the standalone single-chart view
 # loaded by the maximize-into-modal flow on /metrics.
 #
-# Wrapped in `<turbo-frame id="chart-modal-frame">`. The same frame
-# id is targeted by the range picker inside the modal — clicking a
-# pill GETs /metrics/chart?range=NEW (with the rest of the query
-# preserved) and Turbo swaps just this body. The modal stays open;
-# the parent page's range is NOT touched (modal-local scope, the
-# explicit decision when this feature was added).
+# Wrapped in `<turbo-frame id="{frame_id}">`. The same id is targeted
+# by the range picker + pod picker inside the modal — clicking either
+# control GETs /metrics/chart with the matching param swapped (with
+# the rest of the query preserved) and Turbo swaps just this body.
+# The modal stays open; the parent page's state is NOT touched
+# (modal-local scope, the explicit decision when this feature was
+# added).
 #
-# Layout: chart on top (full available width × tall), pills + meta
-# strip below. Stat chips (min/avg/max) sit RIGHT of the pills so
-# operators get both controls and at-a-glance numerics in one row.
+# Per-metric frame_id (`chart-modal-cpu_percent`, `chart-modal-req_count`)
+# is critical: the eight ChartCards on /metrics each render their own
+# hidden modal, so without unique ids `document.getElementById` would
+# always resolve to the FIRST frame in the DOM (CPU's) regardless of
+# which modal is actually open — the previous bug operators saw as
+# "trocou pod no select e valor continua antigo."
+#
+# Layout: pod picker + range pills on top, chart in the middle, min/
+# avg/max strip at the bottom.
 class Views::Metrics::ChartModalBody < Views::Base
-  RANGES = %w[5m 15m 1h 6h 24h 7d].freeze
-
-  def initialize(chart:, range:, range_ms:, query:)
-    @chart    = chart
-    @range    = range
-    @range_ms = range_ms
-    @query    = query
+  def initialize(chart:, range:, range_ms:, query:, frame_id:, pods: [], current_island: nil)
+    @chart          = chart
+    @range          = range
+    @range_ms       = range_ms
+    @query          = query
+    @frame_id       = frame_id
+    @pods           = Array(pods)
+    @current_island = current_island
   end
 
   def view_template
-    turbo_frame_tag("chart-modal-frame", class: "block") do
+    turbo_frame_tag(@frame_id, class: "block") do
       div(class: "flex flex-col gap-3 p-4 vmd:p-5") do
         toolbar
         chart_block
@@ -35,26 +43,63 @@ class Views::Metrics::ChartModalBody < Views::Base
 
   private
 
-  # toolbar — label + range pills. Range pills are anchors that
-  # GET the same /metrics/chart with `range=` swapped; Turbo
-  # extracts the matching `<turbo-frame id="chart-modal-frame">`
-  # from the response and swaps in place.
+  # toolbar — pod picker (left) + range pills (right).
+  #
+  # Pod picker: DS Components::Metrics::PodPicker, wired with
+  # `frame_target: @frame_id` so Turbo swaps inside this modal
+  # instead of doing a full navigation. `base_path: metrics_chart_path`
+  # + `extra_params: @query` make the picker's URLs hit the modal
+  # endpoint preserving the rest of the context (metric/scale/range).
+  #
+  # Range pills: anchors that GET /metrics/chart with `range=` swapped,
+  # targeting `@frame_id`. Same Turbo swap mechanic.
   def toolbar
     div(class: "flex items-center flex-wrap gap-3") do
-      span(
-        class: "text-[12px] font-semibold uppercase tracking-[0.06em] font-voodu-mono",
-        style: "color: #{@chart[:color]};"
-      ) { @chart[:label] }
-
-      span(
-        class: "font-voodu-mono text-[20px] font-semibold text-voodu-text"
-      ) { headline }
-
+      pod_picker_slot
       span(class: "flex-1")
-
       range_pills
     end
   end
+
+  # pod_picker_slot — renders the scope picker (HOST + pods) in
+  # every modal, regardless of the current scope. Earlier
+  # iterations early-returned when the scope wasn't "pod" — the
+  # picker was missing on /metrics?scope_kind=host modals,
+  # leaving the operator no way to drill into a pod without
+  # closing + reopening. Always rendering keeps the navigation
+  # affordance available from any starting point.
+  #
+  # `hide_host: false` so the HOST row stays reachable too —
+  # operator can swap pod↔host within a single modal session
+  # for metrics that exist in both scopes (cpu_percent). For
+  # metrics that don't (e.g. req_count is ingress-only, no host
+  # equivalent), switching to host returns "no data" honestly —
+  # the chart speaks for itself.
+  def pod_picker_slot
+    sk = (@query[:scope_kind] || @query["scope_kind"]).to_s
+    sid = (@query[:scope_id]  || @query["scope_id"]).to_s
+
+    render Components::Metrics::PodPicker.new(
+      scope_kind:     sk.presence || "host",
+      scope_id:       sid,
+      current_island: @current_island,
+      pods:           @pods,
+      base_path:      metrics_chart_path,
+      extra_params:   strip_scope_keys(@query),
+      frame_target:   @frame_id,
+      hide_host:      false
+    )
+  end
+
+  # strip_scope_keys — the picker REPLACES scope_kind/scope_id in
+  # each row's URL, so we shouldn't pre-seed them via extra_params
+  # (otherwise the merge order would clobber the picker's choice).
+  # Pass everything else through unchanged.
+  def strip_scope_keys(query)
+    query.reject { |k, _| %w[scope_kind scope_id].include?(k.to_s) }
+  end
+
+  RANGES = %w[5m 15m 1h 6h 24h 7d].freeze
 
   def range_pills
     div(
@@ -67,6 +112,7 @@ class Views::Metrics::ChartModalBody < Views::Base
 
         a(
           href: range_url(r),
+          data: { turbo_frame: @frame_id },
           role: "tab",
           aria: { selected: active.to_s },
           class: tokens(
@@ -84,6 +130,12 @@ class Views::Metrics::ChartModalBody < Views::Base
   # gets the y-tick labels + x-tick timestamps back (the inline
   # ChartCard hides them on the small grid; in the modal there's
   # room).
+  #
+  # width: 1100 matches the modal dialog's max-w-[min(1100px,...)].
+  # Passing it explicitly lets the Chart's viewBox keep its real
+  # aspect ratio (Chart.rb drops preserveAspectRatio="none" since
+  # 2026-05-25 so SVG text doesn't stretch horizontally — this width
+  # ensures the viewBox = container, near-zero scaling distortion).
   def chart_block
     div(class: "bg-voodu-surface border border-voodu-border p-3.5") do
       render Components::Metrics::Chart.new(
@@ -92,6 +144,7 @@ class Views::Metrics::ChartModalBody < Views::Base
         unit:     @chart[:unit],
         label:    @chart[:label],
         range_ms: @range_ms,
+        width:    1100,
         height:   480,
         axes:     true
       )
@@ -116,16 +169,6 @@ class Views::Metrics::ChartModalBody < Views::Base
       plain "#{label} "
       span(class: "text-voodu-text font-semibold") { format_value(value) }
     end
-  end
-
-  def headline
-    return "—" if @chart[:current].nil?
-
-    base = format_value(@chart[:current])
-    unit = @chart[:unit].to_s
-    return base if unit.empty? || base.include?(unit)
-
-    "#{base} #{unit}"
   end
 
   def stats

@@ -110,10 +110,24 @@ class Components::Metrics::Chart < Components::Base
         metrics_chart_pad_bottom_value: pad_bottom
       }
     ) do
+      # `preserveAspectRatio="xMidYMid meet"` (the default) keeps
+      # the viewBox aspect ratio intact when the SVG is resized to
+      # fill its container. Previously we used "none" to force the
+      # chart to fill ANY container size, but that scales the
+      # entire SVG non-uniformly — paths look fine but `<text>`
+      # nodes (Y/X axis labels) and the hover circle get
+      # horizontally stretched into thin ovals + smeared digits.
+      #
+      # The trade-off: when the container's aspect doesn't match
+      # the viewBox (e.g. a narrow viewport showing a wide
+      # viewBox), the SVG centers itself with whitespace on the
+      # short axis. Caller-controlled `width`/`height` defaults
+      # are tuned so this whitespace is small in practice:
+      #   - inline ChartCard: 600×200 (≈3:1) close to the grid cell
+      #   - modal:           1100×480 (≈2.3:1) matches dialog max-w
       svg(
         width: "100%", height: @height,
         viewBox: "0 0 #{@width} #{@height}",
-        preserveAspectRatio: "none",
         class: "block overflow-visible",
         style: "touch-action: pan-y;"
       ) do |s|

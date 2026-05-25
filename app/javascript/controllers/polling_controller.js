@@ -18,14 +18,30 @@ export default class extends Controller {
   static values = { interval: { type: Number, default: 5000 } }
 
   connect() {
+    this.paused = 0
     this.timer = setInterval(() => this.tick(), this.intervalValue)
+
+    // Pause/resume hooks so other controllers (e.g. chart-expand
+    // when its modal is open) can suspend reloads without us
+    // tearing down the timer. Multiple pauses stack — counter
+    // reaches 0 again before the polling resumes. Documented as
+    // global window events so unrelated controllers don't need a
+    // Stimulus target reference into us.
+    this.onPause  = () => { this.paused += 1 }
+    this.onResume = () => { this.paused = Math.max(0, this.paused - 1) }
+    window.addEventListener("polling:pause",  this.onPause)
+    window.addEventListener("polling:resume", this.onResume)
   }
 
   disconnect() {
     clearInterval(this.timer)
+    window.removeEventListener("polling:pause",  this.onPause)
+    window.removeEventListener("polling:resume", this.onResume)
   }
 
   tick() {
+    if (this.paused > 0) return
+
     const frame = this.element.querySelector("turbo-frame")
     if (frame && typeof frame.reload === "function") frame.reload()
   }

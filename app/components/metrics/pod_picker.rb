@@ -13,17 +13,42 @@
 #   - Logs — primary row is ALL (multi-source fan-out); selecting
 #     a pod scopes the tail to that one container.
 class Components::Metrics::PodPicker < Components::Base
-  def initialize(scope_kind:, scope_id:, current_island:, pods: [])
+  # Modal opt-ins (all optional, defaulting to the page-level
+  # behavior so existing call sites stay unchanged):
+  #
+  #   base_path:    where each row's URL points. Default
+  #                 `metrics_path` (the page). Modal uses
+  #                 `metrics_chart_path`.
+  #   extra_params: hash merged into every URL after the standard
+  #                 scope_kind/scope_id pair. Used by the modal
+  #                 to ride along metric/scale/range/etc.
+  #   frame_target: when set, anchor rows emit
+  #                 `data-turbo-frame="..."` instead of
+  #                 `data-turbo="false"` so Turbo swaps inside the
+  #                 named frame (modal stays open) rather than
+  #                 doing a full-page navigation.
+  #   hide_host:    skip the HOST primary section. The chart-modal
+  #                 endpoint is per-metric and metrics are scoped
+  #                 to either host OR pod — offering "host" inside
+  #                 a modal showing a pod-only metric (like
+  #                 req_count) would lead to "no data" confusion.
+  def initialize(scope_kind:, scope_id:, current_island:, pods: [],
+                 base_path: nil, extra_params: {}, frame_target: nil,
+                 hide_host: false)
     @scope_kind     = scope_kind         # "host" | "pod"
     @scope_id       = scope_id           # host name or pod container name
     @current_island = current_island
     @pods           = Array(pods)
+    @base_path      = base_path
+    @extra_params   = extra_params || {}
+    @frame_target   = frame_target
+    @hide_host      = hide_host
   end
 
   def view_template
     render Components::UI::ScopePicker.new(
       trigger:         build_trigger,
-      primary_section: build_host_section,
+      primary_section: @hide_host ? nil : build_host_section,
       pod_sections:    build_pod_sections
     )
   end
@@ -51,11 +76,12 @@ class Components::Metrics::PodPicker < Components::Base
     {
       label:  "HOST",
       option: {
-        title:  host_name,
-        meta:   "#{@current_island&.host || "—"} · #{@pods.size} pods",
-        href:   metrics_url(kind: "host", id: host_name),
-        active: @scope_kind == "host",
-        icon:   :CpuChipOutline
+        title:       host_name,
+        meta:        "#{@current_island&.host || "—"} · #{@pods.size} pods",
+        href:        metrics_url(kind: "host", id: host_name),
+        active:      @scope_kind == "host",
+        icon:        :CpuChipOutline,
+        turbo_frame: @frame_target
       }
     }
   end
@@ -84,18 +110,23 @@ class Components::Metrics::PodPicker < Components::Base
     title = replica.present? ? "#{resource}.#{replica}" : (resource || container)
 
     {
-      title:  title,
-      meta:   image,
-      href:   metrics_url(kind: "pod", id: container),
-      active: @scope_kind == "pod" && @scope_id == container,
-      status: status
+      title:       title,
+      meta:        image,
+      href:        metrics_url(kind: "pod", id: container),
+      active:      @scope_kind == "pod" && @scope_id == container,
+      status:      status,
+      turbo_frame: @frame_target
     }
   end
 
-  # metrics_url — preserves the current `range` param if present so
-  # switching scope doesn't reset the operator's range pill.
+  # metrics_url — preserves the current request's query params + any
+  # `extra_params` the caller passed (e.g. modal context with
+  # metric/scale/range). Modal overrides `base_path` to point at
+  # /metrics/chart instead of /metrics so URL stays inside the
+  # in-modal endpoint.
   def metrics_url(kind:, id:)
-    params = request.query_parameters.merge(scope_kind: kind, scope_id: id)
-    "#{metrics_path}?#{params.to_query}"
+    base = @base_path || metrics_path
+    params = request.query_parameters.merge(@extra_params).merge(scope_kind: kind, scope_id: id)
+    "#{base}?#{params.to_query}"
   end
 end

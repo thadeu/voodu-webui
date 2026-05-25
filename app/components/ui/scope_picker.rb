@@ -118,15 +118,24 @@ class Components::UI::ScopePicker < Components::Base
   # option_row — the clickable row. Renders either an explicit
   # `icon:` (host/all rows) or a StatusDot (pod rows), based on
   # which key the caller provided.
+  #
+  # `turbo_frame` (optional): when set, the anchor emits
+  # `data-turbo-frame="..."` and Turbo handles the click as a
+  # frame swap (modal-local navigation, stays open). Without it,
+  # the row falls back to `data-turbo="false"` for full-page
+  # navigation — the original page-level pod picker behaviour.
   def option_row(opt)
-    active = opt[:active]
-    title  = opt.fetch(:title)
-    meta   = opt[:meta].to_s
-    href   = opt.fetch(:href)
+    active      = opt[:active]
+    title       = opt.fetch(:title)
+    meta        = opt[:meta].to_s
+    href        = opt.fetch(:href)
+    turbo_frame = opt[:turbo_frame]
+
+    data_attrs = turbo_frame.present? ? { turbo_frame: turbo_frame } : { turbo: false }
 
     a(
       href: href,
-      data: { turbo: false },
+      data: data_attrs,
       class: tokens(
         "flex items-center gap-2.5 w-full px-3 py-2 min-h-[38px] text-left",
         active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-[#ffffff08]"

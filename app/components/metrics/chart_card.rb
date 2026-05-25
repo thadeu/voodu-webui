@@ -34,7 +34,7 @@ class Components::Metrics::ChartCard < Components::Base
   # baked in. Pass nil (or omit) to render a maximize-less card —
   # used historically by call sites that don't have access to the
   # full single-chart context; safe default.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil)
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil)
     @label      = label
     @color      = color
     @unit       = unit
@@ -42,6 +42,23 @@ class Components::Metrics::ChartCard < Components::Base
     @range_ms   = range_ms
     @current    = current
     @expand_url = expand_url
+    # `metric` keys the per-card overlay's turbo-frame id. Without
+    # it, ALL eight cards on /metrics would render
+    # <turbo-frame id="chart-modal-frame"> with identical ids; when
+    # the pod-picker form inside the OPEN modal submits, Turbo
+    # would `getElementById("chart-modal-frame")` and target the
+    # FIRST match in the DOM (likely CPU's hidden modal), leaving
+    # the actually-open modal with stale data. Per-metric id
+    # ("chart-modal-cpu_percent", "chart-modal-req_count", …)
+    # makes each frame uniquely addressable.
+    @metric     = metric
+  end
+
+  # frame_id — unique per ChartCard so each overlay modal owns its
+  # own turbo-frame. Falls back to a generic id when no metric was
+  # provided (legacy call sites without expand support).
+  def frame_id
+    @metric.present? ? "chart-modal-#{@metric}" : "chart-modal-frame"
   end
 
   def view_template
@@ -212,7 +229,7 @@ class Components::Metrics::ChartCard < Components::Base
         # frame body re-target the same frame for in-place
         # navigation without closing the modal.
         div(class: "flex flex-col overflow-auto min-h-0") do
-          turbo_frame_tag("chart-modal-frame", data: { chart_expand_target: "frame" }) do
+          turbo_frame_tag(frame_id, data: { chart_expand_target: "frame" }) do
             # Initial loading placeholder. Replaced by the /metrics/chart
             # response on open; Turbo extracts the matching frame from
             # the response and swaps the contents.

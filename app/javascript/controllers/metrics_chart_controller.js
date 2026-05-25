@@ -108,13 +108,31 @@ export default class extends Controller {
     line.setAttribute("stroke-width", "1")
     line.setAttribute("pointer-events", "none")
 
-    const dot = document.createElementNS(ns, "circle")
+    // Hover marker: <ellipse> with X/Y radii compensated for the
+    // SVG's non-uniform scaling. The chart's SVG declares
+    // preserveAspectRatio="none" + width=100% so it stretches in
+    // both axes to fill its container. A plain <circle r="3.5">
+    // would render as a horizontal ellipse on a wide modal
+    // (~1100px wide, 480px tall ≈ 1.83× horizontal stretch). We
+    // measure the actual rendered scale and inverse-scale the
+    // viewBox radii so the visible dot lands as a perfect circle.
+    //
+    // Same correction for the stroke width (otherwise the outline
+    // also stretches and looks like a fat oval).
+    const svgRect = this.svg.getBoundingClientRect()
+    const scaleX  = (svgRect.width  / this.widthValue)  || 1
+    const scaleY  = (svgRect.height / this.heightValue) || 1
+    const targetRadiusPx = 3.5
+    const targetStrokePx = 2
+
+    const dot = document.createElementNS(ns, "ellipse")
     dot.setAttribute("cx", x)
     dot.setAttribute("cy", y)
-    dot.setAttribute("r", "3.5")
+    dot.setAttribute("rx", targetRadiusPx / scaleX)
+    dot.setAttribute("ry", targetRadiusPx / scaleY)
     dot.setAttribute("fill", "var(--voodu-bg-2)")
     dot.setAttribute("stroke", this.colorValue)
-    dot.setAttribute("stroke-width", "2")
+    dot.setAttribute("stroke-width", targetStrokePx / Math.min(scaleX, scaleY))
     dot.setAttribute("pointer-events", "none")
 
     this.svg.appendChild(line)

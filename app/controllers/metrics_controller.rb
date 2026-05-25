@@ -83,7 +83,20 @@ class MetricsController < ApplicationController
       chart:      chart,
       range:      params[:range].presence || "1h",
       range_ms:   data.range_ms,
-      query:      request.query_parameters
+      query:      request.query_parameters,
+      # `data.all_pods` is the cached compact list (same one the
+      # parent page's PodPicker uses). Always populate it — even
+      # on host-scope modals, the in-modal picker needs the pod
+      # list so the operator can drill from host into a pod
+      # without closing the modal first.
+      pods:           data.all_pods,
+      current_island: current_island,
+      # Per-metric turbo-frame id MUST match the one ChartCard
+      # rendered for this metric — otherwise Turbo can't find the
+      # target frame to swap and the modal stays stale. The
+      # convention is shared between client (ChartCard#frame_id)
+      # and server (here) so they always agree.
+      frame_id:       "chart-modal-#{params[:metric]}"
     ), layout: false
   end
 end
