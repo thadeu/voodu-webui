@@ -2,11 +2,20 @@ import { Controller } from "@hotwired/stimulus"
 
 // CommandPaletteController — ⌘K palette behaviour.
 //
-// Lifecycle:
-//   - connect: bind the global Cmd-K / Ctrl-K listener; no fetch.
-//   - first open: fetch /command_palette.json (or sessionStorage cache),
-//     render Suggestions (LRU) + Navigate (current island) default view.
-//   - subsequent opens within 30s: pure sessionStorage read, instant.
+// Lifecycle (stale-while-revalidate):
+//   - connect: opportunistic prefetch — warm `this.commands` from
+//     sessionStorage IMMEDIATELY (even if stale), and kick off a
+//     background refresh when the cache is missing or past TTL.
+//     So by the time the operator first hits ⌘K, commands are
+//     ready and the palette never paints a Loading state — except
+//     on the very first page load after a fresh tab session, when
+//     there's no cache at all yet.
+//   - open: paint whatever's cached (stale OK); start a refresh
+//     if the cache isn't fresh. The refresh swaps `this.commands`
+//     in place and re-runs the active filter so the operator sees
+//     fresh data without a flicker.
+//   - subsequent opens within 30s: pure sessionStorage read, zero
+//     network, zero loading state.
 //
 // Commands come from CommandPaletteController#commands — one global
 // JSON feed covering EVERY island, not the page's current island. The
@@ -15,6 +24,8 @@ import { Controller } from "@hotwired/stimulus"
 //
 // Caching layers:
 //   - sessionStorage[CACHE_KEY] (30s TTL) — within-tab fast path.
+//     Stale entries are STILL surfaced to the UI (SWR); the TTL only
+//     decides whether to revalidate.
 //   - Browser HTTP cache (Cache-Control: private, max-age=30) — across
 //     tabs / fresh sessionStorage.
 //   - IslandPods 30s Rails.cache — controller-side, shared with
@@ -63,6 +74,15 @@ export default class extends Controller {
     this.fetching    = null
 
     document.addEventListener("keydown", this.onGlobalKey)
+
+    // Warm from cache + opportunistic background prefetch. The point
+    // is to make the first ⌘K of this page-load INSTANT, with no
+    // Loading state, even when the sessionStorage entry is stale.
+    // We paint whatever's there now, then refresh in the background
+    // if it's past TTL (or absent entirely).
+    this.warmFromCache()
+
+    if (!isFresh(readCache())) this.refresh()
   }
 
   disconnect() {
@@ -87,11 +107,19 @@ export default class extends Controller {
 
     requestAnimationFrame(() => this.inputTarget.focus({ preventScroll: true }))
 
+    // Stale-while-revalidate. If `connect()` already warmed
+    // `this.commands` from cache, paint immediately — no Loading.
+    // Kick a background refresh only when the cache is past TTL or
+    // missing; the refresh re-runs the active filter on resolve so
+    // fresh data swaps in invisibly.
+    if (!isFresh(readCache())) this.refresh()
+
     if (!this.loaded) {
+      // First-ever ⌘K on a tab with no warmed cache. Show a Loading
+      // hint and wait on the in-flight prefetch (started by
+      // connect() or by the refresh above).
       this.renderLoading()
-      await this.loadCommands()
-      // Operator might have already closed by the time the fetch
-      // resolves on a flaky network — bail rather than paint stale.
+      await this.fetching
       if (!this.isOpen) return
     }
     this.renderDefault()
@@ -118,34 +146,56 @@ export default class extends Controller {
 
   // ── fetching ────────────────────────────────────────────────────
 
-  async loadCommands() {
-    // Dedupe concurrent in-flight fetches (operator spams ⌘K before
-    // the first response lands).
-    if (this.fetching) return this.fetching
+  // warmFromCache — hydrate `this.commands` from sessionStorage WITHOUT
+  // checking freshness. The whole point of SWR: stale data is better
+  // than no data. The freshness check is the caller's job, used to
+  // decide whether to ALSO kick a refresh.
+  warmFromCache() {
+    const env = readCache()
+    if (!env) return
 
-    const cached = readCache()
-    if (cached) {
-      this.commands = cached
-      this.loaded   = true
-      return
-    }
+    this.commands = env.commands
+    this.loaded   = true
+  }
+
+  // refresh — fire a background fetch, swap `this.commands` on
+  // success, and re-paint the open palette so fresh data appears
+  // without a Loading flicker. Concurrent refreshes dedupe via
+  // `this.fetching`. On error: keep whatever stale data we already
+  // had — no UI regression for the operator.
+  async refresh() {
+    if (this.fetching) return this.fetching
 
     this.fetching = (async () => {
       try {
         const url = appendCurrent(this.endpointValue)
+
         const res = await fetch(url, {
           headers: { "Accept": "application/json" },
           credentials: "same-origin"
         })
+        
         if (!res.ok) throw new Error("HTTP " + res.status)
-        const json = await res.json()
-        this.commands = Array.isArray(json.commands) ? json.commands : []
-        writeCache(this.commands)
-      } catch (e) {
-        console.error("command palette: load failed", e)
-        this.commands = []
-      } finally {
+        
+          const json = await res.json()
+        const next = Array.isArray(json.commands) ? json.commands : []
+
+        this.commands = next
         this.loaded   = true
+        
+        writeCache(next)
+
+        // SWR repaint. `filter()` reads `this.commands` + the current
+        // input value, so calling it covers both the default view
+        // (empty query → renderDefault) and an active search
+        // (operator already typed something while we were fetching).
+        if (this.isOpen) this.filter()
+      } catch (e) {
+        console.error("command palette: refresh failed", e)
+        // Stale `this.commands` stays — operator keeps working. If
+        // we had no commands at all, `loaded` remains false and the
+        // Loading state holds until the next refresh attempt.
+      } finally {
         this.fetching = null
       }
     })()
@@ -417,18 +467,26 @@ export default class extends Controller {
 
 // ── cache helpers (sessionStorage, 30s TTL) ───────────────────────
 
+// readCache — returns the FULL envelope { ts, commands } regardless
+// of TTL, or null when malformed/absent. SWR-friendly: the caller
+// decides what to do with stale data via isFresh().
 function readCache() {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY)
     if (!raw) return null
-    const { ts, commands } = JSON.parse(raw)
-    if (!ts || !Array.isArray(commands)) return null
-    if (Date.now() - ts > CACHE_TTL_MS) return null
+    const env = JSON.parse(raw)
+    if (!env || typeof env.ts !== "number" || !Array.isArray(env.commands)) return null
 
-    return commands
+    return env
   } catch {
     return null
   }
+}
+
+// isFresh — boolean check against the TTL. Used to decide whether
+// to kick a background refresh, NOT whether to render the cache.
+function isFresh(env) {
+  return env != null && Date.now() - env.ts < CACHE_TTL_MS
 }
 
 function writeCache(commands) {
