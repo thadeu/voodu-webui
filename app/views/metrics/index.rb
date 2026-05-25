@@ -40,17 +40,14 @@ class Views::Metrics::Index < Views::Base
   end
 
   def page_head
-    div(class: "flex flex-wrap items-end justify-between gap-3 vmd:gap-4") do
-      div(class: "min-w-0") do
-        h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Metrics" }
-        page_sub
-      end
-
-      div(class: "flex items-center gap-2 shrink-0") do
-        pod_actions if pod_scope?
-        refresh_btn
-      end
-    end
+    render(
+      Components::UI::PageHeader.new(title: "Metrics")
+        .with_subtitle { page_sub }
+        .with_actions do
+          pod_actions if pod_scope?
+          refresh_btn
+        end
+    )
   end
 
   # page_sub — "pod x.aaaa · image:tag · last 1h · ● auto-refresh"

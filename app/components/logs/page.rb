@@ -63,7 +63,6 @@ class Components::Logs::Page < Components::Base
       }
     ) do
       page_header
-      pod_picker_row if show_pod_picker?
       toolbar
       viewport
     end
@@ -77,14 +76,11 @@ class Components::Logs::Page < Components::Base
     !@drawer && @pods.any?
   end
 
-  # pod_picker_row — its own row above the toolbar (matches the
-  # Metrics page layout where the scope picker sits in a dedicated
-  # row between page-head and the chart toolbar). Suppressed in
-  # drawer mode and when @pods is empty (see show_pod_picker?).
-  def pod_picker_row
-    div(class: "flex items-center gap-2 flex-wrap") do
-      render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
-    end
+  # show_open_pod? — render the "Open pod" drawer trigger only when
+  # a specific pod is in view AND we're on the full page (drawer
+  # mode is already inside a peek, no need to spawn another).
+  def show_open_pod?
+    !@drawer && @pod_name.present?
   end
 
   # toolbar — filter input + level pills + follow/wrap/pause/clear.
@@ -108,16 +104,48 @@ class Components::Logs::Page < Components::Base
     end
   end
 
-  # page_header — H1 "Logs" + live counters subline, with a "back to
-  # pod detail" link above the heading when the viewer is scoped to
-  # a single pod (matches the Pod show page's "← All pods" pattern).
+  # page_header — H1 "Logs" + live counters subline + actions
+  # cluster on the right (pod picker, "Open pod" drawer trigger
+  # when scoped). Uses the shared Components::UI::PageHeader so the
+  # visual rhythm matches the Metrics page exactly.
+  #
+  # The "back to pod" link stays OUTSIDE the PageHeader (rendered
+  # above) because PageHeader's job is "title + actions" — adding
+  # an above-title slot just for this one case would bloat the
+  # primitive.
   def page_header
     div(class: "flex flex-col gap-3") do
       back_link if show_back_link?
-      div do
-        h1(class: "text-[22px] font-semibold text-voodu-text tracking-tight") { "Logs" }
-        sub_line
-      end
+      render(
+        Components::UI::PageHeader.new(title: "Logs")
+          .with_subtitle { sub_line }
+          .with_actions do
+            if show_pod_picker?
+              render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
+            end
+            open_pod_btn if show_open_pod?
+          end
+      )
+    end
+  end
+
+  # open_pod_btn — Drawer trigger that mirrors the Metrics page's
+  # "Open pod" action. Clicking peeks the pod detail in a right
+  # drawer instead of navigating away (the same Stimulus drawer
+  # the Metrics surface uses, so the operator's persisted width
+  # preference carries over).
+  def open_pod_btn
+    render(Components::UI::Drawer.new(
+      title:    "Pod · #{@pod_name}",
+      src:      "#{helpers.pod_path(name: @pod_name)}?embed=1",
+      open_url: helpers.pod_path(name: @pod_name),
+      width:    "30vw",
+      trigger_attrs: {
+        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+      }
+    )) do
+      render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
+      span { "Open pod" }
     end
   end
 
@@ -153,7 +181,6 @@ class Components::Logs::Page < Components::Base
       stat(:visible, "0", " visible")
       dot_sep
       stat(:sources, "0", lambda { " source#{'s' unless @pod_name}" })
-      pod_chip if @pod_name
     end
   end
 
@@ -181,30 +208,6 @@ class Components::Logs::Page < Components::Base
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
       aria: { hidden: "true" }
     )
-  end
-
-  # Chip "pod: docs.35a3 ×" — leads back to the un-scoped /logs.
-  def pod_chip
-    short = short_pod(@pod_name)
-    a(
-      href: helpers.logs_path,
-      class: "inline-flex items-center gap-1 px-2 py-[2px] border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 font-voodu-mono text-[11px] no-underline ml-1",
-      aria: { label: "Clear pod filter" }
-    ) do
-      span { "pod: #{short}" }
-      render Icon::XMarkOutline.new(class: "w-2.5 h-2.5")
-    end
-  end
-
-  # "clowk-vd-docs.35a3" → "docs.35a3"
-  def short_pod(name)
-    dot = name.index(".")
-    return name unless dot
-
-    left = name[0...dot]
-    dash = left.rindex("-")
-    base = dash ? left[(dash + 1)..] : left
-    "#{base}#{name[dot..]}"
   end
 
   def filter_input
