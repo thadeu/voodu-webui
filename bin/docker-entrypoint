@@ -1,8 +1,23 @@
-#!/bin/bash -e
+#!/bin/bash
+set -e
 
-# If running the rails server then create or migrate existing database
-if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
+# Auto-generate and persist SECRET_KEY_BASE on first boot when no credentials are wired up.
+if [ -z "${SECRET_KEY_BASE:-}" ] && [ -z "${RAILS_MASTER_KEY:-}" ] && [ ! -f /rails/config/master.key ]; then
+  SKB_FILE="/rails/storage/.secret_key_base"
+  if [ -f "$SKB_FILE" ]; then
+    SECRET_KEY_BASE="$(cat "$SKB_FILE")"
+  else
+    mkdir -p /rails/storage
+    SECRET_KEY_BASE="$(openssl rand -hex 64)"
+    umask 077 && printf '%s' "$SECRET_KEY_BASE" > "$SKB_FILE"
+  fi
+  export SECRET_KEY_BASE
+fi
+
+# If running the rails server (directly or wrapped by Thruster), create/migrate/seed the DB.
+# db:prepare is idempotent: first boot = create + schema load + seed; subsequent boots = pending migrations only.
+if [ "${@: -2:1}" = "./bin/rails" ] && [ "${@: -1:1}" = "server" ]; then
   ./bin/rails db:prepare
 fi
 
-exec "${@}"
+exec "$@"

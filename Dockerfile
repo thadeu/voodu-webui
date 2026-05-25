@@ -21,11 +21,16 @@ RUN apt-get update -qq && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Set production environment variables and enable jemalloc for reduced memory usage and latency.
+# Thruster listens on HTTP_PORT (public) and proxies to Rails on TARGET_PORT — they must differ.
+# Container's external contract: bind 3000. Rails runs internally on 3001 behind Thruster.
+# Thruster overrides $PORT to $TARGET_PORT when spawning Rails, so TARGET_PORT is the knob.
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
     BUNDLE_WITHOUT="development" \
-    LD_PRELOAD="/usr/local/lib/libjemalloc.so"
+    LD_PRELOAD="/usr/local/lib/libjemalloc.so" \
+    HTTP_PORT="3000" \
+    TARGET_PORT="3001"
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build
@@ -35,18 +40,17 @@ RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y build-essential git libpq-dev libvips libyaml-dev node-gyp pkg-config python-is-python3 && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-# Install JavaScript dependencies
+# Install JavaScript dependencies (pnpm — pinned via package.json `packageManager`).
 ARG NODE_VERSION=24.13.0
-ARG YARN_VERSION=1.22.22
 ENV PATH=/usr/local/node/bin:$PATH
 RUN curl -sL https://github.com/nodenv/node-build/archive/master.tar.gz | tar xz -C /tmp/ && \
     /tmp/node-build-master/bin/node-build "${NODE_VERSION}" /usr/local/node && \
-    npm install -g yarn@$YARN_VERSION && \
+    corepack enable && \
     rm -rf /tmp/node-build-master
 
 # Install application gems
 COPY vendor/* ./vendor/
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile Gemfile.lock .ruby-version ./
 
 RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
@@ -54,8 +58,8 @@ RUN bundle install && \
     bundle exec bootsnap precompile -j 1 --gemfile
 
 # Install node modules
-COPY package.json yarn.lock ./
-RUN yarn install --immutable
+COPY package.json pnpm-lock.yaml ./
+RUN corepack prepare --activate && pnpm install --frozen-lockfile
 
 # Copy application code
 COPY . .
@@ -83,9 +87,19 @@ USER 1000:1000
 COPY --chown=rails:rails --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --chown=rails:rails --from=build /rails /rails
 
+# OCI image labels — links package to repo on GHCR + marks license.
+LABEL org.opencontainers.image.source="https://github.com/thadeu/voodu-webui" \
+      org.opencontainers.image.description="Voodu Web UI — zero-config Rails 8 dashboard for the voodu PaaS." \
+      org.opencontainers.image.licenses="MIT"
+
 # Entrypoint prepares the database.
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
+# Container listens on 3000 internally; map any host port to 3000 at `docker run`.
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -fsS http://localhost:3000/up || exit 1
+
 # Start server via Thruster by default, this can be overwritten at runtime
-EXPOSE 80
 CMD ["./bin/thrust", "./bin/rails", "server"]
