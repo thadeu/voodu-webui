@@ -1,18 +1,27 @@
 services:
   web:
     image: ghcr.io/thadeu/voodu-webui:latest
+    # build: .              # uncomment to build locally instead of pulling
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-3000}:3000"
     environment:
       RAILS_ENV: production
       METRICS_WAREHOUSE: 1
+      # SECRET_KEY_BASE / ACTIVE_RECORD_ENCRYPTION_* auto-generated on first
+      # boot if unset and persisted in the storage volume.
     volumes:
       - voodu_webui_storage:/rails/storage
+    extra_hosts:
+      # Makes `host.docker.internal` resolve to the Docker host gateway on
+      # Linux too (Docker Desktop on macOS/Windows handles this natively).
+      # Use it as the address when registering an island that lives on the
+      # host or on a sibling VM (Lima, OrbStack, UTM, multipass).
+      - "host.docker.internal:host-gateway"
 
 volumes:
   voodu_webui_storage:
 
-network:
+networks:
   default:
     name: voodu_webui_network
