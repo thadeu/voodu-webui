@@ -1,23 +1,28 @@
 # frozen_string_literal: true
 
 # Components::Metrics::ChartCard — header (label + current value +
-# min/avg/max strip) + a Components::Metrics::Chart underneath.
-# 2x2 grid layout on /metrics renders four of these.
+# min/avg/max strip + maximize button) + a Components::Metrics::Chart
+# underneath. 2x2 grid layout on /metrics renders four of these per
+# resource and per HTTP scope.
 #
 # Visual:
 #
 #   ┌───────────────────────────────────────────────────────────┐
-#   │ CPU  25%        min 21.9  avg 30.8  max 39.8              │
+#   │ CPU  25%        min 21.9  avg 30.8  max 39.8  ⛶          │
 #   │ ┌───────────────────────────────────────────────────────┐ │
-#   │ │ ⎯  ⎯  ⎯  ⎯  ⎯                                         │ │
-#   │ │ 50  ──╮         ╭─╮                                   │ │
-#   │ │ 38      ╭──────╯   ╰╮                                 │ │
-#   │ │ 25      │            ╰─╮                              │ │
-#   │ │ 13      │              ╰────                          │ │
-#   │ │ 0.0  ──┴────────────────────                          │ │
-#   │ │      05/23  05/23  05/23  05/23  05/23                │ │
+#   │ │ chart …                                                │ │
 #   │ └───────────────────────────────────────────────────────┘ │
 #   └───────────────────────────────────────────────────────────┘
+#
+# Maximize (⛶) opens a SHARED modal (see Components::Metrics::ChartModal)
+# rendered once at the bottom of Views::Metrics::Index. The button
+# is just an anchor with `data-turbo-stream="true"`; clicking it
+# sends an Accept: text/vnd.turbo-stream.html GET to /metrics/chart,
+# whose response targets the modal's slots
+# (#chart-modal-title + #chart-modal-body) and invokes the custom
+# chart_modal_open Turbo Stream action. No per-card overlay, no
+# Stimulus controller for open/close — server drives the whole
+# lifecycle via turbo_stream actions.
 class Components::Metrics::ChartCard < Components::Base
   # current — the unaggregated "right now" value from
   # MetricsPageData (server-side latest field). When nil, falls
@@ -26,15 +31,13 @@ class Components::Metrics::ChartCard < Components::Base
   # latest yet; otherwise the headline tracks the literal latest
   # sample and stays stable across range pills.
   #
-  # expand_url: STRING → enables the "maximize" button in the
-  # header that opens an overlay modal containing the same chart
-  # at a much larger render size + a local-scoped range picker.
-  # Caller (Views::Metrics::Index#render_chart_cards) builds the
-  # URL via metrics_chart_path with metric/source/scale
-  # baked in. Pass nil (or omit) to render a maximize-less card —
-  # used historically by call sites that don't have access to the
-  # full single-chart context; safe default.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil)
+  # expand_url: STRING → enables the maximize button. Caller
+  # (Views::Metrics::Index#render_chart_cards) builds the URL via
+  # metrics_chart_path with metric/source/scale baked in. Pass nil
+  # (or omit) to render a maximize-less card — used historically
+  # by call sites that don't have access to the full single-chart
+  # context; safe default.
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil)
     @label      = label
     @color      = color
     @unit       = unit
@@ -42,69 +45,26 @@ class Components::Metrics::ChartCard < Components::Base
     @range_ms   = range_ms
     @current    = current
     @expand_url = expand_url
-    # `metric` keys the per-card overlay's turbo-frame id. Without
-    # it, ALL eight cards on /metrics would render
-    # <turbo-frame id="chart-modal-frame"> with identical ids; when
-    # the pod-picker form inside the OPEN modal submits, Turbo
-    # would `getElementById("chart-modal-frame")` and target the
-    # FIRST match in the DOM (likely CPU's hidden modal), leaving
-    # the actually-open modal with stale data. Per-metric id
-    # ("chart-modal-cpu_percent", "chart-modal-req_count", …)
-    # makes each frame uniquely addressable.
-    @metric     = metric
-  end
-
-  # frame_id — unique per ChartCard so each overlay modal owns its
-  # own turbo-frame. Falls back to a generic id when no metric was
-  # provided (legacy call sites without expand support).
-  def frame_id
-    @metric.present? ? "chart-modal-#{@metric}" : "chart-modal-frame"
   end
 
   def view_template
-    # When expand_url is set, the wrapping div hosts the
-    # chart-expand controller, the maximize button, and the
-    # hidden overlay scaffold. Without expand_url, falls back to
-    # the previous shape so existing call sites stay unchanged.
-    if @expand_url
-      div(
-        data: {
-          controller: "chart-expand",
-          chart_expand_src_value: @expand_url
-        },
-        class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0 relative group"
-      ) do
-        card_header
-        render Components::Metrics::Chart.new(
-          points:   @points,
-          color:    @color,
-          unit:     @unit,
-          label:    @label,
-          range_ms: @range_ms,
-          height:   200
-        )
-        overlay_modal
-      end
-    else
-      div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0") do
-        card_header
-        render Components::Metrics::Chart.new(
-          points:   @points,
-          color:    @color,
-          unit:     @unit,
-          label:    @label,
-          range_ms: @range_ms,
-          height:   200
-        )
-      end
+    div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0") do
+      card_header
+      render Components::Metrics::Chart.new(
+        points:   @points,
+        color:    @color,
+        unit:     @unit,
+        label:    @label,
+        range_ms: @range_ms,
+        height:   200
+      )
     end
   end
 
   private
 
   # card_header — colored label + big current value + right-aligned
-  # min/avg/max strip. Matches pages-metrics.jsx ChartCard
-  # (lines 358-398) layout.
+  # min/avg/max strip + maximize affordance.
   #
   # Headline current value preference order:
   #   1. @current — set explicitly by the caller from the API's
@@ -116,9 +76,7 @@ class Components::Metrics::ChartCard < Components::Base
   #
   # Named `card_header` (not `header`) because `header` is also
   # a Phlex HTML tag — Phlex's method_missing for HTML tags
-  # collides with this method name if we ever try to use the
-  # actual `<header>` tag in the same component (the overlay_modal
-  # below does exactly that).
+  # collides with this method name.
   def card_header
     s = stats
 
@@ -149,94 +107,29 @@ class Components::Metrics::ChartCard < Components::Base
       stat_chip("avg", s[:avg])
       stat_chip("max", s[:max])
 
-      maximize_button if @expand_url
+      maximize_link if @expand_url
     end
   end
 
-  # maximize_button — opens the overlay modal with the same chart
-  # rendered taller + an isolated range picker. Sits next to the
-  # min/avg/max strip so it's discoverable without dominating the
-  # header. `group-hover` would be nice (CloudWatch only shows the
-  # icon on hover) but Phlex doesn't make that any cleaner than
-  # always-visible; muted color keeps it from competing visually.
-  def maximize_button
-    button(
-      type: "button",
-      data: { action: "chart-expand#open" },
+  # maximize_link — anchor with `data-turbo-stream="true"` so the
+  # GET request negotiates a turbo_stream response. The server
+  # (MetricsController#chart) renders a stream that updates the
+  # shared #chart-modal-* slots and fires the chart_modal_open
+  # action — all in one request, no client-side state to manage.
+  #
+  # Trade-off vs button + JS controller: cmd-click NOW opens
+  # /metrics/chart in a new tab as a normal page (format.html
+  # fallback). Previously this would just no-op or open a JS-only
+  # action. Honest hyperlink semantics restored for free.
+  def maximize_link
+    a(
+      href: @expand_url,
+      data: { turbo_stream: "true" },
       title: "Expand chart",
       "aria-label": "Expand #{@label} chart",
       class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
     ) do
       render Icon::ArrowsPointingOutOutline.new(class: "w-3.5 h-3.5")
-    end
-  end
-
-  # overlay_modal — the in-page modal that pops up on maximize.
-  # Hidden by default; chart_expand_controller removes the `hidden`
-  # attr + sets the turbo-frame's `src` on open. Backdrop click +
-  # X button + ESC all close.
-  #
-  # NOT using Components::UI::Modal because that one is built for
-  # full-page routes (open via navigation, close via navigation).
-  # This is an OVERLAY: opens client-side on the current page, no
-  # URL change. Same shadow/blur language though, so visual parity.
-  def overlay_modal
-    div(
-      data: { chart_expand_target: "overlay" },
-      hidden: true,
-      class: "fixed inset-0 z-[65] flex items-center justify-center"
-    ) do
-      # backdrop
-      div(
-        "aria-hidden": "true",
-        data: { action: "click->chart-expand#backdropClick" },
-        class: "absolute inset-0 bg-black/55 backdrop-blur-[3px]"
-      )
-
-      # dialog
-      div(
-        role: "dialog",
-        "aria-modal": "true",
-        "aria-label": "#{@label} chart",
-        class: tokens(
-          "relative z-[1]",
-          "w-[min(1100px,calc(100vw-32px))] max-h-[calc(100vh-48px)]",
-          "flex flex-col min-h-0",
-          "bg-voodu-surface-2 border border-voodu-border-2",
-          "shadow-[0_28px_56px_rgba(0,0,0,0.65),0_4px_12px_rgba(0,0,0,0.4)]"
-        )
-      ) do
-        # header
-        header(
-          class: "flex items-center gap-2.5 px-4 py-3 border-b border-voodu-border bg-voodu-surface"
-        ) do
-          h2(
-            class: "m-0 text-[13px] font-semibold uppercase tracking-[0.05em] font-voodu-mono",
-            style: "color: #{@color};"
-          ) { @label }
-          div(class: "flex-1")
-          button(
-            type: "button",
-            "aria-label": "Close",
-            data: { action: "click->chart-expand#close" },
-            class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
-          ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
-        end
-
-        # body — turbo-frame placeholder. chart_expand_controller
-        # sets `src` on open, Turbo fetches /metrics/chart and
-        # injects the response inside. Range pills inside the
-        # frame body re-target the same frame for in-place
-        # navigation without closing the modal.
-        div(class: "flex flex-col overflow-auto min-h-0") do
-          turbo_frame_tag(frame_id, data: { chart_expand_target: "frame" }) do
-            # Initial loading placeholder. Replaced by the /metrics/chart
-            # response on open; Turbo extracts the matching frame from
-            # the response and swaps the contents.
-            div(class: "p-6 text-voodu-muted text-[12px] text-center") { "Loading chart…" }
-          end
-        end
-      end
     end
   end
 

@@ -64,8 +64,7 @@ class Views::Metrics::Frame < Views::Base
           points:     c[:points],
           range_ms:   @data.range_ms,
           current:    c[:current],
-          expand_url: expand_url_for(c),
-          metric:     c[:metric]
+          expand_url: expand_url_for(c)
         )
       end
     end

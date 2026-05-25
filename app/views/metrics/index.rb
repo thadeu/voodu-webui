@@ -26,6 +26,14 @@ class Views::Metrics::Index < Views::Base
         body
       end
     end
+
+    # Shared modal scaffold for chart-expand. Rendered ONCE outside
+    # the polling turbo-frame so it survives any 30s reload tick
+    # without portal hacks. The maximize buttons on each ChartCard
+    # trigger /metrics/chart, which returns a turbo_stream targeting
+    # this modal's slots (chart-modal-title / chart-modal-body) +
+    # the chart_modal_open custom action.
+    render Components::Metrics::ChartModal.new if @current_island
   end
 
   private
@@ -269,8 +277,7 @@ class Views::Metrics::Index < Views::Base
           points:     c[:points],
           range_ms:   @data.range_ms,
           current:    c[:current],
-          expand_url: expand_url_for(c),
-          metric:     c[:metric]
+          expand_url: expand_url_for(c)
         )
       end
     end

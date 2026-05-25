@@ -119,19 +119,21 @@ class Components::UI::ScopePicker < Components::Base
   # `icon:` (host/all rows) or a StatusDot (pod rows), based on
   # which key the caller provided.
   #
-  # `turbo_frame` (optional): when set, the anchor emits
-  # `data-turbo-frame="..."` and Turbo handles the click as a
-  # frame swap (modal-local navigation, stays open). Without it,
-  # the row falls back to `data-turbo="false"` for full-page
-  # navigation — the original page-level pod picker behaviour.
+  # `turbo_stream` (optional): when truthy, the anchor emits
+  # `data-turbo-stream="true"` so Turbo negotiates a
+  # text/vnd.turbo-stream.html response — the server replies with
+  # a turbo_stream that drives an in-place swap (modal-local
+  # navigation, stays open). Without it, the row falls back to
+  # `data-turbo="false"` for full-page navigation — the original
+  # page-level pod picker behaviour.
   def option_row(opt)
-    active      = opt[:active]
-    title       = opt.fetch(:title)
-    meta        = opt[:meta].to_s
-    href        = opt.fetch(:href)
-    turbo_frame = opt[:turbo_frame]
+    active       = opt[:active]
+    title        = opt.fetch(:title)
+    meta         = opt[:meta].to_s
+    href         = opt.fetch(:href)
+    turbo_stream = opt[:turbo_stream]
 
-    data_attrs = turbo_frame.present? ? { turbo_frame: turbo_frame } : { turbo: false }
+    data_attrs = turbo_stream ? { turbo_stream: "true" } : { turbo: false }
 
     a(
       href: href,

@@ -33,70 +33,96 @@ class MetricsController < ApplicationController
     end
   end
 
-  # chart — backs the expand-to-modal flow on /metrics. Renders a
-  # SINGLE chart + range picker in a turbo-frame, no Dashboard
-  # chrome. Operator clicks the maximize icon on a ChartCard →
-  # Stimulus reveals the modal + sets the frame's src → this action
-  # responds with the standalone chart body. Range pills inside the
-  # modal swap the frame contents without closing the modal.
+  # chart — backs the expand-to-modal flow on /metrics. Two formats:
   #
-  # Params (all required after the scope_kind/scope_id/range trio
-  # the page-level controller already reads):
-  #   metric    — series key, e.g. "cpu_percent"
-  #   scale     — :percent | :bytes_to_mb | :bytes_to_gb | :bytes_auto | :count | :ms
-  #   label     — display name ("CPU")
-  #   color     — CSS var ("var(--voodu-accent)")
-  #   unit      — "%" | "MB" | "GB" | "ms" | "" (auto-bytes resolves at fetch)
+  #   turbo_stream (default, when triggered by maximize button or
+  #   in-modal picker change): returns a stream that
+  #     1. updates #chart-modal-title with the metric label
+  #     2. replaces #chart-modal-body with a fresh ChartModalBody
+  #     3. invokes the custom :chart_modal_open Turbo action so
+  #        the shared modal becomes visible (idempotent if open)
+  #   All in ONE request — no client-side state to coordinate.
+  #
+  #   html (cmd-click or direct URL access): redirects back to
+  #   /metrics with the scope/range params preserved. Honest
+  #   hyperlink semantics — the URL leads somewhere viewable
+  #   instead of returning a JSON-like fragment to bare browsers.
+  #
+  # Params (all required after the scope_kind/scope_id/range trio):
+  #   metric  — series key, e.g. "cpu_percent"
+  #   scale   — :percent | :bytes_to_mb | :bytes_to_gb | :bytes_auto | :count | :ms
+  #   label   — display name ("CPU")
+  #   color   — CSS var ("var(--voodu-accent)")
+  #   unit    — "%" | "MB" | "GB" | "ms" | "" (auto-bytes resolves at fetch)
   #
   # Modal-scope isolation: this endpoint reads `range` from the
   # query string of THIS request — not the parent /metrics page —
-  # so the range picker inside the modal is local to the modal.
-  # The parent page's range stays untouched.
+  # so the picker inside the modal is local to the modal. Parent
+  # page's range stays untouched.
   def chart
-    if voodu_client.nil?
-      head :not_found
-      return
+    respond_to do |format|
+      format.html { redirect_to metrics_path(request.query_parameters.except(:metric, :scale, :label, :color, :unit)) }
+      format.turbo_stream do
+        if voodu_client.nil?
+          head :not_found
+          next
+        end
+
+        data = MetricsPageData.new(
+          voodu_client,
+          current_island,
+          scope_kind: params[:scope_kind],
+          scope_id:   params[:scope_id],
+          range:      params[:range]
+        )
+
+        chart = data.single_chart(
+          metric: params[:metric].to_s,
+          scale:  params[:scale].presence&.to_sym,
+          label:  params[:label].to_s,
+          color:  params[:color].to_s,
+          unit:   params[:unit].to_s
+        )
+
+        if chart.nil?
+          head :not_found
+          next
+        end
+
+        body = Views::Metrics::ChartModalBody.new(
+          chart:           chart,
+          range:           params[:range].presence || "1h",
+          range_ms:        data.range_ms,
+          query:           request.query_parameters,
+          # `data.all_pods` is the cached compact list (same one the
+          # parent page's PodPicker uses). Always populate it — even
+          # on host-scope modals, the in-modal picker needs the pod
+          # list so the operator can drill from host into a pod
+          # without closing the modal first.
+          pods:            data.all_pods,
+          current_island:  current_island,
+          # Available metrics for the in-modal MetricPicker. Grouped
+          # RESOURCE / HTTP. Pod-scope + ingress-eligible exposes
+          # the full set (8 metrics); host gives 3; non-ingress pods
+          # give 4. Computed server-side so the picker doesn't have
+          # to know the rules.
+          metric_sections: data.available_metric_specs
+        )
+
+        # Three-action stream covers the entire modal lifecycle in
+        # one response:
+        #   - title update so the header bar shows the right label
+        #   - body replace so chart + picker + range pills are the
+        #     fresh ones for the new (metric, scope, range)
+        #   - chart_modal_open is idempotent — opens if closed,
+        #     no-ops if already open (re-fetching the SAME modal
+        #     after a pod/range switch just swaps content)
+        render turbo_stream: [
+          turbo_stream.update("chart-modal-title", chart[:label].to_s),
+          turbo_stream.replace("chart-modal-body", body),
+          turbo_stream.action(:chart_modal_open, "chart-modal")
+        ]
+      end
     end
-
-    data = MetricsPageData.new(
-      voodu_client,
-      current_island,
-      scope_kind: params[:scope_kind],
-      scope_id:   params[:scope_id],
-      range:      params[:range]
-    )
-
-    chart = data.single_chart(
-      metric: params[:metric].to_s,
-      scale:  params[:scale].presence&.to_sym,
-      label:  params[:label].to_s,
-      color:  params[:color].to_s,
-      unit:   params[:unit].to_s
-    )
-
-    if chart.nil?
-      head :not_found
-      return
-    end
-
-    render Views::Metrics::ChartModalBody.new(
-      chart:      chart,
-      range:      params[:range].presence || "1h",
-      range_ms:   data.range_ms,
-      query:      request.query_parameters,
-      # `data.all_pods` is the cached compact list (same one the
-      # parent page's PodPicker uses). Always populate it — even
-      # on host-scope modals, the in-modal picker needs the pod
-      # list so the operator can drill from host into a pod
-      # without closing the modal first.
-      pods:           data.all_pods,
-      current_island: current_island,
-      # Per-metric turbo-frame id MUST match the one ChartCard
-      # rendered for this metric — otherwise Turbo can't find the
-      # target frame to swap and the modal stays stale. The
-      # convention is shared between client (ChartCard#frame_id)
-      # and server (here) so they always agree.
-      frame_id:       "chart-modal-#{params[:metric]}"
-    ), layout: false
   end
 end

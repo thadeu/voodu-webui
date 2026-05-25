@@ -76,6 +76,22 @@ class MetricsPageData
     ingress_chart_specs.map { |spec| build_chart(spec) { fetch_ingress_points(spec[:metric], spec[:scale]) } }
   end
 
+  # available_metric_specs — list of every metric the in-modal
+  # MetricPicker can swap to, grouped by section. Hosts get the
+  # 3 resource metrics only; pods get 4 resource + (when
+  # ingress-eligible) 4 HTTP metrics. Drives the modal's
+  # "switch metric without closing" dropdown.
+  #
+  # Shape: [ { label: "RESOURCE", specs: [spec, ...] }, ... ]
+  # Each spec hash is the same one chart_specs / ingress_chart_specs
+  # returns — label, color, unit, metric, scale — so the picker
+  # can build the chart URL directly without lookup.
+  def available_metric_specs
+    sections = [{ label: "RESOURCE", specs: chart_specs }]
+    sections << { label: "HTTP", specs: ingress_chart_specs } if ingress_eligible?
+    sections
+  end
+
   # single_chart — used by the /metrics/chart endpoint (the modal
   # body that opens when an operator clicks the maximize icon on a
   # ChartCard). Takes the same spec shape build_chart works with

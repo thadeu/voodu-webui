@@ -22,18 +22,22 @@ class Components::Metrics::PodPicker < Components::Base
   #   extra_params: hash merged into every URL after the standard
   #                 scope_kind/scope_id pair. Used by the modal
   #                 to ride along metric/scale/range/etc.
-  #   frame_target: when set, anchor rows emit
-  #                 `data-turbo-frame="..."` instead of
-  #                 `data-turbo="false"` so Turbo swaps inside the
-  #                 named frame (modal stays open) rather than
-  #                 doing a full-page navigation.
+  #   turbo_stream: when true, anchor rows emit
+  #                 `data-turbo-stream="true"` so clicking them
+  #                 does a GET that the server answers with a
+  #                 turbo_stream response — drives the
+  #                 chart-modal swap in place without closing
+  #                 the modal. When false (default), rows fall
+  #                 back to `data-turbo="false"` for full-page
+  #                 navigation (the original /metrics page
+  #                 sidebar picker behaviour).
   #   hide_host:    skip the HOST primary section. The chart-modal
   #                 endpoint is per-metric and metrics are scoped
   #                 to either host OR pod — offering "host" inside
   #                 a modal showing a pod-only metric (like
   #                 req_count) would lead to "no data" confusion.
   def initialize(scope_kind:, scope_id:, current_island:, pods: [],
-                 base_path: nil, extra_params: {}, frame_target: nil,
+                 base_path: nil, extra_params: {}, turbo_stream: false,
                  hide_host: false)
     @scope_kind     = scope_kind         # "host" | "pod"
     @scope_id       = scope_id           # host name or pod container name
@@ -41,7 +45,7 @@ class Components::Metrics::PodPicker < Components::Base
     @pods           = Array(pods)
     @base_path      = base_path
     @extra_params   = extra_params || {}
-    @frame_target   = frame_target
+    @turbo_stream   = turbo_stream
     @hide_host      = hide_host
   end
 
@@ -81,7 +85,7 @@ class Components::Metrics::PodPicker < Components::Base
         href:        metrics_url(kind: "host", id: host_name),
         active:      @scope_kind == "host",
         icon:        :CpuChipOutline,
-        turbo_frame: @frame_target
+        turbo_stream: @turbo_stream
       }
     }
   end
@@ -110,12 +114,12 @@ class Components::Metrics::PodPicker < Components::Base
     title = replica.present? ? "#{resource}.#{replica}" : (resource || container)
 
     {
-      title:       title,
-      meta:        image,
-      href:        metrics_url(kind: "pod", id: container),
-      active:      @scope_kind == "pod" && @scope_id == container,
-      status:      status,
-      turbo_frame: @frame_target
+      title:        title,
+      meta:         image,
+      href:         metrics_url(kind: "pod", id: container),
+      active:       @scope_kind == "pod" && @scope_id == container,
+      status:       status,
+      turbo_stream: @turbo_stream
     }
   end
 
