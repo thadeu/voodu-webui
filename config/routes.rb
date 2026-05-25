@@ -21,6 +21,13 @@ Rails.application.routes.draw do
 
   get "/styleguide", to: "styleguide#index"
 
+  # ⌘K palette feed — GLOBAL, not tenant-scoped. The JS controller
+  # fetches this once per session (with a 30s sessionStorage TTL)
+  # and uses it to render commands for every island, not just the
+  # one the operator is currently viewing. Lives at the top level
+  # because there's no single tenant_key that owns it.
+  get "/command_palette.json", to: "command_palette#commands", as: :command_palette
+
   # Tenant-scoped routes. Every navigation surface (overview, pods,
   # logs, metrics, alerts, settings) hangs off /<key>/ so:
   #

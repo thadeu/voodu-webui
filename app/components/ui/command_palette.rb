@@ -7,14 +7,21 @@
 # Cmd-K / Ctrl-K (global) or when the topbar search button is
 # clicked.
 #
-# Server provides the full command list as JSON inline; the
-# controller filters / scores / renders client-side on every
-# keystroke. No XHR per keystroke — palette feels instant.
+# Empty shell only — the command list is NOT inlined into the
+# page HTML. The JS controller fetches it from /command_palette.json
+# on first open and caches it in sessionStorage for 30s. This:
+#
+#   - Keeps the dashboard layout HTML small (no per-page JSON blob).
+#   - Avoids re-serialising the global command set on every
+#     ApplicationController render — only paid on first ⌘K.
+#   - Removes the "JSON sitting in the DOM" surface the operator
+#     flagged as a security smell. Commands now travel via XHR
+#     with the standard Rails session cookie auth path.
 #
 # Structure:
 #
 #   <div data-controller="command-palette"
-#        data-command-palette-commands-value='[…json…]'>
+#        data-command-palette-endpoint-value="/command_palette.json">
 #     <div data-command-palette-target="backdrop" hidden></div>
 #     <div data-command-palette-target="dialog"   hidden>
 #       <input data-command-palette-target="input">
@@ -23,18 +30,12 @@
 #     </div>
 #   </div>
 class Components::UI::CommandPalette < Components::Base
-  def initialize(commands:, default_suggestion_ids: nil)
-    @commands = Array(commands)
-    @default_suggestion_ids = Array(default_suggestion_ids)
-  end
-
   def view_template
     div(
       data: {
         controller: "command-palette",
-        command_palette_commands_value:    @commands.to_json,
-        command_palette_suggestions_value: @default_suggestion_ids.to_json,
-        command_palette_csrf_value:        helpers.form_authenticity_token
+        command_palette_endpoint_value: helpers.command_palette_path,
+        command_palette_csrf_value:     helpers.form_authenticity_token
       }
     ) do
       backdrop
@@ -119,7 +120,10 @@ class Components::UI::CommandPalette < Components::Base
       hint_pair("dismiss")  { render Components::UI::Kbd.new { "esc" } }
       div(class: "flex-1")
       span do
-        span(class: "text-voodu-text-2", data: { command_palette_target: "count" }) { @commands.size.to_s }
+        # Count starts at — and gets filled in by the JS controller
+        # after the first fetch resolves. Initial render has no
+        # numbers because the command list isn't loaded yet.
+        span(class: "text-voodu-text-2", data: { command_palette_target: "count" }) { "—" }
         plain " results"
       end
     end

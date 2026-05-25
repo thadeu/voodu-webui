@@ -2,20 +2,40 @@ import { Controller } from "@hotwired/stimulus"
 
 // CommandPaletteController — ⌘K palette behaviour.
 //
-// Server dumps the full command list as JSON; this controller
-// owns:
-//   - Cmd-K / Ctrl-K global open (any page, any focus)
-//   - ESC / backdrop / clear-X close
-//   - ↑↓ navigation, PgUp/PgDn/Home/End jumps, Enter run
-//   - Fuzzy filter + score (ported from inspiration's palette.jsx)
-//   - Group rendering with section labels + counts
-//   - Highlight matched query terms inline
-//   - Run: GET commands → location.href; POST/DELETE → dynamic
-//     form with CSRF token (avoids rendering N hidden forms)
-//   - Body scroll lock + initial focus
+// Lifecycle:
+//   - connect: bind the global Cmd-K / Ctrl-K listener; no fetch.
+//   - first open: fetch /command_palette.json (or sessionStorage cache),
+//     render Suggestions (LRU) + Navigate (current island) default view.
+//   - subsequent opens within 30s: pure sessionStorage read, instant.
 //
-// All filtering is client-side so keystrokes have zero latency.
-// At ~100-200 commands the score loop is microseconds.
+// Commands come from CommandPaletteController#commands — one global
+// JSON feed covering EVERY island, not the page's current island. The
+// operator can ⌘K from /pods on island A and restart a pod on island B
+// without switching first.
+//
+// Caching layers:
+//   - sessionStorage[CACHE_KEY] (30s TTL) — within-tab fast path.
+//   - Browser HTTP cache (Cache-Control: private, max-age=30) — across
+//     tabs / fresh sessionStorage.
+//   - IslandPods 30s Rails.cache — controller-side, shared with
+//     /pods + /logs + /metrics pickers.
+//
+// LRU suggestions live in localStorage[LRU_KEY] (cap 8). Surviving a
+// tab close is the point — the operator's "things I do here" doesn't
+// reset every session.
+//
+// Icons: cmd.icon is a logical name (e.g. "CubeOutline") that we map
+// to inline SVG client-side via ICON_MAP. Heroicons-v2 outline paths,
+// hand-embedded so no runtime icon-pack import. Status takes precedence
+// over icon — a pod row with cmd.status="running" gets the green dot,
+// not the cube glyph.
+
+const CACHE_KEY      = "voodu:cmd-palette:v1"
+const CACHE_TTL_MS   = 30_000
+const LRU_KEY        = "voodu:cmd-palette:recent"
+const LRU_CAP        = 8
+const TENANT_KEY_RE  = /^\/([A-Za-z0-9]{6})(?:\/|$)/
+
 const GROUP_BOOST = {
   Navigate: 5,
   Actions:  4,
@@ -28,10 +48,9 @@ const GROUP_BOOST = {
 export default class extends Controller {
   static targets = ["backdrop", "dialog", "input", "clear", "results", "count"]
 
-  static values  = {
-    commands:    Array,
-    suggestions: Array,
-    csrf:        String
+  static values = {
+    endpoint: String,
+    csrf:     String
   }
 
   connect() {
@@ -39,6 +58,9 @@ export default class extends Controller {
     this.onLocalKey  = this.onLocalKey.bind(this)
     this.selected    = 0
     this.flat        = []
+    this.commands    = []
+    this.loaded      = false
+    this.fetching    = null
 
     document.addEventListener("keydown", this.onGlobalKey)
   }
@@ -50,7 +72,7 @@ export default class extends Controller {
 
   // ── lifecycle ───────────────────────────────────────────────────
 
-  open(event) {
+  async open(event) {
     event?.preventDefault()
     if (this.isOpen) return
     this.isOpen = true
@@ -63,10 +85,16 @@ export default class extends Controller {
 
     document.addEventListener("keydown", this.onLocalKey)
 
-    requestAnimationFrame(() => {
-      this.inputTarget.focus({ preventScroll: true })
-      this.renderDefault()
-    })
+    requestAnimationFrame(() => this.inputTarget.focus({ preventScroll: true }))
+
+    if (!this.loaded) {
+      this.renderLoading()
+      await this.loadCommands()
+      // Operator might have already closed by the time the fetch
+      // resolves on a flaky network — bail rather than paint stale.
+      if (!this.isOpen) return
+    }
+    this.renderDefault()
   }
 
   close(event) {
@@ -88,13 +116,46 @@ export default class extends Controller {
     this.inputTarget.focus()
   }
 
+  // ── fetching ────────────────────────────────────────────────────
+
+  async loadCommands() {
+    // Dedupe concurrent in-flight fetches (operator spams ⌘K before
+    // the first response lands).
+    if (this.fetching) return this.fetching
+
+    const cached = readCache()
+    if (cached) {
+      this.commands = cached
+      this.loaded   = true
+      return
+    }
+
+    this.fetching = (async () => {
+      try {
+        const url = appendCurrent(this.endpointValue)
+        const res = await fetch(url, {
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin"
+        })
+        if (!res.ok) throw new Error("HTTP " + res.status)
+        const json = await res.json()
+        this.commands = Array.isArray(json.commands) ? json.commands : []
+        writeCache(this.commands)
+      } catch (e) {
+        console.error("command palette: load failed", e)
+        this.commands = []
+      } finally {
+        this.loaded   = true
+        this.fetching = null
+      }
+    })()
+
+    return this.fetching
+  }
+
   // ── keyboard ────────────────────────────────────────────────────
 
   onGlobalKey(event) {
-    // Cmd-K (Mac) / Ctrl-K (Windows/Linux). Skip when the operator
-    // is already inside an input that owns Cmd-K (none today), or
-    // when a different modal is in the way (Modal/Confirmable/Drawer
-    // all preventDefault their own keys before this fires).
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault()
       this.isOpen ? this.close() : this.open()
@@ -139,6 +200,8 @@ export default class extends Controller {
   // ── filter + render ─────────────────────────────────────────────
 
   filter() {
+    if (!this.loaded) return
+
     const q = this.inputTarget.value.trim()
     this.clearTarget.hidden = !q
 
@@ -148,7 +211,7 @@ export default class extends Controller {
     }
 
     const scored = []
-    for (const cmd of this.commandsValue) {
+    for (const cmd of this.commands) {
       const s = scoreCommand(cmd, q)
       if (s !== null && s > 0) scored.push({ cmd, score: s })
     }
@@ -158,13 +221,59 @@ export default class extends Controller {
     this.renderSections(groupCommands(top), q)
   }
 
+  renderLoading() {
+    this.resultsTarget.innerHTML = `
+      <div class="px-4 py-10 text-center text-voodu-muted">
+        <div class="text-[13px]">Loading commands…</div>
+      </div>`
+    if (this.hasCountTarget) this.countTarget.textContent = "—"
+  }
+
+  // renderDefault — what the operator sees on first ⌘K with no
+  // typed query. Two sections:
+  //
+  //   1. Suggestions — recent LRU resolved against the current
+  //      command list. Drops dead ids (pod renamed, island deleted)
+  //      silently rather than rendering a broken row.
+  //   2. Navigate — the 6 nav items for the CURRENT island, picked
+  //      from the URL prefix. If we're on a tenant-less page (eg
+  //      /islands), there's no current island so we skip Navigate
+  //      and just show Suggestions.
   renderDefault() {
-    const suggestions = this.commandsValue.filter(c => this.suggestionsValue.includes(c.id))
-    const navigate    = this.commandsValue.filter(c => c.group === "Navigate")
+    if (!this.loaded) {
+      this.renderLoading()
+      return
+    }
+
+    const currentKey = detectCurrentTenantKey()
+    const recentIds  = readLRU()
+    const byId       = new Map(this.commands.map(c => [c.id, c]))
+
+    const suggestions = recentIds
+      .map(id => byId.get(id))
+      .filter(Boolean)
+      .slice(0, LRU_CAP)
+
+    const navigate = currentKey
+      ? this.commands.filter(c => c.group === "Navigate" && c.island_key === currentKey)
+      : []
 
     const sections = []
-    if (suggestions.length) sections.push({ label: "Suggestions", items: suggestions })
-    if (navigate.length)    sections.push({ label: "Navigate",    items: navigate })
+    if (suggestions.length) sections.push({ label: "Recent",   items: suggestions })
+    if (navigate.length)    sections.push({ label: "Navigate", items: navigate })
+
+    if (sections.length === 0) {
+      // Tenant-less surface with no LRU history — render a friendly
+      // hint instead of the generic "no matches" empty state.
+      this.resultsTarget.innerHTML = `
+        <div class="px-4 py-10 text-center text-voodu-muted">
+          <div class="text-[13px]">Type to search ${this.commands.length} commands</div>
+          <div class="text-[11.5px] mt-2">pods · logs · metrics · restart · server switch</div>
+        </div>`
+      if (this.hasCountTarget) this.countTarget.textContent = String(this.commands.length)
+      this.flat = []
+      return
+    }
 
     this.renderSections(sections, "")
   }
@@ -259,6 +368,11 @@ export default class extends Controller {
     if (!cmd) return
     if (cmd.confirm && !window.confirm(cmd.confirm)) return
 
+    // Stamp the LRU BEFORE navigating — once we set location.href
+    // the JS context dies. localStorage write is synchronous, so
+    // this is safe.
+    pushLRU(cmd.id)
+
     this.close()
 
     const method = (cmd.method || "GET").toUpperCase()
@@ -267,9 +381,6 @@ export default class extends Controller {
       return
     }
 
-    // POST / DELETE → build a hidden form with CSRF token + submit.
-    // Avoids rendering N hidden forms per page (one per palette
-    // command); cost is one form per execution, negligible.
     const form = document.createElement("form")
     form.method = "post"
     form.action = cmd.href
@@ -304,22 +415,83 @@ export default class extends Controller {
   }
 }
 
-// ── pure helpers ──────────────────────────────────────────────────
+// ── cache helpers (sessionStorage, 30s TTL) ───────────────────────
+
+function readCache() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const { ts, commands } = JSON.parse(raw)
+    if (!ts || !Array.isArray(commands)) return null
+    if (Date.now() - ts > CACHE_TTL_MS) return null
+
+    return commands
+  } catch {
+    return null
+  }
+}
+
+function writeCache(commands) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), commands }))
+  } catch {
+    // QuotaExceeded — palette still works, just not cached.
+  }
+}
+
+// ── LRU helpers (localStorage, cap 8) ─────────────────────────────
+
+function readLRU() {
+  try {
+    const raw = localStorage.getItem(LRU_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw)
+
+    return Array.isArray(arr) ? arr.filter(x => typeof x === "string") : []
+  } catch {
+    return []
+  }
+}
+
+function pushLRU(id) {
+  try {
+    const cur = readLRU().filter(x => x !== id)
+    cur.unshift(id)
+    localStorage.setItem(LRU_KEY, JSON.stringify(cur.slice(0, LRU_CAP)))
+  } catch {
+    // QuotaExceeded — silent fall back, palette still works.
+  }
+}
+
+// ── URL helpers ───────────────────────────────────────────────────
+
+function detectCurrentTenantKey() {
+  const m = location.pathname.match(TENANT_KEY_RE)
+
+  return m ? m[1] : null
+}
+
+function appendCurrent(endpoint) {
+  const cur = detectCurrentTenantKey()
+  if (!cur) return endpoint
+  const sep = endpoint.includes("?") ? "&" : "?"
+
+  return `${endpoint}${sep}current=${encodeURIComponent(cur)}`
+}
+
+// ── scoring ───────────────────────────────────────────────────────
 
 // scoreCommand — fuzzy ranker. Returns null when ANY query term
 // fails to appear in the command's corpus (title + subtitle + match
 // blob); otherwise sums positional + group weights.
-//
-// Weights match inspiration's palette.jsx so behaviour parity is
-// preserved between the React prototype and this port.
 function scoreCommand(cmd, query) {
   if (!query) return 0
   const q = query.toLowerCase().trim()
   if (!q) return 0
 
-  const title = cmd.title.toLowerCase()
+  const title  = cmd.title.toLowerCase()
   const corpus = (cmd.title + " " + (cmd.subtitle || "") + " " + (cmd.match || "")).toLowerCase()
-  const terms = q.split(/\s+/).filter(Boolean)
+  const terms  = q.split(/\s+/).filter(Boolean)
 
   let score = 0
   for (const term of terms) {
@@ -338,6 +510,7 @@ function scoreCommand(cmd, query) {
     }
   }
   score += GROUP_BOOST[cmd.group] || 0
+
   return score
 }
 
@@ -347,8 +520,48 @@ function groupCommands(commands) {
     if (!m.has(c.group)) m.set(c.group, [])
     m.get(c.group).push(c)
   }
+
   return Array.from(m.entries()).map(([label, items]) => ({ label, items }))
 }
+
+// ── icon map ──────────────────────────────────────────────────────
+//
+// Inline SVG paths so the palette renders without any runtime icon
+// pack loading. Heroicons-v2 outline (stroke 1.5, viewBox 24×24).
+// Stroke uses currentColor so parent text-* classes win.
+//
+// When CommandSet adds a new icon name, drop the matching path here.
+// Unknown icon names fall back to the muted dot in leadingIndicator().
+
+const SVG_WRAP_START = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="`
+const SVG_WRAP_END   = `"/></svg>`
+
+function ico(d) {
+  return SVG_WRAP_START + d + SVG_WRAP_END
+}
+
+const ICON_MAP = {
+  Squares2x2Outline: ico("M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"),
+
+  CubeOutline: ico("M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"),
+
+  DocumentTextOutline: ico("M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"),
+
+  ChartBarOutline: ico("M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"),
+
+  BellOutline: ico("M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"),
+
+  // Cog has two paths (outer gear + inner circle). Custom-wrap.
+  Cog6ToothOutline: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.076.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.213-1.28z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
+
+  ArrowPathOutline: ico("M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"),
+
+  PlusOutline: ico("M12 4.5v15m7.5-7.5h-15"),
+
+  ServerStackOutline: ico("M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z")
+}
+
+// ── row rendering ─────────────────────────────────────────────────
 
 function renderRow(cmd, index, selected, query) {
   const destructive = cmd.destructive ? "true" : "false"
@@ -371,8 +584,8 @@ function renderRow(cmd, index, selected, query) {
     <div data-cmd-index="${index}" data-cmd-destructive="${destructive}" data-cmd-selected="${selected}"
          role="option" aria-selected="${selected}"
          class="${base}${selected ? sel : idle}"
-         style="grid-template-columns: 18px 1fr auto;">
-      <span class="inline-flex items-center justify-center w-[18px] text-voodu-muted">
+         style="grid-template-columns: 20px 1fr auto;">
+      <span class="inline-flex items-center justify-center w-[20px] text-voodu-muted">
         ${leadingIndicator(cmd)}
       </span>
       <div class="min-w-0">
@@ -384,11 +597,19 @@ function renderRow(cmd, index, selected, query) {
   `
 }
 
+// leadingIndicator — status dot wins over icon, dot fallback wins
+// over nothing. Picking the right glyph here is what makes the
+// palette skim-readable (icon = action, dot = state).
 function leadingIndicator(cmd) {
   if (cmd.status) {
     const c = statusColor(cmd.status)
+
     return `<span aria-hidden="true" class="inline-block w-[7px] h-[7px] rounded-full" style="background:${c}"></span>`
   }
+
+  const svg = cmd.icon && ICON_MAP[cmd.icon]
+  if (svg) return svg
+
   return `<span aria-hidden="true" class="inline-block w-[5px] h-[5px] rounded-full bg-voodu-muted-2"></span>`
 }
 
@@ -404,11 +625,10 @@ function statusColor(s) {
 }
 
 // highlight — wrap matched substrings in <mark> with accent style.
-// Case-insensitive across all query terms. Reused from inspiration.
+// Case-insensitive across all query terms.
 function highlight(text, query) {
   if (!query) return escapeHtml(text)
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-
   if (!terms.length) return escapeHtml(text)
 
   const lower = text.toLowerCase()
@@ -416,7 +636,7 @@ function highlight(text, query) {
 
   for (const term of terms) {
     let i = 0
-  
+
     while (i < lower.length) {
       const idx = lower.indexOf(term, i)
       if (idx < 0) break
@@ -424,12 +644,12 @@ function highlight(text, query) {
       i = idx + term.length
     }
   }
-  
+
   if (!ranges.length) return escapeHtml(text)
 
   ranges.sort((a, b) => a[0] - b[0])
   const merged = [ranges[0]]
-  
+
   for (let i = 1; i < ranges.length; i++) {
     const last = merged[merged.length - 1]
     if (ranges[i][0] <= last[1]) last[1] = Math.max(last[1], ranges[i][1])
@@ -444,10 +664,10 @@ function highlight(text, query) {
     out.push(`<mark class="bg-voodu-accent-dim text-voodu-accent-2 font-semibold px-px">${escapeHtml(text.slice(s, e))}</mark>`)
     pos = e
   }
-  
+
   if (pos < text.length) out.push(escapeHtml(text.slice(pos)))
-  
-    return out.join("")
+
+  return out.join("")
 }
 
 function escapeHtml(s) {

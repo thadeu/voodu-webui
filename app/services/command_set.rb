@@ -1,34 +1,28 @@
 # frozen_string_literal: true
 
-# CommandSet — assembles the list of commands the ⌘K palette
-# shows.
+# CommandSet — assembles the list of commands the ⌘K palette shows.
 #
-# Layout choice: server BUILDS the full list per request and dumps
-# it as JSON into a data-attribute; the Stimulus controller filters
-# / scores / renders client-side. The whole list is ~50–200 items
-# (6 nav + N pods × 3 surfaces + N restart + N servers + globals);
-# even at 10 pods × 3 servers we're under 100 commands — well
-# inside the "send-it-all" budget. No XHR round-trip per keystroke.
+# Two execution modes:
 #
-# Each command is a hash:
+#   - Per-island (`CommandSet.for(island:, ...)`): builds Navigate
+#     + Pods + Logs/Metrics/Restart for ONE island. Used by the
+#     /command_palette.json endpoint, which loops every registered
+#     island + concatenates the results.
 #
-#   {
-#     id:        unique string,
-#     group:     "Navigate" | "Pods" | "Logs" | ... ,
-#     title:     primary label,
-#     subtitle:  optional muted line under the title,
-#     match:     extra search corpus (synonyms, IDs, intent words),
-#     icon:      Heroicon name (or nil for default dot),
-#     status:    pod/server status (renders a StatusDot instead),
-#     shortcut:  ["G", "P"] style key list,
-#     href:      destination URL,
-#     method:    "GET" (default) | "POST" | "DELETE",
-#     destructive: true → red selection style + "restart ↵" hint,
-#     confirm:   optional message; if set, ask before running
-#   }
+#   - Global tail (`CommandSet.globals(islands:, helpers:)`):
+#     builds Server-switch + Global actions (Add server, Manage
+#     servers). Independent of any single island. Endpoint appends
+#     these once after the per-island loop.
+#
+# Every href is built with EXPLICIT `tenant_key: island.key` — the
+# palette is a multi-server surface, so each command must point at
+# the specific island it was generated for (not the current request's
+# island via default_url_options).
+#
+# Subtitle convention: pod-bound commands include the SERVER name
+# (e.g. "data · postgres:16 · @debian"). Lets the operator scan
+# "where does this pod live" without leaving the palette.
 class CommandSet
-  # Saved log queries — curated filter shortcuts. Static for v1;
-  # operators can pin their own in a future iteration.
   LOG_QUERIES = [
     { id: "logs-errors", title: "Filter logs to ERROR-level",  match: "logs errors level warn" },
     { id: "logs-5xx",    title: "Filter logs to HTTP 5xx",     match: "logs 5xx 500 502 504 server errors" },
@@ -37,33 +31,49 @@ class CommandSet
     { id: "logs-slow",   title: "Show slow queries",           match: "logs slow query database" }
   ].freeze
 
-  def self.for(island:, islands: [], pods: [], helpers:)
-    new(island: island, islands: Array(islands), pods: Array(pods), helpers: helpers).build
+  # ── public entrypoints ──────────────────────────────────────────
+
+  def self.for(island:, pods: [], helpers:)
+    new(island: island, pods: Array(pods), helpers: helpers).build_per_island
   end
 
-  def initialize(island:, islands:, pods:, helpers:)
-    @island  = island
-    @islands = islands
-    @pods    = pods
-    @h       = helpers
+  def self.globals(islands:, current_island: nil, helpers:)
+    new(island: nil, pods: [], helpers: helpers)
+      .build_globals(islands: Array(islands), current_island: current_island)
   end
 
-  def build
-    out = []
-    out.concat(navigate_commands) if @island
-    out.concat(pod_jump_commands) if @island
-    out.concat(per_pod_log_commands) if @island
-    out.concat(per_pod_metric_commands) if @island
-    out.concat(saved_log_queries) if @island
-    out.concat(restart_commands) if @island
-    out.concat(server_switch_commands)
-    out.concat(global_commands)
-    out
+  def initialize(island:, pods:, helpers:)
+    @island = island
+    @pods   = pods
+    @h      = helpers
+  end
+
+  # build_per_island — commands scoped to one specific island.
+  # Tagged with `island_key` so the client can filter the default
+  # view to the current page's island; search shows all islands.
+  def build_per_island
+    return [] if @island.nil?
+
+    [
+      *navigate_commands,
+      *pod_jump_commands,
+      *per_pod_log_commands,
+      *per_pod_metric_commands,
+      *saved_log_queries,
+      *restart_commands
+    ]
+  end
+
+  def build_globals(islands:, current_island:)
+    [
+      *server_switch_commands(islands, current_island),
+      *global_commands
+    ]
   end
 
   private
 
-  # ── Navigate (6) ─────────────────────────────────────────────────
+  # ── Navigate (6 per island) ─────────────────────────────────────
 
   def navigate_commands
     [
@@ -78,31 +88,31 @@ class CommandSet
 
   def nav(route, label, icon, shortcut, match)
     {
-      id:       "nav-#{route}",
-      group:    "Navigate",
-      title:    "Go to #{label}",
-      icon:     icon.to_s,
-      shortcut: shortcut,
-      match:    match,
-      href:     @h.public_send("#{route}_path")
+      id:         "nav-#{route}-#{@island.key}",
+      group:      "Navigate",
+      island_key: @island.key,
+      title:      "Go to #{label}",
+      subtitle:   "@ #{@island.name}",
+      icon:       icon.to_s,
+      shortcut:   shortcut,
+      match:      "#{match} #{@island.name}",
+      href:       @h.public_send("#{route}_path", tenant_key: @island.key)
     }
   end
 
-  # ── Pods — jump to detail (one per pod) ──────────────────────────
+  # ── Pods — jump to detail ───────────────────────────────────────
 
   def pod_jump_commands
     @pods.map do |p|
       {
-        id:       "pod:#{p['name']}",
-        group:    "Pods",
-        title:    pod_title(p),
-        subtitle: "#{p['scope']} · #{p['image']}",
-        match:    pod_match_corpus(p),
-        # Compact /pods uses status=human-string ("Up 2 days"). The
-        # JS dot only knows running/restarting/stopped semantics, so
-        # we normalise here from the boolean `running` field.
-        status:   normalised_status(p),
-        href:     @h.pod_path(name: p["name"])
+        id:         "pod:#{@island.key}:#{p['name']}",
+        group:      "Pods",
+        island_key: @island.key,
+        title:      pod_title(p),
+        subtitle:   "#{p['scope']} · #{p['image']} · @#{@island.name}",
+        match:      "#{pod_match_corpus(p)} #{@island.name}",
+        status:     normalised_status(p),
+        href:       @h.pod_path(name: p["name"], tenant_key: @island.key)
       }
     end
   end
@@ -112,13 +122,14 @@ class CommandSet
   def per_pod_log_commands
     @pods.map do |p|
       {
-        id:       "logs:#{p['name']}",
-        group:    "Logs",
-        title:    "Logs for #{pod_title(p)}",
-        subtitle: "live tail · #{p['scope']}",
-        icon:     "DocumentTextOutline",
-        match:    "logs tail stream #{pod_match_corpus(p)}",
-        href:     @h.pod_logs_path(name: p["name"])
+        id:         "logs:#{@island.key}:#{p['name']}",
+        group:      "Logs",
+        island_key: @island.key,
+        title:      "Logs for #{pod_title(p)}",
+        subtitle:   "live tail · #{p['scope']} · @#{@island.name}",
+        icon:       "DocumentTextOutline",
+        match:      "logs tail stream #{pod_match_corpus(p)} #{@island.name}",
+        href:       @h.pod_logs_path(name: p["name"], tenant_key: @island.key)
       }
     end
   end
@@ -128,68 +139,68 @@ class CommandSet
   def per_pod_metric_commands
     @pods.map do |p|
       {
-        id:       "metrics:#{p['name']}",
-        group:    "Metrics",
-        title:    "Metrics for #{pod_title(p)}",
-        subtitle: "last 1h · #{p['scope']}",
-        icon:     "ChartBarOutline",
-        match:    "metrics charts #{pod_match_corpus(p)}",
-        href:     "#{@h.metrics_path}?scope_kind=pod&scope_id=#{CGI.escape(p['name'])}"
+        id:         "metrics:#{@island.key}:#{p['name']}",
+        group:      "Metrics",
+        island_key: @island.key,
+        title:      "Metrics for #{pod_title(p)}",
+        subtitle:   "last 1h · #{p['scope']} · @#{@island.name}",
+        icon:       "ChartBarOutline",
+        match:      "metrics charts #{pod_match_corpus(p)} #{@island.name}",
+        href:       "#{@h.metrics_path(tenant_key: @island.key)}?scope_kind=pod&scope_id=#{CGI.escape(p['name'])}"
       }
     end
   end
 
-  # ── Saved log queries (curated) ──────────────────────────────────
+  # ── Saved log queries ────────────────────────────────────────────
 
   def saved_log_queries
     LOG_QUERIES.map do |q|
       {
-        id:       q[:id],
-        group:    "Logs",
-        title:    q[:title],
-        subtitle: "saved query",
-        icon:     "DocumentTextOutline",
-        match:    q[:match],
-        href:     @h.logs_path
+        id:         "#{q[:id]}-#{@island.key}",
+        group:      "Logs",
+        island_key: @island.key,
+        title:      q[:title],
+        subtitle:   "saved query · @#{@island.name}",
+        icon:       "DocumentTextOutline",
+        match:      "#{q[:match]} #{@island.name}",
+        href:       @h.logs_path(tenant_key: @island.key)
       }
     end
   end
 
   # ── Restart actions (running pods only) ──────────────────────────
-  #
-  # Compact /pods returns a human `status` string ("Up 2 days") AND
-  # a boolean `running` field. We key off `running == true` so the
-  # match is robust to docker's status-string format drift.
+
   def restart_commands
     @pods.filter_map do |p|
       next unless p["running"] == true
 
       {
-        id:          "restart:#{p['name']}",
+        id:          "restart:#{@island.key}:#{p['name']}",
         group:       "Actions",
+        island_key:  @island.key,
         title:       "Restart #{pod_title(p)}",
-        subtitle:    "#{p['image']} · #{p['scope']}",
+        subtitle:    "#{p['image']} · #{p['scope']} · @#{@island.name}",
         icon:        "ArrowPathOutline",
-        match:       "restart kill cycle bounce #{pod_match_corpus(p)}",
+        match:       "restart kill cycle bounce #{pod_match_corpus(p)} #{@island.name}",
         destructive: true,
-        href:        @h.restart_pod_path(name: p["name"]),
+        href:        @h.restart_pod_path(name: p["name"], tenant_key: @island.key),
         method:      "POST",
-        confirm:     "Restart #{pod_title(p)}?"
+        confirm:     "Restart #{pod_title(p)} on #{@island.name}?"
       }
     end
   end
 
-  # ── Server switching ─────────────────────────────────────────────
+  # ── Server switching (global) ────────────────────────────────────
 
-  def server_switch_commands
-    @islands.filter_map do |s|
-      next if @island && s.id == @island.id
+  def server_switch_commands(islands, current_island)
+    islands.filter_map do |s|
+      next if current_island && s.id == current_island.id
 
       {
         id:       "server:#{s.id}",
         group:    "Servers",
         title:    "Switch to #{s.name}",
-        subtitle: "#{s.host}",
+        subtitle: s.host.to_s,
         status:   (s.status || :unknown).to_s,
         match:    "server host switch select #{s.name} #{s.host}",
         href:     @h.tenant_root_path(tenant_key: s.key)
@@ -200,24 +211,24 @@ class CommandSet
   # ── Globals ──────────────────────────────────────────────────────
 
   def global_commands
-    out = []
-    out << {
-      id:       "act-add-server",
-      group:    "Actions",
-      title:    "Add new server",
-      icon:     "PlusOutline",
-      match:    "add new server host connect setup register",
-      href:     @h.new_island_path
-    }
-    out << {
-      id:       "act-manage-servers",
-      group:    "Actions",
-      title:    "Manage servers",
-      icon:     "ServerStackOutline",
-      match:    "manage servers list edit remove registry",
-      href:     @h.islands_path
-    }
-    out
+    [
+      {
+        id:       "act-add-server",
+        group:    "Actions",
+        title:    "Add new server",
+        icon:     "PlusOutline",
+        match:    "add new server host connect setup register",
+        href:     @h.new_island_path
+      },
+      {
+        id:       "act-manage-servers",
+        group:    "Actions",
+        title:    "Manage servers",
+        icon:     "ServerStackOutline",
+        match:    "manage servers list edit remove registry",
+        href:     @h.islands_path
+      }
+    ]
   end
 
   # ── helpers ──────────────────────────────────────────────────────
@@ -233,10 +244,6 @@ class CommandSet
       .compact.join(" ")
   end
 
-  # normalised_status — turns the compact response's `running` bool
-  # into the semantic state the JS leadingIndicator understands.
-  # `status` field is the human "Up 2 days" string, useless for
-  # colour mapping.
   def normalised_status(p)
     p["running"] == true ? "running" : "stopped"
   end
