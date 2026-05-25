@@ -57,8 +57,20 @@ class LogsController < ApplicationController
 
     set_stream_headers
 
-    voodu_client.logs_stream(params[:name], follow: follow_param, tail: tail_param) do |chunk|
-      response.stream.write(chunk)
+    # Release the dependency interlock during the blocking proxy
+    # loop. Without this, an open SSE tab holds a reader on the
+    # Rails reloader for as long as the stream lives, which means
+    # the operator's next code edit can't acquire the write lock
+    # to reload — they observe "I changed code and it didn't take
+    # effect" and restart bin/dev. permit_concurrent_loads is the
+    # canonical Rails answer for ActionController::Live actions
+    # that spend most of their time in blocking IO. We promise not
+    # to autoload any constants inside this block (we don't — the
+    # client + chunk yield are already loaded).
+    ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
+      voodu_client.logs_stream(params[:name], follow: follow_param, tail: tail_param) do |chunk|
+        response.stream.write(chunk)
+      end
     end
   rescue Voodu::Client::Error => e
     Rails.logger.warn("logs#stream: #{e.class} #{e.message}")
@@ -76,14 +88,18 @@ class LogsController < ApplicationController
 
     set_stream_headers
 
-    voodu_client.logs_stream_multi(
-      follow: follow_param,
-      tail:   tail_param,
-      scope:  params[:scope],
-      kind:   params[:kind],
-      name:   params[:name]
-    ) do |chunk|
-      response.stream.write(chunk)
+    # Same interlock release as `stream` — see the long comment there
+    # for the dev-reloader rationale.
+    ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
+      voodu_client.logs_stream_multi(
+        follow: follow_param,
+        tail:   tail_param,
+        scope:  params[:scope],
+        kind:   params[:kind],
+        name:   params[:name]
+      ) do |chunk|
+        response.stream.write(chunk)
+      end
     end
   rescue Voodu::Client::Error => e
     Rails.logger.warn("logs#stream_all: #{e.class} #{e.message}")
