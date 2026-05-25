@@ -111,11 +111,25 @@ class Components::Pods::Header < Components::Base
     end
   end
 
+  # view_logs_btn — opens the pod's logs viewer inside a right-side
+  # Drawer so the operator can peek without losing the pod context.
+  # Same wiring Metrics page uses for its "Logs" action (see
+  # Views::Metrics::Index#pod_actions): src points at the embed
+  # variant, open_url at the full page so cmd-click / middle-click
+  # still gets a real navigation. Drawer is wider than the Pod peek
+  # (40vw default) because log lines are long.
   def view_logs_btn
-    a(
-      href: helpers.pod_logs_path(name: @data.name),
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) do
+    name = @data.name
+
+    render(Components::UI::Drawer.new(
+      title:    "Logs · #{name}",
+      src:      "#{helpers.pod_logs_path(name: name)}?embed=1",
+      open_url: helpers.pod_logs_path(name: name),
+      width:    "70vw",
+      trigger_attrs: {
+        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+      }
+    )) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
       span { "View logs" }
     end
