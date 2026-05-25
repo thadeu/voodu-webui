@@ -30,7 +30,8 @@ ENV RAILS_ENV="production" \
     BUNDLE_WITHOUT="development" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so" \
     HTTP_PORT="3000" \
-    TARGET_PORT="3001"
+    TARGET_PORT="3001" \
+    SOLID_QUEUE_IN_PUMA="true"
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build

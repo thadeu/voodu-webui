@@ -115,13 +115,23 @@ network namespace, not the macOS network. Don't reach for it.
 | `HOST_PORT`                                                                                           | Compose-only — external port forwarded to internal `3000` (default `3000`).            |
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
 | `TARGET_PORT`                                                                                         | Internal Rails port behind Thruster (default `3001`). Must differ from `HTTP_PORT`.    |
+| `SOLID_QUEUE_IN_PUMA`                                                                                 | Run `solid_queue` (recurring scheduler + workers) inside the Puma process. Default `true` in the image — required for the metrics warehouse to refill every 30s. Unset to disable (e.g., when running a sidecar `bin/jobs` container). |
+| `JOB_CONCURRENCY`                                                                                     | Worker processes solid_queue forks (default `1`). Bump if you have many islands.       |
 
 ## Image internals
 
 - Rails 8.1 + Thruster (HTTP/2 in front of Puma).
-- SQLite, persisted to `/rails/storage` (the volume mount point).
-- Solid stack: `solid_cache`, `solid_queue`, `solid_cable` — all backed by SQLite, no
-  external Redis / Postgres needed.
+- Five SQLite databases under `/rails/storage`: `production.sqlite3` (app data),
+  `production_cache.sqlite3` (solid_cache), `production_queue.sqlite3` (solid_queue),
+  `production_cable.sqlite3` (solid_cable), `production_metrics.sqlite3` (metrics
+  warehouse — high-volume background-job writes kept off the primary).
+- `rails db:prepare` runs against every configured database on boot, so all five files
+  are created and migrated automatically.
+- **Background jobs run in-process.** `SOLID_QUEUE_IN_PUMA=true` (default in the image)
+  loads the solid_queue Puma plugin — the dispatcher, worker pool, and recurring-task
+  scheduler all run inside the same Puma process. The recurring `metrics_sync` task
+  (see `config/recurring.yml`) fans out a per-island sync job every 30 seconds; if you
+  unset `SOLID_QUEUE_IN_PUMA`, the metrics warehouse never refills.
 - Runs as uid `1000` (`rails`). The storage volume is owned by that uid.
 - Multi-arch: `linux/amd64`, `linux/arm64`.
 - Healthcheck: `curl -f http://localhost:3000/up`.
