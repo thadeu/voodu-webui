@@ -18,11 +18,21 @@
 # `dim: true` mutes the value column (for "never" / "(empty)" states).
 class Components::UI::KvRow < Components::Base
   def initialize(key:, mono: true, dim: false, copy: false, copy_value: nil)
-    @key        = key
-    @mono       = mono
-    @dim        = dim
-    @copy       = copy
-    @copy_value = copy_value
+    @key                   = key
+    @mono                  = mono
+    @dim                   = dim
+    @copy                  = copy
+    @copy_value            = copy_value
+    @leading_actions_block = nil
+  end
+
+  # with_leading_actions — slot for buttons rendered LEFT of the
+  # CopyButton in the actions column. Used by EnvCard to inject the
+  # per-row eye toggle (show/hide secret) alongside Copy without
+  # forking the row layout.
+  def with_leading_actions(&block)
+    @leading_actions_block = block
+    self
   end
 
   def view_template(&)
@@ -38,7 +48,8 @@ class Components::UI::KvRow < Components::Base
           "break-all min-w-0"
         )
       ) { yield if block_given? }
-      div(class: "min-w-[22px] flex justify-end") do
+      div(class: "min-w-[22px] flex items-center justify-end gap-1") do
+        @leading_actions_block&.call
         render Components::UI::CopyButton.new(value: @copy_value || "", label: "Copy #{@key}") if @copy && @copy_value
       end
     end
