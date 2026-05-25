@@ -19,7 +19,7 @@ gem "solid_cable"
 gem "bootsnap", require: false
 gem "kamal", require: false
 gem "thruster", require: false
-gem "image_processing", "~> 1.2"
+gem "image_processing", "~> 2.0"
 gem "phlex-rails", "~> 2.4"
 gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"
