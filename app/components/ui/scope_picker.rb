@@ -57,10 +57,16 @@ class Components::UI::ScopePicker < Components::Base
   def trigger_button
     icon_klass = Icon.const_get(@trigger.fetch(:icon))
 
+    # h-9 matches the standard header-level action button height
+    # (Open pod, Refresh, Restart pod…) so the picker reads as
+    # part of the same toolbar row instead of sitting 4px shorter
+    # than its neighbours. Inline toolbar pills (Follow/Wrap/Pause
+    # in Logs, RangePicker pills in Metrics) intentionally stay
+    # h-8 — they're a denser secondary surface.
     button(
       type: "button",
       data: { action: "click->dropdown#toggle" },
-      class: "inline-flex items-center gap-2 px-2.5 h-8 min-w-[180px] border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] hover:bg-voodu-surface-2"
+      class: "inline-flex items-center gap-2 px-2.5 h-9 min-w-[180px] border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] hover:bg-voodu-surface-2"
     ) do
       render icon_klass.new(class: "w-3 h-3")
 

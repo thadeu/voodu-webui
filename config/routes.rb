@@ -55,8 +55,12 @@ Rails.application.routes.draw do
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 
-    get "/metrics",  to: "metrics#index",  as: :metrics
-    get "/alerts",   to: "alerts#index",   as: :alerts
-    get "/settings", to: "settings#index", as: :settings
+    get  "/metrics",  to: "metrics#index",  as: :metrics
+    get  "/alerts",   to: "alerts#index",   as: :alerts
+    get  "/settings", to: "settings#index", as: :settings
+    # Settings actions stay under the same tenant scope so the
+    # per-server context (current_island) flows through naturally.
+    post   "/settings/reconnect",       to: "settings#reconnect",  as: :reconnect_settings
+    delete "/settings/pats/:pat_id",    to: "settings#revoke_pat", as: :revoke_pat_settings
   end
 end

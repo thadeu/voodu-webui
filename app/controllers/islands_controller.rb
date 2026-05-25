@@ -78,7 +78,11 @@ class IslandsController < ApplicationController
   end
 
   def edit
-    render Views::Islands::Edit.new(current_path: current_path, island: @island)
+    render Views::Islands::Edit.new(
+      current_path: current_path,
+      island:       @island,
+      return_to:    safe_return_to
+    )
   end
 
   def update
@@ -92,7 +96,7 @@ class IslandsController < ApplicationController
     @island.assign_attributes(attrs)
 
     unless @island.valid?
-      render Views::Islands::Edit.new(current_path: current_path, island: @island),
+      render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
              status: :unprocessable_entity
       return
     end
@@ -103,6 +107,7 @@ class IslandsController < ApplicationController
       render Views::Islands::Edit.new(
         current_path:     current_path,
         island:           @island,
+        return_to:        safe_return_to,
         connection_error: probe_error
       ), status: :unprocessable_entity
       return
@@ -110,9 +115,9 @@ class IslandsController < ApplicationController
 
     if @island.save
       IslandHealth.warm(@island, online: true)
-      redirect_to islands_path, notice: "Server #{@island.name} updated."
+      redirect_to (safe_return_to || islands_path), notice: "Server #{@island.name} updated."
     else
-      render Views::Islands::Edit.new(current_path: current_path, island: @island),
+      render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
              status: :unprocessable_entity
     end
   end
@@ -131,6 +136,17 @@ class IslandsController < ApplicationController
   # key, not the integer id — lookup must be by key.
   def set_island
     @island = Island.find_by!(key: params[:id])
+  end
+
+  # safe_return_to — accepts a ?return_to= path query param + sanity
+  # checks it. Only same-origin RELATIVE paths starting with `/`
+  # are accepted, blocking open-redirect attacks (an attacker
+  # crafting `?return_to=https://evil.example/...` couldn't steer
+  # the post-save redirect off-site). nil falls back to the
+  # default in the action (usually islands_path).
+  def safe_return_to
+    p = params[:return_to].to_s
+    p.start_with?("/") && !p.start_with?("//") ? p : nil
   end
 
   def island_params

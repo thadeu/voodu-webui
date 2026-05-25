@@ -90,6 +90,29 @@ module Voodu
       get("metrics", params)
     end
 
+    # pats — list every PAT registered on this server, redacted.
+    # Returns an Array of `{ id, name, prefix, suffix, scopes,
+    # created_at, last_used_at }` hashes (newest first).
+    #
+    # Requires the configured PAT to carry `actions` scope (the
+    # controller's PAT-plane proxy gates this endpoint at the same
+    # tier as restart, since the names + prefixes are admin
+    # metadata). When the PAT only has `read`, raises
+    # Voodu::Client::AuthError (401/403) — the WebUI's Settings
+    # page catches it and renders the "admin PAT required" hint
+    # inline instead of the list.
+    def pats
+      payload = get("pats")
+      Array(payload && payload["pats"])
+    end
+
+    # revoke_pat — DELETE one PAT by id. 404 when the id doesn't
+    # exist anymore (idempotent at the etcd level). Same scope
+    # gate as `pats`.
+    def revoke_pat(id)
+      delete("pats/#{CGI.escape(id)}")
+    end
+
     # pods — listing. `detail: true` asks the controller to enrich each
     # row with the full PodDetail shape server-side (env, networks,
     # ports, state, …), giving the WebUI the same payload `vd describe
@@ -211,6 +234,13 @@ module Voodu
 
     def post(path)
       resp = conn.post("/api/pat/v1/#{path}")
+      handle(resp)
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
+    end
+
+    def delete(path)
+      resp = conn.delete("/api/pat/v1/#{path}")
       handle(resp)
     rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
       raise TransportError, e.message

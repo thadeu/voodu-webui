@@ -8,10 +8,15 @@
 # the operator can change name/endpoint/region without re-typing
 # the PAT.
 class Views::Islands::Edit < Views::Base
-  def initialize(current_path:, island:, connection_error: nil)
+  # return_to: — caller-supplied path the modal close + post-save
+  # redirect should land on (Settings page uses this to keep the
+  # operator's flow on Settings instead of bouncing them back to
+  # the /islands registry).
+  def initialize(current_path:, island:, connection_error: nil, return_to: nil)
     @current_path     = current_path
     @island           = island
     @connection_error = connection_error
+    @return_to        = return_to
   end
 
   def view_template
@@ -28,8 +33,16 @@ class Views::Islands::Edit < Views::Base
       subtitle: "Update name, endpoint, or rotate the PAT",
       icon:     :PencilSquareOutline,
       size:     :md,
-      close_to: helpers.islands_path
+      close_to: close_destination
     ).with_footer { footer_actions }
+  end
+
+  # close_destination — where the X / Cancel sends the operator.
+  # Honors return_to when the caller passed one (Settings → close
+  # goes back to Settings); falls back to /islands so the registry
+  # surface stays the default landing.
+  def close_destination
+    @return_to.presence || helpers.islands_path
   end
 
   def form_body
@@ -40,6 +53,9 @@ class Views::Islands::Edit < Views::Base
     ) do
       input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch")
+      # return_to rides along so the post-save redirect honours
+      # the page the operator came from (Settings vs /islands).
+      input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 
       connection_error_banner if @connection_error
 
@@ -154,7 +170,7 @@ class Views::Islands::Edit < Views::Base
     div(class: "flex-1")
 
     a(
-      href: helpers.islands_path,
+      href: close_destination,
       class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { "Cancel" }
 

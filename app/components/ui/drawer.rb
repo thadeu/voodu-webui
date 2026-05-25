@@ -185,8 +185,21 @@ class Components::UI::Drawer < Components::Base
       data: { drawer_target: "body" },
       class: "relative flex-1 overflow-auto bg-voodu-bg"
     ) do
-      div(class: "h-full flex items-center justify-center text-voodu-muted text-[12px]") do
-        plain "loading…"
+      # Spinning brand logo while the fetch is in flight. Replaced
+      # in-place by drawer_controller.js when the response arrives.
+      # `animate-voodu-spin` (theme.css) is a 0.9s linear infinite
+      # rotation — same primitive the inline Spinner uses, applied
+      # to the logo bitmap.
+      #
+      # Icon-only: the spinning brand mark reads as "loading" on
+      # its own; the word adds noise without adding signal.
+      div(class: "h-full flex items-center justify-center") do
+        render img(
+          src: "/mono-white-512.png",
+          alt: "loading",
+          class: "h-24 w-24 animate-voodu-spin opacity-80",
+          aria: { label: "Loading" }
+        )
       end
     end
   end
