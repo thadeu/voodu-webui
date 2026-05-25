@@ -299,9 +299,14 @@ export default class extends Controller {
     const recentIds  = readLRU()
     const byId       = new Map(this.commands.map(c => [c.id, c]))
 
+    // Recent excludes Navigate intentionally — those commands already
+    // live in the dedicated Navigate section below, so surfacing them
+    // here too is duplicate noise. Recent is reserved for the
+    // commands that ONLY exist when you can name them (a specific
+    // pod, a restart, a server switch, a saved log query).
     const suggestions = recentIds
       .map(id => byId.get(id))
-      .filter(Boolean)
+      .filter(c => c && c.group !== "Navigate")
       .slice(0, LRU_CAP)
 
     const navigate = currentKey

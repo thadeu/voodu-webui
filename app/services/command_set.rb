@@ -77,16 +77,22 @@ class CommandSet
 
   def navigate_commands
     [
-      nav(:tenant_root, "Overview", :Squares2x2Outline,   %w[G O], "home dashboard overview"),
-      nav(:pods,        "Pods",     :CubeOutline,         %w[G P], "pods list services replicas"),
-      nav(:logs,        "Logs",     :DocumentTextOutline, %w[G L], "logs stdout tail stream live"),
-      nav(:metrics,     "Metrics",  :ChartBarOutline,     %w[G M], "metrics charts graphs time range"),
-      nav(:alerts,      "Alerts",   :BellOutline,         %w[G A], "alerts firing rules history"),
-      nav(:settings,    "Settings", :Cog6ToothOutline,    %w[G ,], "settings preferences tokens")
+      nav(:tenant_root, "Overview", :Squares2x2Outline,   "home dashboard overview"),
+      nav(:pods,        "Pods",     :CubeOutline,         "pods list services replicas"),
+      nav(:logs,        "Logs",     :DocumentTextOutline, "logs stdout tail stream live"),
+      nav(:metrics,     "Metrics",  :ChartBarOutline,     "metrics charts graphs time range"),
+      nav(:alerts,      "Alerts",   :BellOutline,         "alerts firing rules history"),
+      nav(:settings,    "Settings", :Cog6ToothOutline,    "settings preferences tokens")
     ]
   end
 
-  def nav(route, label, icon, shortcut, match)
+  # nav — no `shortcut` field. The previous version emitted "G P",
+  # "G M", etc. but the palette never wired the matching `G then X`
+  # keyboard handler — the chips were decoration claiming a feature
+  # that didn't exist. Dropped to keep the row clean and the API
+  # honest. Re-add the field + JS handler together if/when the
+  # two-key sequence becomes real.
+  def nav(route, label, icon, match)
     {
       id:         "nav-#{route}-#{@island.key}",
       group:      "Navigate",
@@ -94,7 +100,6 @@ class CommandSet
       title:      "Go to #{label}",
       subtitle:   "@ #{@island.name}",
       icon:       icon.to_s,
-      shortcut:   shortcut,
       match:      "#{match} #{@island.name}",
       href:       @h.public_send("#{route}_path", tenant_key: @island.key)
     }

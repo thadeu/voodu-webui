@@ -139,7 +139,7 @@ class Components::Logs::Page < Components::Base
       title:    "Pod · #{@pod_name}",
       src:      "#{helpers.pod_path(name: @pod_name)}?embed=1",
       open_url: helpers.pod_path(name: @pod_name),
-      width:    "30vw",
+      width:    "70vw",
       trigger_attrs: {
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
       }

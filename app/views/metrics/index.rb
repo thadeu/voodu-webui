@@ -129,7 +129,7 @@ class Views::Metrics::Index < Views::Base
       title:    "Pod · #{@data.scope_id}",
       src:      "#{helpers.pod_path(name: @data.scope_id)}?embed=1",
       open_url: helpers.pod_path(name: @data.scope_id),
-      width:    "30vw",
+      width:    "70vw",
       trigger_attrs: { class: btn_secondary_classes }
     )) do
       render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
