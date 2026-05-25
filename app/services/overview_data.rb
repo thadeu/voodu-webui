@@ -300,7 +300,7 @@ class OverviewData
       label: "DISK", icon: :ServerStackOutline,
       value: used.to_s, unit: "GB",
       sub: total.positive? ? "of #{total} GB · #{pct}%" : "—",
-      color: "var(--voodu-green)",
+      color: "var(--voodu-teal)",
       series: series,
       delta: nil
     }

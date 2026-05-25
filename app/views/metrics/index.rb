@@ -35,8 +35,14 @@ class Views::Metrics::Index < Views::Base
       page_head
       toolbar
       replica_chips
+      # chart_grid renders BOTH resource and HTTP charts inside the
+      # turbo-frame. HTTP must NOT live as a sibling outside the
+      # frame — when the polling tick fetches Views::Metrics::Frame,
+      # that response renders HTTP inside the frame too, and a
+      # sibling rendering would survive as a duplicate on the page
+      # (the bug operators saw as "two HTTP blocks" for a 1-replica
+      # web pod).
       chart_grid
-      http_chart_grid if @data&.ingress_eligible?
     end
   end
 
@@ -212,21 +218,25 @@ class Views::Metrics::Index < Views::Base
       # URL with the Turbo-Frame header set, which the controller
       # uses to short-circuit to the Frame view.
       turbo_frame_tag("metrics-charts", src: current_request_url) do
-        render_chart_cards(@data.charts)
+        # Same structure Views::Metrics::Frame renders on each poll
+        # tick. Keeping both surfaces identical means the initial
+        # pageload and the post-tick swap show the same DOM — no
+        # flicker, no duplication, no "HTTP section disappears
+        # for one tick" race.
+        div(class: "flex flex-col gap-4 vmd:gap-5") do
+          render_chart_cards(@data.charts)
+          http_section if @data.ingress_eligible?
+        end
       end
     end
   end
 
-  # http_chart_grid — second chart grid rendered below the resource
-  # charts when the active pod scope has ingress samples. Same
-  # ChartCard component, same poll-via-frame behaviour (the parent
-  # turbo-frame reloads the WHOLE page metrics on each tick; this
-  # block re-renders inside that flow). A section heading separates
-  # resources above from HTTP below so the operator scanning the
-  # page tops-down sees the natural ordering.
-  def http_chart_grid
-    return if @data.nil?
-
+  # http_section — HTTP heading + chart grid. Called from INSIDE the
+  # turbo-frame block (both here and in Views::Metrics::Frame) so the
+  # section participates in the polling swap. Rendering it as a
+  # sibling of the frame would duplicate after the first tick because
+  # the Frame response also contains it.
+  def http_section
     div(class: "flex flex-col gap-2.5") do
       h2(
         class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"

@@ -73,86 +73,60 @@ class PodDetailData
   # the payload), the values render as "0 B" with sub "no data"
   # — same graceful degradation pattern as the limit-less memory.
   def stat_cards
-    # CPU + Memory pass the memoised series — same fetch that
-    # cpu_pct / mem_used_mb already pulled to derive the
-    # headline value. Keeps the headline number in lock-step
-    # with the rightmost dot on the chart.
+    # 4 cards, content adapts to the pod's nature:
     #
-    # NET I/O + BLOCK I/O headline stays as CUMULATIVE bytes
-    # since container start (different question from the rate
-    # chart). Chart shows delta-per-tick — `*_delta_bytes`
-    # series is what the operator wants to see fluctuating.
-    [
-      stat_card("CPU",       :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_series),
-      stat_card("MEMORY",    :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  mem_series),
-      stat_card("NET I/O",   :SignalOutline,      net_total_label,  "",      net_sub, "var(--voodu-amber)",  series_for_metric("net_rx_delta_bytes")),
-      stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label,  "",      blk_sub, "var(--voodu-green)",  series_for_metric("block_read_delta_bytes"))
+    #   - INGRESS-eligible (deployments serving HTTP traffic):
+    #     CPU + Memory + Requests + p95 Latency. Net/Block migrate
+    #     to /metrics — for a web pod, request throughput + tail
+    #     latency are the actual signal; net/block are a layer
+    #     deeper than what fits a glance.
+    #   - NOT ingress-eligible (workers, stateful services, jobs,
+    #     deployments without ingress): CPU + Memory + Net I/O +
+    #     Block I/O. For these, net/block ARE the signal — e.g.
+    #     replication traffic on a Postgres replica, dump throughput
+    #     on a backup job. There's no Requests/p95 to swap in.
+    #
+    # CPU + Memory pass the memoised series — same fetch that
+    # cpu_pct / mem_used_mb already pulled. Headline stays in
+    # lock-step with the rightmost dot on the chart.
+    #
+    # NET I/O + BLOCK I/O headline stays as CUMULATIVE bytes since
+    # container start (different question from the rate chart).
+    # Chart shows `*_delta_bytes` for the fluctuation view.
+    # Colors here MUST match the same metric's color on /metrics
+    # (see MetricsPageData#chart_specs + #ingress_chart_specs).
+    # Operators glance across pod show + the metrics page expecting
+    # the same tint = the same signal. Drift breaks that mapping.
+    # ERROR/FAILURE metrics ALWAYS use --voodu-red (no other metric
+    # may use red — reserved for incidents).
+    base = [
+      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_series),
+      stat_card("MEMORY", :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  mem_series)
     ]
+
+    if ingress_eligible?
+      base + [
+        stat_card("REQUESTS",    :ChartBarOutline, req_per_sec_label,  "req/s", req_sub,     "var(--voodu-orange)", ingress_series_for_metric("req_count")),
+        stat_card("p95 LATENCY", :BoltOutline,     latency_p95_label,  "ms",    latency_sub, "var(--voodu-amber)",  ingress_series_for_metric("latency_p95_ms"))
+      ]
+    else
+      base + [
+        stat_card("NET I/O",   :SignalOutline,      net_total_label, "", net_sub, "var(--voodu-green)", series_for_metric("net_rx_delta_bytes")),
+        stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label, "", blk_sub, "var(--voodu-cyan)",  series_for_metric("block_read_delta_bytes"))
+      ]
+    end
   end
 
   # ── HTTP / ingress cards (deployments with a declared ingress) ──
   #
-  # Conditional on `ingress_eligible?` — the View only renders this
-  # block when there's at least one ingress sample for this pod's
-  # (scope, resource_name) in the warehouse. Eliminates the empty
-  # "no data" cards on pods that never receive HTTP traffic
-  # (statefulsets, jobs, deployments without ingress).
-  #
-  # Aggregation per Tick window already happened on the controller
-  # side: the warehouse stores 1 row per (host, scope, name) per 15s
-  # with count + status breakdown + p50/p90/p95/p99/max + bytes_out.
-  # MetricsWarehouse re-aggregates into render-buckets (SUM for
-  # counters/bytes, MAX for latencies) when the chart pulls a longer
-  # range. The four cards below show the freshest 15s window's
-  # values as headlines (via the shared `latest` cache cell) plus a
-  # sparkline of the full chart range.
-
-  # http_stat_cards — returns `[]` when not eligible so the view can
-  # `cards.any?` to decide whether to render the HTTP section header
-  # at all. When eligible, returns four cards: REQ/SEC, p95 LATENCY,
-  # 5XX ERRORS, BYTES OUT.
-  def http_stat_cards
-    return [] unless ingress_eligible?
-
-    [
-      stat_card(
-        "REQUESTS",
-        :ChartBarOutline,
-        req_per_sec_label,
-        "req/s",
-        req_sub,
-        "var(--voodu-accent)",
-        ingress_series_for_metric("req_count")
-      ),
-      stat_card(
-        "p95 LATENCY",
-        :BoltOutline,
-        latency_p95_label,
-        "ms",
-        latency_sub,
-        "var(--voodu-blue)",
-        ingress_series_for_metric("latency_p95_ms")
-      ),
-      stat_card(
-        "5XX ERRORS",
-        :ExclamationTriangleOutline,
-        err_count_label,
-        "",
-        err_sub,
-        "var(--voodu-red)",
-        ingress_series_for_metric("req_5xx")
-      ),
-      stat_card(
-        "BYTES OUT",
-        :ArrowUpTrayOutline,
-        bytes_out_label,
-        "/s",
-        bytes_out_sub,
-        "var(--voodu-amber)",
-        ingress_series_for_metric("bytes_out")
-      )
-    ]
-  end
+  # Historically a 4-card HTTP section sat below the resource cards
+  # (REQUESTS, p95 LATENCY, 5xx ERRORS, BYTES OUT). That duplicated
+  # what /metrics already renders bigger and richer, and was the
+  # main source of "the pod show feels cluttered." Replaced by
+  # promoting REQUESTS + p95 LATENCY directly into the top row
+  # (see `stat_cards` above, ingress branch). 5xx Errors + Bytes Out
+  # live ONLY on /metrics now — they're rare-look concerns that
+  # don't earn a permanent card on the always-on glance view.
 
   # ingress_eligible? — true when at least one ingress sample exists
   # in the warehouse for this pod's (scope, resource_name).

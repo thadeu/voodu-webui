@@ -169,14 +169,14 @@ class MetricsPageData
       [
         { label: "CPU",    metric: "cpu_percent",      color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
         { label: "Memory", metric: "mem_used_bytes",   color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
-        { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-green)",  unit: "GB", scale: :bytes_to_gb }
+        { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
       ]
     else
       [
         { label: "CPU",    metric: "cpu_percent",            color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
         { label: "Memory", metric: "mem_usage_bytes",        color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
         { label: "Net Rx", metric: "net_rx_delta_bytes",     color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto  },
-        { label: "Net Tx", metric: "net_tx_delta_bytes",     color: "var(--voodu-amber)",  unit: "",   scale: :bytes_auto  }
+        { label: "Net Tx", metric: "net_tx_delta_bytes",     color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto  }
       ]
     end
   end
@@ -185,12 +185,16 @@ class MetricsPageData
   # resource metrics when the pod has ingress samples. Order
   # mirrors the pod-show stat cards so the two surfaces are
   # cognitively interchangeable.
+  #
+  # Color rule: every metric has a UNIQUE color across the page.
+  # 5xx Errors is ALWAYS red — same rule applies to any future
+  # failure / error / dead-replica chart we add (memorise this).
   def ingress_chart_specs
     [
-      { label: "Requests",    metric: "req_count",       color: "var(--voodu-accent)", unit: "",   scale: :count      },
-      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-blue)",   unit: "ms", scale: :ms         },
+      { label: "Requests",    metric: "req_count",       color: "var(--voodu-orange)", unit: "",   scale: :count      },
+      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-amber)",  unit: "ms", scale: :ms         },
       { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count      },
-      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-amber)",  unit: "",   scale: :bytes_auto }
+      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto }
     ]
   end
 

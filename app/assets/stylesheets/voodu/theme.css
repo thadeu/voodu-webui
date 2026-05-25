@@ -164,6 +164,25 @@
   --voodu-red-dim:   #f8717122;
   --voodu-blue:      #60a5fa;
 
+  /* ── Chart palette (extends the semantic colors above) ──
+   *
+   * Every observable metric gets its OWN color — operators
+   * cross-page should be able to glance at a sparkline tint
+   * and know which signal it is without reading the label.
+   *
+   * RULE: --voodu-red is reserved for errors / failures.
+   * Never use it for a happy-path metric.
+   *
+   * Assignments live in app/services/*_data.rb (search for
+   * "var(--voodu-" — one color per metric, single source of
+   * truth in the chart_specs lists).
+   */
+  --voodu-teal:    #2dd4bf; /* Disk usage */
+  --voodu-cyan:    #22d3ee; /* Block I/O */
+  --voodu-indigo:  #818cf8; /* Net Tx (outbound) */
+  --voodu-orange:  #fb923c; /* HTTP Requests */
+  --voodu-pink:    #ec4899; /* HTTP Bytes Out */
+
   /* ── Radius ──
    *
    * Voodu's brand language is *square corners*. Every rectangle
