@@ -46,6 +46,10 @@ class MetricsWarehouse
     net_rx_delta_bytes net_tx_delta_bytes
     block_read_bytes block_write_bytes
     block_read_delta_bytes block_write_delta_bytes
+
+    req_count req_2xx req_3xx req_4xx req_5xx
+    latency_p50_ms latency_p90_ms latency_p95_ms latency_p99_ms latency_max_ms
+    bytes_out
   ].freeze
 
   # Friendly range aliases (mirror rangeAliases in handlers_metrics.go).
@@ -102,7 +106,28 @@ class MetricsWarehouse
     "net_rx_delta_bytes"      => "MAX",
     "net_tx_delta_bytes"      => "MAX",
     "block_read_delta_bytes"  => "MAX",
-    "block_write_delta_bytes" => "MAX"
+    "block_write_delta_bytes" => "MAX",
+
+    # Ingress counters — SUM across buckets so a "last 1h" chart
+    # shows TOTAL requests in each render-bucket, not the avg per
+    # 15s window. Operator math: total req over visible range =
+    # sum of every chart point.
+    "req_count" => "SUM",
+    "req_2xx"   => "SUM",
+    "req_3xx"   => "SUM",
+    "req_4xx"   => "SUM",
+    "req_5xx"   => "SUM",
+    "bytes_out" => "SUM",
+
+    # Ingress latency percentiles — MAX preserves the worst spike
+    # across each render-bucket. p99 of a 5-minute chart-bucket =
+    # max of the 20 underlying 15s-bucket p99 values. Same family
+    # rule as CPU: peaks matter, averages hide them.
+    "latency_p50_ms" => "MAX",
+    "latency_p90_ms" => "MAX",
+    "latency_p95_ms" => "MAX",
+    "latency_p99_ms" => "MAX",
+    "latency_max_ms" => "MAX"
   }.freeze
   DEFAULT_AGGREGATION = "AVG"
 

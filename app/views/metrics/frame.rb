@@ -27,17 +27,44 @@ class Views::Metrics::Frame < Views::Base
       # swap; the next full pageload will surface the real state.
       next if @data.nil?
 
-      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-        @data.charts.each do |c|
-          render Components::Metrics::ChartCard.new(
-            label:    c[:label],
-            color:    c[:color],
-            unit:     c[:unit],
-            points:   c[:points],
-            range_ms: @data.range_ms,
-            current:  c[:current]
-          )
+      div(class: "flex flex-col gap-4 vmd:gap-5") do
+        # Resource charts — always present.
+        render_grid(@data.charts)
+
+        # HTTP charts — conditional. Same eligibility used by the
+        # full Index view; both surfaces hide/show in lockstep so
+        # the polling tick doesn't add or remove the section
+        # spuriously between renders.
+        if @data.ingress_eligible?
+          div(class: "flex flex-col gap-2.5") do
+            h2(
+              class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"
+            ) do
+              span { "HTTP" }
+              span(class: "flex-1 h-px bg-voodu-border")
+              span(class: "font-normal text-voodu-muted-2 normal-case tracking-normal") { "ingress · same range" }
+            end
+
+            render_grid(@data.http_charts)
+          end
         end
+      end
+    end
+  end
+
+  private
+
+  def render_grid(charts)
+    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+      charts.each do |c|
+        render Components::Metrics::ChartCard.new(
+          label:    c[:label],
+          color:    c[:color],
+          unit:     c[:unit],
+          points:   c[:points],
+          range_ms: @data.range_ms,
+          current:  c[:current]
+        )
       end
     end
   end

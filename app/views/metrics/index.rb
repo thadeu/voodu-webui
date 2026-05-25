@@ -36,6 +36,7 @@ class Views::Metrics::Index < Views::Base
       toolbar
       replica_chips
       chart_grid
+      http_chart_grid if @data&.ingress_eligible?
     end
   end
 
@@ -211,18 +212,48 @@ class Views::Metrics::Index < Views::Base
       # URL with the Turbo-Frame header set, which the controller
       # uses to short-circuit to the Frame view.
       turbo_frame_tag("metrics-charts", src: current_request_url) do
-        div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-          @data.charts.each do |c|
-            render Components::Metrics::ChartCard.new(
-              label:    c[:label],
-              color:    c[:color],
-              unit:     c[:unit],
-              points:   c[:points],
-              range_ms: @data.range_ms,
-              current:  c[:current]
-            )
-          end
-        end
+        render_chart_cards(@data.charts)
+      end
+    end
+  end
+
+  # http_chart_grid — second chart grid rendered below the resource
+  # charts when the active pod scope has ingress samples. Same
+  # ChartCard component, same poll-via-frame behaviour (the parent
+  # turbo-frame reloads the WHOLE page metrics on each tick; this
+  # block re-renders inside that flow). A section heading separates
+  # resources above from HTTP below so the operator scanning the
+  # page tops-down sees the natural ordering.
+  def http_chart_grid
+    return if @data.nil?
+
+    div(class: "flex flex-col gap-2.5") do
+      h2(
+        class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"
+      ) do
+        span { "HTTP" }
+        span(class: "flex-1 h-px bg-voodu-border")
+        span(class: "font-normal text-voodu-muted-2 normal-case tracking-normal") { "ingress · same range" }
+      end
+
+      render_chart_cards(@data.http_charts)
+    end
+  end
+
+  # render_chart_cards — shared block for both grids; identical
+  # layout class + ChartCard wiring. Extracted so chart_grid and
+  # http_chart_grid don't drift on grid columns / gap.
+  def render_chart_cards(charts)
+    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+      charts.each do |c|
+        render Components::Metrics::ChartCard.new(
+          label:    c[:label],
+          color:    c[:color],
+          unit:     c[:unit],
+          points:   c[:points],
+          range_ms: @data.range_ms,
+          current:  c[:current]
+        )
       end
     end
   end

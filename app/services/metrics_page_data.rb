@@ -56,32 +56,49 @@ class MetricsPageData
   def charts
     return [] if @client.nil?
 
-    chart_specs.map do |spec|
-      points = fetch_points(spec[:metric], spec[:scale])
+    chart_specs.map { |spec| build_chart(spec) { fetch_points(spec[:metric], spec[:scale]) } }
+  end
 
-      # For :bytes_auto the unit is decided per chart inside
-      # rescale_points; surface it back via the first point's
-      # formatted string so the ChartCard headline shows the
-      # right "MB" / "kB" / etc.
-      unit = if spec[:scale] == :bytes_auto && points.any?
-               points.first[:formatted].to_s.split(" ").last.to_s
-             else
-               spec[:unit]
-             end
+  # http_charts — second chart grid rendered on the /metrics page
+  # when the active pod scope is ingress-eligible (deployment with
+  # ≥1 ingress sample recorded in the warehouse). Mirrors the
+  # HTTP cards on the pod show page so the two surfaces speak the
+  # same vocabulary — operator drilling from pod show → metrics
+  # page sees the same four metrics, just rendered as full charts
+  # instead of compact stat cards.
+  #
+  # Returns `[]` when not eligible OR when scope is "host" (system-
+  # level HTTP metrics don't make sense — host doesn't serve HTTP).
+  def http_charts
+    return [] if @client.nil?
+    return [] unless ingress_eligible?
 
-      {
-        label:   spec[:label],
-        color:   spec[:color],
-        unit:    unit,
-        points:  points,
-        # current — the unaggregated latest value, scaled to the
-        # chart's unit so the headline doesn't shift when the
-        # operator switches range pills. Matches the rightmost
-        # raw sample (which can differ from series.last when the
-        # rightmost bucket aggregates many samples).
-        current: latest_scaled(spec[:metric], spec[:scale])
-      }
-    end
+    ingress_chart_specs.map { |spec| build_chart(spec) { fetch_ingress_points(spec[:metric], spec[:scale]) } }
+  end
+
+  # ingress_eligible? — true when the current pod scope has at
+  # least one ingress sample in the warehouse. Same data-driven
+  # check used by PodDetailData; duplicated here (5 lines) to
+  # avoid coupling the two data services. If a third surface
+  # eventually wants the same check, lift to a shared helper.
+  def ingress_eligible?
+    return false unless @scope_kind == "pod" && @scope_id.present?
+
+    pod = pod_record
+    return false if pod.nil?
+
+    scope = pod["scope"] || pod[:scope]
+    name  = pod["resource_name"] || pod[:resource_name]
+    return false if scope.blank? || name.blank?
+
+    MetricSample.where(
+      tenant_id: @island.id,
+      source:    "ingress",
+      scope:     scope,
+      name:      name
+    ).any?
+  rescue ActiveRecord::StatementInvalid
+    false
   end
 
   # range_ms — duration in milliseconds for the chart's x-axis
@@ -145,6 +162,8 @@ class MetricsPageData
   #   :bytes_to_mb  — divide by 1_000_000 (decimal MB, docker conv.)
   #   :bytes_to_gb  — divide by 1_000_000_000
   #   :bytes_auto   — pick B / kB / MB / GB based on magnitude
+  #   :count        — integer count, no transform, formatted "1234"
+  #   :ms           — milliseconds, no transform, formatted "12.5 ms"
   def chart_specs
     if @scope_kind == "host"
       [
@@ -161,6 +180,66 @@ class MetricsPageData
       ]
     end
   end
+
+  # ingress_chart_specs — HTTP metrics (4 charts) layered below
+  # resource metrics when the pod has ingress samples. Order
+  # mirrors the pod-show stat cards so the two surfaces are
+  # cognitively interchangeable.
+  def ingress_chart_specs
+    [
+      { label: "Requests",    metric: "req_count",       color: "var(--voodu-accent)", unit: "",   scale: :count      },
+      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-blue)",   unit: "ms", scale: :ms         },
+      { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count      },
+      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-amber)",  unit: "",   scale: :bytes_auto }
+    ]
+  end
+
+  # build_chart — shared envelope construction for the resource +
+  # HTTP chart specs. Caller passes the spec and a block that
+  # returns the (already-rescaled) points; we wrap them with the
+  # unit + current value the ChartCard component expects.
+  def build_chart(spec)
+    points = yield
+
+    unit = if spec[:scale] == :bytes_auto && points.any?
+             points.first[:formatted].to_s.split(" ").last.to_s
+           else
+             spec[:unit]
+           end
+
+    {
+      label:   spec[:label],
+      color:   spec[:color],
+      unit:    unit,
+      points:  points,
+      current: latest_scaled_for(spec)
+    }
+  end
+
+  # latest_scaled_for — dispatches to the right source (system / pod
+  # / ingress) based on the spec's metric. The metric name uniquely
+  # identifies its source (resource metrics live under system/pod,
+  # ingress metrics under "ingress"), so we use a single lookup.
+  def latest_scaled_for(spec)
+    metric = spec[:metric]
+    scale  = spec[:scale]
+
+    if INGRESS_METRICS.include?(metric)
+      latest_ingress_scaled(metric, scale)
+    else
+      latest_scaled(metric, scale)
+    end
+  end
+
+  # INGRESS_METRICS — closed set of metric names known to live
+  # under source="ingress". Used to route latest_scaled_for to the
+  # right backend. Keep in sync with MetricsWarehouse::ALLOWED_METRICS
+  # for ingress entries.
+  INGRESS_METRICS = %w[
+    req_count req_2xx req_3xx req_4xx req_5xx
+    latency_p50_ms latency_p90_ms latency_p95_ms latency_p99_ms latency_max_ms
+    bytes_out
+  ].freeze
 
   # fetch_points — calls /metrics for one series + scales the raw
   # values per the chart_spec. Pod scope needs scope/name (and
@@ -213,8 +292,73 @@ class MetricsPageData
         v = p[:value].to_f / divisor
         { ts: p[:ts], value: v, formatted: format("%.1f %s", v, suffix) }
       end
+    when :count
+      # Integer counters (req_count, req_5xx, …). No transform on
+      # the numeric value but format as int (so "184" not "184.0").
+      points.map do |p|
+        n = p[:value].to_f
+        { ts: p[:ts], value: n, formatted: n.to_i.to_s }
+      end
+    when :ms
+      # Latency in milliseconds — emitted in ms by the ingress
+      # sampler, so no transform. Format with " ms" suffix.
+      points.map do |p|
+        v = p[:value].to_f
+        { ts: p[:ts], value: v, formatted: format("%.1f ms", v) }
+      end
     else
       points
+    end
+  end
+
+  # fetch_ingress_points — parallel to fetch_points but routes to
+  # source="ingress" with (scope, name) keying (no per-replica
+  # filter — see ~/.claude/plans/voodu-http-metrics-from-caddy.md
+  # for why ingress aggregates per-deployment).
+  def fetch_ingress_points(metric, scale)
+    pod = pod_record
+    return [] unless pod
+
+    scope = pod["scope"] || pod[:scope]
+    name  = pod["resource_name"] || pod[:resource_name]
+
+    raw_points = @metrics.points_for(
+      source: :ingress,
+      metric: metric,
+      range:  @range,
+      scope:  scope,
+      name:   name
+    )
+
+    rescale_points(raw_points, scale)
+  end
+
+  # latest_ingress_scaled — same shape as latest_scaled but for
+  # source="ingress". Counter/ms scales pass through unchanged
+  # (the warehouse already stores them in the target unit).
+  def latest_ingress_scaled(metric, scale)
+    pod = pod_record
+    return nil unless pod
+
+    scope = pod["scope"] || pod[:scope]
+    name  = pod["resource_name"] || pod[:resource_name]
+
+    raw = @metrics.latest_for(
+      source: :ingress,
+      metric: metric,
+      range:  @range,
+      scope:  scope,
+      name:   name
+    )
+    return nil if raw.nil?
+
+    case scale
+    when :count      then raw.to_i
+    when :ms         then raw
+    when :bytes_auto
+      divisor, _ = pick_byte_unit(raw.abs)
+      raw / divisor
+    else raw
     end
   end
 

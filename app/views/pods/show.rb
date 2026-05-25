@@ -78,6 +78,7 @@ class Views::Pods::Show < Views::Base
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
       render Components::Pods::Header.new(data: @data)
       stat_cards
+      http_stat_cards if @data.ingress_eligible?
       spec_network_grid
       render Components::Pods::EnvCard.new(pod: @data.raw)
       render Components::Pods::LabelsCard.new(pod: @data.raw)
@@ -99,6 +100,34 @@ class Views::Pods::Show < Views::Base
     ) do
       @data.stat_cards.each do |card|
         render Components::Overview::StatCard.new(**card)
+      end
+    end
+  end
+
+  # http_stat_cards — second cards grid for HTTP / ingress metrics.
+  # Only rendered when `@data.ingress_eligible?` (returns true when
+  # the warehouse has at least one ingress sample for this pod's
+  # scope+name). A small "HTTP" section heading separates resource
+  # cards above from request/latency/error/bytes cards here, so
+  # operators reading top-down get the natural ordering:
+  # "how is the container?" → "how does it serve traffic?"
+  def http_stat_cards
+    div(class: "flex flex-col gap-2.5") do
+      h2(
+        class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"
+      ) do
+        span { "HTTP" }
+        span(class: "flex-1 h-px bg-voodu-border")
+        span(class: "font-normal text-voodu-muted-2 normal-case tracking-normal") { "last 15s · 1h chart" }
+      end
+
+      div(
+        class: "grid gap-3",
+        style: "grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));"
+      ) do
+        @data.http_stat_cards.each do |card|
+          render Components::Overview::StatCard.new(**card)
+        end
       end
     end
   end

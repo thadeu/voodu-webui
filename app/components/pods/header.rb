@@ -24,7 +24,14 @@ class Components::Pods::Header < Components::Base
   def view_template
     div(class: "flex flex-col gap-3") do
       back_link unless @drawer
-      div(class: "flex flex-wrap items-start gap-4") do
+      # Stack on mobile, side-by-side at vmd+. The previous
+      # `flex flex-wrap` collapsed under pressure: `flex-1 min-w-0`
+      # on identity_block let the title shrink to ~30px and break
+      # character-by-character (mono pod name has no spaces, so
+      # `break-all` cascades to one char per line). Column-on-mobile
+      # gives the title its full row, then the action buttons land
+      # on the next row at natural width.
+      div(class: "flex flex-col vmd:flex-row vmd:flex-wrap vmd:items-start gap-3 vmd:gap-4") do
         identity_block
         action_buttons
       end
@@ -100,13 +107,18 @@ class Components::Pods::Header < Components::Base
     raw_nets.values.first
   end
 
-  # action_buttons — View logs + Restart on the full page; only
-  # Restart inside the drawer (the operator opened the drawer from
-  # Metrics — "View logs" would be redundant with the separate Logs
-  # drawer already living in the same toolbar).
+  # action_buttons — View logs + View metrics + Restart on the full
+  # page; only Restart inside the drawer (the operator opened the
+  # drawer from Metrics — "View logs" would be redundant with the
+  # separate Logs drawer already living in the same toolbar, and
+  # "View metrics" would just bounce them back to the page they came
+  # from).
   def action_buttons
     div(class: "flex items-center gap-2 shrink-0") do
-      view_logs_btn unless @drawer
+      unless @drawer
+        view_logs_btn
+        view_metrics_btn
+      end
       restart_btn
     end
   end
@@ -131,7 +143,23 @@ class Components::Pods::Header < Components::Base
       }
     )) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
-      span { "View logs" }
+      span(class: "hidden vmd:inline") { "View logs" }
+    end
+  end
+
+  # view_metrics_btn — jumps to /metrics filtered to THIS pod's
+  # scope. Plain anchor (no drawer): the operator asked for the
+  # full metrics surface, not a peek; cmd-click still opens in a
+  # new tab as expected. Mirrors view_logs_btn's secondary-button
+  # styling so the action row reads as a single visual group.
+  def view_metrics_btn
+    a(
+      href:  helpers.metrics_path(scope_kind: "pod", scope_id: @data.name),
+      title: "View metrics",
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      render Icon::ChartBarOutline.new(class: "w-3.5 h-3.5")
+      span(class: "hidden vmd:inline") { "View metrics" }
     end
   end
 
@@ -154,7 +182,7 @@ class Components::Pods::Header < Components::Base
       }
     )) do
       render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-      span { "Restart pod" }
+      span(class: "hidden vmd:inline") { "Restart pod" }
     end
   end
 end

@@ -90,6 +90,111 @@ class PodDetailData
     ]
   end
 
+  # ── HTTP / ingress cards (deployments with a declared ingress) ──
+  #
+  # Conditional on `ingress_eligible?` — the View only renders this
+  # block when there's at least one ingress sample for this pod's
+  # (scope, resource_name) in the warehouse. Eliminates the empty
+  # "no data" cards on pods that never receive HTTP traffic
+  # (statefulsets, jobs, deployments without ingress).
+  #
+  # Aggregation per Tick window already happened on the controller
+  # side: the warehouse stores 1 row per (host, scope, name) per 15s
+  # with count + status breakdown + p50/p90/p95/p99/max + bytes_out.
+  # MetricsWarehouse re-aggregates into render-buckets (SUM for
+  # counters/bytes, MAX for latencies) when the chart pulls a longer
+  # range. The four cards below show the freshest 15s window's
+  # values as headlines (via the shared `latest` cache cell) plus a
+  # sparkline of the full chart range.
+
+  # http_stat_cards — returns `[]` when not eligible so the view can
+  # `cards.any?` to decide whether to render the HTTP section header
+  # at all. When eligible, returns four cards: REQ/SEC, p95 LATENCY,
+  # 5XX ERRORS, BYTES OUT.
+  def http_stat_cards
+    return [] unless ingress_eligible?
+
+    [
+      stat_card(
+        "REQUESTS",
+        :ChartBarOutline,
+        req_per_sec_label,
+        "req/s",
+        req_sub,
+        "var(--voodu-accent)",
+        ingress_series_for_metric("req_count")
+      ),
+      stat_card(
+        "p95 LATENCY",
+        :BoltOutline,
+        latency_p95_label,
+        "ms",
+        latency_sub,
+        "var(--voodu-blue)",
+        ingress_series_for_metric("latency_p95_ms")
+      ),
+      stat_card(
+        "5XX ERRORS",
+        :ExclamationTriangleOutline,
+        err_count_label,
+        "",
+        err_sub,
+        "var(--voodu-red)",
+        ingress_series_for_metric("req_5xx")
+      ),
+      stat_card(
+        "BYTES OUT",
+        :ArrowUpTrayOutline,
+        bytes_out_label,
+        "/s",
+        bytes_out_sub,
+        "var(--voodu-amber)",
+        ingress_series_for_metric("bytes_out")
+      )
+    ]
+  end
+
+  # ingress_eligible? — true when at least one ingress sample exists
+  # in the warehouse for this pod's (scope, resource_name).
+  # Memoised because PodDetailData lives for one render and the
+  # query is cheap but not free.
+  #
+  # Why warehouse-driven instead of querying the apply state for
+  # `kind=ingress` matching this deployment:
+  #   - Zero extra HTTP round-trip (the warehouse is local).
+  #   - Honest: cards appear when traffic IS being recorded, not
+  #     when an ingress manifest happens to exist (could be
+  #     misconfigured and never receive traffic).
+  #   - First request after a fresh ingress declare → cards appear
+  #     within the next sync tick (~30s). Acceptable lag.
+  def ingress_eligible?
+    return @ingress_eligible if defined?(@ingress_eligible)
+
+    @ingress_eligible = check_ingress_samples
+  end
+
+  private
+
+  def check_ingress_samples
+    return false if scope.blank? || resource_name.blank?
+    return false if @island.nil?
+
+    MetricSample.where(
+      tenant_id: @island.id,
+      source: "ingress",
+      scope: scope,
+      name: resource_name
+    ).any?
+  rescue ActiveRecord::StatementInvalid => e
+    # Warehouse DB not migrated yet OR connection error. Don't fail
+    # the pod page just because the optional HTTP cards can't render
+    # — return false and the section stays hidden.
+    Rails.logger.warn("ingress_eligible? check failed: #{e.class} #{e.message}")
+    false
+  end
+
+  public
+
   # series_for_metric — pulls real time-series via MetricsData
   # scoped to this pod's (scope, name). Aggregation on (scope, name)
   # means the chart survives container restarts (replica_id is
@@ -384,6 +489,121 @@ class PodDetailData
     return "#{(b / 1_000_000_000.0).round(1)} GB" if b < 1_000_000_000_000
 
     "#{(b / 1_000_000_000_000.0).round(1)} TB"
+  end
+
+  # ── Ingress (HTTP) data accessors ───────────────────────────────
+  #
+  # All four ingress stat cards pull from the warehouse via
+  # `@metrics.latest_for` (headline) and `ingress_series_for_metric`
+  # (sparkline). Source: ":ingress", identity: (scope, name) — no
+  # per-replica drill-down (the Caddy access log doesn't carry
+  # upstream IP by default, so we aggregate per-deployment; see
+  # ~/.claude/plans/voodu-http-metrics-from-caddy.md for the rationale).
+  #
+  # The "latest" values come from a 15s aggregation window (the
+  # controller's IngressSampler tick), so:
+  #   - req_count latest = requests in the last 15s
+  #   - latency_p95_ms latest = p95 across that window's samples
+  #   - req_5xx latest = 5xx count in the last 15s
+  #   - bytes_out latest = bytes Caddy returned in the last 15s
+  #
+  # We express headlines as RATES per second by dividing by 15
+  # (the Tick cadence). Charts show absolute per-bucket values
+  # because the chart timeline implies the period — the headline
+  # is the only place we explicitly divide.
+
+  TICK_SECONDS = 15.0
+
+  def ingress_series_for_metric(metric)
+    @metrics.points_for(
+      source: :ingress,
+      metric: metric,
+      range:  "1h",
+      scope:  scope,
+      name:   resource_name
+    )
+  end
+
+  def latest_ingress(metric)
+    @metrics.latest_for(
+      source: :ingress,
+      metric: metric,
+      range:  "1h",
+      scope:  scope,
+      name:   resource_name
+    ).to_f
+  end
+
+  # ── REQUESTS card ──────────────────────────────────────────────
+  def req_per_sec_label
+    return "—" unless ingress_eligible?
+
+    rate = latest_ingress("req_count") / TICK_SECONDS
+    rate >= 10 ? rate.round.to_s : ("%.1f" % rate)
+  end
+
+  def req_sub
+    total = latest_ingress("req_count").to_i
+
+    return "no traffic yet" if total.zero?
+
+    breakdown = []
+
+    %w[req_2xx req_3xx req_4xx req_5xx].each do |k|
+      v = latest_ingress(k).to_i
+      next if v.zero?
+
+      breakdown << "#{k.split('_').last}: #{v}"
+    end
+
+    "in last 15s · #{breakdown.join(' · ')}"
+  end
+
+  # ── p95 LATENCY card ───────────────────────────────────────────
+  def latency_p95_label
+    p95 = latest_ingress("latency_p95_ms")
+    return "—" if p95.zero?
+
+    "%.1f" % p95
+  end
+
+  def latency_sub
+    p99 = latest_ingress("latency_p99_ms")
+    max = latest_ingress("latency_max_ms")
+    return "no requests in last 15s" if p99.zero? && max.zero?
+
+    "p99: #{"%.1f" % p99} ms · max: #{"%.1f" % max} ms"
+  end
+
+  # ── 5XX ERRORS card ────────────────────────────────────────────
+  def err_count_label
+    latest_ingress("req_5xx").to_i.to_s
+  end
+
+  def err_sub
+    total = latest_ingress("req_count").to_i
+    errs  = latest_ingress("req_5xx").to_i
+
+    return "no traffic" if total.zero?
+    return "0 errors / #{total} reqs in last 15s" if errs.zero?
+
+    pct = (errs.to_f / total * 100).round(1)
+    "#{pct}% of #{total} reqs in last 15s"
+  end
+
+  # ── BYTES OUT card ─────────────────────────────────────────────
+  def bytes_out_label
+    bps = latest_ingress("bytes_out") / TICK_SECONDS
+    return "0" if bps.zero?
+
+    format_bytes(bps)
+  end
+
+  def bytes_out_sub
+    total = latest_ingress("bytes_out").to_i
+    return "no traffic" if total.zero?
+
+    "#{format_bytes(total)} in last 15s"
   end
 
   # synth_series — deleted in M2.C4. Real time-series via

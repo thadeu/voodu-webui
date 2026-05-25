@@ -141,6 +141,16 @@ class MetricsData
       # MetricFormat for the magnitude tiers.
       MetricFormat.method(:percent)
 
+    when /\Areq_/
+      # HTTP request counters — integers. Tooltip shows "184 reqs"
+      # instead of "184.0", matching how the headline reads.
+      ->(v) { v.to_i.to_s }
+
+    when /_ms\z/
+      # Latency in milliseconds. 2 decimals so sub-ms (cached static
+      # responses) doesn't collapse to "0 ms".
+      ->(v) { "#{v.round(2)} ms" }
+
     when /\Amem_/, /\Adisk_/
       method(:format_bytes)
 
@@ -150,7 +160,7 @@ class MetricsData
       # period; user reads "100 MB in this bucket" naturally.
       method(:format_bytes)
 
-    when /_bytes\z/
+    when /_bytes\z/, "bytes_out"
       method(:format_bytes)
 
     else
