@@ -119,8 +119,8 @@ class Views::Metrics::Index < Views::Base
   def pod_actions
     render(Components::UI::Drawer.new(
       title:    "Logs · #{@data.scope_id}",
-      src:      "#{helpers.pod_logs_path(name: @data.scope_id)}?embed=1",
-      open_url: helpers.pod_logs_path(name: @data.scope_id),
+      src:      "#{pod_logs_path(name: @data.scope_id)}?embed=1",
+      open_url: pod_logs_path(name: @data.scope_id),
       trigger_attrs: { class: btn_secondary_classes }
     )) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
@@ -134,8 +134,8 @@ class Views::Metrics::Index < Views::Base
     # the operator override either way.
     render(Components::UI::Drawer.new(
       title:    "Pod · #{@data.scope_id}",
-      src:      "#{helpers.pod_path(name: @data.scope_id)}?embed=1",
-      open_url: helpers.pod_path(name: @data.scope_id),
+      src:      "#{pod_path(name: @data.scope_id)}?embed=1",
+      open_url: pod_path(name: @data.scope_id),
       width:    "70vw",
       trigger_attrs: { class: btn_secondary_classes }
     )) do
@@ -145,9 +145,9 @@ class Views::Metrics::Index < Views::Base
   end
 
   def refresh_btn
-    params_for_refresh = helpers.request.query_parameters.merge(refresh: 1)
+    params_for_refresh = request.query_parameters.merge(refresh: 1)
     a(
-      href: "#{helpers.metrics_path}?#{params_for_refresh.to_query}",
+      href: "#{metrics_path}?#{params_for_refresh.to_query}",
       data: { turbo: false },
       class: btn_secondary_classes
     ) do
@@ -253,19 +253,47 @@ class Views::Metrics::Index < Views::Base
   # render_chart_cards — shared block for both grids; identical
   # layout class + ChartCard wiring. Extracted so chart_grid and
   # http_chart_grid don't drift on grid columns / gap.
+  #
+  # `expand_url` is the per-card URL that the maximize button
+  # opens via the chart-expand Stimulus controller. We build it
+  # here (not inside ChartCard) so the component stays
+  # presentation-only — knowing how to talk to /metrics/chart is
+  # the parent view's job, since it owns the helpers.
   def render_chart_cards(charts)
     div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
       charts.each do |c|
         render Components::Metrics::ChartCard.new(
-          label:    c[:label],
-          color:    c[:color],
-          unit:     c[:unit],
-          points:   c[:points],
-          range_ms: @data.range_ms,
-          current:  c[:current]
+          label:      c[:label],
+          color:      c[:color],
+          unit:       c[:unit],
+          points:     c[:points],
+          range_ms:   @data.range_ms,
+          current:    c[:current],
+          expand_url: expand_url_for(c)
         )
       end
     end
+  end
+
+  # expand_url_for — builds the URL the maximize button opens.
+  # Echoes the parent page's scope_kind/scope_id/range so the
+  # modal starts at the same view the operator is looking at,
+  # then layers on metric/scale/label/color/unit so the modal
+  # endpoint can rebuild THIS single chart (not the whole grid).
+  def expand_url_for(chart)
+    qp = request.query_parameters
+    params = {
+      scope_kind: qp[:scope_kind] || @data&.scope_kind,
+      scope_id:   qp[:scope_id]   || @data&.scope_id,
+      range:      qp[:range]      || @data&.range || "1h",
+      metric:     chart[:metric],
+      scale:      chart[:scale],
+      label:      chart[:label],
+      color:      chart[:color],
+      unit:       chart[:unit]
+    }.compact
+
+    "#{metrics_chart_path}?#{params.to_query}"
   end
 
   # current_request_url — request path + query string. Used as the
@@ -275,7 +303,7 @@ class Views::Metrics::Index < Views::Base
   # carries the host+port which would force a CORS-like fetch in
   # local dev with non-default ports.
   def current_request_url
-    qs = helpers.request.query_parameters.to_query
-    qs.present? ? "#{helpers.request.path}?#{qs}" : helpers.request.path
+    qs = request.query_parameters.to_query
+    qs.present? ? "#{request.path}?#{qs}" : request.path
   end
 end

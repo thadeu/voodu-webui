@@ -98,9 +98,9 @@ class Components::Logs::Page < Components::Base
 
   def stream_url
     if @pod_name
-      "#{helpers.pod_log_stream_path(name: @pod_name)}?follow=true&tail=50"
+      "#{pod_log_stream_path(name: @pod_name)}?follow=true&tail=50"
     else
-      "#{helpers.logs_stream_path}?follow=true&tail=50"
+      "#{logs_stream_path}?follow=true&tail=50"
     end
   end
 
@@ -137,8 +137,8 @@ class Components::Logs::Page < Components::Base
   def open_pod_btn
     render(Components::UI::Drawer.new(
       title:    "Pod · #{@pod_name}",
-      src:      "#{helpers.pod_path(name: @pod_name)}?embed=1",
-      open_url: helpers.pod_path(name: @pod_name),
+      src:      "#{pod_path(name: @pod_name)}?embed=1",
+      open_url: pod_path(name: @pod_name),
       width:    "70vw",
       trigger_attrs: {
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
@@ -162,7 +162,7 @@ class Components::Logs::Page < Components::Base
 
   def back_link
     a(
-      href: helpers.pod_path(name: @pod_name),
+      href: pod_path(name: @pod_name),
       class: "inline-flex items-center gap-1.5 self-start text-[12.5px] text-voodu-text-2 hover:text-voodu-text"
     ) do
       render Icon::ArrowLeftOutline.new(class: "w-3.5 h-3.5")

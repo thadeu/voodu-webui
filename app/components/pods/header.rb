@@ -42,7 +42,7 @@ class Components::Pods::Header < Components::Base
 
   def back_link
     a(
-      href: helpers.pods_path,
+      href: pods_path,
       class: "inline-flex items-center gap-1.5 self-start text-[12.5px] text-voodu-text-2 hover:text-voodu-text"
     ) do
       render Icon::ArrowLeftOutline.new(class: "w-3.5 h-3.5")
@@ -135,8 +135,8 @@ class Components::Pods::Header < Components::Base
 
     render(Components::UI::Drawer.new(
       title:    "Logs · #{name}",
-      src:      "#{helpers.pod_logs_path(name: name)}?embed=1",
-      open_url: helpers.pod_logs_path(name: name),
+      src:      "#{pod_logs_path(name: name)}?embed=1",
+      open_url: pod_logs_path(name: name),
       width:    "70vw",
       trigger_attrs: {
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
@@ -154,7 +154,7 @@ class Components::Pods::Header < Components::Base
   # styling so the action row reads as a single visual group.
   def view_metrics_btn
     a(
-      href:  helpers.metrics_path(scope_kind: "pod", scope_id: @data.name),
+      href:  metrics_path(scope_kind: "pod", scope_id: @data.name),
       title: "View metrics",
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
@@ -172,7 +172,7 @@ class Components::Pods::Header < Components::Base
       confirm_label: "Restart pod",
       icon:          :ArrowPathOutline,
       form: {
-        action: helpers.restart_pod_path(name: name),
+        action: restart_pod_path(name: name),
         method: :post
       },
       trigger: {

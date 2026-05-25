@@ -38,7 +38,7 @@ class Components::Logs::PodPicker < Components::Base
       option: {
         title:  "all pods",
         meta:   "#{@pods.size} #{@pods.size == 1 ? "source" : "sources"}",
-        href:   helpers.logs_path,
+        href:   logs_path,
         active: @active_pod.blank?,
         icon:   :Squares2x2Outline
       }
@@ -71,7 +71,7 @@ class Components::Logs::PodPicker < Components::Base
     {
       title:  title,
       meta:   image,
-      href:   helpers.pod_logs_path(name: container),
+      href:   pod_logs_path(name: container),
       active: @active_pod == container,
       status: status
     }

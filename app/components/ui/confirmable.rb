@@ -33,7 +33,7 @@
 #     danger:        true,
 #     icon:          :TrashOutline,
 #     form: {
-#       action: helpers.island_path(island),
+#       action: island_path(island),
 #       method: :delete
 #     },
 #     trigger: {
@@ -92,7 +92,7 @@ class Components::UI::Confirmable < Components::Base
       },
       **@form_attrs
     ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: @form_method) if method_override
 
       button(type: "submit", **@trigger_attrs, &trigger_body)

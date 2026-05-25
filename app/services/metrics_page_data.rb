@@ -76,6 +76,28 @@ class MetricsPageData
     ingress_chart_specs.map { |spec| build_chart(spec) { fetch_ingress_points(spec[:metric], spec[:scale]) } }
   end
 
+  # single_chart — used by the /metrics/chart endpoint (the modal
+  # body that opens when an operator clicks the maximize icon on a
+  # ChartCard). Takes the same spec shape build_chart works with
+  # internally, routes to the right fetch path (system/pod resource
+  # vs ingress) based on the metric name, and returns the same
+  # envelope shape `charts` / `http_charts` produce — so the modal
+  # body can render via the same Components::Metrics::Chart with
+  # zero special-casing.
+  def single_chart(metric:, scale:, label:, color:, unit:)
+    return nil if @client.nil?
+
+    spec = { metric: metric, scale: scale, label: label, color: color, unit: unit }
+
+    build_chart(spec) do
+      if INGRESS_METRICS.include?(metric)
+        fetch_ingress_points(metric, scale)
+      else
+        fetch_points(metric, scale)
+      end
+    end
+  end
+
   # ingress_eligible? — true when the current pod scope has at
   # least one ingress sample in the warehouse. Same data-driven
   # check used by PodDetailData; duplicated here (5 lines) to
@@ -202,6 +224,12 @@ class MetricsPageData
   # HTTP chart specs. Caller passes the spec and a block that
   # returns the (already-rescaled) points; we wrap them with the
   # unit + current value the ChartCard component expects.
+  #
+  # `metric`/`source`/`scale` are echoed back unchanged so the
+  # ChartCard's maximize-into-modal button can hand them off to
+  # /metrics/chart for the refetch (the modal needs to know
+  # which series to re-pull at the new range, independent of
+  # whatever was used to render the inline card).
   def build_chart(spec)
     points = yield
 
@@ -216,8 +244,22 @@ class MetricsPageData
       color:   spec[:color],
       unit:    unit,
       points:  points,
-      current: latest_scaled_for(spec)
+      current: latest_scaled_for(spec),
+      metric:  spec[:metric],
+      source:  source_for(spec[:metric]),
+      scale:   spec[:scale]
     }
+  end
+
+  # source_for — maps a metric name to its NDJSON source. Resource
+  # metrics under host scope live in "system"; same metric under
+  # pod scope lives in "pod"; ingress metrics always in "ingress".
+  # Needed by the chart-expand endpoint to rebuild the right
+  # MetricsData query when the operator opens the modal.
+  def source_for(metric)
+    return "ingress" if INGRESS_METRICS.include?(metric)
+
+    @scope_kind == "host" ? "system" : "pod"
   end
 
   # latest_scaled_for — dispatches to the right source (system / pod

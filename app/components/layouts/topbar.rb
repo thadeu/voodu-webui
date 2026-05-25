@@ -110,7 +110,7 @@ class Components::Layouts::Topbar < Components::Base
       ) do
         div(class: "py-1") { @islands.each { |i| switcher_row(i) } }
         div(class: "border-t border-voodu-border py-1") do
-          a(href: helpers.islands_path, class: "block px-3 py-1.5 text-[12px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text") { "manage servers →" }
+          a(href: islands_path, class: "block px-3 py-1.5 text-[12px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text") { "manage servers →" }
         end
       end
     end
@@ -123,7 +123,7 @@ class Components::Layouts::Topbar < Components::Base
   def switcher_row(island)
     selected = island.id == @current_island.id
     a(
-      href: helpers.tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(tenant_key: island.key),
       class: tokens(
         "block w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] font-voodu-mono",
         selected ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-surface-2"
@@ -258,7 +258,7 @@ class Components::Layouts::Topbar < Components::Base
   # on `/pods?status=running&refresh=1` — filters survive the
   # refresh, only the snapshot cache gets invalidated.
   def refresh_href
-    params = helpers.request.query_parameters.merge(refresh: 1)
-    "#{helpers.request.path}?#{params.to_query}"
+    params = request.query_parameters.merge(refresh: 1)
+    "#{request.path}?#{params.to_query}"
   end
 end

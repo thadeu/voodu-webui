@@ -58,14 +58,36 @@ class Views::Metrics::Frame < Views::Base
     div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
       charts.each do |c|
         render Components::Metrics::ChartCard.new(
-          label:    c[:label],
-          color:    c[:color],
-          unit:     c[:unit],
-          points:   c[:points],
-          range_ms: @data.range_ms,
-          current:  c[:current]
+          label:      c[:label],
+          color:      c[:color],
+          unit:       c[:unit],
+          points:     c[:points],
+          range_ms:   @data.range_ms,
+          current:    c[:current],
+          expand_url: expand_url_for(c)
         )
       end
     end
+  end
+
+  # expand_url_for — mirrors Views::Metrics::Index#expand_url_for
+  # exactly so the maximize button works on both initial pageload
+  # (Index) AND post-poll-tick swaps (this Frame). Drift between
+  # the two would mean the button disappears or 404s after the
+  # first 30s tick — pin them together.
+  def expand_url_for(chart)
+    qp = request.query_parameters
+    params = {
+      scope_kind: qp[:scope_kind] || @data.scope_kind,
+      scope_id:   qp[:scope_id]   || @data.scope_id,
+      range:      qp[:range]      || @data.range || "1h",
+      metric:     chart[:metric],
+      scale:      chart[:scale],
+      label:      chart[:label],
+      color:      chart[:color],
+      unit:       chart[:unit]
+    }.compact
+
+    "#{metrics_chart_path}?#{params.to_query}"
   end
 end

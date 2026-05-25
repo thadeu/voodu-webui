@@ -51,7 +51,7 @@ class Components::Layouts::Dashboard < Components::Base
       end
     end
 
-    render Components::UI::ToastStack.new(flash: helpers.flash)
+    render Components::UI::ToastStack.new(flash: flash)
     render_command_palette
   end
 

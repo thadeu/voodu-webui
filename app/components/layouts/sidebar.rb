@@ -34,7 +34,7 @@ class Components::Layouts::Sidebar < Components::Base
   #                      whether the "See all" footer link appears.
   # @recent_islands    — MRU subset (cap 6) that we actually render
   #                      in the SERVERS section. When nil we read it
-  #                      lazily from `helpers.recent_islands` so most
+  #                      lazily from `recent_islands` so most
   #                      callers don't have to plumb it through
   #                      (dashboard_context doesn't carry it — see
   #                      ApplicationController#dashboard_context for
@@ -99,7 +99,7 @@ class Components::Layouts::Sidebar < Components::Base
           end
         end
         a(
-          href: helpers.new_island_path,
+          href: new_island_path,
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
           aria: { label: "Add server" }
         ) do
@@ -134,7 +134,7 @@ class Components::Layouts::Sidebar < Components::Base
     return @recent_islands if @recent_islands
 
     begin
-      helpers.recent_islands
+      recent_islands
     rescue NoMethodError
       @islands
     end
@@ -147,7 +147,7 @@ class Components::Layouts::Sidebar < Components::Base
   # useful even when every island fits in the recent slots.
   def see_all_link
     a(
-      href: helpers.islands_path,
+      href: islands_path,
       class: "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-accent-2 transition-colors"
     ) do
       render Icon::ServerStackOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
@@ -160,7 +160,7 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2") do
       plain "no servers yet."
       br
-      a(href: helpers.new_island_path, class: "text-voodu-accent-2 hover:underline") { "add one →" }
+      a(href: new_island_path, class: "text-voodu-accent-2 hover:underline") { "add one →" }
     end
   end
 
@@ -172,7 +172,7 @@ class Components::Layouts::Sidebar < Components::Base
     # behavior — see IslandsController history). No session write
     # needed: the URL itself encodes the context.
     a(
-      href: helpers.tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(tenant_key: island.key),
       class: tokens(
         # min-h-11 (44px) matches inspiration's serverRow touch target.
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
@@ -239,7 +239,7 @@ class Components::Layouts::Sidebar < Components::Base
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
-    href = helpers.public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
+    href = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
 
     a(
       href: href,
@@ -278,7 +278,7 @@ class Components::Layouts::Sidebar < Components::Base
   # matching would always hit). Everything else uses prefix match
   # so /<key>/pods AND /<key>/pods/foo both highlight Pods.
   def nav_active?(item)
-    href = helpers.public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
+    href = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
     return @current_path == href if item[:path] == :tenant_root
 
     @current_path.start_with?(href)

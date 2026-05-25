@@ -34,8 +34,8 @@ class Components::UI::CommandPalette < Components::Base
     div(
       data: {
         controller: "command-palette",
-        command_palette_endpoint_value: helpers.command_palette_path,
-        command_palette_csrf_value:     helpers.form_authenticity_token
+        command_palette_endpoint_value: command_palette_path,
+        command_palette_csrf_value:     form_authenticity_token
       }
     ) do
       backdrop

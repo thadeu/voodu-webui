@@ -42,16 +42,16 @@ class Views::Islands::Edit < Views::Base
   # goes back to Settings); falls back to /islands so the registry
   # surface stays the default landing.
   def close_destination
-    @return_to.presence || helpers.islands_path
+    @return_to.presence || islands_path
   end
 
   def form_body
     form(
-      action: helpers.island_path(@island), method: "post",
+      action: island_path(@island), method: "post",
       data: { turbo: false }, id: "edit-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch")
       # return_to rides along so the post-save redirect honours
       # the page the operator came from (Settings vs /islands).

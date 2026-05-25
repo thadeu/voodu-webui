@@ -38,7 +38,7 @@ class Components::Overview::PodCard < Components::Base
   def header_row
     div(class: "flex items-start gap-3") do
       a(
-        href: helpers.pod_path(name: @pod[:name]),
+        href: pod_path(name: @pod[:name]),
         class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-accent-2 transition-colors"
       ) do
         span(class: "text-[14px] font-semibold text-voodu-text truncate") { @pod[:name] }
@@ -146,7 +146,7 @@ class Components::Overview::PodCard < Components::Base
   # carries.
   def open_pod_btn
     a(
-      href: helpers.pod_path(name: @pod[:name]),
+      href: pod_path(name: @pod[:name]),
       aria: { label: "Open pod" },
       title: "Open pod",
       class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 hover:bg-voodu-surface-3 hover:text-voodu-text"
@@ -157,7 +157,7 @@ class Components::Overview::PodCard < Components::Base
 
   def logs_btn
     a(
-      href: helpers.pod_logs_path(name: @pod[:name]),
+      href: pod_logs_path(name: @pod[:name]),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3 h-3")
@@ -174,7 +174,7 @@ class Components::Overview::PodCard < Components::Base
       confirm_label: "Restart",
       icon:          :ArrowPathOutline,
       form: {
-        action: helpers.restart_pod_path(name: @pod[:name]),
+        action: restart_pod_path(name: @pod[:name]),
         method: :post
       },
       trigger: {

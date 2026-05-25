@@ -104,7 +104,7 @@ class Views::Dashboard::Index < Views::Base
 
   def open_logs_btn
     a(
-      href: helpers.logs_path,
+      href: logs_path,
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")

@@ -30,8 +30,8 @@
 #
 #   render(Components::UI::Drawer.new(
 #     title:        "Logs · #{name}",
-#     src:          "#{helpers.pod_logs_path(name: name)}?embed=1",
-#     open_url:     helpers.pod_logs_path(name: name),
+#     src:          "#{pod_logs_path(name: name)}?embed=1",
+#     open_url:     pod_logs_path(name: name),
 #     width:        "40vw",
 #     min_width:    "320px",
 #     trigger_attrs: { class: btn_secondary_classes }

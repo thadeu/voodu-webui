@@ -95,7 +95,7 @@ class Components::Metrics::PodPicker < Components::Base
   # metrics_url — preserves the current `range` param if present so
   # switching scope doesn't reset the operator's range pill.
   def metrics_url(kind:, id:)
-    params = helpers.request.query_parameters.merge(scope_kind: kind, scope_id: id)
-    "#{helpers.metrics_path}?#{params.to_query}"
+    params = request.query_parameters.merge(scope_kind: kind, scope_id: id)
+    "#{metrics_path}?#{params.to_query}"
   end
 end

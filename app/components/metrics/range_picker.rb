@@ -41,7 +41,7 @@ class Components::Metrics::RangePicker < Components::Base
   private
 
   def range_url(r)
-    params = helpers.request.query_parameters.merge(range: r)
-    "#{helpers.metrics_path}?#{params.to_query}"
+    params = request.query_parameters.merge(range: r)
+    "#{metrics_path}?#{params.to_query}"
   end
 end

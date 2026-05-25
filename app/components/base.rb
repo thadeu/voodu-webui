@@ -32,6 +32,18 @@ class Components::Base < Phlex::HTML
   include Phlex::Rails::Helpers::TurboFrameTag
   include Phlex::Rails::Helpers::TurboStreamFrom
 
+  # Custom helpers exposed by ApplicationController via `helper_method`.
+  # `register_value_helper` is the post-phlex-2.4 replacement for the
+  # deprecated `helpers.X` indirection — it auto-defines a method that
+  # forwards to view_context internally, so callers write `flash`,
+  # `recent_islands`, etc. directly.
+  #
+  # Routes (metrics_path, pod_logs_path, etc.) are already exposed by
+  # `Phlex::Rails::Helpers::Routes` above; CSRF + custom controller
+  # helpers need explicit registration:
+  register_value_helper :form_authenticity_token
+  register_value_helper :recent_islands
+
   Icon = PhlexIcons::Hero
 
   if Rails.env.development?

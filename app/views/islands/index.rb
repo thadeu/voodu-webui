@@ -76,7 +76,7 @@ class Views::Islands::Index < Views::Base
 
   def add_server_btn
     a(
-      href: helpers.new_island_path,
+      href: new_island_path,
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2 shrink-0"
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -220,7 +220,7 @@ class Views::Islands::Index < Views::Base
   # on the same spot when bouncing between /pods and /islands.
   def server_cell(island)
     a(
-      href: helpers.tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(tenant_key: island.key),
       class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-accent-2 transition-colors"
     ) do
       span(class: "text-[13px] font-semibold text-voodu-text whitespace-nowrap") { island.name }
@@ -269,7 +269,7 @@ class Views::Islands::Index < Views::Base
       # Header: name+endpoint clickable (opens island), status pill right.
       div(class: "flex items-start gap-3") do
         a(
-          href: helpers.tenant_root_path(tenant_key: island.key),
+          href: tenant_root_path(tenant_key: island.key),
           class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-accent-2 transition-colors"
         ) do
           span(class: "text-[14px] font-semibold text-voodu-text truncate") { island.name }
@@ -317,7 +317,7 @@ class Views::Islands::Index < Views::Base
 
   def open_btn(island)
     a(
-      href: helpers.tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(tenant_key: island.key),
       title: "Open overview",
       "aria-label": "Open #{island.name}",
       class: action_btn_classes
@@ -329,7 +329,7 @@ class Views::Islands::Index < Views::Base
 
   def edit_btn(island)
     a(
-      href: helpers.edit_island_path(island),
+      href: edit_island_path(island),
       title: "Edit server",
       "aria-label": "Edit #{island.name}",
       class: action_btn_classes
@@ -347,7 +347,7 @@ class Views::Islands::Index < Views::Base
       danger:        true,
       icon:          :TrashOutline,
       form: {
-        action: helpers.island_path(island),
+        action: island_path(island),
         method: :delete
       },
       trigger: {

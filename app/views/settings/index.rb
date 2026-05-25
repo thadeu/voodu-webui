@@ -102,7 +102,7 @@ class Views::Settings::Index < Views::Base
   # affordance for both.
   def header_actions
     a(
-      href: helpers.edit_island_path(@current_island, return_to: helpers.settings_path),
+      href: edit_island_path(@current_island, return_to: settings_path),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5")
@@ -119,7 +119,7 @@ class Views::Settings::Index < Views::Base
       danger:        true,
       icon:          :TrashOutline,
       form: {
-        action: helpers.island_path(@current_island),
+        action: island_path(@current_island),
         method: :delete
       },
       trigger: {
@@ -287,7 +287,7 @@ class Views::Settings::Index < Views::Base
       danger:        true,
       icon:          :TrashOutline,
       form: {
-        action: helpers.revoke_pat_settings_path(pat_id: p["id"]),
+        action: revoke_pat_settings_path(pat_id: p["id"]),
         method: :delete
       },
       trigger: {
@@ -431,10 +431,10 @@ class Views::Settings::Index < Views::Base
 
   def reconnect_button
     form(
-      action: helpers.reconnect_settings_path, method: "post",
+      action: reconnect_settings_path, method: "post",
       data: { turbo: false }, class: "inline-flex"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       button(
         type: "submit",
         class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"

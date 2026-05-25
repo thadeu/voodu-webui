@@ -16,7 +16,7 @@ class Components::UI::NoIslandState < Components::Base
         "metrics, and logs."
       end
       div(class: "pt-2") do
-        render(Components::UI::Button.new(tag: :a, variant: :primary, href: helpers.new_island_path)) { "Add island" }
+        render(Components::UI::Button.new(tag: :a, variant: :primary, href: new_island_path)) { "Add island" }
       end
     end
   end

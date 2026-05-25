@@ -69,6 +69,17 @@ db/
   the design is avoiding
 - `render Components::X::Y.new(...)` to compose. NEVER inline duplicates of
   a primitive — extract into `Components::UI::*` first
+- **Never use `helpers.X`** — `helpers` is deprecated in phlex-rails 2.4+
+  and will be removed. Routes, flash, request, link_to, etc. are already
+  exposed directly via the includes in `Components::Base`. Call
+  `metrics_path`, `flash`, `request` straight up. Custom controller helpers
+  (`form_authenticity_token`, `recent_islands`) are registered there via
+  `register_value_helper :name` — add new ones to that list as needed
+- **HTML tag name collision**: `header`, `footer`, `section`, `article`,
+  `main`, `aside`, `nav`, `figure` are Phlex HTML tag methods. Never name
+  a private method these (e.g. `def header` to render the card header).
+  Use `card_header`, `panel_footer`, etc. Phlex method_missing resolves
+  to your method and breaks the tag rendering
 
 ### Tailwind / responsive
 - Custom breakpoint prefix: **`vmd:`** (not bare `md:`) — defined in the

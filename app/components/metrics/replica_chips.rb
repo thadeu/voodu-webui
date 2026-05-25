@@ -48,7 +48,7 @@ class Components::Metrics::ReplicaChips < Components::Base
   end
 
   def replica_url(container)
-    params = helpers.request.query_parameters.merge(scope_kind: "pod", scope_id: container)
-    "#{helpers.metrics_path}?#{params.to_query}"
+    params = request.query_parameters.merge(scope_kind: "pod", scope_id: container)
+    "#{metrics_path}?#{params.to_query}"
   end
 end

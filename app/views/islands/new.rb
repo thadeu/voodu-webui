@@ -33,17 +33,17 @@ class Views::Islands::New < Views::Base
       subtitle: "Connect a Docker host running the voodu agent",
       icon:     :PlusOutline,
       size:     :md,
-      close_to: helpers.islands_path
+      close_to: islands_path
     ).with_footer { footer_actions }
   end
 
   def form_body
     form(
-      action: helpers.islands_path, method: "post",
+      action: islands_path, method: "post",
       data: { turbo: false }, id: "add-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: helpers.form_authenticity_token)
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
 
       connection_error_banner if @connection_error
 
@@ -194,7 +194,7 @@ class Views::Islands::New < Views::Base
     div(class: "flex-1")
 
     a(
-      href: helpers.islands_path,
+      href: islands_path,
       class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { "Cancel" }
 
