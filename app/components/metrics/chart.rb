@@ -356,36 +356,25 @@ class Components::Metrics::Chart < Components::Base
   # (a tick that took 35s instead of 30s isn't a gap, it's noise).
   GAP_FACTOR = 3.0
 
-  # path_for — Catmull-Rom → cubic bezier smoothing.
+  # path_for — step-after (LOCF) path with gap detection.
   #
-  # Subtle gotcha when porting from JS: in JavaScript `pts[-1]` is
-  # `undefined`, so `pts[i - 1] || pts[i]` correctly falls back at
-  # the start of the array. In Ruby, `pts[-1]` returns the LAST
-  # element of the array (negative indexing) — silently feeding
-  # bezier control points based on the span between the first
-  # point and the last point. The curve then bows out of the
-  # chart box at the start. We use explicit bounds checks to
-  # avoid that trap.
+  # Splits the projected points into contiguous segments separated
+  # by detected gaps (median × GAP_FACTOR threshold), then renders
+  # each segment as a step-after staircase via `segment_path`.
   #
-  # X clamp on the control points: uniform Catmull-Rom assumes
-  # equal parameter spacing between samples. When the X axis is
-  # time-based (this chart, unlike the index-based Sparkline) and
-  # the spacing is non-uniform — gaps in the warehouse, the
-  # appended latest sample at a different cadence than the bucket
-  # boundaries — the control points overshoot horizontally and the
-  # rendered stroke loops backward in time ("hooks" that travel
-  # right-then-left-then-right). Clamping cp1x to [p1.x, p2.x]
-  # and cp2x to the same band kills the overshoot without changing
-  # the visual on uniformly-spaced ranges; the curve flattens
-  # gracefully where samples are sparse instead of looping.
+  # Why step-after instead of the previous Catmull-Rom bezier:
+  # the chart's X axis is timestamp-based and non-uniform, so a
+  # bezier connecting sparse samples drew a diagonal "ramp" that
+  # implied gradual transition between them — actively misleading
+  # when the truth was just "no data in between." See `segment_path`
+  # for the full rationale + the path-shape math.
   #
-  # Gap detection: when the X distance between consecutive points
-  # exceeds GAP_FACTOR × median delta, we emit `M` (move-without-
-  # draw) instead of `C` (curve), breaking the path into segments.
-  # This makes a host outage visually obvious — no diagonal "ramp"
-  # connecting the last sample before the outage to the first one
-  # after, which would mislead the operator into thinking the
-  # metric was actually ramping during what was really downtime.
+  # Gap detection (segments_of) is still useful even with step:
+  # for very long outages (host offline for hours), holding the
+  # previous Y as a single flat line all the way to the post-outage
+  # sample would imply "value stayed at X for hours" which is
+  # equally dishonest. A real gap breaks the path so the chart
+  # shows two disconnected islands of data with empty space between.
   def path_for(pts)
     segments_of(pts).map { |seg| segment_path(seg) }.reject(&:empty?).join(" ")
   end
@@ -441,31 +430,50 @@ class Components::Metrics::Chart < Components::Base
     median * GAP_FACTOR
   end
 
-  # segment_path — single-segment Catmull-Rom → cubic bezier path.
-  # No gap detection (caller already split into gap-free segments)
-  # but keeps the anti-overshoot X-clamp; non-uniform spacing within
-  # a segment (appended latest, sync jitter) still benefits from it.
+  # segment_path — single-segment STEP-AFTER (LOCF) path.
+  #
+  # Why step instead of the previous Catmull-Rom bezier:
+  #
+  # With time-bucketed metrics the X axis is non-uniform — a 1h
+  # range showing two samples 70 minutes apart used to draw a
+  # diagonal bezier ramp between them. That's actively misleading:
+  # the operator sees "value smoothly climbed from 184 to 372 over
+  # an hour" when the actual truth is "184 was the last measurement,
+  # and the next measurement (whenever it arrived) was 372 — we
+  # have NO data on what happened in between."
+  #
+  # Step-after semantics:
+  #   - Hold the previous Y until the NEXT sample's X
+  #   - Step vertically AT the next sample's X (instantaneous jump
+  #     because that's where the new measurement landed)
+  #
+  # Path shape for samples A → B → C:
+  #   M Ax Ay  L Bx Ay  L Bx By  L Cx By  L Cx Cy
+  #              └ flat ┘└ jump ┘└ flat ┘└ jump ┘
+  #
+  # Standard monitoring-tool default (Grafana, Datadog, Prometheus
+  # graph). Honest about sparse data; matches operator mental model
+  # for both gauges ("last value held until refreshed") and counters
+  # ("the bucket recorded this many; nothing recorded between
+  # buckets means we don't know what was happening").
+  #
+  # Trade-off: for pure counters where "no sample = 0 traffic"
+  # (req_count, bytes_out), LOCF holds the previous non-zero value
+  # across an actual no-traffic gap, which is slightly less honest
+  # than backfilling 0. That's a warehouse-side concern (see
+  # MetricsWarehouse#aggregate_for); chart-side step is the right
+  # default until/unless we add per-metric backfill semantics.
   def segment_path(pts)
     return "" if pts.size < 2
 
     d = "M #{pts[0][0]} #{pts[0][1]}"
 
-    (0...pts.size - 1).each do |i|
-      p0 = i.zero? ? pts[i] : pts[i - 1]
-      p1 = pts[i]
-      p2 = pts[i + 1]
-      p3 = (i + 2 < pts.size) ? pts[i + 2] : p2
+    (1...pts.size).each do |i|
+      prev_y = pts[i - 1][1]
+      curr_x = pts[i][0]
+      curr_y = pts[i][1]
 
-      cp1x = p1[0] + (p2[0] - p0[0]) / 6.0
-      cp1y = p1[1] + (p2[1] - p0[1]) / 6.0
-      cp2x = p2[0] - (p3[0] - p1[0]) / 6.0
-      cp2y = p2[1] - (p3[1] - p1[1]) / 6.0
-
-      lo, hi = [p1[0], p2[0]].minmax
-      cp1x = cp1x.clamp(lo, hi)
-      cp2x = cp2x.clamp(lo, hi)
-
-      d += " C #{cp1x} #{cp1y}, #{cp2x} #{cp2y}, #{p2[0]} #{p2[1]}"
+      d += " L #{curr_x} #{prev_y} L #{curr_x} #{curr_y}"
     end
 
     d
