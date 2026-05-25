@@ -35,7 +35,7 @@ class MetricsData
   # unknown, etc.) so callers' `if points.present?` guard in the
   # view degrades cleanly to "show the headline number, no chart."
   def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
-    return [] if @client.nil?
+    return [] unless data_source_available?
 
     payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
     return [] unless payload.is_a?(Hash)
@@ -99,7 +99,7 @@ class MetricsData
   #
   # Returns the raw Float or nil when there's no data.
   def latest_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
-    return nil if @client.nil?
+    return nil unless data_source_available?
 
     if (rec = read_shared_latest(source, metric, scope, name, pod))
       return rec[:value]
@@ -118,7 +118,7 @@ class MetricsData
   # flags) when a caller needs the metadata, not just the values. Used
   # by future pages that render the chart axis explicitly.
   def raw_payload(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil)
-    return nil if @client.nil?
+    return nil unless data_source_available?
 
     fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name)
   end
@@ -172,25 +172,52 @@ class MetricsData
     "#{(b / 1_000_000_000_000.0).round(1)} TB"
   end
 
-  # fetch — Rails.cache-backed wrapper around Voodu::Client#metrics.
+  # fetch — Rails.cache-backed wrapper around the metric data source.
+  #
+  # TWO backends, selected per-request by the METRICS_WAREHOUSE env:
+  #
+  #   - HTTP path (default): calls Voodu::Client#metrics, which
+  #     round-trips to the controller's /api/pat/v1/metrics and
+  #     scans the NDJSON files on disk. The legacy + correct-by-
+  #     default path; flipping the env back to false instantly
+  #     restores this behaviour.
+  #
+  #   - Warehouse path (ENV["METRICS_WAREHOUSE"]=true): calls
+  #     MetricsWarehouse.query, which serves the SAME envelope from
+  #     the local `metrics` SQLite database (populated by the
+  #     MetricsSync jobs every 30s).
+  #
+  # Why a per-request flag instead of a hard switch?
+  #
+  #   - A/B compare: operator runs `METRICS_WAREHOUSE=true bin/dev`
+  #     in one terminal, plain `bin/dev` in another, opens the same
+  #     page in both. Bytes-for-bytes comparison.
+  #   - Rollback is reverting one env var — no schema undo, no
+  #     code revert.
+  #   - The cache key includes the backend tag so flipping the flag
+  #     doesn't serve a stale entry from the other backend.
+  #
   # Errors are swallowed (return nil) so a flaky chart doesn't
-  # poison the parent OverviewData/PodDetailData fetch. The
-  # higher-level error banner on those pages already handles the
-  # "can't reach controller" case.
+  # poison the parent OverviewData/PodDetailData fetch. Both
+  # backends raise different exception families (Voodu::Client::Error
+  # for HTTP; ActiveRecord::StatementInvalid for SQLite) — the
+  # rescue list covers both.
   def fetch(source:, metric:, range:, interval:, scope:, name:, pod:)
-    # One hash carries ALL params that go to the API; the cache
-    # key digests it. Adding a new param (`agg=max`, `format=json`,
-    # …) becomes a one-line change here — no separate cache_key
-    # signature to update. The whole "remember to add the param to
-    # the cache key" footgun goes away.
+    # One hash carries ALL params; the cache key digests it. Adding
+    # a new param (`agg=max`, `format=json`, …) becomes a one-line
+    # change here — no separate cache_key signature to update.
     query = {
       source: source, metric: metric, range: range, interval: interval,
       scope: scope, name: name, pod: pod
     }
 
     Rails.cache.fetch(cache_key(query), expires_in: CACHE_TTL) do
-      # Network round-trip — only happens on cache MISS.
-      payload = @client.metrics(**query)
+      payload =
+        if warehouse_enabled?
+          MetricsWarehouse.query(@island, **query)
+        else
+          @client.metrics(**query)
+        end
 
       # Side-effect: publish the latest to the SHARED cell so all
       # other range pills + latest_for() see the same value.
@@ -209,9 +236,38 @@ class MetricsData
 
       payload
     end
-  rescue Voodu::Client::Error => e
+  rescue Voodu::Client::Error, ActiveRecord::StatementInvalid => e
     Rails.logger.warn("metrics: #{source}/#{metric} #{range}: #{e.class} #{e.message}")
     nil
+  end
+
+  # warehouse_enabled? — env-flag gate. Boolean string ("true" / "1")
+  # so a shell `export METRICS_WAREHOUSE=true` flips the path. Empty
+  # / "false" / "0" / unset → HTTP path (default).
+  #
+  # Checked per request (not memoised) so a process can toggle the
+  # flag mid-flight via Rails.application.config or a hot-reload
+  # without restart. Cost is one ENV lookup per chart, negligible.
+  def warehouse_enabled?
+    %w[true 1].include?(ENV["METRICS_WAREHOUSE"].to_s.downcase)
+  end
+
+  # data_source_available? — guards the public methods against the
+  # "neither backend usable" case:
+  #
+  #   - HTTP path needs @client (built from @island.endpoint+pat).
+  #   - Warehouse path needs only @island (used as tenant_id key)
+  #     because reads hit local SQLite, not the network.
+  #
+  # When the warehouse is enabled but @island is also nil (would
+  # only happen on tenant-less routes that build MetricsData wrong),
+  # we still short-circuit — there's nothing to query against.
+  def data_source_available?
+    if warehouse_enabled?
+      !@island.nil?
+    else
+      !@client.nil?
+    end
   end
 
   # read_shared_latest — reads the no-range, no-interval cache cell
@@ -232,8 +288,13 @@ class MetricsData
   # hash order) hit the same cell; ANY param change invalidates
   # cleanly. Adding a new query param requires zero changes here.
 
+  # Cache key includes the backend tag so flipping METRICS_WAREHOUSE
+  # mid-session doesn't serve a stale entry from the other backend
+  # (subtly different floats from rounding paths would make the
+  # debug confusing — separate cells keep the A/B clean).
   def cache_key(query)
-    "voodu:metrics:v1:island:#{@island.id}:#{digest(query)}"
+    backend = warehouse_enabled? ? "wh" : "http"
+    "voodu:metrics:v1:#{backend}:island:#{@island.id}:#{digest(query)}"
   end
 
   def latest_cache_key(identity)

@@ -1,14 +1,18 @@
 services:
   web:
     image: ghcr.io/thadeu/voodu-webui:latest
-    # build: .              # uncomment to build locally instead of pulling
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-3000}:3000"
     environment:
       RAILS_ENV: production
-      # SECRET_KEY_BASE auto-generated on first boot if unset (persisted in storage volume)
+      METRICS_WAREHOUSE: 1
     volumes:
       - voodu_webui_storage:/rails/storage
+
 volumes:
   voodu_webui_storage:
+
+network:
+  default:
+    name: voodu_webui_network

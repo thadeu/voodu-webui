@@ -21,6 +21,15 @@ class MetricsController < ApplicationController
       )
     end
 
-    render Views::Metrics::Index.new(**dashboard_context.merge(data: @data))
+    # Turbo-Frame request → polling tick. Render JUST the chart_grid
+    # inside the matching frame tag; Turbo extracts it and swaps the
+    # frame contents atomically. layout: false skips the Dashboard
+    # chrome — sidebar/topbar/page_head don't need to re-render on
+    # every 30s tick.
+    if request.headers["Turbo-Frame"] == "metrics-charts"
+      render Views::Metrics::Frame.new(data: @data), layout: false
+    else
+      render Views::Metrics::Index.new(**dashboard_context.merge(data: @data))
+    end
   end
 end

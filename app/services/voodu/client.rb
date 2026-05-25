@@ -199,7 +199,78 @@ module Voodu
       raise TransportError, e.message
     end
 
+    # metrics_dump — incremental NDJSON warehouse pull. Streams the
+    # controller's `/metrics/dump?since=<unix_ts>` endpoint and yields
+    # one Hash per parsed line, shaped for MetricSample#bulk_insert
+    # consumption (minus `tenant_id`, which the caller adds).
+    #
+    # Streaming + line-buffered: Faraday's on_data delivers arbitrary
+    # byte boundaries. We accumulate in `buffer`, split on `\n`,
+    # yield each complete line, and carry any trailing partial across
+    # chunks. A line that lacks `ts` or `source` is silently skipped
+    # — the controller already filters by ts, so this would only
+    # happen on a malformed line which both sides tolerate (matches
+    # reader.go / dump.go behaviour).
+    #
+    # `since` is unix seconds (integer). 0 (or `since.to_i.zero?`)
+    # tells the controller to dump the full retention window —
+    # the natural backfill path for a brand-new island.
+    #
+    # No return value (streaming). Caller counts rows via the yield
+    # callback if it needs a tally.
+    #
+    # Errors surface as Voodu::Client::Error subclasses — the
+    # MetricsSyncIslandJob lets solid_queue retry transient transport
+    # failures and logs auth errors for operator follow-up.
+    def metrics_dump(since:, &on_row)
+      raise ArgumentError, "block required" unless on_row
+
+      buffer = +""
+
+      streaming_conn.get("/api/pat/v1/metrics/dump", { since: since.to_i }) do |req|
+        req.options.on_data = proc do |chunk, _overall, _env|
+          buffer << chunk
+
+          while (nl = buffer.index("\n"))
+            line   = buffer.slice!(0..nl).chomp
+            next if line.empty?
+
+            row = parse_dump_line(line)
+            on_row.call(row) if row
+          end
+        end
+      end
+
+      # Trailing partial line — shouldn't happen if the controller
+      # writes whole lines + flushes, but defensive: try the rump.
+      if buffer.present?
+        row = parse_dump_line(buffer.chomp)
+        on_row.call(row) if row
+      end
+
+      nil
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
+    end
+
     private
+
+    # parse_dump_line — minimal validation of a single NDJSON line.
+    # Returns the bulk_insert-ready Hash, or nil to skip the line
+    # (malformed JSON, missing required field). Tolerant by design:
+    # the warehouse sync runs every 30s, so a single bad line should
+    # never poison the batch.
+    def parse_dump_line(line)
+      parsed = JSON.parse(line)
+      ts     = parsed["ts"]
+      source = parsed["source"]
+      return nil if ts.blank? || source.blank?
+
+      { source: source, ts_iso: ts, payload: line }
+    rescue JSON::ParserError
+      nil
+    end
+
 
     def conn
       @conn ||= Faraday.new(url: @island.endpoint) do |f|

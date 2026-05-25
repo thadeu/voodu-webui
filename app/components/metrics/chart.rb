@@ -68,11 +68,26 @@ class Components::Metrics::Chart < Components::Base
   def pad_bottom; @axes ? PAD_BOTTOM_FULL : PAD_BOTTOM_COMPACT; end
 
   def view_template
-    if @points.size < 2
+    # Truly empty → honest "no data" placeholder (cold boot, no
+    # samples on disk or in warehouse for this range yet).
+    if @points.empty?
       return div(
         class: "flex items-center justify-center text-voodu-muted text-[12px]",
         style: "height: #{@height}px;"
       ) { "no data" }
+    end
+
+    # Single point edge case — happens when the range/interval is
+    # narrow enough that only one bucket has samples (warehouse
+    # warming up, brand-new island, or very short range). The
+    # operator already sees a meaningful value in the StatCard
+    # headline pulled from that same point; the chart should render
+    # a flat line at that level rather than say "no data" (which
+    # contradicts the headline + min/avg/max next to it). We
+    # duplicate the point so the curve has 2 vertices to draw.
+    if @points.size == 1
+      only = @points.first
+      @points = [only, only]
     end
 
     pts    = projected_points
@@ -134,7 +149,7 @@ class Components::Metrics::Chart < Components::Base
         end
 
         d_line = path_for(pts)
-        d_area = "#{d_line} L #{pts.last[0]} #{baseline_y} L #{pts.first[0]} #{baseline_y} Z"
+        d_area = area_path_for(pts)
 
         # Both fill and stroke go through the clip so an overshoot
         # below the baseline (or above the top) is invisibly cropped.
@@ -335,6 +350,12 @@ class Components::Metrics::Chart < Components::Base
     ceil * factor
   end
 
+  # GAP_FACTOR — how many "median deltas" between consecutive points
+  # we allow before declaring a gap. 3× picks up real outages (host
+  # off for hours) without false-firing on the warehouse sync jitter
+  # (a tick that took 35s instead of 30s isn't a gap, it's noise).
+  GAP_FACTOR = 3.0
+
   # path_for — Catmull-Rom → cubic bezier smoothing.
   #
   # Subtle gotcha when porting from JS: in JavaScript `pts[-1]` is
@@ -345,7 +366,88 @@ class Components::Metrics::Chart < Components::Base
   # point and the last point. The curve then bows out of the
   # chart box at the start. We use explicit bounds checks to
   # avoid that trap.
+  #
+  # X clamp on the control points: uniform Catmull-Rom assumes
+  # equal parameter spacing between samples. When the X axis is
+  # time-based (this chart, unlike the index-based Sparkline) and
+  # the spacing is non-uniform — gaps in the warehouse, the
+  # appended latest sample at a different cadence than the bucket
+  # boundaries — the control points overshoot horizontally and the
+  # rendered stroke loops backward in time ("hooks" that travel
+  # right-then-left-then-right). Clamping cp1x to [p1.x, p2.x]
+  # and cp2x to the same band kills the overshoot without changing
+  # the visual on uniformly-spaced ranges; the curve flattens
+  # gracefully where samples are sparse instead of looping.
+  #
+  # Gap detection: when the X distance between consecutive points
+  # exceeds GAP_FACTOR × median delta, we emit `M` (move-without-
+  # draw) instead of `C` (curve), breaking the path into segments.
+  # This makes a host outage visually obvious — no diagonal "ramp"
+  # connecting the last sample before the outage to the first one
+  # after, which would mislead the operator into thinking the
+  # metric was actually ramping during what was really downtime.
   def path_for(pts)
+    segments_of(pts).map { |seg| segment_path(seg) }.reject(&:empty?).join(" ")
+  end
+
+  # area_path_for — like path_for but each segment is independently
+  # closed down to the baseline. Without this, the area fill would
+  # close from the post-gap rightmost point ALL THE WAY LEFT to the
+  # first sample, creating a translucent polygon covering the entire
+  # gap region (visually pretending there was data). Per-segment
+  # closure means each "island" of real data gets its own area fill
+  # rooted to the baseline — the gap is honest empty space.
+  def area_path_for(pts)
+    segments_of(pts).map do |seg|
+      next "" if seg.size < 2
+
+      "#{segment_path(seg)} L #{seg.last[0]} #{baseline_y} L #{seg.first[0]} #{baseline_y} Z"
+    end.reject(&:empty?).join(" ")
+  end
+
+  # segments_of — splits the projected points into contiguous runs
+  # separated by gaps. A gap is any X distance > GAP_FACTOR × median
+  # delta. The result is an Array of Arrays of points (each inner
+  # Array is one segment ready for its own M+C+...+L baseline pass).
+  #
+  # Median-based threshold (not mean) so the appended latest point
+  # — typically closer to the last bucket than buckets are to each
+  # other — doesn't skew the cutoff. Catches multi-hour outages
+  # without false-firing on natural sync jitter.
+  def segments_of(pts)
+    return [pts] if pts.size < 3
+
+    threshold = gap_threshold_for(pts)
+    segments  = [[pts[0]]]
+
+    (1...pts.size).each do |i|
+      if (pts[i][0] - pts[i - 1][0]) > threshold
+        segments << [pts[i]]
+      else
+        segments.last << pts[i]
+      end
+    end
+
+    segments
+  end
+
+  # gap_threshold_for — derives the "this is a gap" cutoff from the
+  # actual sample spacing in the series, not from a fixed value.
+  def gap_threshold_for(pts)
+    return Float::INFINITY if pts.size < 3
+
+    deltas = (1...pts.size).map { |i| pts[i][0] - pts[i - 1][0] }
+    median = deltas.sort[deltas.size / 2]
+    median * GAP_FACTOR
+  end
+
+  # segment_path — single-segment Catmull-Rom → cubic bezier path.
+  # No gap detection (caller already split into gap-free segments)
+  # but keeps the anti-overshoot X-clamp; non-uniform spacing within
+  # a segment (appended latest, sync jitter) still benefits from it.
+  def segment_path(pts)
+    return "" if pts.size < 2
+
     d = "M #{pts[0][0]} #{pts[0][1]}"
 
     (0...pts.size - 1).each do |i|
@@ -358,6 +460,10 @@ class Components::Metrics::Chart < Components::Base
       cp1y = p1[1] + (p2[1] - p0[1]) / 6.0
       cp2x = p2[0] - (p3[0] - p1[0]) / 6.0
       cp2y = p2[1] - (p3[1] - p1[1]) / 6.0
+
+      lo, hi = [p1[0], p2[0]].minmax
+      cp1x = cp1x.clamp(lo, hi)
+      cp2x = cp2x.clamp(lo, hi)
 
       d += " C #{cp1x} #{cp1y}, #{cp2x} #{cp2y}, #{p2[0]} #{p2[1]}"
     end

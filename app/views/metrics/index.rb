@@ -178,22 +178,63 @@ class Views::Metrics::Index < Views::Base
   # Host scope shows 3 cards (CPU/Mem/Disk — host net was removed
   # in W7); pod scope shows 4 (CPU/Mem/Rx/Tx). Grid auto-wraps
   # cleanly either way.
+  #
+  # Wrapped in `polling_controller` + `turbo_frame_tag` so the
+  # `auto-refresh` chip is honest:
+  #
+  #   - Initial pageload renders the grid inline (chart appears
+  #     immediately, no fetch round-trip blocked on Turbo).
+  #   - polling_controller.js ticks every 30s and calls
+  #     `frame.reload()`, which refetches the frame's src (the
+  #     current URL with all query params preserved).
+  #   - MetricsController detects the `Turbo-Frame` header and
+  #     responds with Views::Metrics::Frame (layout: false), which
+  #     is just THIS grid inside a matching `<turbo-frame>` tag.
+  #   - Turbo atomically swaps the frame contents — scroll position,
+  #     range pill, scope picker state all preserved.
+  #
+  # 30s cadence chosen to align with the warehouse sync tick
+  # (MetricsSyncIslandJob runs every 30s). Polling faster wouldn't
+  # see fresher data; polling slower would lose responsiveness
+  # without saving meaningful work.
   def chart_grid
     return if @data.nil?
 
     div(
-      class: "grid grid-cols-1 vmd:grid-cols-2 gap-3"
+      data: {
+        controller: "polling",
+        polling_interval_value: "30000"
+      }
     ) do
-      @data.charts.each do |c|
-        render Components::Metrics::ChartCard.new(
-          label:    c[:label],
-          color:    c[:color],
-          unit:     c[:unit],
-          points:   c[:points],
-          range_ms: @data.range_ms,
-          current:  c[:current]
-        )
+      # `src` is the current URL preserving query params (scope,
+      # range, refresh marker). On reload Turbo refetches the same
+      # URL with the Turbo-Frame header set, which the controller
+      # uses to short-circuit to the Frame view.
+      turbo_frame_tag("metrics-charts", src: current_request_url) do
+        div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+          @data.charts.each do |c|
+            render Components::Metrics::ChartCard.new(
+              label:    c[:label],
+              color:    c[:color],
+              unit:     c[:unit],
+              points:   c[:points],
+              range_ms: @data.range_ms,
+              current:  c[:current]
+            )
+          end
+        end
       end
     end
+  end
+
+  # current_request_url — request path + query string. Used as the
+  # turbo-frame `src` so the polling reload refetches the exact same
+  # scope/range/refresh the operator is viewing. Re-serialising via
+  # `to_query` instead of `request.original_url` because the latter
+  # carries the host+port which would force a CORS-like fetch in
+  # local dev with non-default ports.
+  def current_request_url
+    qs = helpers.request.query_parameters.to_query
+    qs.present? ? "#{helpers.request.path}?#{qs}" : helpers.request.path
   end
 end

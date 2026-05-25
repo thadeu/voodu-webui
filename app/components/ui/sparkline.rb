@@ -44,7 +44,23 @@ class Components::UI::Sparkline < Components::Base
   end
 
   def view_template
-    return if @points.size < 2
+    return if @points.empty?
+
+    # Single-point edge case (warehouse warming up; range so short
+    # that only one bucket has data; metric just started reporting).
+    # We used to `return` here, which made the StatCard render its
+    # "no data" placeholder — confusing when the headline IS showing
+    # a value pulled from that same point. Synthesise a second point
+    # at the SAME value so the curve renders as a flat line at the
+    # measured level; honest visual ("we have one reading, no trend
+    # to draw yet") instead of misleading empty state.
+    if @points.size == 1
+      only = @points.first
+      @points = [
+        only.merge(ts: only[:ts]),
+        only.merge(ts: only[:ts]) # duplicate; flat segment
+      ]
+    end
 
     pts    = projected_points
     d_line = path_for(pts)

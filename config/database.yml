@@ -12,12 +12,53 @@ default: &default
   timeout: 5000
 
 development:
-  <<: *default
-  database: storage/development.sqlite3
+  primary:
+    <<: *default
+    database: storage/development.sqlite3
+  # solid_queue, solid_cache and solid_cable tables live in their own
+  # SQLite files in dev — same shape as prod, so the recurring
+  # supervisor (bin/jobs) finds `solid_queue_recurring_tasks` etc.
+  # right where the gems expect. Each <name>_schema.rb is loaded into
+  # the matching file on `db:prepare`.
+  cache:
+    <<: *default
+    database: storage/development_cache.sqlite3
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: storage/development_queue.sqlite3
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: storage/development_cable.sqlite3
+    migrations_paths: db/cable_migrate
+  # Metrics warehouse. High-volume background-job writes (every 30s,
+  # per-tenant) live in their own file to keep the primary lean.
+  metrics:
+    <<: *default
+    database: storage/development_metrics.sqlite3
+    migrations_paths: db/metrics_migrate
 
 test:
-  <<: *default
-  database: storage/test.sqlite3
+  primary:
+    <<: *default
+    database: storage/test.sqlite3
+  cache:
+    <<: *default
+    database: storage/test_cache.sqlite3
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: storage/test_queue.sqlite3
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: storage/test_cable.sqlite3
+    migrations_paths: db/cable_migrate
+  metrics:
+    <<: *default
+    database: storage/test_metrics.sqlite3
+    migrations_paths: db/metrics_migrate
 
 production:
   primary:
@@ -35,3 +76,7 @@ production:
     <<: *default
     database: storage/production_cable.sqlite3
     migrations_paths: db/cable_migrate
+  metrics:
+    <<: *default
+    database: storage/production_metrics.sqlite3
+    migrations_paths: db/metrics_migrate

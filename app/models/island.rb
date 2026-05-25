@@ -26,6 +26,14 @@ class Island < ApplicationRecord
   before_validation :normalize_endpoint
   before_validation :ensure_key, on: :create
 
+  # Kick the first metrics warehouse sync immediately on island
+  # creation. Without this, a newly-added island would wait up to
+  # 30s for the next orchestrator tick before charts start filling.
+  # The sync itself is no-op-safe (idempotent via MAX(ts_epoch)
+  # watermark), so this and the orchestrator can both fire without
+  # double-inserts.
+  after_create_commit { MetricsSyncIslandJob.perform_later(id) }
+
   validates :name, presence: true, uniqueness: true, length: { maximum: 64 }
   validates :endpoint, presence: true, format: {
     with: %r{\Ahttps?://[^/]+:\d+}, message: "could not be normalised to scheme://host:port"
