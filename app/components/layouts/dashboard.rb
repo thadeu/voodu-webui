@@ -52,9 +52,39 @@ class Components::Layouts::Dashboard < Components::Base
     end
 
     render Components::UI::ToastStack.new(flash: helpers.flash)
+    render_command_palette
   end
 
   private
+
+  # render_command_palette — mounted at the layout root so ⌘K
+  # works from any page without each view having to opt in. The
+  # CommandSet builder needs the current island, the full islands
+  # list, AND the compact pods list (for per-pod jumps/restarts).
+  # Pods come from the shared IslandPods cache — same 30s TTL the
+  # Metrics + Logs pickers use, so this read is usually a cache
+  # hit when those pages have been opened recently.
+  def render_command_palette
+    pods = IslandPods.compact(helpers.voodu_client, @current_island)
+    commands = CommandSet.for(
+      island:  @current_island,
+      islands: @islands,
+      pods:    pods,
+      helpers: helpers
+    )
+    render Components::UI::CommandPalette.new(
+      commands: commands,
+      default_suggestion_ids: default_suggestion_ids(commands)
+    )
+  end
+
+  # default_suggestion_ids — first-open "what would I want?" picks.
+  # No persistent ranking yet (recency / usage stats are a future
+  # iteration); we just nominate the most useful nav items on the
+  # current surface so the empty palette isn't empty.
+  def default_suggestion_ids(commands)
+    @current_island ? %w[nav-overview nav-pods nav-logs nav-metrics] : []
+  end
 
   # Backdrop sits behind the sidebar but above main content. Hidden
   # by default; the mobile-nav controller toggles `hidden` when the

@@ -173,15 +173,19 @@ class Components::Layouts::Topbar < Components::Base
     span(class: "text-voodu-muted text-xs") { "no server selected" }
   end
 
-  # Full search box — visible at 1100+. The Cmd-K hint only shows
-  # at 1280+ (where there's room).
+  # Full search box — visible at 1100+. Real button now: clicking
+  # opens the command palette (or operator hits Cmd-K from anywhere).
+  # The Cmd-K hint only shows at 1280+ (where there's room).
   def search_box
-    div(
-      class: "hidden vmd:flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-[260px] vlg:w-[320px] text-voodu-muted",
-      role: "search"
+    button(
+      type: "button",
+      data: { action: "click->command-palette#open" },
+      class: "hidden vmd:flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-[260px] vlg:w-[320px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text-2 transition-colors",
+      role: "search",
+      "aria-label": "Open command palette"
     ) do
       render Icon::MagnifyingGlassOutline.new(class: "w-3.5 h-3.5 shrink-0")
-      span(class: "text-[13px] flex-1") { "Search pods, images, logs…" }
+      span(class: "text-[13px] flex-1 text-left") { "Search pods, logs, actions…" }
       span(class: "hidden vlg:flex items-center gap-1") do
         render Components::UI::Kbd.new { "⌘" }
         render Components::UI::Kbd.new { "K" }
@@ -189,13 +193,14 @@ class Components::Layouts::Topbar < Components::Base
     end
   end
 
-  # Icon-only search — mobile fallback. M-future wires Cmd-K modal;
-  # for now it's visual parity with the inspiration.
+  # Icon-only search — mobile fallback. Same target as the desktop
+  # search button (command palette open).
   def search_icon
     button(
       type: "button",
+      data: { action: "click->command-palette#open" },
       class: "vmd:hidden inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 shrink-0",
-      aria: { label: "Search" }
+      aria: { label: "Open command palette" }
     ) do
       render Icon::MagnifyingGlassOutline.new(class: "w-4 h-4")
     end
