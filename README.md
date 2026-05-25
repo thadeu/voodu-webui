@@ -30,6 +30,7 @@ The image ships Rails 8.1 + Thruster, the Solid stack (`solid_cache`, `solid_que
 **First boot vs. restarts.**
 
 - `SECRET_KEY_BASE` is auto-generated and persisted at `/rails/storage/.secret_key_base` when you don't ship one (and no `RAILS_MASTER_KEY` / `config/master.key`). Keep the storage volume to keep sessions valid.
+- ActiveRecord Encryption keys (`primary_key`, `deterministic_key`, `key_derivation_salt`) are auto-generated and persisted at `/rails/storage/.ar_encryption.env` under the same condition. Losing this file makes existing encrypted columns unreadable — keep the volume.
 - First boot runs `rails db:prepare` → creates SQLite DBs, loads the schema, runs `db:seed`.
 - Subsequent boots also run `db:prepare`, which only applies pending migrations. Seeds do not re-run (Rails design — protects user data).
 
@@ -38,6 +39,7 @@ The image ships Rails 8.1 + Thruster, the Solid stack (`solid_cache`, `solid_que
 | Var | Purpose |
 | --- | --- |
 | `SECRET_KEY_BASE` | Override the auto-generated key. |
+| `ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` / `_DETERMINISTIC_KEY` / `_KEY_DERIVATION_SALT` | Override the auto-generated AR Encryption keys. Set all three together. |
 | `RAILS_MASTER_KEY` | Decrypt `config/credentials.yml.enc` if you ship encrypted credentials. |
 | `DATABASE_URL` | Swap SQLite for Postgres later without rebuilding. |
 | `HOST_PORT` | Compose-only — external port forwarded to internal 3000 (default `3000`). |
@@ -65,6 +67,7 @@ docker run -d --name voodu-webui \
   -p 3000:3000 \
   -v voodu_webui_storage:/rails/storage \
   --restart unless-stopped \
+  --network host
   ghcr.io/thadeu/voodu-webui:latest
 
 # Custom external port — internal is always 3000

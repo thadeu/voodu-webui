@@ -1,17 +1,33 @@
 #!/bin/bash
 set -e
 
-# Auto-generate and persist SECRET_KEY_BASE on first boot when no credentials are wired up.
-if [ -z "${SECRET_KEY_BASE:-}" ] && [ -z "${RAILS_MASTER_KEY:-}" ] && [ ! -f /rails/config/master.key ]; then
-  SKB_FILE="/rails/storage/.secret_key_base"
-  if [ -f "$SKB_FILE" ]; then
-    SECRET_KEY_BASE="$(cat "$SKB_FILE")"
-  else
-    mkdir -p /rails/storage
-    SECRET_KEY_BASE="$(openssl rand -hex 64)"
-    umask 077 && printf '%s' "$SECRET_KEY_BASE" > "$SKB_FILE"
+# Auto-generate and persist SECRET_KEY_BASE + ActiveRecord Encryption keys on first boot
+# when no credentials are wired up. Both persist to the storage volume across restarts.
+if [ -z "${RAILS_MASTER_KEY:-}" ] && [ ! -f /rails/config/master.key ]; then
+  mkdir -p /rails/storage
+
+  if [ -z "${SECRET_KEY_BASE:-}" ]; then
+    SKB_FILE="/rails/storage/.secret_key_base"
+    if [ -f "$SKB_FILE" ]; then
+      SECRET_KEY_BASE="$(cat "$SKB_FILE")"
+    else
+      SECRET_KEY_BASE="$(openssl rand -hex 64)"
+      umask 077 && printf '%s' "$SECRET_KEY_BASE" > "$SKB_FILE"
+    fi
+    export SECRET_KEY_BASE
   fi
-  export SECRET_KEY_BASE
+
+  if [ -z "${ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY:-}" ]; then
+    AR_ENC_FILE="/rails/storage/.ar_encryption.env"
+    if [ ! -f "$AR_ENC_FILE" ]; then
+      umask 077 && {
+        printf 'ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY=%s\n'         "$(openssl rand -hex 16)"
+        printf 'ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY=%s\n'   "$(openssl rand -hex 16)"
+        printf 'ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT=%s\n' "$(openssl rand -hex 16)"
+      } > "$AR_ENC_FILE"
+    fi
+    set -a; . "$AR_ENC_FILE"; set +a
+  fi
 fi
 
 # If running the rails server (directly or wrapped by Thruster), create/migrate/seed the DB.
