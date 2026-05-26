@@ -39,7 +39,18 @@ class Views::Metrics::Index < Views::Base
   private
 
   def body
-    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+    # auto-refresh controller owns the WHOLE page body so both the
+    # cable source (the wrapped <turbo-cable-stream-source>) and the
+    # subtitle button (data-action="click->auto-refresh#toggle")
+    # share its scope. Storage key is per-island so toggling
+    # auto-refresh on one server doesn't bleed into another.
+    div(
+      class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5",
+      data: {
+        controller: "auto-refresh",
+        auto_refresh_storage_key_value: "voodu:auto-refresh:#{@current_island.id}"
+      }
+    ) do
       # Subscribe to live ticks broadcast by MetricsSyncIslandJob
       # whenever new samples land in the warehouse for this island.
       # The custom `metrics_tick` Turbo Stream action (see
@@ -47,9 +58,15 @@ class Views::Metrics::Index < Views::Base
       # metrics-charts frame — same refetch the 30s polling tick
       # does, but triggered by real data arrival.
       #
-      # The polling controller stays put as a 30s fallback in case
-      # the WebSocket drops (network blip, browser sleep, etc.).
-      turbo_stream_from "metrics-#{@current_island.id}"
+      # Wrapped in a target span so auto_refresh_controller.js can
+      # detach / re-attach the underlying <turbo-cable-stream-source>
+      # custom element when the operator toggles auto-refresh off.
+      # Detaching fires its disconnectedCallback → unsubscribes;
+      # re-attaching fires connectedCallback → resubscribes. Same
+      # signed-stream-name node is reused (no re-signing roundtrip).
+      span(data: { auto_refresh_target: "source" }) do
+        turbo_stream_from "metrics-#{@current_island.id}"
+      end
 
       page_head
       toolbar
@@ -117,13 +134,33 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
+  # auto_refresh_indicator — clickable toggle for the cable
+  # subscription. Default ON (green pulsing dot + "auto-refresh");
+  # operator click flips to OFF (red static dot + "paused") and
+  # detaches the <turbo-cable-stream-source> so the broadcast tick
+  # stops reloading the chart frame. State persists per-island via
+  # localStorage in auto_refresh_controller.js — operator pauses
+  # once during a long debugging session and the page stays paused
+  # across reloads / navigations until they un-pause.
+  #
+  # The dot + label initial styles are SEEDED here (green + "auto-
+  # refresh") to match the controller's default; if the operator
+  # had paused state in localStorage, the controller flips both
+  # within a few ms of mount. Brief flash is acceptable — the
+  # alternative (server-side cookie) costs more than it saves.
   def auto_refresh_indicator
-    span(class: "inline-flex items-center gap-1.5") do
+    button(
+      type:  "button",
+      title: "Toggle auto-refresh",
+      data:  { action: "click->auto-refresh#toggle" },
+      class: "inline-flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+    ) do
       span(
+        data:  { auto_refresh_target: "dot" },
         class: "inline-block rounded-full animate-voodu-pulse",
         style: "width: 6px; height: 6px; background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
       )
-      span { "auto-refresh" }
+      span(data: { auto_refresh_target: "label" }) { "auto-refresh" }
     end
   end
 

@@ -153,8 +153,6 @@ class PodDetailData
     @ingress_eligible = kind.to_s == "deployment"
   end
 
-  private
-
   # series_for_metric — pulls real time-series via MetricsData
   # scoped to this pod's (scope, name). Aggregation on (scope, name)
   # means the chart survives container restarts (replica_id is
