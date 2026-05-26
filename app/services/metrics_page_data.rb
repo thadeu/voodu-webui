@@ -28,6 +28,7 @@
 # is a future win when round-trip cost dominates.
 class MetricsPageData
   RANGES = {
+    "1m"  => "1m",
     "5m"  => "5m",
     "15m" => "15m",
     "1h"  => "1h",
@@ -144,6 +145,7 @@ class MetricsPageData
   # relative to now). Mirrors the inspiration's RANGES.ms.
   def range_ms
     case @range
+    when "1m"  then 60 * 1000
     when "5m"  then 5 * 60 * 1000
     when "15m" then 15 * 60 * 1000
     when "1h"  then 60 * 60 * 1000

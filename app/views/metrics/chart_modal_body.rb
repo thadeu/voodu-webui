@@ -130,7 +130,10 @@ class Views::Metrics::ChartModalBody < Views::Base
     query.reject { |k, _| %w[scope_kind scope_id].include?(k.to_s) }
   end
 
-  RANGES = %w[5m 15m 1h 6h 24h 7d].freeze
+  # Keep aligned with Components::Metrics::RangePicker::RANGES — both
+  # surfaces must offer the same pills so a 1m view in the inline grid
+  # stays 1m when the operator clicks the maximize icon.
+  RANGES = %w[1m 5m 15m 1h 6h 24h 7d].freeze
 
   def range_pills
     div(
