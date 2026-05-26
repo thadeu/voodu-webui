@@ -98,38 +98,55 @@ class Components::Metrics::Chart < Components::Base
       class: "relative w-full",
       data: {
         controller: "metrics-chart",
-        metrics_chart_points_value: points_for_js.to_json,
-        metrics_chart_color_value:  @color,
-        metrics_chart_unit_value:   @unit,
-        metrics_chart_label_value:  @label,
-        metrics_chart_width_value:  @width,
-        metrics_chart_height_value: @height,
-        metrics_chart_pad_left_value: pad_left,
+        metrics_chart_points_value:    points_for_js.to_json,
+        metrics_chart_segments_value:  normalized_segments.to_json,
+        metrics_chart_color_value:     @color,
+        metrics_chart_unit_value:      @unit,
+        metrics_chart_label_value:     @label,
+        metrics_chart_width_value:     @width,
+        metrics_chart_height_value:    @height,
+        metrics_chart_pad_left_value:  pad_left,
         metrics_chart_pad_right_value: pad_right,
-        metrics_chart_pad_top_value: pad_top,
-        metrics_chart_pad_bottom_value: pad_bottom
+        metrics_chart_pad_top_value:   pad_top,
+        metrics_chart_pad_bottom_value: pad_bottom,
+        metrics_chart_baseline_y_value: baseline_y,
+        # responsive: client measures actual container width on
+        # connect + on resize, then rewrites viewBox to
+        # `0 0 <measuredW> <height>` and reprojects path + axis
+        # ticks using the normalized segments above. Result: chart
+        # fills container fully WITHOUT squishing text (every SVG
+        # unit == 1 CSS pixel after takeover). Server-rendered
+        # snapshot below uses @width/@height as a no-JS fallback.
+        metrics_chart_responsive_value: true
       }
     ) do
-      # `preserveAspectRatio="xMidYMid meet"` (the default) keeps
-      # the viewBox aspect ratio intact when the SVG is resized to
-      # fill its container. Previously we used "none" to force the
-      # chart to fill ANY container size, but that scales the
-      # entire SVG non-uniformly — paths look fine but `<text>`
-      # nodes (Y/X axis labels) and the hover circle get
-      # horizontally stretched into thin ovals + smeared digits.
+      # ── Responsive strategy ────────────────────────────────────
       #
-      # The trade-off: when the container's aspect doesn't match
-      # the viewBox (e.g. a narrow viewport showing a wide
-      # viewBox), the SVG centers itself with whitespace on the
-      # short axis. Caller-controlled `width`/`height` defaults
-      # are tuned so this whitespace is small in practice:
-      #   - inline ChartCard: 600×200 (≈3:1) close to the grid cell
-      #   - modal:           1100×480 (≈2.3:1) matches dialog max-w
+      # The server emits a COMPLETE chart at viewBox=@width × @height
+      # (default 600×200) so no-JS users see a coherent snapshot.
+      # `preserveAspectRatio="xMidYMid meet"` (default) keeps the
+      # aspect intact — text stays round, dots stay circular —
+      # accepting horizontal whitespace on wider containers.
+      #
+      # Then metrics_chart_controller.js takes over: it measures
+      # the container's CSS width, sets viewBox to `0 0 W <height>`,
+      # and rewrites every x-coordinate (path, axis tick labels,
+      # spanning lines, clip + overlay rects) so 1 viewBox unit ==
+      # 1 CSS pixel post-takeover. That keeps text at its design
+      # size (10pt SVG = 10px on screen) AND fills the full width.
+      #
+      # Elements that need x-repositioning on resize are tagged
+      # with Stimulus targets below:
+      #   line / area              — path rebuilt from segmentsValue
+      #   clipRect / overlayRect   — width updated
+      #   hLine (multi)            — x2 updated to W - padRight
+      #   xTick (multi)            — x updated to padLeft + t * innerW
       svg(
         width: "100%", height: @height,
         viewBox: "0 0 #{@width} #{@height}",
         class: "block overflow-visible",
-        style: "touch-action: pan-y;"
+        style: "touch-action: pan-y;",
+        data: { metrics_chart_target: "svg" }
       ) do |s|
         s.defs do
           s.linearGradient(id: gradient_id, x1: 0, y1: 0, x2: 0, y2: 1) do
@@ -149,7 +166,8 @@ class Components::Metrics::Chart < Components::Base
             s.rect(
               x: pad_left, y: pad_top,
               width: @width - pad_left - pad_right,
-              height: @height - pad_top - pad_bottom
+              height: @height - pad_top - pad_bottom,
+              data: { metrics_chart_target: "clipRect" }
             )
           end
         end
@@ -168,10 +186,14 @@ class Components::Metrics::Chart < Components::Base
         # Both fill and stroke go through the clip so an overshoot
         # below the baseline (or above the top) is invisibly cropped.
         s.g("clip-path": "url(##{clip_id})") do
-          s.path(d: d_area, fill: "url(##{gradient_id})")
+          s.path(
+            d: d_area, fill: "url(##{gradient_id})",
+            data: { metrics_chart_target: "area" }
+          )
           s.path(
             d: d_line, fill: "none", stroke: @color, "stroke-width": "1.5",
-            "stroke-linecap": "round", "stroke-linejoin": "round"
+            "stroke-linecap": "round", "stroke-linejoin": "round",
+            data: { metrics_chart_target: "line" }
           )
         end
 
@@ -183,7 +205,8 @@ class Components::Metrics::Chart < Components::Base
           s.line(
             x1: pad_left, x2: @width - pad_right,
             y1: baseline_y, y2: baseline_y,
-            stroke: "var(--voodu-border)"
+            stroke: "var(--voodu-border)",
+            data: { metrics_chart_target: "hLine" }
           )
         end
 
@@ -213,16 +236,50 @@ class Components::Metrics::Chart < Components::Base
   # in one place (server-side) and lets the JS stay tiny: find
   # nearest by x, position tooltip + crosshair using the same px
   # the SVG already painted.
+  #
+  # x_norm is the point's x position normalized to [0, 1] within
+  # the inner chart area (between padLeft and width-padRight). On
+  # resize the controller recomputes the absolute x via
+  # `padLeft + x_norm * innerW` so hover lookup follows the chart
+  # as its viewBox stretches to match the container.
   def points_for_js
-    pts    = projected_points
+    pts     = projected_points
+    inner_w = (@width - pad_left - pad_right).to_f
+
+    return [] if inner_w <= 0
+
     @points.each_with_index.map do |p, i|
+      abs_x = pts[i][0]
       {
         ts:        p[:ts],
         value:     p[:value],
         formatted: p[:formatted],
-        x:         pts[i][0].round(2),
+        x:         abs_x.round(2),
+        x_norm:    ((abs_x - pad_left) / inner_w).round(5),
         y:         pts[i][1].round(2)
       }
+    end
+  end
+
+  # normalized_segments — same gap-detected step-after segments
+  # used by the server-side path, but with each point's x stored
+  # as a 0-1 ratio of the inner chart area. The Stimulus
+  # controller rebuilds the path d-strings on resize by mapping
+  # `x_norm → padLeft + x_norm * (W - padLeft - padRight)` against
+  # the measured container width.
+  #
+  # Returning normalized segments (instead of raw points) means
+  # the chart honours its gap policy across resize too: a 3-hour
+  # outage stays as two disconnected islands of data in the wide
+  # post-resize chart, never auto-bridged.
+  def normalized_segments
+    pts     = projected_points
+    inner_w = (@width - pad_left - pad_right).to_f
+
+    return [] if pts.empty? || inner_w <= 0
+
+    segments_of(pts).map do |seg|
+      seg.map { |x, y| [((x - pad_left) / inner_w).round(5), y.round(2)] }
     end
   end
 
@@ -279,9 +336,12 @@ class Components::Metrics::Chart < Components::Base
         x1: pad_left, x2: @width - pad_right,
         y1: y, y2: y,
         stroke: "var(--voodu-border)",
-        "stroke-opacity": i.zero? ? "0" : "0.5"
+        "stroke-opacity": i.zero? ? "0" : "0.5",
+        data: { metrics_chart_target: "hLine" }
       )
 
+      # Y-axis label x stays at pad_left - 6 across resize (the
+      # left gutter doesn't change with width). No target needed.
       svg.text(
         x: pad_left - 6, y: y + 3.5,
         "text-anchor": "end",
@@ -304,13 +364,20 @@ class Components::Metrics::Chart < Components::Base
       ts_ms = x_min + t * span
       ts = Time.at(ts_ms / 1000.0).utc
 
+      # X-axis labels: x is recomputed on resize as
+      # `pad_left + (t * inner_w)`. Stash t on the element so JS
+      # can rescale without re-doing the tick loop.
       svg.text(
         x: pad_left + t * (@width - pad_left - pad_right),
         y: @height - 5,
         "text-anchor": "middle",
         "font-size": "10",
         fill: "var(--voodu-muted-2)",
-        "font-family": "var(--voodu-font-mono, ui-monospace, monospace)"
+        "font-family": "var(--voodu-font-mono, ui-monospace, monospace)",
+        data: {
+          metrics_chart_target: "xTick",
+          x_tick_ratio: t.round(4)
+        }
       ) { format_axis_time(ts) }
     end
   end

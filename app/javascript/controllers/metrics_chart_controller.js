@@ -1,82 +1,208 @@
 import { Controller } from "@hotwired/stimulus"
 
-// MetricsChartController — hover crosshair + tooltip for the big
-// chart on /metrics. Ported 1:1 from design-webui-inspiration/
-// pages-metrics.jsx MetricChart's onMove/onLeave + the
-// absolutely-positioned tooltip JSX (lines 221-331).
+// MetricsChartController — owns the responsive layout + hover
+// crosshair/tooltip for Components::Metrics::Chart.
 //
-// Pre-projected points (with x/y already painted by the SVG)
-// come in via data-metrics-chart-points-value; this controller
-// only does:
+// Responsive (Option B):
+//   The server renders the chart at viewBox=widthValue×heightValue
+//   (default 600×200) as a no-JS fallback. On connect + on resize
+//   this controller MEASURES the actual container width in CSS
+//   pixels, rewrites the viewBox to `0 0 W heightValue`, and
+//   reprojects every x-coordinate (path, axis ticks, spanning
+//   lines, clip + overlay rects). After takeover, 1 SVG unit ==
+//   1 CSS pixel, so `font-size="10"` paints at 10px no matter how
+//   wide the container is — text never squishes, chart fills the
+//   full available width.
 //
-//   1. find nearest point by x-distance from mouse
-//   2. draw a dashed vertical line + outline circle at the point
-//   3. position a dark mono tooltip near the point
+//   `segmentsValue` is the gap-detected step-after path emitted
+//   by the server with each point's x stored as a 0-1 ratio of
+//   the inner chart area. We rebuild the line + area `d` attrs
+//   on every resize by mapping `padLeft + xNorm * innerW`.
 //
-// All visuals scoped to the chart container — multiple charts on
-// the page are independent (each has its own controller instance).
+//   Y coordinates and Y-axis labels DON'T move on resize: the
+//   chart's height is fixed (not container-relative), and the
+//   left gutter stays at padLeft regardless of width.
 //
-// Why pre-projected coords (not re-derived in JS):
-//   - The bezier math + nice-ceil + axis padding already lives in
-//     the Phlex component; duplicating it in JS would create two
-//     sources of truth for "where does point i land in viewBox?"
-//     and they'd inevitably drift. Pre-computing on Rails-side
-//     and passing the px coords through data-* keeps both sides
-//     reading the same numbers.
+// Hover:
+//   move() walks the projected points to find the nearest x to
+//   the cursor, then paints a dashed crosshair line + outlined
+//   dot at that point and positions a dark mono tooltip. All
+//   coordinates are in viewBox units (which equal CSS pixels
+//   post-resize), so the hover lookup stays accurate as the
+//   container reflows.
 export default class extends Controller {
-  static targets = ["overlay"]
+  static targets = [
+    "svg",        // the inner <svg> (set programmatically too)
+    "overlay",    // hover rect catching mouse events
+    "line",       // <path> for the stroked curve
+    "area",       // <path> for the gradient fill
+    "clipRect",   // <rect> inside <clipPath>
+    "hLine",      // gridlines + frame baseline (span padLeft → W-padRight)
+    "xTick"       // X-axis tick labels (use data-x-tick-ratio)
+  ]
   static values  = {
-    points:    { type: Array,  default: [] },
-    color:     { type: String, default: "#7c5cff" },
-    unit:      { type: String, default: "" },
-    label:     { type: String, default: "" },
-    width:     { type: Number, default: 600 },
-    height:    { type: Number, default: 200 },
-    padLeft:   { type: Number, default: 44 },
-    padRight:  { type: Number, default: 12 },
-    padTop:    { type: Number, default: 14 },
-    padBottom: { type: Number, default: 22 }
+    points:     { type: Array,   default: [] },   // { ts, value, formatted, x, x_norm, y }
+    segments:   { type: Array,   default: [] },   // [[[xNorm, y], ...], ...]
+    color:      { type: String,  default: "#7c5cff" },
+    unit:       { type: String,  default: "" },
+    label:      { type: String,  default: "" },
+    width:      { type: Number,  default: 600 },  // initial viewBox W, updated on resize
+    height:     { type: Number,  default: 200 },
+    padLeft:    { type: Number,  default: 44 },
+    padRight:   { type: Number,  default: 12 },
+    padTop:     { type: Number,  default: 14 },
+    padBottom:  { type: Number,  default: 22 },
+    baselineY:  { type: Number,  default: 178 },  // height - padBottom; precomputed server-side
+    responsive: { type: Boolean, default: false }
   }
 
   connect() {
-    this.svg = this.element.querySelector("svg")
+    this.svg       = this.hasSvgTarget ? this.svgTarget : this.element.querySelector("svg")
     this.crosshair = null
-    this.dot = null
-    this.tooltip = null
+    this.dot       = null
+    this.tooltip   = null
+    this.points    = this.pointsValue.map((p) => ({ ...p }))   // working copy with mutable x
+
+    if (!this.responsiveValue) return
+
+    // Use ResizeObserver so we react to ANY container width change
+    // (drawer open/close, 1col↔2col flip, devtools opening, etc.)
+    // — not just window resize.
+    this.resizeObserver = new ResizeObserver(() => this.scheduleResize())
+    this.resizeObserver.observe(this.element)
+
+    // Initial fit. ResizeObserver fires once on observe in modern
+    // browsers anyway, but explicit call keeps the first-paint
+    // path predictable.
+    this.resize()
   }
 
   disconnect() {
+    this.resizeObserver?.disconnect()
+    if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf)
     this.clearHover()
     this.tooltip?.remove()
     this.tooltip = null
   }
 
-  // move — mouse moved over the overlay rect. Translate the page
-  // x to viewBox x (the SVG is `width: 100%` so they're not equal),
-  // walk the points to find the nearest, paint crosshair + dot,
-  // position tooltip.
+  // ── Resize pipeline ──────────────────────────────────────────
+
+  // scheduleResize — coalesce multiple ResizeObserver callbacks
+  // within one frame into a single resize(). Cheap; avoids
+  // double-work when the browser fires entries in rapid succession.
+  scheduleResize() {
+    if (this.resizeRaf) return
+
+    this.resizeRaf = requestAnimationFrame(() => {
+      this.resizeRaf = null
+      this.resize()
+    })
+  }
+
+  resize() {
+    const measured = this.element.getBoundingClientRect().width
+    if (measured <= 0) return
+
+    // Round down — sub-pixel viewBox widths confuse browser snap
+    // and produce a 1-pixel gap at the right edge on some zoom
+    // levels.
+    const W = Math.floor(measured)
+    if (W === this.widthValue && this.lastAppliedW === W) return
+
+    this.widthValue    = W
+    this.lastAppliedW  = W
+
+    this.svg.setAttribute("viewBox", `0 0 ${W} ${this.heightValue}`)
+
+    const innerW = W - this.padLeftValue - this.padRightValue
+    if (innerW <= 0) return
+
+    // Spanning rects (clip + overlay) — width = innerW, left edge
+    // stays at padLeft.
+    if (this.hasClipRectTarget) {
+      this.clipRectTarget.setAttribute("width", innerW)
+    }
+
+    if (this.hasOverlayTarget) {
+      this.overlayTarget.setAttribute("width", innerW)
+    }
+
+    // Spanning lines (gridlines + frame baseline). x1 stays at
+    // padLeft; only x2 needs to move with W.
+    const rightX = W - this.padRightValue
+    this.hLineTargets.forEach((line) => line.setAttribute("x2", rightX))
+
+    // X-axis tick labels — reposition via cached t ratio.
+    this.xTickTargets.forEach((tick) => {
+      const t = parseFloat(tick.dataset.xTickRatio)
+      if (!Number.isFinite(t)) return
+
+      tick.setAttribute("x", this.padLeftValue + t * innerW)
+    })
+
+    // Rebuild path d-strings from normalized segments.
+    this.rebuildPaths(innerW)
+
+    // Recompute each point's absolute x for hover nearest-x
+    // lookup. y is unchanged.
+    this.points.forEach((p, i) => {
+      const norm = this.pointsValue[i]?.x_norm
+      if (Number.isFinite(norm)) {
+        p.x = this.padLeftValue + norm * innerW
+      }
+    })
+
+    // If the hover marker is currently visible, drop it — its
+    // x coords are stale post-rescale. Next mousemove repaints.
+    this.clearHover()
+  }
+
+  rebuildPaths(innerW) {
+    if (!this.segmentsValue || this.segmentsValue.length === 0) return
+
+    const padL      = this.padLeftValue
+    const baselineY = this.baselineYValue
+
+    const lineSegs = this.segmentsValue.map((seg) =>
+      seg.map(([xNorm, y]) => [padL + xNorm * innerW, y])
+    )
+
+    const lineD = lineSegs
+      .map((seg) => segmentPath(seg))
+      .filter((s) => s)
+      .join(" ")
+
+    const areaD = lineSegs
+      .map((seg) => areaPath(seg, baselineY))
+      .filter((s) => s)
+      .join(" ")
+
+    if (this.hasLineTarget) this.lineTarget.setAttribute("d", lineD)
+    if (this.hasAreaTarget) this.areaTarget.setAttribute("d", areaD)
+  }
+
+  // ── Hover (largely unchanged from previous version) ─────────
+
   move(event) {
-    if (!this.pointsValue || this.pointsValue.length === 0) return
+    if (!this.points || this.points.length === 0) return
 
     const overlay = event.currentTarget
-    const rect = overlay.getBoundingClientRect()
-    const mouseX = event.clientX - rect.left
+    const rect    = overlay.getBoundingClientRect()
+    const mouseX  = event.clientX - rect.left
 
-    // Map mouseX (in CSS pixels relative to overlay) → viewBox X.
-    // overlay starts at `padLeft` in viewBox space; its rendered
-    // width is `rect.width` and represents `width - padLeft - padRight`
-    // viewBox units.
-    const innerVbW   = this.widthValue - this.padLeftValue - this.padRightValue
-    const vbMouseX   = this.padLeftValue + (mouseX / rect.width) * innerVbW
+    // Map mouseX (CSS px relative to overlay) → viewBox X.
+    // overlay starts at padLeft in viewBox space; its rendered
+    // width is rect.width and represents innerW viewBox units.
+    const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
+    const vbMouseX = this.padLeftValue + (mouseX / rect.width) * innerVbW
 
-    // Find nearest point in viewBox space.
-    let nearest = this.pointsValue[0]
+    let nearest = this.points[0]
     let bestDx  = Infinity
 
-    for (const p of this.pointsValue) {
+    for (const p of this.points) {
       const dx = Math.abs(p.x - vbMouseX)
       if (dx < bestDx) {
-        bestDx = dx
+        bestDx  = dx
         nearest = p
       }
     }
@@ -90,9 +216,6 @@ export default class extends Controller {
     if (this.tooltip) this.tooltip.style.opacity = "0"
   }
 
-  // drawCrosshair — vertical line through the hovered point +
-  // outlined circle at the point. Both painted as direct SVG
-  // children (above the area/line which are siblings).
   drawCrosshair(x, y) {
     this.clearHover()
 
@@ -108,31 +231,17 @@ export default class extends Controller {
     line.setAttribute("stroke-width", "1")
     line.setAttribute("pointer-events", "none")
 
-    // Hover marker: <ellipse> with X/Y radii compensated for the
-    // SVG's non-uniform scaling. The chart's SVG declares
-    // preserveAspectRatio="none" + width=100% so it stretches in
-    // both axes to fill its container. A plain <circle r="3.5">
-    // would render as a horizontal ellipse on a wide modal
-    // (~1100px wide, 480px tall ≈ 1.83× horizontal stretch). We
-    // measure the actual rendered scale and inverse-scale the
-    // viewBox radii so the visible dot lands as a perfect circle.
-    //
-    // Same correction for the stroke width (otherwise the outline
-    // also stretches and looks like a fat oval).
-    const svgRect = this.svg.getBoundingClientRect()
-    const scaleX  = (svgRect.width  / this.widthValue)  || 1
-    const scaleY  = (svgRect.height / this.heightValue) || 1
-    const targetRadiusPx = 3.5
-    const targetStrokePx = 2
-
-    const dot = document.createElementNS(ns, "ellipse")
+    // Hover dot. With responsive Option B, scaleX == scaleY at
+    // all times (viewBox is rewritten to match container px so
+    // 1 SVG unit = 1 CSS pixel), so a plain <circle> renders as
+    // a true circle — no inverse-scale compensation needed.
+    const dot = document.createElementNS(ns, "circle")
     dot.setAttribute("cx", x)
     dot.setAttribute("cy", y)
-    dot.setAttribute("rx", targetRadiusPx / scaleX)
-    dot.setAttribute("ry", targetRadiusPx / scaleY)
+    dot.setAttribute("r", "3.5")
     dot.setAttribute("fill", "var(--voodu-bg-2)")
     dot.setAttribute("stroke", this.colorValue)
-    dot.setAttribute("stroke-width", targetStrokePx / Math.min(scaleX, scaleY))
+    dot.setAttribute("stroke-width", "2")
     dot.setAttribute("pointer-events", "none")
 
     this.svg.appendChild(line)
@@ -149,10 +258,6 @@ export default class extends Controller {
     this.dot = null
   }
 
-  // positionTooltip — absolutely-positioned div inside the chart
-  // container (NOT body) so it inherits the page's z-stack but
-  // stays anchored to the chart's coordinate system. Mirrors the
-  // inspiration's `position: absolute, left/top relative to chart`.
   positionTooltip(point, overlayRect) {
     this.ensureTooltip()
 
@@ -168,21 +273,18 @@ export default class extends Controller {
     `
 
     // Convert viewBox point.x/y → CSS px relative to the chart
-    // container. overlayRect is the overlay's bounding rect;
-    // overlay starts at viewBox padLeft and ends at width-padRight.
+    // container. With responsive takeover, viewBox W ≈ overlayRect.width,
+    // so scale collapses to ≈1 — but compute it explicitly so the
+    // pre-takeover snapshot also positions correctly.
     const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
     const innerVbH = this.heightValue - this.padTopValue - this.padBottomValue
     const scaleX   = overlayRect.width  / innerVbW
     const scaleY   = overlayRect.height / innerVbH
 
-    // overlayRect is relative to viewport; we want coords relative
-    // to the chart container (this.element) which IS the
-    // tooltip's offsetParent (position: relative on the root div).
     const containerRect = this.element.getBoundingClientRect()
     const pxX = (overlayRect.left - containerRect.left) + (point.x - this.padLeftValue) * scaleX
     const pxY = (overlayRect.top  - containerRect.top)  + (point.y - this.padTopValue)  * scaleY
 
-    // Tooltip dimensions only known after content is set.
     this.tooltip.style.opacity = "1"
     this.tooltip.style.left = "0px"
     this.tooltip.style.top  = "0px"
@@ -191,9 +293,7 @@ export default class extends Controller {
     let left = pxX + 12
     let top  = Math.max(8, pxY - 30)
 
-    // Flip horizontally if the tooltip would clip the right edge.
-    const containerW = containerRect.width
-    if (left + ttRect.width > containerW - 4) {
+    if (left + ttRect.width > containerRect.width - 4) {
       left = pxX - ttRect.width - 12
     }
 
@@ -227,9 +327,6 @@ export default class extends Controller {
     this.element.appendChild(this.tooltip)
   }
 
-  // formatTs — RFC3339 → "YYYY-MM-DD HH:MM:SS UTC". Matches the
-  // inspiration's window.formatDateTime fallback (a known-good
-  // operator-readable shape).
   formatTs(iso) {
     if (!iso) return ""
 
@@ -244,6 +341,30 @@ export default class extends Controller {
   formatRaw(v) {
     return `${Number(v).toFixed(1)}${this.unitValue}`
   }
+}
+
+// ── Path builders — mirror Components::Metrics::Chart#segment_path
+// and #area_path_for so resize paths look identical to first paint.
+
+function segmentPath(seg) {
+  if (seg.length < 2) return ""
+
+  let d = `M ${seg[0][0]} ${seg[0][1]}`
+
+  for (let i = 1; i < seg.length; i++) {
+    const prevY = seg[i - 1][1]
+    const currX = seg[i][0]
+    const currY = seg[i][1]
+    d += ` L ${currX} ${prevY} L ${currX} ${currY}`
+  }
+
+  return d
+}
+
+function areaPath(seg, baselineY) {
+  if (seg.length < 2) return ""
+
+  return `${segmentPath(seg)} L ${seg[seg.length - 1][0]} ${baselineY} L ${seg[0][0]} ${baselineY} Z`
 }
 
 function escapeHtml(s) {
