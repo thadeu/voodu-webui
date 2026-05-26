@@ -183,6 +183,22 @@
   --voodu-orange:  #fb923c; /* HTTP Requests */
   --voodu-pink:    #ec4899; /* HTTP Bytes Out */
 
+  /* HTTP latency tail family — sister tones to amber (p95).
+   * Gold reads as "moderate tail" (p90), violet as "rare extreme"
+   * (p99). Both visually distinct from amber so a p95 chart never
+   * gets mistaken for a p99 one in cross-page glances. */
+  --voodu-gold:    #eab308; /* HTTP p90 Latency */
+  --voodu-violet:  #a855f7; /* HTTP p99 Latency */
+
+  /* HTTP status families.
+   * sky = informational / redirect (3xx) — bluer than --voodu-blue
+   * which is Memory, so the two never read as the same signal.
+   * rose = client error (4xx) — in the red family per the RED-FOR-
+   * ERRORS rule above, but distinguishably warmer than --voodu-red
+   * (5xx), signalling "less severe than a server failure". */
+  --voodu-sky:     #38bdf8; /* HTTP 3xx */
+  --voodu-rose:    #fb7185; /* HTTP 4xx */
+
   /* ── Radius ──
    *
    * Voodu's brand language is *square corners*. Every rectangle

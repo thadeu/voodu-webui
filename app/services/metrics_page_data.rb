@@ -103,7 +103,7 @@ class MetricsPageData
   # can build the chart URL directly without lookup.
   def available_metric_specs
     sections = [{ label: "RESOURCE", specs: chart_specs }]
-    sections << { label: "HTTP", specs: ingress_chart_specs } if ingress_eligible?
+    sections << { label: "HTTP", specs: ingress_picker_specs } if ingress_eligible?
     sections
   end
 
@@ -129,29 +129,31 @@ class MetricsPageData
     end
   end
 
-  # ingress_eligible? — true when the current pod scope has at
-  # least one ingress sample in the warehouse. Same data-driven
-  # check used by PodDetailData; duplicated here (5 lines) to
-  # avoid coupling the two data services. If a third surface
-  # eventually wants the same check, lift to a shared helper.
+  # ingress_eligible? — true when the current pod scope is a
+  # `kind=deployment`. KIND-DRIVEN, not data-driven: a brand-new
+  # deployment that hasn't received a request yet still shows the
+  # HTTP section, just with heartbeat-zero charts. Operator sees
+  # the surface exists from day one instead of "waiting for HTTP
+  # cards to appear" once traffic starts.
+  #
+  # Trade-off accepted: a deployment without an ingress declared
+  # will render the HTTP cards as flat-zero forever (the ingress
+  # sampler only emits heartbeat rows for KNOWN bindings). That's
+  # a visible signal too — "you've got a deployment with no
+  # ingress mapped; declare one to start receiving HTTP signals"
+  # — and more honest than hiding the cards and leaving the
+  # operator wondering whether HTTP metrics exist at all.
+  #
+  # Statefulsets, jobs, cronjobs return false: they don't serve
+  # HTTP, so showing zero-HTTP charts on them would be noise.
   def ingress_eligible?
     return false unless @scope_kind == "pod" && @scope_id.present?
 
     pod = pod_record
     return false if pod.nil?
 
-    scope = pod["scope"] || pod[:scope]
-    name  = pod["resource_name"] || pod[:resource_name]
-    return false if scope.blank? || name.blank?
-
-    MetricSample.where(
-      tenant_id: @island.id,
-      source:    "ingress",
-      scope:     scope,
-      name:      name
-    ).any?
-  rescue ActiveRecord::StatementInvalid
-    false
+    kind = (pod["kind"] || pod[:kind]).to_s
+    kind == "deployment"
   end
 
   # range_ms — duration in milliseconds for the chart's x-axis
@@ -235,10 +237,13 @@ class MetricsPageData
     end
   end
 
-  # ingress_chart_specs — HTTP metrics (4 charts) layered below
-  # resource metrics when the pod has ingress samples. Order
-  # mirrors the pod-show stat cards so the two surfaces are
-  # cognitively interchangeable.
+  # ingress_chart_specs — HTTP metrics RENDERED AS CARDS on the
+  # page grid (and the modal's inline grid). Intentionally narrow:
+  # 4 "default view" signals an operator wants at a glance. The
+  # rest of the HTTP family lives in `ingress_picker_only_specs`
+  # and is only reachable via the modal's metric picker — keeps
+  # the page from drowning under 8 charts while still letting an
+  # operator drill into p99 / 4xx / 3xx on demand.
   #
   # Color rule: every metric has a UNIQUE color across the page.
   # 5xx Errors is ALWAYS red — same rule applies to any future
@@ -250,6 +255,42 @@ class MetricsPageData
       { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count      },
       { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto }
     ]
+  end
+
+  # ingress_picker_only_specs — HTTP metrics available IN THE
+  # PICKER but NOT rendered as cards on the grid. Operator opens
+  # the modal on any card, then swaps to p90 / p99 / 3xx / 4xx
+  # via the dropdown — same single-chart endpoint, just a
+  # different metric.
+  #
+  # Color assignments follow the palette rule (1 metric = 1
+  # color, red family = errors). See theme.css for the full
+  # rationale on gold/violet/sky/rose.
+  def ingress_picker_only_specs
+    [
+      { label: "p90 Latency", metric: "latency_p90_ms",  color: "var(--voodu-gold)",   unit: "ms", scale: :ms    },
+      { label: "p99 Latency", metric: "latency_p99_ms",  color: "var(--voodu-violet)", unit: "ms", scale: :ms    },
+      { label: "3xx",         metric: "req_3xx",         color: "var(--voodu-sky)",    unit: "",   scale: :count },
+      { label: "4xx",         metric: "req_4xx",         color: "var(--voodu-rose)",   unit: "",   scale: :count }
+    ]
+  end
+
+  # ingress_picker_specs — full HTTP set exposed to the modal's
+  # metric picker. Order: Requests → latency family (p90/p95/p99)
+  # → status codes ascending (3xx/4xx/5xx) → Bytes Out. Reads
+  # like a natural left-to-right "what happened" narrative:
+  # volume, speed, outcome, bandwidth.
+  def ingress_picker_specs
+    chart     = ingress_chart_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
+    extra     = ingress_picker_only_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
+    by_metric = chart.merge(extra)
+
+    %w[
+      req_count
+      latency_p90_ms latency_p95_ms latency_p99_ms
+      req_3xx req_4xx req_5xx
+      bytes_out
+    ].map { |m| by_metric[m] }.compact
   end
 
   # build_chart — shared envelope construction for the resource +

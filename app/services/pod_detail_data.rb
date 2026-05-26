@@ -128,46 +128,32 @@ class PodDetailData
   # live ONLY on /metrics now — they're rare-look concerns that
   # don't earn a permanent card on the always-on glance view.
 
-  # ingress_eligible? — true when at least one ingress sample exists
-  # in the warehouse for this pod's (scope, resource_name).
-  # Memoised because PodDetailData lives for one render and the
-  # query is cheap but not free.
+  # ingress_eligible? — true when the pod is a `kind=deployment`.
+  # KIND-DRIVEN, not data-driven: a brand-new deployment that
+  # hasn't received traffic yet still shows the HTTP stat cards
+  # (REQUESTS / p95 LATENCY) with heartbeat-zero values — operator
+  # sees the surface exists from day one rather than having to wait
+  # for traffic to "unhide" the cards.
   #
-  # Why warehouse-driven instead of querying the apply state for
-  # `kind=ingress` matching this deployment:
-  #   - Zero extra HTTP round-trip (the warehouse is local).
-  #   - Honest: cards appear when traffic IS being recorded, not
-  #     when an ingress manifest happens to exist (could be
-  #     misconfigured and never receive traffic).
-  #   - First request after a fresh ingress declare → cards appear
-  #     within the next sync tick (~30s). Acceptable lag.
+  # Trade-off accepted: a deployment without an ingress declared
+  # renders the HTTP cards as zero forever (the ingress sampler
+  # only emits heartbeat rows for KNOWN bindings). That's a useful
+  # signal in itself — "you have a deployment with no ingress
+  # mapped" — instead of silently hiding the cards.
+  #
+  # Statefulsets / jobs / cronjobs return false: they don't serve
+  # HTTP, so HTTP stat cards on them would be noise.
+  #
+  # Must mirror MetricsPageData#ingress_eligible? exactly — drift
+  # = the two surfaces disagreeing about whether HTTP exists on
+  # the same pod.
   def ingress_eligible?
     return @ingress_eligible if defined?(@ingress_eligible)
 
-    @ingress_eligible = check_ingress_samples
+    @ingress_eligible = kind.to_s == "deployment"
   end
 
   private
-
-  def check_ingress_samples
-    return false if scope.blank? || resource_name.blank?
-    return false if @island.nil?
-
-    MetricSample.where(
-      tenant_id: @island.id,
-      source: "ingress",
-      scope: scope,
-      name: resource_name
-    ).any?
-  rescue ActiveRecord::StatementInvalid => e
-    # Warehouse DB not migrated yet OR connection error. Don't fail
-    # the pod page just because the optional HTTP cards can't render
-    # — return false and the section stays hidden.
-    Rails.logger.warn("ingress_eligible? check failed: #{e.class} #{e.message}")
-    false
-  end
-
-  public
 
   # series_for_metric — pulls real time-series via MetricsData
   # scoped to this pod's (scope, name). Aggregation on (scope, name)
