@@ -66,6 +66,9 @@ class Views::Metrics::Frame < Views::Base
       scope_kind: @data.scope_kind || "host",
       scope_id:   @data.scope_id,
       range:      @data.range || "1h",
+      # Match Views::Metrics::Index#expand_url_for — omit `interval`
+      # when `auto` so URLs stay clean on the default path.
+      interval:   (@data.interval && @data.interval != "auto") ? @data.interval : nil,
       metric:     chart[:metric],
       scale:      chart[:scale],
       label:      chart[:label],

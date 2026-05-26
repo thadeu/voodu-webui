@@ -76,8 +76,11 @@ class Views::Metrics::Index < Views::Base
     )
   end
 
-  # page_sub — "pod x.aaaa · image:tag · last 1h · ● auto-refresh"
-  # Mirrors the inspiration's scopeSubtitle + metadata strip.
+  # page_sub — "pod x.aaaa · image:tag · last 1h · every 1m · ● auto-refresh"
+  # Mirrors the inspiration's scopeSubtitle + metadata strip. The
+  # `every Xm` chip is suppressed when the operator hasn't overridden
+  # interval (auto) — keeps the subtitle uncluttered for the default
+  # path; only shows up when there's something the operator picked.
   def page_sub
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
       scope_subtitle
@@ -85,6 +88,13 @@ class Views::Metrics::Index < Views::Base
       span do
         plain "last "
         span(class: "font-voodu-mono text-voodu-text-2") { @data&.range || "1h" }
+      end
+      if @data&.interval && @data.interval != "auto"
+        dot_sep
+        span do
+          plain "every "
+          span(class: "font-voodu-mono text-voodu-text-2") { @data.interval }
+        end
       end
       dot_sep
       auto_refresh_indicator
@@ -188,6 +198,11 @@ class Views::Metrics::Index < Views::Base
         pods:           @data&.all_pods || []
       )
       render Components::Metrics::RangePicker.new(range: @data&.range || "1h")
+      render Components::Metrics::IntervalPicker.new(
+        current:      @data&.interval || "auto",
+        base_path:    metrics_path,
+        extra_params: request.query_parameters.except(:interval)
+      )
     end
   end
 
@@ -285,6 +300,9 @@ class Views::Metrics::Index < Views::Base
       scope_kind: @data&.scope_kind || "host",
       scope_id:   @data&.scope_id,
       range:      @data&.range || "1h",
+      # `auto` is the default — omit from the URL so default views
+      # have a clean `?range=1h` instead of `?range=1h&interval=auto`.
+      interval:   (@data&.interval && @data.interval != "auto") ? @data.interval : nil,
       metric:     chart[:metric],
       scale:      chart[:scale],
       label:      chart[:label],

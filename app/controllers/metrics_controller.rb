@@ -17,7 +17,8 @@ class MetricsController < ApplicationController
         current_island,
         scope_kind: params[:scope_kind],
         scope_id:   params[:scope_id],
-        range:      params[:range]
+        range:      params[:range],
+        interval:   params[:interval]
       )
     end
 
@@ -73,7 +74,8 @@ class MetricsController < ApplicationController
           current_island,
           scope_kind: params[:scope_kind],
           scope_id:   params[:scope_id],
-          range:      params[:range]
+          range:      params[:range],
+          interval:   params[:interval]
         )
 
         chart = data.single_chart(

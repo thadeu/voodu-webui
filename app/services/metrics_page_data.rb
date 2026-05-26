@@ -40,14 +40,28 @@ class MetricsPageData
 
   DEFAULT_RANGE = "1h"
 
-  attr_reader :scope_kind, :scope_id, :range
+  # INTERVALS — operator-selectable bucket sizes for the chart's
+  # x-axis density. `auto` defers to MetricsWarehouse#autopick (range
+  # / MAX_BUCKETS rounded up to a clean step). Explicit values let
+  # the operator override — e.g. "last 1h at 1m buckets" gives 60
+  # data points instead of auto's 15s (240 points).
+  #
+  # Keep in lockstep with MetricsWarehouse::INTERVAL_ALIASES keys +
+  # the IntervalPicker dropdown options. Drift = picker rows that
+  # roundtrip to "auto" silently.
+  INTERVALS = %w[auto 1s 10s 15s 1m 5m 15m 30m 1h].freeze
 
-  def initialize(client, island, scope_kind:, scope_id:, range:)
+  DEFAULT_INTERVAL = "auto"
+
+  attr_reader :scope_kind, :scope_id, :range, :interval
+
+  def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil)
     @client     = client
     @island     = island
     @scope_kind = (scope_kind == "pod") ? "pod" : "host"
     @scope_id   = scope_id
     @range      = RANGES.key?(range) ? range : DEFAULT_RANGE
+    @interval   = INTERVALS.include?(interval) ? interval : DEFAULT_INTERVAL
 
     @metrics = MetricsData.new(client, island)
   end
@@ -317,15 +331,16 @@ class MetricsPageData
         name  = pod && (pod["resource_name"] || pod[:resource_name])
 
         @metrics.points_for(
-          source: :pod,
-          metric: metric,
-          range:  @range,
-          scope:  scope,
-          name:   name,
-          pod:    @scope_id   # replica-precise filter (container name)
+          source:   :pod,
+          metric:   metric,
+          range:    @range,
+          interval: @interval,
+          scope:    scope,
+          name:     name,
+          pod:      @scope_id   # replica-precise filter (container name)
         )
       else
-        @metrics.points_for(source: :system, metric: metric, range: @range)
+        @metrics.points_for(source: :system, metric: metric, range: @range, interval: @interval)
       end
 
     rescale_points(raw_points, scale)
@@ -387,11 +402,12 @@ class MetricsPageData
     name  = pod["resource_name"] || pod[:resource_name]
 
     raw_points = @metrics.points_for(
-      source: :ingress,
-      metric: metric,
-      range:  @range,
-      scope:  scope,
-      name:   name
+      source:   :ingress,
+      metric:   metric,
+      range:    @range,
+      interval: @interval,
+      scope:    scope,
+      name:     name
     )
 
     rescale_points(raw_points, scale)

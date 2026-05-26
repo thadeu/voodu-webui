@@ -75,7 +75,35 @@ class Views::Metrics::ChartModalBody < Views::Base
       pod_picker_slot
       span(class: "flex-1")
       range_pills
+      interval_picker_slot
     end
+  end
+
+  # interval_picker_slot — DS dropdown choosing the chart's bucket
+  # size. Sits to the RIGHT of the range pills (reading order
+  # "range first, then granularity" matches how operators talk
+  # about charts — "last 1h, at 5m buckets"). turbo_stream: true
+  # so picking an interval swaps the modal body in place without
+  # closing.
+  def interval_picker_slot
+    render Components::Metrics::IntervalPicker.new(
+      current:      current_interval,
+      base_path:    metrics_chart_path,
+      extra_params: strip_interval_keys(@query),
+      turbo_stream: true
+    )
+  end
+
+  def current_interval
+    iv = (@query[:interval] || @query["interval"]).to_s
+    iv.presence || "auto"
+  end
+
+  # strip_interval_keys — picker rows REPLACE `interval`, so
+  # leaving it in extra_params would have the merge order clobber
+  # the picker's choice.
+  def strip_interval_keys(query)
+    query.reject { |k, _| k.to_s == "interval" }
   end
 
   def metric_picker_slot

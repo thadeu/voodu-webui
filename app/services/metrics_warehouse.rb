@@ -66,18 +66,29 @@ class MetricsWarehouse
     "7d"  =>  7 * 24 * 60 * 60
   }.freeze
 
-  # Bucket-size steps (mirror intervalAliases + autoInterval). Always
-  # land at a "clean" unit so axis labels stay readable across pills.
+  # Bucket-size steps. Operator-selectable via the /metrics interval
+  # picker. 1s/10s/30m are opt-in zoom levels — useful when the
+  # operator KNOWS the data is dense enough to fill them (e.g. a
+  # busy ingress at 1s buckets surfaces per-second spikes hidden by
+  # the default 15s sampling cadence).
   INTERVAL_ALIASES = {
+    "1s"  =>      1,
+    "10s" =>     10,
     "15s" =>     15,
     "30s" =>     30,
     "1m"  =>     60,
     "5m"  =>    300,
     "15m" =>    900,
+    "30m" =>   1800,
     "1h"  =>   3600
   }.freeze
 
-  INTERVAL_STEPS = [15, 30, 60, 300, 900, 3600].freeze
+  # autopick steps — what `interval=auto` resolves to. INTENTIONALLY
+  # narrower than INTERVAL_ALIASES: floor at 15s so auto-mode doesn't
+  # land on 1s/10s where 90% of buckets would be empty (sampler ticks
+  # every 15s, so sub-15s buckets are mostly dishonest unless the
+  # operator explicitly opts in via the picker).
+  INTERVAL_STEPS = [15, 30, 60, 300, 900, 1800, 3600].freeze
 
   # Caps chart length — matches MaxBuckets in internal/metrics/reader.go.
   # 300 is the SVG sparkline sweet spot.
