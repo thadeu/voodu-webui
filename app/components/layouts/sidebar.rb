@@ -27,7 +27,7 @@
 #   4. Footer    — single collapse/expand chevron toggle.
 #
 # State persists in localStorage via SidebarCollapseController. State
-# is communicated to children via Tailwind's `group-data-[collapsed]`
+# is communicated to children via Tailwind's `vmd:group-data-[collapsed]`
 # variants on the aside root — no per-child JS, no Phlex branching.
 class Components::Layouts::Sidebar < Components::Base
   # NAV_ITEMS — the :path key maps to a route HELPER name (resolved
@@ -72,7 +72,14 @@ class Components::Layouts::Sidebar < Components::Base
       ),
       data: {
         controller:        "sidebar-collapse",
-        mobile_nav_target: "sidebar"
+        mobile_nav_target: "sidebar",
+        # Default to collapsed in the rendered HTML — JS expands on
+        # connect() if localStorage says so. Avoids the "page loaded,
+        # then sidebar visibly closes" flicker on every reload.
+        # `vmd:` prefix on every group-data-[collapsed]:* descendant
+        # keeps mobile unaffected: the off-canvas drawer still shows
+        # the full sidebar regardless of this attribute.
+        collapsed:         ""
       },
       aria: { label: "Sidebar" }
     ) do
@@ -93,7 +100,7 @@ class Components::Layouts::Sidebar < Components::Base
     div(
       class: tokens(
         "flex items-center gap-2.5 px-3.5 h-14 border-b border-voodu-border shrink-0",
-        "group-data-[collapsed]:px-0 group-data-[collapsed]:justify-center group-data-[collapsed]:gap-0"
+        "vmd:group-data-[collapsed]:px-0 vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:gap-0"
       )
     ) do
       render img(
@@ -103,17 +110,17 @@ class Components::Layouts::Sidebar < Components::Base
         aria:  { hidden: "true" }
       )
 
-      div(class: "flex flex-col leading-tight flex-1 group-data-[collapsed]:hidden") do
+      div(class: "flex flex-col leading-tight flex-1 vmd:group-data-[collapsed]:hidden") do
         span(class: "font-semibold text-[14px] text-voodu-text tracking-tight") { "Clowk Voodu" }
       end
     end
   end
 
   def islands_section
-    div(class: "flex flex-col gap-1.5 px-2.5 pt-3.5 group-data-[collapsed]:px-1.5") do
+    div(class: "flex flex-col gap-1.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5") do
       # Section header (label + count + add button) hides entirely
       # when collapsed — the rail isn't wide enough to read it.
-      div(class: "flex items-center justify-between px-2 pt-1 pb-0.5 group-data-[collapsed]:hidden") do
+      div(class: "flex items-center justify-between px-2 pt-1 pb-0.5 vmd:group-data-[collapsed]:hidden") do
         span(class: "inline-flex items-baseline gap-1.5") do
           span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
           if @islands.any?
@@ -160,19 +167,19 @@ class Components::Layouts::Sidebar < Components::Base
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
         "hover:bg-[#ffffff08] hover:text-voodu-accent-2 transition-colors",
-        "group-data-[collapsed]:justify-center group-data-[collapsed]:p-1.5 group-data-[collapsed]:min-h-0"
+        "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1.5 vmd:group-data-[collapsed]:min-h-0"
       )
     ) do
       render Icon::ServerStackOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
-      span(class: "flex-1 group-data-[collapsed]:hidden") { "See all servers" }
-      span(class: "group-data-[collapsed]:hidden") do
+      span(class: "flex-1 vmd:group-data-[collapsed]:hidden") { "See all servers" }
+      span(class: "vmd:group-data-[collapsed]:hidden") do
         render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted shrink-0")
       end
     end
   end
 
   def empty_islands
-    div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 group-data-[collapsed]:hidden") do
+    div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 vmd:group-data-[collapsed]:hidden") do
       plain "no servers yet."
       br
       a(href: new_island_path, class: "text-voodu-accent-2 hover:underline") { "add one →" }
@@ -196,21 +203,21 @@ class Components::Layouts::Sidebar < Components::Base
       title: "#{island.name} · #{island.host}",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
-        "group-data-[collapsed]:justify-center group-data-[collapsed]:p-1 group-data-[collapsed]:min-h-0 group-data-[collapsed]:gap-0",
+        "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
         # Selected row: accent bg + border in EXPANDED state only.
         # When collapsed, the avatar tile itself carries the accent
         # tint — doubling them (row bg + avatar bg both purple)
         # reads as two stacked highlights.
-        selected ? "bg-voodu-accent-dim border-voodu-accent-line group-data-[collapsed]:bg-transparent group-data-[collapsed]:border-transparent" : "border-transparent hover:bg-[#ffffff08]"
+        selected ? "bg-voodu-accent-dim border-voodu-accent-line vmd:group-data-[collapsed]:bg-transparent vmd:group-data-[collapsed]:border-transparent" : "border-transparent hover:bg-[#ffffff08]"
       )
     ) do
       # Status dot — expanded view only.
-      span(class: "shrink-0 group-data-[collapsed]:hidden") do
+      span(class: "shrink-0 vmd:group-data-[collapsed]:hidden") do
         render Components::UI::StatusDot.new(status: status)
       end
 
       # Name + meta — expanded view only.
-      div(class: "min-w-0 flex-1 flex flex-col leading-tight group-data-[collapsed]:hidden") do
+      div(class: "min-w-0 flex-1 flex flex-col leading-tight vmd:group-data-[collapsed]:hidden") do
         span(
           class: tokens(
             "font-voodu-mono text-[12.5px] truncate",
@@ -232,7 +239,7 @@ class Components::Layouts::Sidebar < Components::Base
       # its live status, and the accent matches the row's expanded
       # selected state for consistent "this is where you are" cue.
       span(
-        class: "hidden group-data-[collapsed]:inline-flex items-center justify-center w-8 h-8 font-voodu-mono text-[10.5px] font-semibold uppercase tracking-tight",
+        class: "hidden vmd:group-data-[collapsed]:inline-flex items-center justify-center w-8 h-8 font-voodu-mono text-[10.5px] font-semibold uppercase tracking-tight",
         style: avatar_style_for(status, selected: selected),
         aria:  { hidden: "true" }
       ) { letters }
@@ -284,10 +291,10 @@ class Components::Layouts::Sidebar < Components::Base
     return if nav_tenant_key.nil?
 
     nav(
-      class: "flex flex-col gap-1.5 px-2.5 pt-3.5 group-data-[collapsed]:px-1.5",
+      class: "flex flex-col gap-1.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
       aria:  { label: "Primary" }
     ) do
-      div(class: "px-2 pt-1 pb-0.5 group-data-[collapsed]:hidden") do
+      div(class: "px-2 pt-1 pb-0.5 vmd:group-data-[collapsed]:hidden") do
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Navigation" }
       end
       div(class: "flex flex-col gap-px") do
@@ -315,7 +322,7 @@ class Components::Layouts::Sidebar < Components::Base
       "aria-current": (active ? "page" : nil),
       class:          tokens(
         "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
-        "group-data-[collapsed]:justify-center group-data-[collapsed]:p-2 group-data-[collapsed]:min-h-0 group-data-[collapsed]:gap-0",
+        "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-2 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
         active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-text"
       )
     ) do
@@ -329,18 +336,18 @@ class Components::Layouts::Sidebar < Components::Base
         # when the sidebar is collapsed.
         if badge_count&.positive?
           span(
-            class: "hidden group-data-[collapsed]:inline-flex absolute -top-1 -right-1 items-center justify-center min-w-[12px] h-[12px] px-1 text-[9px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red rounded-full leading-none",
+            class: "hidden vmd:group-data-[collapsed]:inline-flex absolute -top-1 -right-1 items-center justify-center min-w-[12px] h-[12px] px-1 text-[9px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red rounded-full leading-none",
             aria:  { label: "#{badge_count} alerts" }
           ) { badge_count.to_s }
         end
       end
 
-      span(class: "flex-1 text-left group-data-[collapsed]:hidden") { item[:label] }
+      span(class: "flex-1 text-left vmd:group-data-[collapsed]:hidden") { item[:label] }
 
       # Expanded-state badge — inline right-aligned pill, same look
       # as before. Hidden when collapsed (the icon badge takes over).
       if badge_count&.positive?
-        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red group-data-[collapsed]:hidden") { badge_count.to_s }
+        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red vmd:group-data-[collapsed]:hidden") { badge_count.to_s }
       end
     end
   end
@@ -370,7 +377,7 @@ class Components::Layouts::Sidebar < Components::Base
   # collapsed so a single icon serves both states (Left points to
   # collapse → expanded; Right points to expand → collapsed).
   def collapse_footer
-    div(class: "hidden vmd:flex border-t border-voodu-border shrink-0 p-2 group-data-[collapsed]:justify-center") do
+    div(class: "hidden vmd:flex border-t border-voodu-border shrink-0 p-2 vmd:group-data-[collapsed]:justify-center") do
       button(
         type:  "button",
         title: "Toggle sidebar",
@@ -446,17 +453,24 @@ class Components::Layouts::Sidebar < Components::Base
           "focus:outline-none"
         )
       ) do
-        # Visible line — invisible by default, accent on hover. The
-        # cursor-pointer on the parent button still gives a hover
-        # cue without the operator having to spot a static line.
-        # Discoverability is covered by the footer chevron button;
-        # this edge handle is the "I know it's here" power-use path.
+        # Visible line with three states:
+        #   1. Mouse off sidebar    → transparent (invisible)
+        #   2. Mouse over sidebar   → muted (discoverable hint)
+        #   3. Mouse over the line  → accent + slightly larger
+        #
+        # `group-hover:` (no name) targets hover on the OUTER `group`
+        # class on the aside — i.e. anywhere over the sidebar — so
+        # the line surfaces as soon as the operator's cursor enters
+        # the rail, not only when they happen to land on the 12px
+        # edge container. `group-hover/handle:` (named) layers the
+        # stronger accent state for landing on the line itself.
         span(
           aria:  { hidden: "true" },
           class: tokens(
             "block h-12 w-px",
             "bg-transparent transition-all duration-150",
-            "group-hover/handle:bg-voodu-accent",
+            "group-hover:bg-voodu-muted/50",
+            "group-hover/handle:!bg-voodu-accent",
             "group-hover/handle:w-0.5 group-hover/handle:h-14"
           )
         )
@@ -464,7 +478,7 @@ class Components::Layouts::Sidebar < Components::Base
 
       # Tooltip — slides into view to the right of the handle on
       # hover. Two spans for the label so the same DOM serves both
-      # states; group-data-[collapsed] (from the OUTER sidebar
+      # states; vmd:group-data-[collapsed] (from the OUTER sidebar
       # group) swaps which one renders.
       span(
         class: tokens(
@@ -476,8 +490,8 @@ class Components::Layouts::Sidebar < Components::Base
           "transition-opacity duration-150"
         )
       ) do
-        span(class: "group-data-[collapsed]:hidden") { "Collapse" }
-        span(class: "hidden group-data-[collapsed]:inline") { "Expand" }
+        span(class: "vmd:group-data-[collapsed]:hidden") { "Collapse" }
+        span(class: "hidden vmd:group-data-[collapsed]:inline") { "Expand" }
       end
     end
   end
