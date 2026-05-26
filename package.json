@@ -17,6 +17,7 @@
     "@hotwired/turbo-rails": "^8.0.23",
     "@tailwindcss/cli": "^4.3.0",
     "geist": "^1.7.1",
+    "sortablejs": "^1.15.7",
     "tailwindcss": "^4.3.0"
   }
 }

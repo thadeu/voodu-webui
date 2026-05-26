@@ -27,16 +27,19 @@ import { Controller } from "@hotwired/stimulus"
 //      every drawer in the app remembers the operator's preference.
 //
 // Persistence: width is stored as a CSS value (e.g. "560px") in
-// localStorage. On connect, every drawer reads it and applies as
-// the initial width (overriding the server-rendered default).
-const STORAGE_KEY = "voodu:drawer-width"
+// localStorage under `storageKeyValue`. Default key is shared across
+// content drawers (Logs, Pod) so a single operator preference sticks
+// across visits; drawers with a different content shape (e.g. the
+// Settings card grid) pass their own key from the server to avoid
+// inheriting an unrelated width.
 
 export default class extends Controller {
   static targets = ["panel", "body", "handle"]
   static values  = {
-    src:       String,
-    minWidth:  { type: String,  default: "320px" },
-    resizable: { type: Boolean, default: true }
+    src:        String,
+    minWidth:   { type: String,  default: "320px" },
+    resizable:  { type: Boolean, default: true },
+    storageKey: { type: String,  default: "voodu:drawer-width" }
   }
 
   connect() {
@@ -46,9 +49,10 @@ export default class extends Controller {
     this.onResizeEnd   = this.onResizeEnd.bind(this)
     this.contentLoaded = false
 
-    // Apply any persisted width — overrides the server default so
-    // the operator's chosen size sticks across visits/drawers.
-    const saved = localStorage.getItem(STORAGE_KEY)
+    // Apply any persisted width for THIS drawer's storage key —
+    // overrides the server default so the operator's chosen size
+    // sticks across visits.
+    const saved = localStorage.getItem(this.storageKeyValue)
     if (saved && this.hasPanelTarget) this.panelTarget.style.width = saved
   }
 
@@ -192,11 +196,12 @@ export default class extends Controller {
     document.removeEventListener("pointerup",   this.onResizeEnd)
     document.removeEventListener("pointercancel", this.onResizeEnd)
 
-    // Persist as the literal pixel value. Every drawer reads this
-    // on connect — operator sets it once, every subsequent peek
-    // honours it.
+    // Persist as the literal pixel value under THIS drawer's
+    // storage key — operator sets the Logs/Pod width once, every
+    // subsequent peek honours it; the Settings drawer keeps its
+    // own compact size independently.
     try {
-      localStorage.setItem(STORAGE_KEY, this.panelTarget.style.width)
+      localStorage.setItem(this.storageKeyValue, this.panelTarget.style.width)
     } catch { /* localStorage disabled — silently ignore */ }
   }
 

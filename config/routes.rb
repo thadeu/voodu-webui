@@ -78,8 +78,9 @@ Rails.application.routes.draw do
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 
-    get  "/metrics",        to: "metrics#index",  as: :metrics
-    get  "/metrics/chart",  to: "metrics#chart",  as: :metrics_chart
+    get  "/metrics",                    to: "metrics#index",            as: :metrics
+    get  "/metrics/chart",             to: "metrics#chart",            as: :metrics_chart
+    get  "/metrics/display_settings",  to: "metrics#display_settings", as: :metrics_display_settings
     get  "/alerts",   to: "alerts#index",   as: :alerts
     get  "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same tenant scope so the

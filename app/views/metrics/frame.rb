@@ -11,6 +11,10 @@
 # `Views::Metrics::Index#chart_grid` renders the SAME structure on
 # initial pageload — keeping them lockstep means the broadcast
 # swap doesn't visually flicker (same DOM in, same DOM out).
+#
+# Resource + HTTP cards share ONE grid (no divider). Each HTTP card
+# carries an inline [http] badge inside its header so the visual
+# cue remains without breaking the grid.
 class Views::Metrics::Frame < Views::Base
   def initialize(data: nil)
     @data = data
@@ -20,22 +24,19 @@ class Views::Metrics::Frame < Views::Base
     turbo_frame_tag("metrics-charts") do
       next if @data.nil?
 
-      div(class: "flex flex-col gap-4 vmd:gap-5") do
-        render_grid(@data.charts)
-
-        if @data.ingress_eligible?
-          div(class: "flex flex-col gap-2.5") do
-            h2(
-              class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"
-            ) do
-              span { "HTTP" }
-              span(class: "flex-1 h-px bg-voodu-border")
-              span(class: "font-normal text-voodu-muted-2 normal-case tracking-normal") { "ingress · same range" }
-            end
-
-            render_grid(@data.http_charts)
-          end
-        end
+      # metrics-display controller: mirrors the wrapper in
+      # Views::Metrics::Index#chart_grid. Must carry the same
+      # controller + kindValue so the hide-filter + custom ordering
+      # re-apply correctly after each broadcast-tick swap.
+      div(
+        class: "flex flex-col gap-4 vmd:gap-5",
+        data: {
+          controller:                 "metrics-display",
+          metrics_display_kind_value: @data.display_kind
+        }
+      ) do
+        all_charts = @data.charts + (@data.ingress_eligible? ? @data.http_charts : [])
+        render_grid(all_charts)
       end
     end
   end
@@ -52,7 +53,9 @@ class Views::Metrics::Frame < Views::Base
           points:     c[:points],
           range_ms:   @data.range_ms,
           current:    c[:current],
-          expand_url: expand_url_for(c)
+          expand_url: expand_url_for(c),
+          metric:     c[:metric],
+          section:    c[:section]
         )
       end
     end

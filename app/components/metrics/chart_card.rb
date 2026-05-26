@@ -37,7 +37,19 @@ class Components::Metrics::ChartCard < Components::Base
   # (or omit) to render a maximize-less card — used historically
   # by call sites that don't have access to the full single-chart
   # context; safe default.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil)
+  # metric: STRING — the metric key (e.g. "cpu_percent"). When given,
+  # the root div gains data-metrics-display-target="card" +
+  # data-metric-key="<metric>" so MetricsDisplayController can hide/
+  # show this card based on the operator's display settings.
+  # Pass nil (or omit) to opt out of the display-filter system
+  # (e.g. standalone chart cards outside the main grid).
+  #
+  # section: STRING — "resource" or "http". When "http", a small
+  # inline [http] badge renders next to the metric label, giving
+  # operators a visual cue that the card is HTTP-derived. (The
+  # divider-style HTTP section header was removed in favor of this
+  # inline tag — fewer hard breaks in the grid, same signal.)
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil)
     @label      = label
     @color      = color
     @unit       = unit
@@ -45,10 +57,24 @@ class Components::Metrics::ChartCard < Components::Base
     @range_ms   = range_ms
     @current    = current
     @expand_url = expand_url
+    @metric     = metric
+    @section    = section
   end
 
   def view_template
-    div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0") do
+    root_data = {}
+
+    if @metric
+      root_data[:metrics_display_target] = "card"
+      root_data[:metric_key]             = @metric
+    end
+
+    root_data[:section] = @section if @section
+
+    div(
+      class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",
+      data:  root_data
+    ) do
       card_header
       render Components::Metrics::Chart.new(
         points:   @points,
@@ -85,6 +111,17 @@ class Components::Metrics::ChartCard < Components::Base
         class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
         style: "color: #{@color};"
       ) { @label }
+
+      # [http] inline badge — replaces the old HTTP section divider.
+      # Same visual signal ("this metric comes from ingress logs") but
+      # without splitting the grid into two boxes.
+      if @section == "http"
+        span(
+          class: "text-[9.5px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.06em] " \
+                 "border border-voodu-border px-1 py-px translate-y-[-1px]",
+          title: "HTTP metric (ingress)"
+        ) { "http" }
+      end
 
       # Render number + unit. For percent metrics the unit is part
       # of the formatted string (so we can show "<0.01%" without

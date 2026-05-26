@@ -55,6 +55,20 @@ class MetricsPageData
 
   attr_reader :scope_kind, :scope_id, :range, :interval
 
+  # display_kind — the key used to namespace display-settings in
+  # sessionStorage. "host" for the system scope; for pod scopes,
+  # the pod's workload kind ("deployment", "statefulset", etc.).
+  # Falls back to "pod" when the pod record is unavailable (e.g.
+  # the pod just terminated between page loads).
+  def display_kind
+    return "host" if @scope_kind == "host"
+
+    pod = pod_record
+    return "pod" if pod.nil?
+
+    (pod["kind"] || pod[:kind]).to_s.presence || "pod"
+  end
+
   def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil)
     @client     = client
     @island     = island
@@ -206,6 +220,46 @@ class MetricsPageData
     @all_pods ||= IslandPods.compact(@client, @island)
   end
 
+  # ── Class-level spec accessors (used by /metrics/display_settings) ──
+
+  # resource_specs_for — static spec list for the given scope_kind.
+  # Mirrors chart_specs instance method; kept as a class method so
+  # the display_settings endpoint can build spec cards without
+  # instantiating a full MetricsPageData (which needs a live client).
+  # All entries carry section: "resource".
+  def self.resource_specs_for(scope_kind)
+    base =
+      if scope_kind == "host"
+        [
+          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-accent)", unit: "%" },
+          { label: "Memory", metric: "mem_used_bytes",  color: "var(--voodu-blue)",   unit: "GB" },
+          { label: "Disk",   metric: "disk_used_bytes", color: "var(--voodu-teal)",   unit: "GB" }
+        ]
+      else
+        [
+          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-accent)", unit: "%" },
+          { label: "Memory", metric: "mem_usage_bytes",    color: "var(--voodu-blue)",   unit: "MB" },
+          { label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)",  unit: "" },
+          { label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "" }
+        ]
+      end
+
+    base.map { |s| s.merge(section: "resource") }
+  end
+
+  # http_specs_static — the four HTTP chart-grid cards. Same as
+  # ingress_chart_specs but as a class method so the display_settings
+  # endpoint can render them without a client connection.
+  # All entries carry section: "http".
+  def self.http_specs_static
+    [
+      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   section: "http" },
+      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", section: "http" },
+      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   section: "http" },
+      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   section: "http" }
+    ]
+  end
+
   private
 
   # chart_specs — per-scope metric layout. The `scale` key tells
@@ -305,6 +359,7 @@ class MetricsPageData
   # whatever was used to render the inline card).
   def build_chart(spec)
     points = yield
+    src    = source_for(spec[:metric])
 
     unit = if spec[:scale] == :bytes_auto && points.any?
              points.first[:formatted].to_s.split(" ").last.to_s
@@ -319,7 +374,12 @@ class MetricsPageData
       points:  points,
       current: latest_scaled_for(spec),
       metric:  spec[:metric],
-      source:  source_for(spec[:metric]),
+      source:  src,
+      # section — "resource" for system/pod cards, "http" for ingress.
+      # Drives the inline [http] badge on the chart card label and the
+      # `data-section` attribute that lets the metrics-display
+      # controller route saved hide-state to the right bucket.
+      section: src == "ingress" ? "http" : "resource",
       scale:   spec[:scale]
     }
   end

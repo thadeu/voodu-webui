@@ -90,7 +90,10 @@ export default class extends Controller {
   applyLabel() {
     if (!this.hasLabelTarget) return
 
-    this.labelTarget.textContent = this.paused ? "paused" : "auto-refresh"
+    // Keep in sync with the seed text in views/metrics/index.rb
+    // `auto_refresh_indicator` — the server renders "realtime" so
+    // first paint matches the default-ON state without a flash.
+    this.labelTarget.textContent = this.paused ? "paused" : "realtime"
   }
 
   // Cable: detach the custom element to drop the subscription;

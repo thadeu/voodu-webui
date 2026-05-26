@@ -128,4 +128,32 @@ class MetricsController < ApplicationController
     end
   end
 
+  # display_settings — lightweight endpoint for the "Display settings"
+  # drawer. Renders the metric-toggle UI (no chart data needed — just
+  # the spec metadata: label, color, metric key). The JS controller
+  # reads sessionStorage on connect to restore the operator's saved
+  # hidden-metrics set.
+  #
+  # Params:
+  #   kind       — "deployment" | "statefulset" | "host" | "pod"
+  #   scope_kind — "host" | "pod"
+  #
+  # Rendered WITHOUT layout (layout: false) because it lives inside
+  # the Drawer panel, which provides its own chrome. The Drawer's
+  # fetch() call injects the response HTML into its panel body and
+  # Stimulus auto-connects the sub-controller.
+  def display_settings
+    kind       = params[:kind].to_s.presence || "host"
+    scope_kind = params[:scope_kind].to_s == "pod" ? "pod" : "host"
+
+    resource_specs = MetricsPageData.resource_specs_for(scope_kind)
+    http_specs     = kind == "deployment" ? MetricsPageData.http_specs_static : []
+
+    render Views::Metrics::DisplaySettings.new(
+      kind:           kind,
+      resource_specs: resource_specs,
+      http_specs:     http_specs
+    ), layout: false
+  end
+
 end

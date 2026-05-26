@@ -44,18 +44,34 @@
 # (the anchor's native `href` handles it) — Stimulus only intercepts
 # plain left-click.
 class Components::UI::Drawer < Components::Base
+  # show_full_page_link — whether to render the "open as full page"
+  # icon button in the panel header. True for content drawers (Logs,
+  # Pod detail) where the full page is meaningful; false for
+  # settings/tool drawers that have no standalone page equivalent.
+  #
+  # storage_key — localStorage bucket the resize handle reads/writes.
+  # Defaults to the SHARED key so Logs + Pod drawers remember the
+  # operator's chosen width together (same content style = same
+  # natural width). Pass a unique key (e.g. "voodu:drawer-width:settings")
+  # for drawers with a fundamentally different content shape — a
+  # compact settings card grid shouldn't inherit the 60vw width an
+  # operator set for the logs viewer.
   def initialize(title:, src:, open_url:,
                  trigger_attrs: {},
-                 width:     "40vw",
-                 min_width: "320px",
-                 resizable: true)
-    @title         = title
-    @src           = src
-    @open_url      = open_url
-    @width         = width
-    @min_width     = min_width
-    @resizable     = resizable
-    @trigger_attrs = trigger_attrs
+                 width:               "40vw",
+                 min_width:           "320px",
+                 resizable:           true,
+                 show_full_page_link: true,
+                 storage_key:         "voodu:drawer-width")
+    @title               = title
+    @src                 = src
+    @open_url            = open_url
+    @width               = width
+    @min_width           = min_width
+    @resizable           = resizable
+    @trigger_attrs       = trigger_attrs
+    @show_full_page_link = show_full_page_link
+    @storage_key         = storage_key
   end
 
   def view_template(&trigger_body)
@@ -63,9 +79,10 @@ class Components::UI::Drawer < Components::Base
       class: "contents",
       data: {
         controller: "drawer",
-        drawer_src_value:       @src,
-        drawer_min_width_value: @min_width,
-        drawer_resizable_value: @resizable.to_s
+        drawer_src_value:         @src,
+        drawer_min_width_value:   @min_width,
+        drawer_resizable_value:   @resizable.to_s,
+        drawer_storage_key_value: @storage_key
       }
     ) do
       render_trigger(&trigger_body)
@@ -152,7 +169,7 @@ class Components::UI::Drawer < Components::Base
         class: "m-0 text-[13px] font-semibold text-voodu-text truncate flex-1 min-w-0"
       ) { @title }
 
-      open_in_tab_link
+      open_in_tab_link if @show_full_page_link
       close_button
     end
   end

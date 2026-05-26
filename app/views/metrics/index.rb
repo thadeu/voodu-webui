@@ -160,7 +160,7 @@ class Views::Metrics::Index < Views::Base
         class: "inline-block rounded-full animate-voodu-pulse",
         style: "width: 6px; height: 6px; background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
       )
-      span(data: { auto_refresh_target: "label" }) { "auto-refresh" }
+      span(data: { auto_refresh_target: "label" }) { "realtime" }
     end
   end
 
@@ -240,6 +240,20 @@ class Views::Metrics::Index < Views::Base
         base_path:    metrics_path,
         extra_params: request.query_parameters.except(:interval)
       )
+
+      # Display settings button — pushed to the far right on wide
+      # viewports; wraps naturally on narrow ones. Only shown when
+      # there's an active scope (no island → no data → no charts to
+      # configure).
+      if @data
+        div(class: "ml-auto") do
+          render Components::Metrics::DisplaySettingsButton.new(
+            kind:                @data.display_kind,
+            scope_kind:          @data.scope_kind,
+            display_settings_url: metrics_display_settings_path
+          )
+        end
+      end
     end
   end
 
@@ -281,30 +295,29 @@ class Views::Metrics::Index < Views::Base
     # Turbo-Frame header in MetricsController#index and returns
     # Views::Metrics::Frame with fresh data, Turbo atomically
     # swaps the contents. No per-card subframes, no skeleton flash.
+    # metrics-display controller wraps the chart content INSIDE the
+    # frame so it reconnects automatically on every broadcast-tick
+    # swap and re-applies the operator's hidden-metrics filter +
+    # custom card ordering. kindValue drives sessionStorage namespace
+    # (deployment vs host vs statefulset — independent display
+    # configs per workload kind).
+    #
+    # Resource + HTTP cards now share ONE grid (no divider). Each
+    # HTTP card gets an inline [http] badge inside the card header
+    # so the visual cue stays without breaking the grid into two
+    # boxes — and operators can interleave resource/HTTP charts in
+    # their preferred order via the Settings drawer.
     turbo_frame_tag("metrics-charts", src: current_request_url) do
-      div(class: "flex flex-col gap-4 vmd:gap-5") do
-        render_chart_cards(@data.charts)
-        http_section if @data.ingress_eligible?
-      end
-    end
-  end
-
-  # http_section — HTTP heading + chart grid. Called from INSIDE the
-  # turbo-frame block (both here and in Views::Metrics::Frame) so the
-  # section participates in the polling swap. Rendering it as a
-  # sibling of the frame would duplicate after the first tick because
-  # the Frame response also contains it.
-  def http_section
-    div(class: "flex flex-col gap-2.5") do
-      h2(
-        class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted flex items-center gap-2"
+      div(
+        class: "flex flex-col gap-4 vmd:gap-5",
+        data: {
+          controller:                "metrics-display",
+          metrics_display_kind_value: @data.display_kind
+        }
       ) do
-        span { "HTTP" }
-        span(class: "flex-1 h-px bg-voodu-border")
-        span(class: "font-normal text-voodu-muted-2 normal-case tracking-normal") { "ingress · same range" }
+        all_charts = @data.charts + (@data.ingress_eligible? ? @data.http_charts : [])
+        render_chart_cards(all_charts)
       end
-
-      render_chart_cards(@data.http_charts)
     end
   end
 
@@ -322,7 +335,9 @@ class Views::Metrics::Index < Views::Base
           points:     c[:points],
           range_ms:   @data.range_ms,
           current:    c[:current],
-          expand_url: expand_url_for(c)
+          expand_url: expand_url_for(c),
+          metric:     c[:metric],
+          section:    c[:section]
         )
       end
     end
