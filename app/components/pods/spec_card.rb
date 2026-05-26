@@ -10,8 +10,15 @@
 # state.status, datetime formatter for the timestamps, copy buttons
 # for the long opaque id). Everything else is dumped as-is.
 class Components::Pods::SpecCard < Components::Base
-  def initialize(pod:)
-    @pod = pod
+  # stale: → propagated from the page service (PodDetailData#stale?).
+  # When true, the `state.status` row pill flips to Offline so the
+  # operator doesn't see a green "Running" inside the SPEC card while
+  # the rest of the page (header pill, top banner) honestly admits
+  # the controller is down. Defaults to false so any legacy caller
+  # not yet stale-aware still gets the literal state.status mapping.
+  def initialize(pod:, stale: false)
+    @pod   = pod
+    @stale = stale
   end
 
   def view_template
@@ -52,13 +59,12 @@ class Components::Pods::SpecCard < Components::Base
     @pod.dig("state", key)
   end
 
+  # state_status_sym — delegates to PodStatus so the SPEC card row
+  # uses the SAME mapping (and the SAME stale-override) as the
+  # header pill and the pods-table rows. Single source of truth for
+  # "given this pod, what status do we show?" across the app.
   def state_status_sym
-    s = state_dig("status").to_s.downcase
-    return :running if s == "running"
-    return :restarting if s.include?("restart")
-    return :stopped if s == "stopped" || s == "exited"
-
-    :stopped
+    PodStatus.from_state_string(state_dig("status"), stale: @stale)
   end
 
   def started?

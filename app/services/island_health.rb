@@ -41,6 +41,21 @@ class IslandHealth
   # the status is :offline — same bucket as "controller is down"
   # because from the operator's perspective the symptom is the
   # same: the WebUI can't see live data.
+  # WAREHOUSE=1 and WAREHOUSE=0 share THIS method untouched. The
+  # split lives in WHO warms the cache:
+  #
+  #   WAREHOUSE=0 — `OverviewData.fetch_from_http!` warms after its
+  #                 /system call (success → :online, failure →
+  #                 :offline).
+  #
+  #   WAREHOUSE=1 — `StateSyncIslandJob` warms every 10s after its
+  #                 fetch (same online/offline contract). With
+  #                 the job ticking 3× per TTL window, the cache
+  #                 is always warm — sub-ms read on every page,
+  #                 status flips within ~10s of a `systemctl stop`.
+  #
+  # Either way the cache is the single source of truth read here,
+  # and the status_for surface stays free of warehouse branching.
   def self.status_for(island, client: nil)
     Rails.cache.fetch(cache_key(island), expires_in: TTL) do
       probe(island, client) ? :online : :offline

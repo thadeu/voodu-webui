@@ -82,7 +82,13 @@ class Components::Layouts::Topbar < Components::Base
         end
       end
 
-      render Components::UI::StatusPill.new(status: @current_island.status || :stopped)
+      # DOM id = Turbo Stream broadcast target. State-sync job
+      # re-renders this span on every sync (success → :online,
+      # failure → :offline) and pushes it to the client without
+      # a refresh. See StateSyncIslandJob#broadcast_status_change.
+      span(id: "island-status-pill-#{@current_island.id}", class: "inline-flex") do
+        render Components::UI::StatusPill.new(status: @current_island.status || :stopped)
+      end
 
       # Chips collapse on < 1280px to keep the topbar single-line.
       span(class: "hidden vlg:contents") do

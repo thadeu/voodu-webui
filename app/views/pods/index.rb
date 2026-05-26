@@ -32,21 +32,56 @@ class Views::Pods::Index < Views::Base
 
   private
 
+  # body — wrapped in a Turbo Frame so StateSyncIslandJob's
+  # state_tick broadcast can refresh it without a page reload. No
+  # src= on the frame (would cause Turbo to auto-fetch on connect
+  # and possibly blank the body). The state-tick JS handler sets
+  # frame.src = window.location.href right before reload() — same
+  # effect, no first-paint flash, preserves active_tab filter
+  # because window.location carries the query string.
   def body
-    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
-      error_banner if @data&.error
-      page_header
-      # show_heading: false — the page_header above already renders
-      # the H1 "Pods" + status counts. Letting PodsTable draw its
-      # own H2 "Pods" right under it stacks two identical labels
-      # (the Overview screen doesn't have this problem because its
-      # H1 is "Overview").
-      render Components::Overview::PodsTable.new(
-        pods: @data.pods(filter_status: tab_to_status),
-        total: @data.pods_total,
-        active_tab: @active_tab,
-        show_heading: false
-      )
+    # `target="_top"` — links inside the frame (every pod row, the
+    # tab pills that filter by status, etc.) navigate the whole
+    # page instead of getting trapped by Turbo's frame navigation.
+    # Without it, clicking a pod row would render "Content missing"
+    # because the /pods/:name response has no matching frame.
+    # See Views::Dashboard::Index for the same fix.
+    turbo_frame_tag(
+      "island-#{@current_island.id}-state",
+      target: "_top",
+      data: { state_frame: true }
+    ) do
+      div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+        stale_banner if @data&.stale?
+        error_banner if @data&.error
+        page_header
+        # show_heading: false — the page_header above already renders
+        # the H1 "Pods" + status counts. Letting PodsTable draw its
+        # own H2 "Pods" right under it stacks two identical labels
+        # (the Overview screen doesn't have this problem because its
+        # H1 is "Overview").
+        render Components::Overview::PodsTable.new(
+          pods: @data.pods(filter_status: tab_to_status),
+          total: @data.pods_total,
+          active_tab: @active_tab,
+          show_heading: false
+        )
+      end
+    end
+  end
+
+  # stale_banner — mirrors the Overview's stale banner. Surfaces the
+  # "controller offline · showing last-known state" message at the
+  # top of /pods too so the operator gets the same signal regardless
+  # of which page they land on.
+  def stale_banner
+    age = @data.updated_at ? "#{time_ago_in_words(@data.updated_at)} ago" : "moments ago"
+
+    div(class: "px-3 py-2 border border-voodu-amber/40 bg-voodu-amber-dim text-voodu-amber text-[12.5px] flex items-center gap-2") do
+      render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
+      span { "Controller offline — showing last-known state from " }
+      span(class: "font-voodu-mono opacity-80") { age }
+      span { ". Pod statuses are uncertain until the agent comes back." }
     end
   end
 

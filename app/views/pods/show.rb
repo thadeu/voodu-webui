@@ -35,18 +35,48 @@ class Views::Pods::Show < Views::Base
       ) do
         if @current_island.nil?
           render Components::UI::NoIslandState.new
-        elsif @data.error
-          render Components::UI::ErrorState.new(error: @data.error)
-        elsif @data.raw.nil?
-          not_found
         else
-          body
+          framed_body
         end
       end
     end
   end
 
   private
+
+  # framed_body — wraps the page body in a Turbo Frame so the
+  # state-tick broadcast from StateSyncIslandJob can refresh it
+  # without a manual reload. Same pattern as Dashboard + Pods::Index:
+  # no `src=` on the frame (the JS handler sets it to
+  # `window.location.href` right before reload(), preserving the
+  # current URL).
+  #
+  # `target="_top"` — every link inside the frame (Restart confirm
+  # modal, View logs drawer trigger, View metrics anchor, the back
+  # link to /pods) must navigate the whole page, not get trapped by
+  # Turbo's frame navigation. Without it, "View metrics" would request
+  # /metrics with a Turbo-Frame header, find no matching frame, and
+  # render "Content missing".
+  #
+  # We wrap the error / not_found branches too so a transient "pod
+  # not in warehouse yet" state recovers automatically on the next
+  # sync — operator doesn't have to manually refresh after a pod
+  # creation.
+  def framed_body
+    turbo_frame_tag(
+      "island-#{@current_island.id}-state",
+      target: "_top",
+      data: { state_frame: true }
+    ) do
+      if @data.error
+        render Components::UI::ErrorState.new(error: @data.error)
+      elsif @data.raw.nil?
+        not_found
+      else
+        body
+      end
+    end
+  end
 
   # drawer_body — render-path used when the view is loaded into a
   # right-side Drawer (Metrics page peek).
@@ -76,11 +106,28 @@ class Views::Pods::Show < Views::Base
 
   def body
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+      stale_banner if @data.stale?
       render Components::Pods::Header.new(data: @data)
       stat_cards
       spec_network_grid
       render Components::Pods::EnvCard.new(pod: @data.raw)
       render Components::Pods::LabelsCard.new(pod: @data.raw)
+    end
+  end
+
+  # stale_banner — mirrors the Overview + /pods banners. Surfaces
+  # the "controller offline — showing last-known state" hint at the
+  # top of the pod show page too, so the Header's pill flipping to
+  # Offline + the stat cards going flat are explained by ONE
+  # explicit reason instead of leaving the operator to guess.
+  def stale_banner
+    age = @data.updated_at ? "#{time_ago_in_words(@data.updated_at)} ago" : "moments ago"
+
+    div(class: "px-3 py-2 border border-voodu-amber/40 bg-voodu-amber-dim text-voodu-amber text-[12.5px] flex items-center gap-2") do
+      render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
+      span { "Controller offline — showing last-known state from " }
+      span(class: "font-voodu-mono opacity-80") { age }
+      span { ". Pod status is uncertain until the agent comes back." }
     end
   end
 
@@ -108,7 +155,12 @@ class Views::Pods::Show < Views::Base
       class: "grid gap-3 vmd:gap-4",
       style: "grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));"
     ) do
-      render Components::Pods::SpecCard.new(pod: @data.raw)
+      # `stale: @data.stale?` so the SPEC card's state.status row
+      # flips to Offline alongside the header pill — otherwise the
+      # operator sees "● Offline" up top but "state.status ● Running"
+      # right below it on the same page. Single source of truth for
+      # "is this pod's status trustworthy right now?" lives on @data.
+      render Components::Pods::SpecCard.new(pod: @data.raw, stale: @data.stale?)
       render Components::Pods::NetworkCard.new(pod: @data.raw)
     end
   end

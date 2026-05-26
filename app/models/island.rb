@@ -23,16 +23,33 @@ class Island < ApplicationRecord
   # decrypts on read. Operator never has to think about it.
   encrypts :pat_ciphertext
 
+  # Local snapshots maintained by `StateSyncIslandJob` (every 10s).
+  # Pages read from these instead of making a fresh HTTP call to
+  # the controller — page-instant render + offline resilience. See
+  # `app/services/island_state.rb` for the read facade and
+  # `app/services/pod_snapshot.rb` / `system_snapshot.rb` for the
+  # writers.
+  #
+  # `dependent: :destroy` keeps snapshot tables tidy: removing an
+  # Island purges its row sets in the same transaction (also enforced
+  # at the DB level via `foreign_key: { on_delete: :cascade }`).
+  has_many :pods, dependent: :destroy
+  has_one  :system, dependent: :destroy
+
   before_validation :normalize_endpoint
   before_validation :ensure_key, on: :create
 
-  # Kick the first metrics warehouse sync immediately on island
-  # creation. Without this, a newly-added island would wait up to
-  # 30s for the next orchestrator tick before charts start filling.
-  # The sync itself is no-op-safe (idempotent via MAX(ts_epoch)
-  # watermark), so this and the orchestrator can both fire without
-  # double-inserts.
+  # Kick the first sync jobs immediately on island creation. Without
+  # this, a newly-added island would wait up to 10s (state) / 14s
+  # (metrics) for the next orchestrator tick before pages stop
+  # rendering "—". Both jobs are no-op-safe / idempotent, so this
+  # and the orchestrators can both fire without double-work.
   after_create_commit { MetricsSyncIslandJob.perform_later(id) }
+  # StateSyncIslandJob ships in C4 — guarded so this commit (C2)
+  # boots cleanly without the job class on disk yet.
+  after_create_commit do
+    StateSyncIslandJob.perform_later(id) if defined?(StateSyncIslandJob)
+  end
 
   validates :name, presence: true, uniqueness: true, length: { maximum: 64 }
   validates :endpoint, presence: true, format: {
@@ -60,16 +77,20 @@ class Island < ApplicationRecord
     endpoint
   end
 
-  # pods_count — total pod count, read from a Rails.cache key
-  # OverviewData warms after its /pods fetch. Returns nil when no
-  # snapshot exists (e.g. operator has never opened the dashboard
-  # for this island since boot) — sidebar renders "—" instead of a
-  # misleading 0.
+  # pods_count — total pod count for the sidebar's row sub-text.
   #
-  # Cache TTL slightly longer than the overview snapshot (10s) so
-  # the sidebar mirrors the operator's freshest data without
-  # briefly blanking out between page renders within a session.
+  # WAREHOUSE=1 → reads `pods.count` directly (SQL COUNT, sub-ms).
+  # The state-sync job (every 10s) keeps the table fresh, so the
+  # sidebar shows accurate counts for EVERY island — not just the
+  # one the operator most recently opened the overview for.
+  #
+  # WAREHOUSE=0 → legacy: reads a Rails.cache key OverviewData
+  # warms after its /pods fetch. Returns nil when the operator has
+  # never opened the dashboard for this island since boot, and
+  # the sidebar renders "—" instead of "0".
   def pods_count
+    return pods.count if IslandState.warehouse?
+
     Rails.cache.read(self.class.pods_count_cache_key(id))
   end
 
@@ -126,24 +147,33 @@ class Island < ApplicationRecord
 
   # uptime — humanized "Nd Nh" string surfaced in the topbar chip.
   #
-  # Source of truth: the host uptime cached by OverviewData after
-  # its /system fetch (see Island.write_uptime_seconds). Reading
-  # from the cache means EVERY page (pods, logs, pod show, etc.)
-  # gets the live uptime — not just Overview — without each page
-  # needing to fetch /system itself.
+  # WAREHOUSE=1 → reads `system.uptime_seconds` directly from the
+  # local snapshot maintained by `StateSyncIslandJob`. Every page
+  # gets the live uptime, even ones the operator has never opened
+  # for this island.
   #
-  # Falls back to "—" when no snapshot exists yet (operator hasn't
-  # opened Overview for this island this session). Better to show
-  # an honest dash than a fabricated count from the WebUI record's
-  # created_at, which used to read as "host uptime" but really
-  # meant "how long since you registered this island here."
+  # WAREHOUSE=0 → legacy Rails.cache lookup that OverviewData
+  # warms after its /system fetch. Returns "—" when no snapshot
+  # exists yet.
   def uptime
-    secs = Rails.cache.read(self.class.uptime_cache_key(id))
+    secs = uptime_seconds_from_source
     return "—" if secs.nil? || secs <= 0
 
     days  = secs / 86_400
     hours = (secs % 86_400) / 3600
     "#{days}d #{hours}h"
+  end
+
+  # uptime_seconds_from_source — picks the warehouse or legacy
+  # cache source. Extracted so the formatting (uptime) and the
+  # raw number (callers that want their own format) share a
+  # single decision point.
+  def uptime_seconds_from_source
+    if IslandState.warehouse?
+      system&.uptime_seconds
+    else
+      Rails.cache.read(self.class.uptime_cache_key(id))
+    end
   end
 
   # Class-level cache-key + writer so OverviewData (the canonical

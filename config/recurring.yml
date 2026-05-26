@@ -26,6 +26,16 @@ common: &common
     # bulk-insert; cadence cost is nothing on local SQLite.
     schedule: every 14 seconds
 
+  state_sync:
+    class: StateSyncOrchestratorJob
+    # 10s cadence keeps pods+system snapshots fresh enough that the
+    # sidebar's "synced Xs ago" label rarely reads stale during
+    # normal operation. Falls inside the IslandHealth "online ≤30s"
+    # threshold by a comfortable 3× margin so a single missed tick
+    # doesn't flip status. Independent of metrics-sync (different
+    # data, different cadence, different transactionality).
+    schedule: every 10 seconds
+
 development:
   <<: *common
 

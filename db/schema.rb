@@ -10,12 +10,13 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_24_191615) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_26_150200) do
   create_table "islands", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "endpoint", null: false
     t.string "infra"
     t.string "key", null: false
+    t.datetime "last_synced_at"
     t.string "name", null: false
     t.text "pat_ciphertext", null: false
     t.string "region"
@@ -23,4 +24,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_24_191615) do
     t.index ["key"], name: "index_islands_on_key", unique: true
     t.index ["name"], name: "index_islands_on_name", unique: true
   end
+
+  create_table "pods", force: :cascade do |t|
+    t.string "container_name", null: false
+    t.datetime "created_at", null: false
+    t.integer "island_id", null: false
+    t.string "kind", null: false
+    t.text "payload", null: false
+    t.string "replica_id"
+    t.string "resource_name", null: false
+    t.string "scope", null: false
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["island_id", "container_name"], name: "index_pods_on_island_id_and_container_name", unique: true
+    t.index ["island_id", "kind", "scope", "resource_name"], name: "index_pods_on_island_id_and_kind_and_scope_and_resource_name"
+    t.index ["island_id"], name: "index_pods_on_island_id"
+  end
+
+  create_table "systems", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "island_id", null: false
+    t.text "payload", null: false
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["island_id"], name: "index_systems_on_island_id", unique: true
+  end
+
+  add_foreign_key "pods", "islands", on_delete: :cascade
+  add_foreign_key "systems", "islands", on_delete: :cascade
 end

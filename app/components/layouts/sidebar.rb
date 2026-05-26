@@ -83,6 +83,15 @@ class Components::Layouts::Sidebar < Components::Base
       },
       aria: { label: "Sidebar" }
     ) do
+      # Turbo Stream subscriptions — one per visible island so the
+      # status dot in each row flips live when its state-sync job
+      # completes (success → :online, failure → :offline). The
+      # current_island's subscription also covers the topbar
+      # status pill (same channel; broadcast carries both targets).
+      recent_islands_to_render.each do |island|
+        turbo_stream_from "island-state-#{island.id}"
+      end
+
       brand
       islands_section
       nav_section
@@ -211,8 +220,15 @@ class Components::Layouts::Sidebar < Components::Base
         selected ? "bg-voodu-accent-dim border-voodu-accent-line vmd:group-data-[collapsed]:bg-transparent vmd:group-data-[collapsed]:border-transparent" : "border-transparent hover:bg-[#ffffff08]"
       )
     ) do
-      # Status dot — expanded view only.
-      span(class: "shrink-0 vmd:group-data-[collapsed]:hidden") do
+      # Status dot — expanded view only. DOM id is the Turbo
+      # Stream broadcast target. StateSyncIslandJob re-renders
+      # this span on every sync result and the dot flips live
+      # without a page refresh. See
+      # StateSyncIslandJob#broadcast_status_change.
+      span(
+        id:    "island-status-dot-#{island.id}",
+        class: "shrink-0 vmd:group-data-[collapsed]:hidden"
+      ) do
         render Components::UI::StatusDot.new(status: status)
       end
 

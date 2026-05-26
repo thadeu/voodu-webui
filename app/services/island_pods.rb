@@ -36,8 +36,17 @@ class IslandPods
   # Empty array on any failure (no island, network error, malformed
   # payload). Callers should NOT raise — the surfaces that consume
   # this (picker dropdowns) gracefully hide themselves on [].
+  #
+  # WAREHOUSE=1 → read from the local snapshot table (sub-ms, offline
+  # resilient). Same payload shape since pods.payload stores the
+  # /pods?detail=true&spec=true row verbatim — pickers don't need
+  # to know which path served them.
   def self.compact(client, island)
     return [] if client.nil? || island.nil?
+
+    if IslandState.warehouse?
+      return island.pods.order(:container_name).map(&:payload_hash)
+    end
 
     Rails.cache.fetch(cache_key(island), expires_in: TTL) do
       payload = client.pods(detail: false)

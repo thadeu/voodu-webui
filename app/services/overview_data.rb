@@ -23,6 +23,22 @@
 class OverviewData
   attr_reader :error, :updated_at, :cache_hit
 
+  # stale? — true when we're rendering snapshot data while the
+  # controller is unreachable. Drives:
+  #
+  #   - The banner at the top of the dashboard ("Controller offline
+  #     — showing last-known data from N min ago")
+  #   - Pod-row statuses are forced to :offline so the table reflects
+  #     "we don't know if these are actually running right now"
+  #     instead of confidently showing yesterday's :running.
+  #
+  # Only meaningful under WAREHOUSE=1 (the warehouse path is what
+  # makes stale-but-rendered possible — the HTTP path raises into
+  # @error and pods_raw stays empty).
+  def stale?
+    @stale == true
+  end
+
   # Cache TTL for one island's overview snapshot. Short enough that
   # the operator's view is "live-ish" (≤ this many seconds stale), long
   # enough that browsing — opening the dashboard, flipping pod-status
@@ -129,6 +145,11 @@ class OverviewData
   end
 
   def pods_running_count
+    # When stale, every row renders as :offline; reflect that in the
+    # "N of M running" summary line so the header doesn't lie ("7 of
+    # 8 pods running" with 8 :offline pill rows is jarring).
+    return 0 if stale?
+
     @pods_raw.count { |p| p["running"] }
   end
 
@@ -183,6 +204,41 @@ class OverviewData
   def fetch!
     return if @client.nil?
 
+    return fetch_from_warehouse! if IslandState.warehouse?
+
+    fetch_from_http!
+  end
+
+  # fetch_from_warehouse! — read the local snapshot tables populated
+  # by `StateSyncIslandJob` (every 10s). Sub-millisecond, no HTTP, no
+  # error paths to handle — the sync job is the only thing that can
+  # fail, and we accept whatever it last wrote.
+  #
+  # @updated_at carries `island.last_synced_at` so the topbar's
+  # "updated Ns ago" chip reflects DATA freshness rather than this
+  # page-render moment.
+  def fetch_from_warehouse!
+    state = IslandState.for(@island)
+
+    @system     = state.system || {}
+    @pods_raw   = state.pods
+    @updated_at = state.synced_at || Time.current
+    @cache_hit  = true  # always a "hit" — the warehouse IS the cache
+
+    # Mark the snapshot stale when the controller is unreachable.
+    # Drives the banner + forces per-pod status to :offline (see
+    # `stale?` doc above + `prepare_pod` below). We trust
+    # IslandHealth here rather than recomputing recency thresholds
+    # — it's the single source of truth for "is the agent up?"
+    # under both WAREHOUSE modes.
+    @stale = @island.status == :offline && state.synced_at.present?
+  end
+
+  # fetch_from_http! — the legacy path. Direct controller call per
+  # request, cached 10s in Rails.cache. Stays in place for
+  # WAREHOUSE=0 (during rollout) and as a defensive fallback should
+  # the warehouse path ever need a quick-disable.
+  def fetch_from_http!
     Rails.cache.delete(cache_key) if @force
 
     cached = Rails.cache.read(cache_key)
@@ -374,7 +430,13 @@ class OverviewData
   # ?detail=true): payload carries `ports: [{container: "80/tcp"}, …]`.
   # We extract the container number (before `/`) + dedup.
   def prepare_pod(p)
-    status = pod_status_sym(p)
+    # When the controller is unreachable we can't honestly claim any
+    # pod is "running" — that's the LAST KNOWN state, but the actual
+    # truth is "we don't know". PodStatus handles the override so the
+    # table matches the topbar's offline pill. As soon as the next
+    # sync succeeds, the badges flip back to whatever the controller
+    # reports.
+    status = PodStatus.from_payload(p, stale: stale?)
 
     {
       name:          p["name"],
@@ -428,12 +490,9 @@ class OverviewData
     end.uniq
   end
 
-  def pod_status_sym(p)
-    return :running if p["running"]
-    return :restarting if p["status"].to_s.match?(/restarting/i)
-
-    :stopped
-  end
+  # pod_status_sym — replaced by PodStatus.from_payload (single
+  # source of truth across OverviewData + PodDetailData). Method
+  # kept as a tombstone reference for git-history grep.
 
   # synth_series — deleted in M2.C4. Real time-series via
   # MetricsData replaced this; when /metrics returns empty (cold

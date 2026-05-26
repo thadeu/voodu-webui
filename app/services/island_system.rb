@@ -17,8 +17,20 @@ class IslandSystem
   # fetch — returns the parsed /system payload (Hash) or nil on any
   # failure (no island, network error, malformed). Callers should
   # gracefully degrade — Settings shows "—" for the affected fields.
+  #
+  # WAREHOUSE=1 → read from the local snapshot maintained by
+  # `StateSyncIslandJob` (every 10s). Sub-millisecond + offline-
+  # resilient: when the controller is down the Settings "About"
+  # card keeps showing the last-known hostname / kernel / CPU /
+  # memory / disk / uptime / voodu version — instead of dashing
+  # every field. The sync job refreshes this on every tick so the
+  # values track the agent live.
   def self.fetch(client, island)
-    return nil if client.nil? || island.nil?
+    return nil if island.nil?
+
+    return island.system&.payload_hash if IslandState.warehouse?
+
+    return nil if client.nil?
 
     Rails.cache.fetch(cache_key(island), expires_in: TTL) do
       client.system

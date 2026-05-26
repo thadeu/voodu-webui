@@ -34,12 +34,56 @@ class Views::Dashboard::Index < Views::Base
 
   private
 
+  # overview_body — wrapped in a Turbo Frame so StateSyncIslandJob's
+  # state_tick broadcast can refresh it without a page reload. We
+  # DON'T set src= on the frame (would cause Turbo to auto-fetch on
+  # connect, which can blank out the body before the network round-
+  # trip completes). Instead, the state-tick JS handler sets
+  # frame.src = window.location.href just before calling reload().
+  # Same effect, no first-paint flash.
+  #
+  # `data-state-frame` is the opt-in marker the JS action looks
+  # for — sibling pages (Logs, Settings) that don't want this
+  # behaviour simply don't set it.
   def overview_body
-    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
-      error_banner if @data&.error
-      page_header
-      stat_cards
-      pods_section
+    # `target="_top"` is critical here: without it Turbo would treat
+    # any link inside this frame (every pod row, every action button)
+    # as a frame-navigation — clicking a pod would request /pods/:name
+    # with a Turbo-Frame header, the response wouldn't have a matching
+    # frame, and Turbo would render "Content missing". `_top` flips the
+    # default so links navigate the whole page; the frame remains
+    # programmatically reload()-able by state_tick.
+    turbo_frame_tag(
+      "island-#{@current_island.id}-state",
+      target: "_top",
+      data: { state_frame: true }
+    ) do
+      div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+        stale_banner if @data&.stale?
+        error_banner if @data&.error
+        page_header
+        stat_cards
+        pods_section
+      end
+    end
+  end
+
+  # stale_banner — rendered when the controller is unreachable but
+  # we have a local snapshot (WAREHOUSE=1). Tells the operator
+  # "you're looking at saved data, not real-time" so the running
+  # counts + chart values aren't misread as live. Different copy
+  # from error_banner because there's nothing to fix — just wait
+  # for the agent to come back.
+  def stale_banner
+    age = @data.updated_at ? "#{time_ago_in_words(@data.updated_at)} ago" : "moments ago"
+
+    div(
+      class: "px-3 py-2 border border-voodu-amber/40 bg-voodu-amber-dim text-voodu-amber text-[12.5px] flex items-center gap-2"
+    ) do
+      render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
+      span { "Controller offline — showing last-known state from " }
+      span(class: "font-voodu-mono opacity-80") { age }
+      span { ". Pod statuses are uncertain until the agent comes back." }
     end
   end
 

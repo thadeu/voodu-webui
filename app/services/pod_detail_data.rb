@@ -52,12 +52,24 @@ class PodDetailData
   def kind          = pick("kind")
   def image         = pick("image")
   def restarts      = (@raw&.dig("restarts") || 0).to_i
-  def status_sym
-    return :running if @raw&.dig("running")
-    return :restarting if @raw&.dig("status").to_s.match?(/restart/i)
-    return :stopped if @raw&.dig("status") == "stopped"
 
-    :stopped
+  # status_sym — delegates to PodStatus (shared with OverviewData) so
+  # the pill on the pod show header matches the one on the pods table
+  # exactly. Stale flips it to :offline regardless of @raw — same
+  # honesty rule as the table: controller unreachable means we can't
+  # claim the pod is up.
+  def status_sym
+    PodStatus.from_payload(@raw, stale: stale?)
+  end
+
+  # stale? — true when we're rendering a warehoused snapshot while
+  # the controller is unreachable. Drives the yellow banner at the
+  # top of the page AND forces status_sym to :offline so the
+  # Running pill doesn't lie when the agent is down. Only meaningful
+  # under WAREHOUSE=1 (the HTTP path raises into @error before we
+  # can render anything to be stale ABOUT).
+  def stale?
+    @stale == true
   end
 
   # Stat-card payloads (same shape Components::Overview::StatCard
@@ -248,6 +260,33 @@ class PodDetailData
   def fetch!
     return if @client.nil?
 
+    return fetch_from_warehouse! if IslandState.warehouse?
+
+    fetch_from_http!
+  end
+
+  # fetch_from_warehouse! — read the pod's snapshot from the local
+  # `pods` table populated by StateSyncIslandJob. Sub-millisecond.
+  # When the pod isn't in the snapshot (sync hasn't run yet, or it
+  # was just deleted), @raw stays nil and the view renders the
+  # "—" sentinels — same as a 404 from the HTTP path, no error.
+  def fetch_from_warehouse!
+    pod_row     = @island.pods.find_by(container_name: @name)
+    @raw        = pod_row&.payload_hash
+    @updated_at = @island.last_synced_at || Time.current
+
+    # Mark the snapshot stale when the controller is unreachable —
+    # mirrors OverviewData's stale-detection. Drives the yellow
+    # banner + forces status_sym to :offline via PodStatus.
+    # Trust IslandHealth (the single source of truth for "is the
+    # agent up?") instead of recomputing recency thresholds here.
+    @stale = @island.status == :offline && @updated_at.present?
+  end
+
+  # fetch_from_http! — legacy path: single HTTP fetch + Rails.cache.
+  # Stays in place for WAREHOUSE=0 (rollout) + as a defensive
+  # fallback when an operator wants the live shape.
+  def fetch_from_http!
     Rails.cache.delete(cache_key) if @force
 
     cached = Rails.cache.read(cache_key)

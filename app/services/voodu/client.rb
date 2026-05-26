@@ -113,17 +113,25 @@ module Voodu
       delete("pats/#{CGI.escape(id)}")
     end
 
-    # pods — listing. `detail: true` asks the controller to enrich each
-    # row with the full PodDetail shape server-side (env, networks,
-    # ports, state, …), giving the WebUI the same payload `vd describe
-    # pod` consumes via a single round-trip. Without it the response
-    # is the compact list (cheaper, used by surfaces that only need
-    # name / kind / scope).
+    # pods — listing. Two opt-in enrichments:
     #
-    # The flag is opt-in to keep `vd get pods` and the dashboard
-    # header — which only render compact info — paying the cheap cost.
-    def pods(detail: false)
-      get("pods", detail ? { detail: "true" } : nil)
+    #   detail: true — each row carries the full PodDetail shape
+    #     (env, networks, ports, state, stats). Same payload `vd
+    #     describe pod` consumes via a single round-trip.
+    #
+    #   spec: true — each row carries the declared manifest from etcd
+    #     (kind, scope, name, spec body, metadata). Lets the WebUI
+    #     render probes / env / resources from the source of truth
+    #     in a single request instead of fanning out to /apply.
+    #
+    # Composable: passing both is the shape `StateSyncIslandJob` uses
+    # to populate the snapshot table — full runtime + declared spec
+    # in one fetch per sync tick.
+    def pods(detail: false, spec: false)
+      params = {}
+      params[:detail] = "true" if detail
+      params[:spec]   = "true" if spec
+      get("pods", params.presence)
     end
 
     # pod — fetches a single container's detail. The PAT plane envelopes
@@ -132,8 +140,13 @@ module Voodu
     # `data`, we still need to peel `pod`. Other endpoints (stats, pods)
     # put their primary payload directly in `data` and leave the unwrap
     # to the caller — that's why this is the only spot doing it.
-    def pod(name)
-      data = get("pods/#{CGI.escape(name)}")
+    #
+    # `spec: true` enriches the single-pod response the same way
+    # `pods(spec: true)` does the list — declared manifest joined in
+    # from etcd.
+    def pod(name, spec: false)
+      params = spec ? { spec: "true" } : nil
+      data = get("pods/#{CGI.escape(name)}", params)
       data.is_a?(Hash) ? (data["pod"] || data) : data
     end
 
