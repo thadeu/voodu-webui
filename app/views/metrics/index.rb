@@ -325,19 +325,27 @@ class Views::Metrics::Index < Views::Base
   # server-side (no lazy sub-frames). The parent metrics-charts
   # turbo-frame handles refresh as a single atomic swap on
   # broadcast tick — see turbo_actions/metrics.js.
+  # render_chart_cards — grid wrapper carries data-metrics-display-target="grid"
+  # so the metrics-display controller can mutate gridTemplateColumns
+  # at runtime. Server defaults to 2-col at vmd+ via Tailwind class;
+  # JS overrides based on visible count + operator's saved cols pref.
   def render_chart_cards(charts)
-    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+    div(
+      class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
+      data:  { metrics_display_target: "grid" }
+    ) do
       charts.each do |c|
         render Components::Metrics::ChartCard.new(
-          label:      c[:label],
-          color:      c[:color],
-          unit:       c[:unit],
-          points:     c[:points],
-          range_ms:   @data.range_ms,
-          current:    c[:current],
-          expand_url: expand_url_for(c),
-          metric:     c[:metric],
-          section:    c[:section]
+          label:           c[:label],
+          color:           c[:color],
+          unit:            c[:unit],
+          points:          c[:points],
+          range_ms:        @data.range_ms,
+          current:         c[:current],
+          expand_url:      expand_url_for(c),
+          metric:          c[:metric],
+          section:         c[:section],
+          default_visible: c.fetch(:default_visible, true)
         )
       end
     end

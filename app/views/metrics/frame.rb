@@ -44,18 +44,22 @@ class Views::Metrics::Frame < Views::Base
   private
 
   def render_grid(charts)
-    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+    div(
+      class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
+      data:  { metrics_display_target: "grid" }
+    ) do
       charts.each do |c|
         render Components::Metrics::ChartCard.new(
-          label:      c[:label],
-          color:      c[:color],
-          unit:       c[:unit],
-          points:     c[:points],
-          range_ms:   @data.range_ms,
-          current:    c[:current],
-          expand_url: expand_url_for(c),
-          metric:     c[:metric],
-          section:    c[:section]
+          label:           c[:label],
+          color:           c[:color],
+          unit:            c[:unit],
+          points:          c[:points],
+          range_ms:        @data.range_ms,
+          current:         c[:current],
+          expand_url:      expand_url_for(c),
+          metric:          c[:metric],
+          section:         c[:section],
+          default_visible: c.fetch(:default_visible, true)
         )
       end
     end

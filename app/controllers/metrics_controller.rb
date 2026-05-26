@@ -146,13 +146,11 @@ class MetricsController < ApplicationController
     kind       = params[:kind].to_s.presence || "host"
     scope_kind = params[:scope_kind].to_s == "pod" ? "pod" : "host"
 
-    resource_specs = MetricsPageData.resource_specs_for(scope_kind)
-    http_specs     = kind == "deployment" ? MetricsPageData.http_specs_static : []
+    items = MetricsPageData.display_settings_items_for(scope_kind, kind)
 
     render Views::Metrics::DisplaySettings.new(
-      kind:           kind,
-      resource_specs: resource_specs,
-      http_specs:     http_specs
+      kind:  kind,
+      items: items
     ), layout: false
   end
 

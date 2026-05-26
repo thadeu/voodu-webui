@@ -49,16 +49,24 @@ class Components::Metrics::ChartCard < Components::Base
   # operators a visual cue that the card is HTTP-derived. (The
   # divider-style HTTP section header was removed in favor of this
   # inline tag — fewer hard breaks in the grid, same signal.)
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil)
-    @label      = label
-    @color      = color
-    @unit       = unit
-    @points     = Array(points)
-    @range_ms   = range_ms
-    @current    = current
-    @expand_url = expand_url
-    @metric     = metric
-    @section    = section
+  #
+  # default_visible: BOOLEAN — when false, the card emits
+  # data-default-visible="false". The metrics-display controller
+  # reads this on first connect for a kind that has no saved
+  # display settings yet and hides the card by default. Operator
+  # can un-hide it via the Settings drawer's Latency / Errors
+  # picker groups.
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true)
+    @label           = label
+    @color           = color
+    @unit            = unit
+    @points          = Array(points)
+    @range_ms        = range_ms
+    @current         = current
+    @expand_url      = expand_url
+    @metric          = metric
+    @section         = section
+    @default_visible = default_visible
   end
 
   def view_template
@@ -69,7 +77,8 @@ class Components::Metrics::ChartCard < Components::Base
       root_data[:metric_key]             = @metric
     end
 
-    root_data[:section] = @section if @section
+    root_data[:section]         = @section if @section
+    root_data[:default_visible] = "false"  unless @default_visible
 
     div(
       class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",

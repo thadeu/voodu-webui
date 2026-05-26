@@ -102,7 +102,13 @@ class MetricsPageData
     return [] if @client.nil?
     return [] unless ingress_eligible?
 
-    ingress_chart_specs.map { |spec| build_chart(spec) { fetch_ingress_points(spec[:metric], spec[:scale]) } }
+    # Emit ALL picker specs (8 cards) so the operator can un-hide any
+    # of the latency / status-code variants via the Settings drawer.
+    # Each card carries `default_visible: true|false` — JS hides the
+    # picker-only ones on first run for a kind that hasn't been
+    # configured yet (~4 visible by default, ~4 in the Latency/Errors
+    # group pickers).
+    ingress_picker_specs.map { |spec| build_chart(spec) { fetch_ingress_points(spec[:metric], spec[:scale]) } }
   end
 
   # available_metric_specs — list of every metric the in-modal
@@ -247,17 +253,72 @@ class MetricsPageData
     base.map { |s| s.merge(section: "resource") }
   end
 
-  # http_specs_static — the four HTTP chart-grid cards. Same as
-  # ingress_chart_specs but as a class method so the display_settings
-  # endpoint can render them without a client connection.
-  # All entries carry section: "http".
+  # http_specs_static — the FULL HTTP set (8 metrics) used by the
+  # display_settings endpoint. The view groups the latency variants
+  # (p90/p95/p99) into a "Latency" picker card and the status code
+  # variants (3xx/4xx/5xx) into an "Errors" picker card so the
+  # drawer stays compact regardless of how many percentile / status
+  # variants we eventually expose.
+  #
+  # default_visible mirrors the chart-grid behavior: p95 + 5xx are
+  # the canonical "primary" variants and stay visible on first run;
+  # p90, p99, 3xx, 4xx default hidden and only appear when operator
+  # checks them in the group picker.
   def self.http_specs_static
     [
-      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   section: "http" },
-      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", section: "http" },
-      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   section: "http" },
-      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   section: "http" }
+      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   section: "http", default_visible: true },
+      { label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)",   unit: "ms", section: "http", default_visible: false },
+      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", section: "http", default_visible: true },
+      { label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", section: "http", default_visible: false },
+      { label: "3xx",         metric: "req_3xx",        color: "var(--voodu-sky)",    unit: "",   section: "http", default_visible: false },
+      { label: "4xx",         metric: "req_4xx",        color: "var(--voodu-rose)",   unit: "",   section: "http", default_visible: false },
+      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   section: "http", default_visible: true },
+      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   section: "http", default_visible: true }
     ]
+  end
+
+  # display_settings_items_for — what the Settings drawer renders.
+  # Resource metrics stay as single tiles; HTTP latency + error
+  # variants get grouped into picker cards so the drawer doesn't
+  # balloon. Returns a flat array of items, each either:
+  #   { kind: :single, ... spec fields }
+  #   { kind: :group,  label:, group_key:, color:, unit:, section:, members: [specs] }
+  #
+  # The view renders single → normal tile; group → expandable tile
+  # with sub-metric checkboxes inside.
+  def self.display_settings_items_for(scope_kind, kind)
+    items = resource_specs_for(scope_kind).map { |s| s.merge(kind: :single) }
+
+    return items unless kind == "deployment"
+
+    http = http_specs_static.each_with_object({}) { |s, h| h[s[:metric]] = s }
+
+    # Layout: Requests → Latency group → Errors group → Bytes Out
+    items << http["req_count"].merge(kind: :single)
+
+    items << {
+      kind:      :group,
+      label:     "Latency",
+      group_key: "latency",
+      color:     "var(--voodu-amber)",
+      unit:      "ms",
+      section:   "http",
+      members:   [http["latency_p90_ms"], http["latency_p95_ms"], http["latency_p99_ms"]]
+    }
+
+    items << {
+      kind:      :group,
+      label:     "Errors",
+      group_key: "errors",
+      color:     "var(--voodu-red)",
+      unit:      "",
+      section:   "http",
+      members:   [http["req_3xx"], http["req_4xx"], http["req_5xx"]]
+    }
+
+    items << http["bytes_out"].merge(kind: :single)
+
+    items
   end
 
   private
@@ -304,10 +365,10 @@ class MetricsPageData
   # failure / error / dead-replica chart we add (memorise this).
   def ingress_chart_specs
     [
-      { label: "Requests",    metric: "req_count",       color: "var(--voodu-orange)", unit: "",   scale: :count      },
-      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-amber)",  unit: "ms", scale: :ms         },
-      { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count      },
-      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto }
+      { label: "Requests",    metric: "req_count",       color: "var(--voodu-orange)", unit: "",   scale: :count,      default_visible: true },
+      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-amber)",  unit: "ms", scale: :ms,         default_visible: true },
+      { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count,      default_visible: true },
+      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto, default_visible: true }
     ]
   end
 
@@ -322,10 +383,10 @@ class MetricsPageData
   # rationale on gold/violet/sky/rose.
   def ingress_picker_only_specs
     [
-      { label: "p90 Latency", metric: "latency_p90_ms",  color: "var(--voodu-gold)",   unit: "ms", scale: :ms    },
-      { label: "p99 Latency", metric: "latency_p99_ms",  color: "var(--voodu-violet)", unit: "ms", scale: :ms    },
-      { label: "3xx",         metric: "req_3xx",         color: "var(--voodu-sky)",    unit: "",   scale: :count },
-      { label: "4xx",         metric: "req_4xx",         color: "var(--voodu-rose)",   unit: "",   scale: :count }
+      { label: "p90 Latency", metric: "latency_p90_ms",  color: "var(--voodu-gold)",   unit: "ms", scale: :ms,    default_visible: false },
+      { label: "p99 Latency", metric: "latency_p99_ms",  color: "var(--voodu-violet)", unit: "ms", scale: :ms,    default_visible: false },
+      { label: "3xx",         metric: "req_3xx",         color: "var(--voodu-sky)",    unit: "",   scale: :count, default_visible: false },
+      { label: "4xx",         metric: "req_4xx",         color: "var(--voodu-rose)",   unit: "",   scale: :count, default_visible: false }
     ]
   end
 
@@ -368,19 +429,24 @@ class MetricsPageData
            end
 
     {
-      label:   spec[:label],
-      color:   spec[:color],
-      unit:    unit,
-      points:  points,
-      current: latest_scaled_for(spec),
-      metric:  spec[:metric],
-      source:  src,
+      label:           spec[:label],
+      color:           spec[:color],
+      unit:            unit,
+      points:          points,
+      current:         latest_scaled_for(spec),
+      metric:          spec[:metric],
+      source:          src,
       # section — "resource" for system/pod cards, "http" for ingress.
-      # Drives the inline [http] badge on the chart card label and the
-      # `data-section` attribute that lets the metrics-display
+      # Drives the inline [http] badge on the chart card label and
+      # the `data-section` attribute that lets the metrics-display
       # controller route saved hide-state to the right bucket.
-      section: src == "ingress" ? "http" : "resource",
-      scale:   spec[:scale]
+      section:         src == "ingress" ? "http" : "resource",
+      scale:           spec[:scale],
+      # default_visible — false for picker-only metrics (p90, p99,
+      # 3xx, 4xx). When the operator hasn't configured display
+      # settings for this kind yet, JS hides cards with
+      # default_visible: false on first connect.
+      default_visible: spec.fetch(:default_visible, true)
     }
   end
 
