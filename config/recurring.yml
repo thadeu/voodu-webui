@@ -17,7 +17,14 @@
 common: &common
   metrics_sync:
     class: MetricsSyncOrchestratorJob
-    schedule: every 30 seconds
+    # 14s sync paired with MetricsData.CACHE_TTL=10s — the 4s gap
+    # guarantees that whatever cache window was warmed at sync T
+    # has expired by sync T+1, so each broadcast-triggered
+    # frame.reload() always cache-misses and pulls fresh data.
+    # Sits just under the 15s controller-side sampler cadence
+    # so we don't accidentally lap it. Cheap NDJSON-tail-and-
+    # bulk-insert; cadence cost is nothing on local SQLite.
+    schedule: every 14 seconds
 
 development:
   <<: *common

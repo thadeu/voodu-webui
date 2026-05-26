@@ -42,7 +42,25 @@ export default class extends Controller {
   tick() {
     if (this.paused > 0) return
 
-    const frame = this.element.querySelector("turbo-frame")
-    if (frame && typeof frame.reload === "function") frame.reload()
+    // Reload LEAF turbo-frames only — i.e. frames that don't
+    // wrap other turbo-frames.
+    //
+    // Why: the /metrics page nests N per-card `<turbo-frame>`
+    // inside a parent `<turbo-frame id="metrics-charts">`. If we
+    // reloaded the parent, the server response would re-emit
+    // skeleton placeholders for every card, then each card's
+    // lazy frame would fire its own fetch — causing a visible
+    // skeleton flash on every poll tick. Reloading the leaves
+    // directly refreshes the data in place without disrupting
+    // the rendered chart underneath.
+    //
+    // The /logs page has a single inner frame (no nesting), so
+    // it's a leaf too — same code path covers both surfaces
+    // without per-page branching.
+    const frames = this.element.querySelectorAll("turbo-frame")
+    frames.forEach((frame) => {
+      if (frame.querySelector("turbo-frame")) return // skip parents
+      if (typeof frame.reload === "function") frame.reload()
+    })
   }
 }

@@ -1,17 +1,30 @@
-# Async adapter only works within the same process, so for manually triggering cable updates from a console,
-# and seeing results in the browser, you must do so from the web console (running inside the dev process),
-# not a terminal started via bin/rails console! Add "console" to any action or any ERB template view
-# to make the web console appear.
-development:
-  adapter: async
-
-test:
-  adapter: test
-
-production:
+# Solid Cable in dev too — not `async`.
+#
+# Why: Procfile.dev runs `web` and `jobs` in SEPARATE processes.
+# The async adapter is IN-PROCESS only — a `broadcast_to` from
+# MetricsSyncIslandJob (running in jobs process) never reaches the
+# browser's `<turbo-cable-stream-source>` subscription (mounted in
+# web process). Symptom: server log shows "Broadcasting to ..." but
+# charts never update live; the bug is silent because the broadcast
+# call succeeds locally and the subscriber simply never sees it.
+#
+# solid_cable uses SQLite as the message broker, so any Rails
+# process writing to the cable DB delivers to any process polling
+# it. polling_interval: 0.1s keeps live updates feeling instant
+# (a 100ms tail on top of the job's own ~10s sync cadence).
+default: &default
   adapter: solid_cable
   connects_to:
     database:
       writing: cable
   polling_interval: 0.1.seconds
   message_retention: 1.day
+
+development:
+  <<: *default
+
+test:
+  adapter: test
+
+production:
+  <<: *default

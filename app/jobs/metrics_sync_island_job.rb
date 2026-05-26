@@ -71,5 +71,38 @@ class MetricsSyncIslandJob < ApplicationJob
       "metrics-sync island=#{island.key} tenant=#{island.id} " \
       "since=#{last_ts} inserted=#{total}"
     )
+
+    # Live tick: nudge every page subscribed to this island's metrics
+    # stream that there's fresh data. Each subscriber re-fetches the
+    # metrics-charts turbo-frame at its CURRENT scope/range — the
+    # broadcast is just a "stale, reload" signal, not a content push.
+    # Same refetch the 30s polling tick would have done, but driven
+    # by real data arrival (often sub-second) instead of wall-clock.
+    #
+    # Only broadcasts when `total > 0` — empty pulls are the steady-
+    # state quiet period; no point waking every browser to no-op.
+    broadcast_tick(island) if total.positive?
+  end
+
+  private
+
+  # broadcast_tick — fire-and-forget ActionCable broadcast to the
+  # `metrics-#{island.id}` stream. The custom `metrics_tick` Turbo
+  # Stream action (see turbo_actions/metrics.js) calls frame.reload()
+  # on the metrics-charts frame. Target arg is required by
+  # Turbo::StreamsChannel but unused by our action — passing the
+  # frame id keeps the broadcast contract conventional.
+  #
+  # Rescued generically so a cable hiccup (e.g. solid_cable migration
+  # mid-sync) never fails the job itself — the polling controller is
+  # still ticking every 30s as backup.
+  def broadcast_tick(island)
+    Turbo::StreamsChannel.broadcast_action_to(
+      "metrics-#{island.id}",
+      action: :metrics_tick,
+      target: "metrics-charts"
+    )
+  rescue StandardError => e
+    Rails.logger.warn("metrics-sync broadcast failed island=#{island.id}: #{e.class} #{e.message}")
   end
 end

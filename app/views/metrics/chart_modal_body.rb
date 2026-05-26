@@ -36,12 +36,25 @@ class Views::Metrics::ChartModalBody < Views::Base
   def view_template
     div(
       id:    "chart-modal-body",
+      data:  { refresh_url: refresh_url },
       class: "flex flex-col gap-3 p-4 vmd:p-5"
     ) do
       toolbar
       chart_block
       stat_strip
     end
+  end
+
+  # refresh_url — the URL the broadcast tick refetches when the
+  # modal is open. Identical to the URL the operator's last
+  # picker action GET'd, so the refresh stays scoped to the
+  # current metric/pod/range without sending the operator back
+  # to a "default" view they didn't pick.
+  #
+  # Read by turbo_actions/metrics.js when `chart-modal:opened`
+  # is true and a metrics_tick fires.
+  def refresh_url
+    "#{metrics_chart_path}?#{@query.to_query}"
   end
 
   private

@@ -125,4 +125,5 @@ class MetricsController < ApplicationController
       end
     end
   end
+
 end

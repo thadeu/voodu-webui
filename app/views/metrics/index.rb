@@ -40,6 +40,17 @@ class Views::Metrics::Index < Views::Base
 
   def body
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+      # Subscribe to live ticks broadcast by MetricsSyncIslandJob
+      # whenever new samples land in the warehouse for this island.
+      # The custom `metrics_tick` Turbo Stream action (see
+      # turbo_actions/metrics.js) calls `frame.reload()` on the
+      # metrics-charts frame — same refetch the 30s polling tick
+      # does, but triggered by real data arrival.
+      #
+      # The polling controller stays put as a 30s fallback in case
+      # the WebSocket drops (network blip, browser sleep, etc.).
+      turbo_stream_from "metrics-#{@current_island.id}"
+
       page_head
       toolbar
       replica_chips
@@ -194,47 +205,34 @@ class Views::Metrics::Index < Views::Base
   # in W7); pod scope shows 4 (CPU/Mem/Rx/Tx). Grid auto-wraps
   # cleanly either way.
   #
-  # Wrapped in `polling_controller` + `turbo_frame_tag` so the
-  # `auto-refresh` chip is honest:
+  # Update strategy: ActionCable broadcast over Solid Cable. The
+  # MetricsSyncIslandJob fires `metrics_tick` after inserting new
+  # samples, every page subscribed to `metrics-#{island.id}`
+  # reloads its per-card frames in place (see
+  # turbo_actions/metrics.js). Polling tick was removed: with
+  # lazy-loaded sub-frames, reloading the parent caused skeleton
+  # flicker every 30s — broadcast covers the same job cadence
+  # without the visual cost.
   #
-  #   - Initial pageload renders the grid inline (chart appears
-  #     immediately, no fetch round-trip blocked on Turbo).
-  #   - polling_controller.js ticks every 30s and calls
-  #     `frame.reload()`, which refetches the frame's src (the
-  #     current URL with all query params preserved).
-  #   - MetricsController detects the `Turbo-Frame` header and
-  #     responds with Views::Metrics::Frame (layout: false), which
-  #     is just THIS grid inside a matching `<turbo-frame>` tag.
-  #   - Turbo atomically swaps the frame contents — scroll position,
-  #     range pill, scope picker state all preserved.
-  #
-  # 30s cadence chosen to align with the warehouse sync tick
-  # (MetricsSyncIslandJob runs every 30s). Polling faster wouldn't
-  # see fresher data; polling slower would lose responsiveness
-  # without saving meaningful work.
+  # Trade-off documented: if Solid Cable / WebSocket connection
+  # drops (rare in local dev, possible on mobile/network change),
+  # data freezes until next manual refresh. Acceptable for a
+  # local self-hosted dashboard; if a SaaS surface ever wants
+  # multi-second polling fallback, a follow-up can re-introduce
+  # polling behind an opt-in URL toggle (e.g. ?auto_refresh=poll).
   def chart_grid
     return if @data.nil?
 
-    div(
-      data: {
-        controller: "polling",
-        polling_interval_value: "30000"
-      }
-    ) do
-      # `src` is the current URL preserving query params (scope,
-      # range, refresh marker). On reload Turbo refetches the same
-      # URL with the Turbo-Frame header set, which the controller
-      # uses to short-circuit to the Frame view.
-      turbo_frame_tag("metrics-charts", src: current_request_url) do
-        # Same structure Views::Metrics::Frame renders on each poll
-        # tick. Keeping both surfaces identical means the initial
-        # pageload and the post-tick swap show the same DOM — no
-        # flicker, no duplication, no "HTTP section disappears
-        # for one tick" race.
-        div(class: "flex flex-col gap-4 vmd:gap-5") do
-          render_chart_cards(@data.charts)
-          http_section if @data.ingress_eligible?
-        end
+    # Single turbo-frame carrying ALL chart cards inline. The
+    # metrics_tick broadcast (see turbo_actions/metrics.js) calls
+    # frame.reload() which refetches `src` — server detects the
+    # Turbo-Frame header in MetricsController#index and returns
+    # Views::Metrics::Frame with fresh data, Turbo atomically
+    # swaps the contents. No per-card subframes, no skeleton flash.
+    turbo_frame_tag("metrics-charts", src: current_request_url) do
+      div(class: "flex flex-col gap-4 vmd:gap-5") do
+        render_chart_cards(@data.charts)
+        http_section if @data.ingress_eligible?
       end
     end
   end
@@ -258,15 +256,10 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
-  # render_chart_cards — shared block for both grids; identical
-  # layout class + ChartCard wiring. Extracted so chart_grid and
-  # http_chart_grid don't drift on grid columns / gap.
-  #
-  # `expand_url` is the per-card URL that the maximize button
-  # opens via the chart-expand Stimulus controller. We build it
-  # here (not inside ChartCard) so the component stays
-  # presentation-only — knowing how to talk to /metrics/chart is
-  # the parent view's job, since it owns the helpers.
+  # render_chart_cards — renders ChartCards with data fetched
+  # server-side (no lazy sub-frames). The parent metrics-charts
+  # turbo-frame handles refresh as a single atomic swap on
+  # broadcast tick — see turbo_actions/metrics.js.
   def render_chart_cards(charts)
     div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
       charts.each do |c|
@@ -283,17 +276,15 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
-  # expand_url_for — builds the URL the maximize button opens.
-  # Echoes the parent page's scope_kind/scope_id/range so the
-  # modal starts at the same view the operator is looking at,
-  # then layers on metric/scale/label/color/unit so the modal
-  # endpoint can rebuild THIS single chart (not the whole grid).
+  # expand_url_for — URL the maximize button anchors to (turbo_stream
+  # response → opens shared modal). Echoes parent page scope/range
+  # so the modal starts at the same view, layers on metric metadata
+  # so the endpoint rebuilds the right single-chart slice.
   def expand_url_for(chart)
-    qp = request.query_parameters
-    params = {
-      scope_kind: qp[:scope_kind] || @data&.scope_kind,
-      scope_id:   qp[:scope_id]   || @data&.scope_id,
-      range:      qp[:range]      || @data&.range || "1h",
+    qp = {
+      scope_kind: @data&.scope_kind || "host",
+      scope_id:   @data&.scope_id,
+      range:      @data&.range || "1h",
       metric:     chart[:metric],
       scale:      chart[:scale],
       label:      chart[:label],
@@ -301,7 +292,7 @@ class Views::Metrics::Index < Views::Base
       unit:       chart[:unit]
     }.compact
 
-    "#{metrics_chart_path}?#{params.to_query}"
+    "#{metrics_chart_path}?#{qp.to_query}"
   end
 
   # current_request_url — request path + query string. Used as the

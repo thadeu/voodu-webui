@@ -16,7 +16,15 @@
 # tabs) hitting the same chart share the cached fetch — same pattern
 # as IslandHealth + pods_count.
 class MetricsData
-  CACHE_TTL = 60.seconds
+  # Pinned 4s SHORTER than MetricsSyncIslandJob's 14s recurring
+  # cadence (see config/recurring.yml). The gap guarantees: whenever
+  # the job ticks at T and broadcasts metrics_tick, the cache cell
+  # populated at the previous tick (T−14s) has already expired
+  # (T−4s past TTL). Frame.reload() always cache-misses and pulls
+  # fresh data. Going EQUAL or HIGHER reintroduces the "served
+  # previous tick's data" bug operators observed as "2min sem
+  # atualizar."
+  CACHE_TTL = 10.seconds
 
   def initialize(client, island)
     @client = client

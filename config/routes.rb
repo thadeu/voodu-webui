@@ -5,6 +5,22 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
 
+  # ActionCable WebSocket endpoint.
+  #
+  # Required so `turbo_stream_from` subscribers in any view (currently
+  # Views::Metrics::Index for live chart updates after MetricsSyncIslandJob
+  # broadcasts) can actually establish a WebSocket connection. Without
+  # this mount, Rails generates the right
+  # `<turbo-cable-stream-source>` HTML but the browser hits 404 on
+  # `/cable`, silently never subscribes, and broadcasts fall on the
+  # floor — chart stays frozen at pageload time.
+  #
+  # Rails 8 + turbo-rails doesn't auto-mount cable; the default
+  # `config.action_cable.mount_path = "/cable"` only declares WHERE
+  # it would be served, not that it IS served. The actual hookup is
+  # this routes entry.
+  mount ActionCable.server => "/cable"
+
   # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
