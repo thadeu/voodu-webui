@@ -56,10 +56,34 @@ class Components::UI::Drawer < Components::Base
   # for drawers with a fundamentally different content shape — a
   # compact settings card grid shouldn't inherit the 60vw width an
   # operator set for the logs viewer.
+  # id — stable identifier for the Turbo "permanent" wrapping. When
+  # this drawer's host frame is re-rendered (e.g. StateSyncIslandJob's
+  # state_tick reloading the pod show frame), Turbo matches the
+  # before/after nodes by id and KEEPS the current one — preserving
+  # the Stimulus controller instance, the `data-open` state, the
+  # already-fetched body content, and any focus. Without it the
+  # frame reload would clobber the drawer mid-read.
+  #
+  # Default derives a deterministic short hash from `src` so two
+  # different drawers in the same frame get different ids automatically.
+  # Pass an explicit `id:` for readability / debuggability when the
+  # call site has a natural identifier ("drawer-logs-#{pod_name}").
+  # max_width — upper bound the operator can drag the panel to (and
+  # the CSS `max-width` ceiling, which applies even without dragging).
+  # Default `min(100vw, 1200px)` matches the previous hard-coded cap:
+  # at most the full viewport, at most 1200px on huge monitors. Pass
+  # a larger value (e.g. "85vw") for content-heavy drawers like the
+  # logs viewer where the operator routinely wants a wider tail.
+  #
+  # Accepts any CSS length expression (`"85vw"`, `"1400px"`,
+  # `"min(100vw, 1600px)"`). Used both in the inline style of the
+  # panel and in the resize handle's clamp logic.
   def initialize(title:, src:, open_url:,
-                 trigger_attrs: {},
+                 id:                  nil,
+                 trigger_attrs:       {},
                  width:               "40vw",
                  min_width:           "320px",
+                 max_width:           "min(100vw, 1200px)",
                  resizable:           true,
                  show_full_page_link: true,
                  storage_key:         "voodu:drawer-width")
@@ -68,19 +92,28 @@ class Components::UI::Drawer < Components::Base
     @open_url            = open_url
     @width               = width
     @min_width           = min_width
+    @max_width           = max_width
     @resizable           = resizable
     @trigger_attrs       = trigger_attrs
     @show_full_page_link = show_full_page_link
     @storage_key         = storage_key
+    @id                  = id || "drawer-#{Digest::SHA1.hexdigest(src.to_s)[0, 12]}"
   end
 
   def view_template(&trigger_body)
     div(
+      # `data-turbo-permanent` + stable id → Turbo preserves THIS node
+      # across frame reloads. Required because the drawer's open
+      # state lives in the client (dataset + Stimulus instance), so
+      # a server-driven re-render would otherwise reset it.
+      id:    @id,
       class: "contents",
       data: {
         controller: "drawer",
+        turbo_permanent: true,
         drawer_src_value:         @src,
         drawer_min_width_value:   @min_width,
+        drawer_max_width_value:   @max_width,
         drawer_resizable_value:   @resizable.to_s,
         drawer_storage_key_value: @storage_key
       }
@@ -110,16 +143,15 @@ class Components::UI::Drawer < Components::Base
       role: "dialog",
       "aria-modal": "false",
       "aria-labelledby": panel_title_id,
-      # Inline `width` so the resize handle can mutate it directly
-      # without fighting Tailwind classes. `max-width` from a class
-      # caps the upper bound on huge monitors.
-      style: "width: #{@width};",
+      # Inline `width` + `max-width` so the resize handle can mutate
+      # `width` directly without fighting Tailwind classes, and the
+      # max ceiling stays configurable per drawer instance (logs
+      # drawer opts in to 85vw — see Components::Pods::Header
+      # #view_logs_btn). Default `min(100vw, 1200px)` matches the
+      # old hard-coded cap.
+      style: "width: #{@width}; max-width: #{@max_width};",
       class: tokens(
         "fixed top-0 right-0 h-screen z-[60]",
-        # On mobile the inline width is overridden by w-full (max
-        # width helpful with the constraint that 40vw on a 360px
-        # screen is too narrow to be useful).
-        "max-w-[min(100vw,1200px)]",
         "flex flex-col",
         "bg-voodu-bg-2 border-l border-voodu-border",
         "shadow-[-12px_0_32px_rgba(0,0,0,0.55)]",

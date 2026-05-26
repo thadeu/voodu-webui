@@ -134,10 +134,14 @@ class Components::Pods::Header < Components::Base
     name = @data.name
 
     render(Components::UI::Drawer.new(
-      title:    "Logs · #{name}",
-      src:      "#{pod_logs_path(name: name)}?embed=1",
-      open_url: pod_logs_path(name: name),
-      width:    "70vw",
+      title:     "Logs · #{name}",
+      src:       "#{pod_logs_path(name: name)}?embed=1",
+      open_url:  pod_logs_path(name: name),
+      width:     "70vw",
+      # Logs are content-heavy (long lines, dense JSON dumps);
+      # let the operator drag the drawer up to 85vw when they
+      # need to read a wide payload without scrolling sideways.
+      max_width: "85vw",
       trigger_attrs: {
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
       }

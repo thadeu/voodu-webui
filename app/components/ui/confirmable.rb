@@ -49,7 +49,18 @@
 # `danger: true` swaps the confirm button to the red palette;
 # leave false for benign actions (e.g. "Apply changes").
 class Components::UI::Confirmable < Components::Base
+  # id — stable identifier for the Turbo "permanent" wrapping. Same
+  # rationale as Components::UI::Drawer: when this confirmable's host
+  # frame is re-rendered (e.g. state_tick reloading the pod show
+  # frame while the operator has the Restart modal open), Turbo
+  # matches before/after by id and KEEPS the current node — modal
+  # stays open, mid-confirmation state preserved.
+  #
+  # Default hashes the form action + method so two confirmables in
+  # the same frame get distinct ids automatically. Pass `id:` for
+  # readability when the call site has a natural identifier.
   def initialize(title:, message:, form:, trigger: {},
+                 id: nil,
                  confirm_label: "Confirm", cancel_label: "Cancel",
                  danger: false, icon: nil)
     @title         = title
@@ -64,12 +75,20 @@ class Components::UI::Confirmable < Components::Base
     @form_attrs   = form.except(:action, :method)
 
     @trigger_attrs = trigger
+    @id            = id || "confirmable-#{Digest::SHA1.hexdigest("#{@form_action}-#{@form_method}")[0, 12]}"
   end
 
   def view_template(&trigger_body)
     div(
+      # `data-turbo-permanent` + stable id → Turbo preserves THIS
+      # node across frame reloads, so a state_tick mid-confirmation
+      # doesn't close the modal under the operator's finger.
+      id:    @id,
       class: "inline-flex",
-      data: { controller: "confirmable" }
+      data: {
+        controller: "confirmable",
+        turbo_permanent: true
+      }
     ) do
       render_form(&trigger_body)
       render_modal

@@ -184,9 +184,13 @@ class Views::Metrics::Index < Views::Base
   # anchor, not a button — see its docs).
   def pod_actions
     render(Components::UI::Drawer.new(
-      title:    "Logs · #{@data.scope_id}",
-      src:      "#{pod_logs_path(name: @data.scope_id)}?embed=1",
-      open_url: pod_logs_path(name: @data.scope_id),
+      title:     "Logs · #{@data.scope_id}",
+      src:       "#{pod_logs_path(name: @data.scope_id)}?embed=1",
+      open_url:  pod_logs_path(name: @data.scope_id),
+      # Logs are content-heavy — allow drag up to 85vw for wide
+      # payloads. Same rationale as Components::Pods::Header
+      # #view_logs_btn.
+      max_width: "85vw",
       trigger_attrs: { class: btn_secondary_classes }
     )) do
       render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")

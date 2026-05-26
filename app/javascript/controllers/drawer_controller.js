@@ -38,6 +38,7 @@ export default class extends Controller {
   static values  = {
     src:        String,
     minWidth:   { type: String,  default: "320px" },
+    maxWidth:   { type: String,  default: "min(100vw, 1200px)" },
     resizable:  { type: Boolean, default: true },
     storageKey: { type: String,  default: "voodu:drawer-width" }
   }
@@ -182,8 +183,20 @@ export default class extends Controller {
   onResizeMove(event) {
     if (!this.resizing) return
     const min = this.parseLengthToPx(this.minWidthValue) || 320
-    const max = window.innerWidth - 80    // leave breathing room
-    const w   = Math.max(min, Math.min(max, window.innerWidth - event.clientX))
+
+    // Cap is the smaller of: (a) caller-configured maxWidth (e.g.
+    // "85vw" for the logs drawer), (b) viewport minus 80px breathing
+    // room so the page underneath stays partially visible even at
+    // the widest setting. parseLengthToPx returns null for compound
+    // expressions like `min(100vw, 1200px)` — fall back to the
+    // viewport-minus-breathing-room cap in that case.
+    const configuredMax = this.parseLengthToPx(this.maxWidthValue)
+    const breathingMax  = window.innerWidth - 80
+    const max           = configuredMax != null
+      ? Math.min(configuredMax, breathingMax)
+      : breathingMax
+
+    const w = Math.max(min, Math.min(max, window.innerWidth - event.clientX))
     this.panelTarget.style.width = `${w}px`
   }
 

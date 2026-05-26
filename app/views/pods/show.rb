@@ -63,10 +63,28 @@ class Views::Pods::Show < Views::Base
   # sync — operator doesn't have to manually refresh after a pod
   # creation.
   def framed_body
+    # `refresh="morph"` — when StateSyncIslandJob's state_tick triggers
+    # frame.reload(), Turbo 8 uses Idiomorph to diff the response
+    # against the current DOM instead of replacing the frame body
+    # wholesale. Two big wins:
+    #
+    #   1. `[data-turbo-permanent]` nodes (the Drawer + Confirmable
+    #      roots) are skipped during morph → open drawers/modals keep
+    #      their client-side state (data-open, Stimulus instance vars
+    #      like log_stream_controller's `wrap` flag, scroll position
+    #      inside the logs viewer, fetched body content).
+    #   2. The stat cards, status pills, and other live fields are
+    #      morphed in place rather than re-created → no flash, no
+    #      controller disconnect/connect cycles on unchanged nodes.
+    #
+    # Without morph, plain Turbo Frame reload replaces the entire
+    # frame body. Even `[data-turbo-permanent]` is ignored (that
+    # attribute is a Turbo Drive feature, not Turbo Frames).
     turbo_frame_tag(
       "island-#{@current_island.id}-state",
-      target: "_top",
-      data: { state_frame: true }
+      target:  "_top",
+      refresh: "morph",
+      data:    { state_frame: true }
     ) do
       if @data.error
         render Components::UI::ErrorState.new(error: @data.error)

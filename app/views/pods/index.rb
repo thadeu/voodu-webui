@@ -46,10 +46,16 @@ class Views::Pods::Index < Views::Base
     # Without it, clicking a pod row would render "Content missing"
     # because the /pods/:name response has no matching frame.
     # See Views::Dashboard::Index for the same fix.
+    # `refresh="morph"` — see Views::Pods::Show#framed_body for the
+    # full rationale. Short version: Turbo 8 morph rendering respects
+    # `[data-turbo-permanent]` and updates only the nodes that changed,
+    # so open drawers / modals keep their client state across the
+    # state_tick reload.
     turbo_frame_tag(
       "island-#{@current_island.id}-state",
-      target: "_top",
-      data: { state_frame: true }
+      target:  "_top",
+      refresh: "morph",
+      data:    { state_frame: true }
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         stale_banner if @data&.stale?
