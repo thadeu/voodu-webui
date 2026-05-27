@@ -421,6 +421,7 @@ class MetricsPageData
   def build_chart(spec)
     points = yield
     src    = source_for(spec[:metric])
+    cap    = capacity_for(spec)
 
     unit = if spec[:scale] == :bytes_auto && points.any?
              points.first[:formatted].to_s.split(" ").last.to_s
@@ -446,8 +447,161 @@ class MetricsPageData
       # 3xx, 4xx). When the operator hasn't configured display
       # settings for this kind yet, JS hides cards with
       # default_visible: false on first connect.
-      default_visible: spec.fetch(:default_visible, true)
+      default_visible: spec.fetch(:default_visible, true),
+      # capacity_label / capacity_pct — "X GB / Y GB · Z%" context
+      # rendered next to the current value on memory + disk cards
+      # (host or pod) so the operator reads "21.9 GB of 39 GB · 56%"
+      # like they do on Overview. nil for CPU (no natural total) and
+      # for HTTP/Net metrics (no fixed cap). See `capacity_for`.
+      capacity_label:  cap && cap[:label],
+      capacity_pct:    cap && cap[:pct]
     }
+  end
+
+  # capacity_for — resolves the "of Y" total to pair with the current
+  # value for a given metric. Returns `{ label:, pct: }` when the
+  # metric has a meaningful total, nil otherwise.
+  #
+  # Logic:
+  #   host scope:
+  #     mem_used_bytes  → host total memory (from system snapshot)
+  #     disk_used_bytes → host total disk space (system snapshot)
+  #     cpu_percent     → nil (% has no "of N cores" pairing that
+  #                       reads better than the % alone)
+  #
+  #   pod scope:
+  #     mem_usage_bytes → container memory_limit_bytes from the pod
+  #                       stats. Skipped when the value is huge (no
+  #                       explicit limit → docker reports kernel max)
+  #                       since "23 MB of 9223372036 GB" is noise.
+  #     cpu_percent     → nil for the same reason as host CPU
+  #     net_*           → nil (no fixed cap)
+  #
+  # The label uses the SAME scale as the chart's headline so units
+  # line up ("0.9 GB / 4 GB" not "950 MB / 4 GB").
+  def capacity_for(spec)
+    return nil if spec[:scale] == :percent
+    return nil if INGRESS_METRICS.include?(spec[:metric])
+
+    if @scope_kind == "host"
+      capacity_for_host(spec)
+    else
+      capacity_for_pod(spec)
+    end
+  end
+
+  # capacity_for_host — host total memory / disk, sourced from the
+  # latest system snapshot. Reuses the warehouse path so this is a
+  # single SQLite read in warehouse mode; falls back to a live
+  # /system HTTP call when warehouse mode is off.
+  def capacity_for_host(spec)
+    case spec[:metric]
+    when "mem_used_bytes"
+      total = host_system_payload&.dig("mem", "total_bytes").to_i
+      build_capacity(spec, total)
+    when "disk_used_bytes"
+      total = host_system_payload&.dig("disk", 0, "total_bytes").to_i
+      build_capacity(spec, total)
+    end
+  end
+
+  # capacity_for_pod — container memory limit from the pod's stats
+  # block. Docker reports a kernel-max value (~9.2 EiB) when no
+  # explicit `resources.limits.memory` is declared in the manifest;
+  # we skip the badge in that case rather than render confusing
+  # "23 MB of 9223372036 GB" arithmetic.
+  def capacity_for_pod(spec)
+    return nil unless spec[:metric] == "mem_usage_bytes"
+
+    pod = pod_record
+    return nil if pod.nil?
+
+    limit = pod.dig("stats", "usage", "memory_limit_bytes").to_i
+    # 1 TiB threshold — well above any single-container limit anyone
+    # configures intentionally, well below the kernel-max sentinel
+    # docker returns when no limit was set.
+    return nil if limit <= 0 || limit > 1_099_511_627_776
+
+    build_capacity(spec, limit)
+  end
+
+  # build_capacity — turns a raw bytes total into the `{ label, pct }`
+  # shape the chart card expects. `pct` is computed against the
+  # latest sample (same value the headline shows), so the percentage
+  # and current always agree.
+  def build_capacity(spec, total_bytes)
+    return nil if total_bytes <= 0
+
+    scaled_total = rescale_value(total_bytes, spec[:scale])
+    unit = spec[:unit]
+
+    label = format("%s %s", format_capacity_number(scaled_total), unit).strip
+
+    current = latest_scaled_for(spec)
+    pct =
+      if current && total_bytes.positive?
+        # Convert current back to bytes for the ratio. We could use
+        # scaled_total too — same answer either way (ratio is
+        # scale-invariant) — but raw-bytes math avoids float drift
+        # at the GB/MB boundary.
+        current_bytes = unscale_value(current, spec[:scale])
+        (current_bytes.to_f / total_bytes * 100).round
+      end
+
+    { label: label, pct: pct }
+  end
+
+  # rescale_value — bytes → display-unit number, matching the same
+  # transform `rescale_points` applies to the series. Pulled out so
+  # build_capacity can scale the TOTAL using the same dialect as the
+  # chart headline.
+  def rescale_value(bytes, scale)
+    case scale
+    when :bytes_to_mb then bytes / 1_000_000.0
+    when :bytes_to_gb then bytes / 1_000_000_000.0
+    when :bytes_auto
+      divisor, _ = pick_byte_unit(bytes.abs)
+      bytes / divisor
+    else bytes
+    end
+  end
+
+  # unscale_value — display-unit number → bytes. Inverse of
+  # rescale_value so build_capacity can recover the absolute bytes
+  # of the current sample (already rescaled by the time we read it)
+  # for the percentage math.
+  def unscale_value(value, scale)
+    case scale
+    when :bytes_to_mb then value * 1_000_000
+    when :bytes_to_gb then value * 1_000_000_000
+    else value
+    end
+  end
+
+  # format_capacity_number — capacity totals are usually whole or
+  # near-whole numbers (39 GB, 512 MB). Trim to 1 decimal place but
+  # drop the .0 suffix so "39 GB" reads as "39 GB" not "39.0 GB".
+  def format_capacity_number(v)
+    n = v.to_f
+    return n.to_i.to_s if n == n.to_i
+
+    format("%.1f", n)
+  end
+
+  # host_system_payload — system info for the current island. In
+  # warehouse mode this is a sub-millisecond local read off the
+  # latest StateSyncIslandJob snapshot; in HTTP mode it falls back
+  # to a live /system call. Memoised per-instance so multiple
+  # capacity lookups don't re-hit the source.
+  def host_system_payload
+    return @host_system_payload if defined?(@host_system_payload)
+
+    @host_system_payload =
+      if defined?(IslandState) && IslandState.warehouse?
+        IslandState.for(@island)&.system
+      else
+        @client&.system
+      end
   end
 
   # source_for — maps a metric name to its NDJSON source. Resource

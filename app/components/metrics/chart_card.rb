@@ -56,7 +56,15 @@ class Components::Metrics::ChartCard < Components::Base
   # display settings yet and hides the card by default. Operator
   # can un-hide it via the Settings drawer's Latency / Errors
   # picker groups.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true)
+  # capacity_label: STRING — "39 GB" / "512 MB" / etc. When given,
+  # the headline grows a "/ <capacity_label> · NN%" suffix so the
+  # card reads "21.9 GB / 39 GB · 56%" — mirrors the Overview's
+  # Memory/Disk cards. Pass nil for metrics with no natural total
+  # (CPU %, HTTP counts, network rates).
+  # capacity_pct: NUMBER — integer percentage paired with the label.
+  # Always renders alongside capacity_label; nil when the current
+  # sample is missing (we omit the "· NN%" trail in that case).
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil)
     @label           = label
     @color           = color
     @unit            = unit
@@ -67,6 +75,8 @@ class Components::Metrics::ChartCard < Components::Base
     @metric          = metric
     @section         = section
     @default_visible = default_visible
+    @capacity_label  = capacity_label
+    @capacity_pct    = capacity_pct
   end
 
   def view_template
@@ -147,6 +157,8 @@ class Components::Metrics::ChartCard < Components::Base
         end
       end
 
+      capacity_chip if @capacity_label
+
       div(class: "flex-1")
 
       stat_chip("min", s[:min])
@@ -183,6 +195,24 @@ class Components::Metrics::ChartCard < Components::Base
     span(class: "text-[11px] font-voodu-mono text-voodu-muted") do
       plain "#{label} "
       span(class: "text-voodu-text-2") { format_value(value) }
+    end
+  end
+
+  # capacity_chip — the "of Y · NN%" suffix that pairs the headline
+  # current value with the resource's total. Renders just to the
+  # right of the headline so the operator reads "21.9 GB / 39 GB ·
+  # 56%" as one cohesive measurement. Muted styling keeps it from
+  # competing with the headline.
+  def capacity_chip
+    span(
+      class: "font-voodu-mono text-[12px] text-voodu-muted",
+      title: @capacity_pct ? "current / total · #{@capacity_pct}% used" : "current / total"
+    ) do
+      plain "/ #{@capacity_label}"
+      if @capacity_pct
+        plain " · "
+        span(class: "text-voodu-text-2") { "#{@capacity_pct}%" }
+      end
     end
   end
 

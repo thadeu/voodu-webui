@@ -349,7 +349,9 @@ class Views::Metrics::Index < Views::Base
           expand_url:      expand_url_for(c),
           metric:          c[:metric],
           section:         c[:section],
-          default_visible: c.fetch(:default_visible, true)
+          default_visible: c.fetch(:default_visible, true),
+          capacity_label:  c[:capacity_label],
+          capacity_pct:    c[:capacity_pct]
         )
       end
     end

@@ -215,10 +215,49 @@ class Views::Metrics::ChartModalBody < Views::Base
     s = stats
 
     div(class: "flex items-center flex-wrap gap-4 px-1") do
+      # Capacity context on the LEFT — pairs the headline current
+      # value with the host/pod's total, mirroring the chart card
+      # header on /metrics ("21.9 GB / 39 GB · 56%"). Only renders
+      # for metrics that HAVE a meaningful total (memory + disk);
+      # CPU, HTTP counters, network rates pass through with the
+      # min/avg/max strip starting flush-left.
+      capacity_chip if @chart[:capacity_label]
+
       stat_chip("min", s[:min])
       stat_chip("avg", s[:avg])
       stat_chip("max", s[:max])
     end
+  end
+
+  # capacity_chip — "21.9 GB / 39 GB · 56%" cluster. Current value
+  # comes from MetricsPageData's `current` (unaggregated latest),
+  # falling back to series.last when the API hasn't shipped a
+  # latest yet (cold boot). Capacity + percentage are echoed from
+  # the same `capacity_for` resolution that drives the card header
+  # — both surfaces speak one dialect.
+  def capacity_chip
+    cur = @chart[:current] || (Array(@chart[:points]).last || {})[:value]
+    cur_fmt = format_value(cur)
+
+    span(class: "text-[12px] font-voodu-mono text-voodu-muted") do
+      # current value carries its own unit suffix when the unit isn't
+      # baked into the formatter (percent units already include "%";
+      # MB/GB don't — match the card-header rendering policy).
+      span(class: "text-voodu-text font-semibold") { cur_fmt }
+      unless percent_unit?
+        plain " "
+        span { @chart[:unit].to_s }
+      end
+      plain " / #{@chart[:capacity_label]}"
+      if @chart[:capacity_pct]
+        plain " · "
+        span(class: "text-voodu-text-2") { "#{@chart[:capacity_pct]}%" }
+      end
+    end
+  end
+
+  def percent_unit?
+    @chart[:unit].to_s == "%"
   end
 
   def stat_chip(label, value)
