@@ -127,10 +127,23 @@ module Voodu
     # Composable: passing both is the shape `StateSyncIslandJob` uses
     # to populate the snapshot table — full runtime + declared spec
     # in one fetch per sync tick.
-    def pods(detail: false, spec: false)
+    # stats: false → opt OUT of the live docker stats batch the
+    # controller normally joins when detail=true. That batch is
+    # the single biggest CPU consumer on the controller side
+    # (`docker stats --no-stream` samples cgroup files TWICE per
+    # container to compute CPU%, in a synchronous batch). Polling
+    # consumers like StateSyncIslandJob pass `stats: false` —
+    # their UI table can show "—" for live CPU/Mem (operator has
+    # /metrics charts for that anyway) in exchange for letting
+    # the controller breathe between ticks.
+    #
+    # No-op when detail is false (stats are never collected on
+    # the compact list path).
+    def pods(detail: false, spec: false, stats: true)
       params = {}
       params[:detail] = "true" if detail
       params[:spec]   = "true" if spec
+      params[:stats]  = "false" if detail && stats == false
       get("pods", params.presence)
     end
 

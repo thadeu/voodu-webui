@@ -53,7 +53,16 @@ class StateSyncIslandJob < ApplicationJob
     # semantics simple (one Faraday call at a time, one error at
     # a time). If runtime ever approaches the interval, switching
     # to Async / Concurrent::Future is a localised change.
-    pods_response   = client.pods(detail: true, spec: true)
+    # stats: false — skip the docker stats batch on the controller.
+    # That call shells out to `docker stats --no-stream` which
+    # samples cgroup files twice per container to compute CPU%,
+    # and was the dominant CPU spike on the controller (visible
+    # as periodic 100% bursts every sync tick). We don't need
+    # live runtime numbers in the snapshot table: the /metrics
+    # warehouse covers CPU/Mem charts via its own dedicated
+    # sampler, and the /pods table degrades gracefully (CPU/Mem
+    # chips render as "—" instead of live values).
+    pods_response   = client.pods(detail: true, spec: true, stats: false)
     system_response = client.system
 
     pods_payload   = pods_payload_from(pods_response)
