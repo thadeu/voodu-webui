@@ -28,13 +28,46 @@ common: &common
 
   state_sync:
     class: StateSyncOrchestratorJob
-    # 10s cadence keeps pods+system snapshots fresh enough that the
-    # sidebar's "synced Xs ago" label rarely reads stale during
-    # normal operation. Falls inside the IslandHealth "online ≤30s"
-    # threshold by a comfortable 3× margin so a single missed tick
-    # doesn't flip status. Independent of metrics-sync (different
-    # data, different cadence, different transactionality).
-    schedule: every 10 seconds
+    # 30s cadence — was 10s, raised because every tick invokes
+    # `docker stats --no-stream` IN BATCH for all containers on
+    # the island (via /pods?detail=true → StatsCollector). That
+    # call is the single biggest CPU/IO consumer the controller
+    # has: docker stats samples cgroup files TWICE per container
+    # to compute CPU%, so a 10-pod batch takes ~1-2s of dockerd
+    # CPU every tick.
+    #
+    # 30s still falls inside IslandHealth.OFFLINE_THRESHOLD (120s)
+    # so a missed tick doesn't flip the status pill. Trade-off:
+    # sidebar/topbar status updates feel ~20s slower under that
+    # threshold; for the cost cut on the controller (3× less
+    # docker stats churn) it's a clear win.
+    #
+    # Independent of metrics-sync (different data path, different
+    # transactionality, and metrics-sync does NOT shell out to
+    # docker stats — it pulls pre-sampled NDJSON from /metrics/dump).
+    schedule: every 30 seconds
+
+  log_tail_orchestrator:
+    class: LogTailOrchestratorJob
+    # 1 min cadence — fast enough to recover from a crashed tail job
+    # in under a minute, slow enough that the per-island TailLock
+    # check overhead is negligible. Per-island work is dropped at
+    # this tick if a tail is already in flight (TailLock guard).
+    schedule: every 1 minute
+
+  log_tail_cleanup:
+    class: LogTailCleanupJob
+    # 03:00 daily — low-traffic window. Reaps NDJSON files older
+    # than RETENTION_DAYS (2). Empty pod-dirs get removed too so
+    # decommissioned pods don't leak the tree.
+    schedule: every day at 3:00 am
+
+  log_export_cleanup:
+    class: LogExportCleanupJob
+    # Hourly — reaps LogExport rows whose expires_at has passed
+    # (24h post-ready by default) + orphan .partial files left
+    # by crashed export jobs.
+    schedule: every hour
 
 development:
   <<: *common

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_26_150200) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_26_220238) do
   create_table "islands", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "endpoint", null: false
@@ -23,6 +23,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_150200) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_islands_on_key", unique: true
     t.index ["name"], name: "index_islands_on_name", unique: true
+  end
+
+  create_table "log_exports", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "downloaded_at"
+    t.text "error"
+    t.datetime "expires_at"
+    t.string "file_path"
+    t.bigint "file_size_bytes"
+    t.integer "island_id", null: false
+    t.integer "line_count"
+    t.text "params", null: false
+    t.datetime "ready_at"
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_log_exports_on_expires_at"
+    t.index ["island_id", "created_at"], name: "index_log_exports_on_island_id_and_created_at"
+    t.index ["island_id"], name: "index_log_exports_on_island_id"
   end
 
   create_table "pods", force: :cascade do |t|
@@ -50,6 +68,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_26_150200) do
     t.index ["island_id"], name: "index_systems_on_island_id", unique: true
   end
 
+  add_foreign_key "log_exports", "islands", on_delete: :cascade
   add_foreign_key "pods", "islands", on_delete: :cascade
   add_foreign_key "systems", "islands", on_delete: :cascade
 end

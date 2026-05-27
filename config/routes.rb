@@ -75,12 +75,42 @@ Rails.application.routes.draw do
     # the show page (HTML, wrong content-type for a stream subscriber).
     get "/logs",              to: "logs#index",      as: :logs
     get "/logs/stream",       to: "logs#stream_all", as: :logs_stream
+
+    # Warehouse-fed log endpoint: reads from storage/logs/<island_id>/
+    # NDJSON files instead of opening a `docker logs -f` SSE through the
+    # controller. Accepts ?pod=<name>&since=<iso>. Returns text/plain
+    # with `[pod-name] <raw line>\n` per row (compatible with
+    # log_stream_controller's existing parser). Client polls this
+    # endpoint every ~2s with an advancing `since` watermark.
+    #
+    # Trade-off vs the SSE endpoints above: ~2s of latency between
+    # log emission and visible-in-tab, but ZERO additional `docker
+    # logs -f` connections on the controller (the LogTailIslandJob
+    # already maintains one per island for the warehouse).
+    get "/logs/warehouse_stream", to: "logs#warehouse_stream", as: :logs_warehouse_stream
+
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 
     get  "/metrics",                    to: "metrics#index",            as: :metrics
     get  "/metrics/chart",             to: "metrics#chart",            as: :metrics_chart
     get  "/metrics/display_settings",  to: "metrics#display_settings", as: :metrics_display_settings
+
+    # Log exports — operator-triggered NDJSON dumps from the local
+    # log warehouse (storage/logs/). `show` renders the drawer body
+    # (Turbo Stream target for status updates); `create` enqueues
+    # the LogExportJob; `download` send_files the artifact.
+    #
+    # Routes intentionally narrow — no index page yet (drawer
+    # surfaces "recent exports"; standalone listing is a follow-up).
+    # `new` returns the drawer body (form), `create` enqueues the
+    # job + responds with turbo_stream that morphs the drawer body
+    # into the status block.
+    get  "/exports/new",           to: "exports#new",      as: :new_export
+    post "/exports",               to: "exports#create",   as: :exports
+    get  "/exports/:id",           to: "exports#show",     as: :export,           constraints: { id: /\d+/ }
+    get  "/exports/:id/download",  to: "exports#download", as: :download_export,  constraints: { id: /\d+/ }
+
     get  "/alerts",   to: "alerts#index",   as: :alerts
     get  "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same tenant scope so the

@@ -170,11 +170,18 @@ module Voodu
     # Timeout is bumped to `nil` (no read timeout) because follow
     # streams are intentionally long-lived; the default 6s would cut
     # the first idle minute.
-    def logs_stream(name, follow: true, tail: 20, &on_chunk)
+    # since: passed verbatim to controller's `?since=`, which forwards
+    # to `docker logs --since`. Accepts RFC3339 ("2026-05-26T23:30Z"),
+    # relative ("10m", "1h"), or unix string. Nil/empty skips the
+    # flag. Used by polling consumers to advance a watermark and
+    # avoid re-tailing the same lines every cycle.
+    def logs_stream(name, follow: true, tail: 20, since: nil, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
-      streaming_conn.get("/api/pat/v1/pods/#{CGI.escape(name)}/logs",
-                         { follow: follow, tail: tail }) do |req|
+      params = { follow: follow, tail: tail }
+      params[:since] = since if since.present?
+
+      streaming_conn.get("/api/pat/v1/pods/#{CGI.escape(name)}/logs", params) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|
           on_chunk.call(chunk)
         end
@@ -194,13 +201,17 @@ module Voodu
     #
     # Same chunk semantics as logs_stream — yields raw bytes, caller
     # buffers + splits.
-    def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, &on_chunk)
+    # since: same semantics as logs_stream above — passes through
+    # to `docker logs --since`. Tail job sends a moving watermark
+    # to fetch only new lines per poll.
+    def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, since: nil, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
       params = { follow: follow, tail: tail }
       params[:scope] = scope if scope.present?
       params[:kind]  = kind  if kind.present?
       params[:name]  = name  if name.present?
+      params[:since] = since if since.present?
 
       streaming_conn.get("/api/pat/v1/logs", params) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|

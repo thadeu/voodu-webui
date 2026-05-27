@@ -230,9 +230,12 @@ class Components::UI::Drawer < Components::Base
   end
 
   def panel_body
+    # `scrollbar-hidden` — auto-overflow without the visible scrollbar
+    # track (operator preference; the bar feels noisy in a peek
+    # surface). Wheel/touch/keyboard scroll still works.
     div(
       data: { drawer_target: "body" },
-      class: "relative flex-1 overflow-auto bg-voodu-bg"
+      class: "relative flex-1 overflow-auto scrollbar-hidden bg-voodu-bg"
     ) do
       # Spinning brand logo while the fetch is in flight. Replaced
       # in-place by drawer_controller.js when the response arrives.

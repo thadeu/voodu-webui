@@ -193,9 +193,113 @@ export default class extends Controller {
   }
 
   // ── Real stream ────────────────────────────────────────────────────
+  //
+  // Two transport modes, picked by URL shape:
+  //
+  //   - "warehouse_stream" in URL → POLLING mode: short fetch every
+  //     POLL_INTERVAL_MS, advancing a `since` watermark on each round.
+  //     Server reads from the local NDJSON warehouse — zero extra
+  //     `docker logs -f` connections on the controller.
+  //
+  //   - anything else → STREAMING mode: single long-lived fetch with
+  //     a chunked reader (the legacy `/logs/stream` SSE proxy).
+  //
+  // The polling path is the default for /logs since the warehouse
+  // landed; streaming stays as a fallback for any future endpoint
+  // that needs strict realtime.
+
+  POLL_INTERVAL_MS = 2_000  // poll cadence for warehouse mode
 
   async openStream() {
     this.streamAbort = new AbortController()
+
+    if (this.isWarehouseMode()) {
+      await this.runPollingLoop()
+    } else {
+      await this.runStreamingFetch()
+    }
+  }
+
+  isWarehouseMode() {
+    return this.streamUrlValue.includes("warehouse_stream")
+  }
+
+  // runPollingLoop — short fetch → process → sleep → repeat. Each
+  // fetch sends a `since=<iso>` watermark; the server returns only
+  // lines newer than that, and we update the watermark from the
+  // newest line we just appended.
+  //
+  // Initial poll has no `since` — server's default lookback (5min)
+  // gives a useful backfill without dumping retention into the
+  // viewport.
+  async runPollingLoop() {
+    // Track watermark across polls. Updated by `recordLineTs` which
+    // every appendLog call routes through.
+    this.warehouseSinceIso = null
+
+    while (!this.streamAbort.signal.aborted) {
+      try {
+        await this.runOnePoll()
+      } catch (e) {
+        if (e.name === "AbortError") return
+        this.appendSyntheticError(`poll failed: ${e.message}`)
+      }
+
+      // Sleep with abort awareness — if disconnect fires during the
+      // sleep we want to break immediately, not wait the full
+      // interval.
+      await this.sleepAbortable(this.POLL_INTERVAL_MS)
+    }
+  }
+
+  async runOnePoll() {
+    const url = this.buildPollUrl()
+    const resp = await fetch(url, {
+      signal:      this.streamAbort.signal,
+      headers:     { "Accept": "text/plain" },
+      credentials: "same-origin",
+    })
+    if (!resp.ok) {
+      this.appendSyntheticError(`HTTP ${resp.status} ${resp.statusText}`)
+      return
+    }
+
+    const text = await resp.text()
+    this.consumeChunk(text)
+
+    // Flush trailing partial line (response is fully delivered; no
+    // more chunks coming, so any half-line in the buffer is complete).
+    if (this.lineBuffer) {
+      this.ingestLine(this.lineBuffer)
+      this.lineBuffer = ""
+    }
+  }
+
+  buildPollUrl() {
+    const base = this.streamUrlValue
+    if (!this.warehouseSinceIso) return base
+
+    const sep = base.includes("?") ? "&" : "?"
+    return `${base}${sep}since=${encodeURIComponent(this.warehouseSinceIso)}`
+  }
+
+  // sleepAbortable — Promise that resolves after `ms` OR rejects
+  // with AbortError when streamAbort fires. Lets `runPollingLoop`
+  // tear down promptly on disconnect/navigation instead of holding
+  // the JS task alive until the next poll wakeup.
+  sleepAbortable(ms) {
+    return new Promise((resolve) => {
+      const t = setTimeout(resolve, ms)
+      this.streamAbort.signal.addEventListener("abort", () => {
+        clearTimeout(t)
+        resolve()
+      }, { once: true })
+    })
+  }
+
+  // runStreamingFetch — legacy long-lived fetch+reader. Kept for
+  // backward compat if a future page wires up an SSE-style endpoint.
+  async runStreamingFetch() {
     let resp
     try {
       resp = await fetch(this.streamUrlValue, {
@@ -224,7 +328,6 @@ export default class extends Controller {
         const text = decoder.decode(value, { stream: true })
         this.consumeChunk(text)
       }
-      // Flush any trailing partial line that wasn't terminated.
       if (this.lineBuffer) {
         this.ingestLine(this.lineBuffer)
         this.lineBuffer = ""
@@ -250,7 +353,23 @@ export default class extends Controller {
 
   ingestLine(line) {
     const parsed = parseLogLine(line, this.podValue)
-    if (parsed) this.appendLog(parsed)
+    if (!parsed) return
+
+    // Update the warehouse polling watermark from the parsed
+    // timestamp. Next poll's `since=` carries this so the server
+    // returns ONLY lines newer than what we've seen, no overlap
+    // (= no client-side dedupe needed).
+    //
+    // Only meaningful in warehouse mode; in streaming mode the
+    // watermark is set-but-never-read, harmless.
+    if (parsed.ts && !isNaN(parsed.ts)) {
+      const iso = parsed.ts.toISOString()
+      if (!this.warehouseSinceIso || iso > this.warehouseSinceIso) {
+        this.warehouseSinceIso = iso
+      }
+    }
+
+    this.appendLog(parsed)
   }
 
   appendSyntheticError(msg) {

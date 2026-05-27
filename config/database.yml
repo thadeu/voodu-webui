@@ -8,7 +8,17 @@
 
 default: &default
   adapter: sqlite3
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  # Pool must cover the sum of all concurrent DB users in the same
+  # Ruby process: Puma worker threads (3 default) + every Solid Queue
+  # worker thread + dispatcher pollers. Our queue.yml runs:
+  #   - default pool: 3 threads
+  #   - log_tail pool: 4 threads (long-running SSE tail jobs)
+  #   - 1 dispatcher
+  # → 8 minimum. We pad to 10 for headroom (next time someone adds a
+  # worker pool, no Mystery Pool-Exhaustion error). Bumping the pool
+  # is cheap on SQLite WAL — readers don't block each other, writers
+  # serialise behind the file lock either way.
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
   timeout: 5000
 
 development:

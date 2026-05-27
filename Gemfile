@@ -24,6 +24,19 @@ gem "phlex-rails", "~> 2.4"
 gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"
 
+# rubyzip — used by LogExportJob to bundle "group by pod" exports
+# into a single .zip download (one .ndjson per pod inside). MIT
+# license, no native extension, pure Ruby. Loaded only by the job
+# (require "zip" inside #generate_zip!), so the rest of the app
+# pays nothing for it.
+gem "rubyzip", "~> 2.3", require: false
+
+# csv — stdlib in Ruby ≤3.3, bundled gem from Ruby 3.4 onward
+# (must be in the Gemfile to load). Used by LogExportJob's CSV
+# output format. `require: false` because only the export job
+# needs it; loaded on-demand via `require "csv"` inside the job.
+gem "csv", "~> 3.3", require: false
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
   gem "bundler-audit", require: false

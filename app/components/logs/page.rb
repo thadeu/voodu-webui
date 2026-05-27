@@ -96,12 +96,22 @@ class Components::Logs::Page < Components::Base
 
   private
 
+  # stream_url — warehouse-fed endpoint instead of the controller's
+  # `docker logs -f` SSE proxy. The local NDJSON warehouse (kept
+  # fresh by LogTailIslandJob's 5s poll) is the source; the operator
+  # pays ZERO extra `docker logs` connections on the controller.
+  #
+  # Trade-off: ~2-7s of latency between a log line being emitted
+  # and visible (5s tail-job poll + 2s client poll cadence).
+  # Acceptable for typical debug ("what happened 30s ago"); for
+  # strict realtime tail use `vd logs <pod> -f` from the CLI.
+  #
+  # `?pod=` scopes to a single pod; absent = all pods on the island.
+  # `?since=` is added by the JS controller on each poll with the
+  # watermark of the last line it saw.
   def stream_url
-    if @pod_name
-      "#{pod_log_stream_path(name: @pod_name)}?follow=true&tail=50"
-    else
-      "#{logs_stream_path}?follow=true&tail=50"
-    end
+    base = logs_warehouse_stream_path
+    @pod_name ? "#{base}?pod=#{CGI.escape(@pod_name)}" : base
   end
 
   # page_header — H1 "Logs" + live counters subline + actions
@@ -267,6 +277,13 @@ class Components::Logs::Page < Components::Base
       wrap_btn
       pause_btn
       clear_btn
+      # Export drawer trigger — last action so the destructive-ish
+      # workflow ("generate file, download") doesn't crowd the
+      # live-tail toggles. Hidden in drawer mode (Metrics peek)
+      # because the peek already has limited width and an export
+      # there would mean the operator can't see the live tail
+      # while picking a period.
+      render Components::Logs::ExportButton.new(current_pod: @pod_name) unless @drawer
     end
   end
 
