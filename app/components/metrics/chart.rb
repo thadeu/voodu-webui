@@ -91,7 +91,7 @@ class Components::Metrics::Chart < Components::Base
     end
 
     pts    = projected_points
-    y_max  = nice_ceil(raw_max * 1.18)
+    y_max  = y_axis_max
     x_min, x_max = time_bounds
 
     div(
@@ -284,7 +284,7 @@ class Components::Metrics::Chart < Components::Base
   end
 
   def projected_points
-    y_max = nice_ceil(raw_max * 1.18)
+    y_max = y_axis_max
     x_min, x_max = time_bounds
 
     inner_w = (@width - pad_left - pad_right).to_f
@@ -302,6 +302,23 @@ class Components::Metrics::Chart < Components::Base
 
   def raw_max
     @points.map { |p| p[:value].to_f }.max
+  end
+
+  # y_axis_max — single source of truth for the chart's Y ceiling.
+  # Both the gridline renderer (render_y_axis) and the point
+  # projection (projected_points) must agree, or the dots float
+  # above the top gridline. Centralised here.
+  #
+  # No multiplicative padding — `nice_ceil` already rounds UP to
+  # the next clean number (5, 7.5, 10, 25, 50, 75, 100, …), which
+  # naturally puts a peak below the chart's top edge in every
+  # case EXCEPT when the peak sits exactly at a bucket boundary
+  # (e.g. CPU pegged at 100%). At that boundary we accept the
+  # peak kissing the top — it's honest ("you're at the cap") and
+  # adding padding would jump the axis to 2× the bucket size
+  # (100 × 1.05 = 105 → ceil → 200, the bug the operator caught).
+  def y_axis_max
+    nice_ceil(raw_max)
   end
 
   def time_bounds
@@ -410,9 +427,20 @@ class Components::Metrics::Chart < Components::Base
   end
 
   # nice_ceil — rounds a max value up to a "nice" axis ceiling
-  # (1, 2, 2.5, 5, 10 × 10^n). Ported from pages-metrics.jsx.
-  # Without this the Y-axis labels would be ugly raw numbers like
-  # 23.7, 47.4, 71.1; with it we get 25, 50, 75, 100.
+  # (1, 2, 2.5, 4, 5, 7.5, 10 × 10^n). Without this the Y-axis
+  # labels would be ugly raw numbers like 23.7, 47.4, 71.1; with
+  # it we get 25, 40, 50, 75, 100.
+  #
+  # Buckets, with rationale per stop:
+  #   1   — small values (0..1)
+  #   2   — peaks at ~1.x get a clean ceiling of 2
+  #   2.5 — peaks at ~2 get 25 instead of 40 (gridlines 0/6.25/12.5/...)
+  #   4   — peaks at ~3 get 40 instead of 50 (gridlines 0/10/20/30/40)
+  #         Without this, 29.4 → mantissa 2.94 → bucket 5 → axis 50,
+  #         wasting ~40% of the chart's vertical space.
+  #   5   — peaks at ~4 get 50
+  #   7.5 — peaks at ~6 get 75 instead of 100 (avoids over-zoom 2x)
+  #   10  — peaks at ~8-9 land at the next decade
   def nice_ceil(v)
     return 1 if v <= 0
 
@@ -421,11 +449,14 @@ class Components::Metrics::Chart < Components::Base
     mantissa = v / factor
 
     ceil = case mantissa
-           when 0..1   then 1
-           when 1..2   then 2
-           when 2..2.5 then 2.5
-           when 2.5..5 then 5
-           else 10
+           when 0..1     then 1
+           when 1..2     then 2
+           when 2..2.5   then 2.5
+           when 2.5..4   then 4
+           when 4..5     then 5
+           when 5..7.5   then 7.5
+           when 7.5..10  then 10
+           else               10
            end
 
     ceil * factor

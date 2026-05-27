@@ -28,24 +28,22 @@ common: &common
 
   state_sync:
     class: StateSyncOrchestratorJob
-    # 30s cadence — was 10s, raised because every tick invokes
-    # `docker stats --no-stream` IN BATCH for all containers on
-    # the island (via /pods?detail=true → StatsCollector). That
-    # call is the single biggest CPU/IO consumer the controller
-    # has: docker stats samples cgroup files TWICE per container
-    # to compute CPU%, so a 10-pod batch takes ~1-2s of dockerd
-    # CPU every tick.
+    # 15s cadence. Each tick pulls /pods?detail=true&spec=true
+    # which on the controller side now uses the docker SDK (no
+    # more fork+exec per stat call) — the historic 100% CPU
+    # spikes that forced us to widen this to 30s are gone. Back
+    # to a tighter window so the pods table CPU/Mem chips +
+    # status pills feel responsive again.
     #
-    # 30s still falls inside IslandHealth.OFFLINE_THRESHOLD (120s)
-    # so a missed tick doesn't flip the status pill. Trade-off:
-    # sidebar/topbar status updates feel ~20s slower under that
-    # threshold; for the cost cut on the controller (3× less
-    # docker stats churn) it's a clear win.
+    # If the controller's CPU starts spiking again (e.g. after
+    # adding many new chatty pods), the cheapest knob is to
+    # raise this back to 30s; deeper levers live in the
+    # controller's VOODU_METRICS_INTERVAL + VOODU_STATS_STAGGER_MS.
     #
-    # Independent of metrics-sync (different data path, different
-    # transactionality, and metrics-sync does NOT shell out to
-    # docker stats — it pulls pre-sampled NDJSON from /metrics/dump).
-    schedule: every 30 seconds
+    # Independent of metrics-sync (different data path; metrics-
+    # sync pulls pre-sampled NDJSON from /metrics/dump, doesn't
+    # invoke docker stats).
+    schedule: every 15 seconds
 
   log_tail_orchestrator:
     class: LogTailOrchestratorJob

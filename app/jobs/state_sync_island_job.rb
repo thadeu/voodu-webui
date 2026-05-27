@@ -53,16 +53,15 @@ class StateSyncIslandJob < ApplicationJob
     # semantics simple (one Faraday call at a time, one error at
     # a time). If runtime ever approaches the interval, switching
     # to Async / Concurrent::Future is a localised change.
-    # stats: false — skip the docker stats batch on the controller.
-    # That call shells out to `docker stats --no-stream` which
-    # samples cgroup files twice per container to compute CPU%,
-    # and was the dominant CPU spike on the controller (visible
-    # as periodic 100% bursts every sync tick). We don't need
-    # live runtime numbers in the snapshot table: the /metrics
-    # warehouse covers CPU/Mem charts via its own dedicated
-    # sampler, and the /pods table degrades gracefully (CPU/Mem
-    # chips render as "—" instead of live values).
-    pods_response   = client.pods(detail: true, spec: true, stats: false)
+    # stats: true (default) — fetch live CPU/Mem per pod. The /pods
+    # table shows these as chips next to each pod row, and
+    # /pods/:name renders them in the header card. The DX win is
+    # significant (operator sees runtime numbers at a glance);
+    # the cost (one batch docker stats call per sync tick) is no
+    # longer a problem since the controller migrated docker stats
+    # from `exec.Command` to the SDK with per-container stagger —
+    # spikes that were near-100% now top out around 20%.
+    pods_response   = client.pods(detail: true, spec: true)
     system_response = client.system
 
     pods_payload   = pods_payload_from(pods_response)

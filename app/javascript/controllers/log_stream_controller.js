@@ -176,6 +176,18 @@ export default class extends Controller {
     this.hideJumpToLive()
   }
 
+  // jumpToTop — operator clicked the hover-revealed "Jump to top"
+  // chip. Side-effect of scrolling away from the bottom: follow
+  // mode flips off (same as any manual scroll-up), so new live lines
+  // queue at the bottom without yanking the viewport back. The
+  // existing onScroll handler picks this up and surfaces the
+  // "Jump to live" affordance, completing the round trip.
+  jumpToTop() {
+    if (!this.hasViewportTarget) return
+
+    this.viewportTarget.scrollTop = 0
+  }
+
   onScroll() {
     const el = this.viewportTarget
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24

@@ -96,22 +96,31 @@ class Components::Logs::Page < Components::Base
 
   private
 
-  # stream_url — warehouse-fed endpoint instead of the controller's
-  # `docker logs -f` SSE proxy. The local NDJSON warehouse (kept
-  # fresh by LogTailIslandJob's 5s poll) is the source; the operator
-  # pays ZERO extra `docker logs` connections on the controller.
+  # stream_url — controller's `docker logs -f` SSE proxy. Now that
+  # the controller's log stream is served via the docker SDK (no
+  # fork+exec per call) the per-pod `docker logs -f` cost is just
+  # a long-lived HTTP connection to the daemon socket — cheap
+  # enough to keep open while the operator watches. The realtime
+  # UX (sub-second latency) is worth more than the few persistent
+  # connections during a debug session.
   #
-  # Trade-off: ~2-7s of latency between a log line being emitted
-  # and visible (5s tail-job poll + 2s client poll cadence).
-  # Acceptable for typical debug ("what happened 30s ago"); for
-  # strict realtime tail use `vd logs <pod> -f` from the CLI.
+  # The warehouse path (`logs_warehouse_stream_path`) is still
+  # registered + used by exports for historical reads; it's just
+  # not the realtime feed anymore.
   #
-  # `?pod=` scopes to a single pod; absent = all pods on the island.
-  # `?since=` is added by the JS controller on each poll with the
-  # watermark of the last line it saw.
+  # tail=0 — operator decision: open the page and ONLY see lines
+  # that arrive from this moment forward. No backfill of recent
+  # context. Cleaner first-paint for debug sessions where the
+  # operator is about to reproduce something and wants the
+  # viewport empty to attribute every new line to their action.
+  # Historical reads / scrollback live behind a filter UI
+  # (planned) that hits the warehouse on demand.
   def stream_url
-    base = logs_warehouse_stream_path
-    @pod_name ? "#{base}?pod=#{CGI.escape(@pod_name)}" : base
+    if @pod_name
+      "#{pod_log_stream_path(name: @pod_name)}?follow=true&tail=0"
+    else
+      "#{logs_stream_path}?follow=true&tail=0"
+    end
   end
 
   # page_header — H1 "Logs" + live counters subline + actions
@@ -394,8 +403,16 @@ class Components::Logs::Page < Components::Base
   # viewport — scrollable container the controller writes into.
   # Empty state lives inside; controller flips its `hidden` based on
   # visibleCount.
+  #
+  # `group` enables Tailwind's group-hover pattern on the floating
+  # affordances. `jump_to_top` opacities-in when the mouse enters the
+  # viewport (operator hovers the log stream); pure CSS, no JS state
+  # to manage. `jump_to_live` keeps its existing Stimulus-driven
+  # show/hide because it's also tied to scroll position (auto-shows
+  # when the operator scrolls away from the tail), which CSS alone
+  # can't express.
   def viewport
-    div(class: "flex-1 min-h-[280px] bg-voodu-bg-2 border border-voodu-border flex flex-col overflow-hidden relative") do
+    div(class: "flex-1 min-h-[280px] bg-voodu-bg-2 border border-voodu-border flex flex-col overflow-hidden relative group") do
       div(
         class: "flex-1 overflow-auto py-1.5 min-w-0",
         tabindex: "0",
@@ -414,7 +431,36 @@ class Components::Logs::Page < Components::Base
         div(data: { log_stream_target: "list" })
       end
 
+      jump_to_top
       jump_to_live
+    end
+  end
+
+  # jump_to_top — hover-only affordance. The mirror of jump_to_live
+  # (top-center vs bottom-center). Visible only while the cursor is
+  # inside the viewport box (`group-hover:opacity-100`) — keeps the
+  # log surface clean when the operator's reading and reveals the
+  # control exactly when they're considering using it.
+  #
+  # `pointer-events-none` when hidden so the invisible button doesn't
+  # eat clicks targeting log lines underneath it during the fade.
+  # Styling matches the toolbar's secondary chrome (border-voodu-
+  # border + bg-voodu-surface) rather than the accent palette used
+  # by jump_to_live — top is a navigation aid, not a primary CTA.
+  def jump_to_top
+    button(
+      type: "button",
+      title: "Jump to top",
+      "aria-label": "Jump to top of log stream",
+      data: { action: "click->log-stream#jumpToTop" },
+      class: "absolute left-1/2 -translate-x-1/2 top-3.5 inline-flex items-center gap-1.5 px-3 h-8 " \
+             "border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium shadow-2xl " \
+             "opacity-0 pointer-events-none transition-opacity duration-150 " \
+             "group-hover:opacity-100 group-hover:pointer-events-auto " \
+             "hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      render Icon::ChevronUpOutline.new(class: "w-3 h-3")
+      span { "Jump to top" }
     end
   end
 
