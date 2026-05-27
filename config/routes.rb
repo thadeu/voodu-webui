@@ -98,6 +98,13 @@ Rails.application.routes.draw do
     # already maintains one per island for the warehouse).
     get "/logs/warehouse_stream", to: "logs#warehouse_stream", as: :logs_warehouse_stream
 
+    # Pods picker drawer body. MUST live BEFORE `/logs/:name` —
+    # otherwise the `:name` matcher swallows "pods_picker" and the
+    # operator's click on the All pods chip serves the logs viewer
+    # (with name=pods_picker) instead of the multi-select drawer.
+    # See same ordering note above for /logs/stream.
+    get "/logs/pods_picker", to: "logs#pods_picker", as: :pods_picker_logs
+
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 

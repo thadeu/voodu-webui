@@ -88,7 +88,6 @@ class Views::Metrics::Index < Views::Base
         .with_subtitle { page_sub }
         .with_actions do
           pod_actions if pod_scope?
-          refresh_btn
         end
     )
   end
@@ -214,17 +213,11 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
-  def refresh_btn
-    params_for_refresh = request.query_parameters.merge(refresh: 1)
-    a(
-      href: "#{metrics_path}?#{params_for_refresh.to_query}",
-      data: { turbo: false },
-      class: btn_secondary_classes
-    ) do
-      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-      span { "Refresh" }
-    end
-  end
+  # refresh_btn removed — the metrics-charts turbo-frame polls
+  # via metrics-tick broadcasts + the auto-refresh toggle in the
+  # toolbar already keeps charts live. A manual Refresh button is
+  # redundant chrome that crowds the actions row; the polling tick
+  # is the source of truth for "fresh data on screen".
 
   def btn_secondary_classes
     "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"

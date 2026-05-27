@@ -70,6 +70,17 @@ export default class extends Controller {
   static values = {
     pod:       String,
     streamUrl: String,
+    // Pods snapshot at page render: [{ name, resource_name, scope }].
+    // Used to expand the resource_name selection (from localStorage)
+    // into a container-name allow-set the row filter checks against.
+    // Snapshot can go stale between renders — new replicas of an
+    // already-selected resource_name auto-stream because we match
+    // by resource_name not container.
+    pods:      { type: Array, default: [] },
+    // localStorage key for the pod-selector filter (matches the
+    // drawer's storage_key_value so both sides reach into the same
+    // bucket). Empty string = no persistence, default to "all".
+    podsFilterKey: { type: String, default: "" },
     // bufferCap — max log rows held in memory + rendered in the DOM.
     // Trade-off: too low and a noisy stream evicts lines the operator
     // is actively reading (the symptom we saw: 234 lines/sec × cap
@@ -125,6 +136,31 @@ export default class extends Controller {
 
     this.updateSources()
 
+    // ── Pod-selector filter setup ────────────────────────────────
+    //
+    // Build a lookup of container_name → resource_name from the
+    // pods snapshot the page handed us; the drawer's selection is
+    // a list of resource_names (operator-facing identity), but
+    // each log line's [pod] prefix carries the container name
+    // (resource_name + ".<replica_id>"). The map bridges the two
+    // at filter time.
+    //
+    // initialResourceFilter — null means "show all" (no key in
+    // localStorage); array means "show only these resource_names".
+    // The window-level `logs-pods:changed` listener updates this
+    // as the operator toggles checkboxes in the drawer.
+    this.containerToResource = new Map()
+    for (const p of this.podsValue) {
+      if (p && p.name && p.resource_name) {
+        this.containerToResource.set(p.name, p.resource_name)
+      }
+    }
+
+    this.resourceFilter = this.loadResourceFilter()
+
+    this.onPodsFilterChanged = this.onPodsFilterChanged.bind(this)
+    window.addEventListener("logs-pods:changed", this.onPodsFilterChanged)
+
     // Apply the initial wrap state to the list element. The button
     // chrome in page.rb#wrap_btn already renders the active chip;
     // this line is what actually flips the CSS so long lines wrap
@@ -146,6 +182,9 @@ export default class extends Controller {
   disconnect() {
     if (this.mockTimer) clearTimeout(this.mockTimer)
     if (this.rateTimer) clearInterval(this.rateTimer)
+    if (this.onPodsFilterChanged) {
+      window.removeEventListener("logs-pods:changed", this.onPodsFilterChanged)
+    }
     if (this.streamAbort) this.streamAbort.abort()
   }
 
@@ -543,6 +582,11 @@ export default class extends Controller {
     row.className = "log-row"
     row.dataset.level = log.level
     row.dataset.search = `${log.pod} ${log.ip} ${log.method || ""} ${log.path || ""} ${log.status || ""} ${log.message || ""}`.toLowerCase()
+    // data-pod carries the full container name (e.g. voodu-fsw-
+    // controller.67ad) so the pod-selector filter can resolve it
+    // back to resource_name via the controller's containerToResource
+    // map without re-parsing the line text.
+    row.dataset.pod = log.pod || ""
     // Double-click anywhere on the row → toggle per-row wrap. Same
     // outcome as clicking the floating .log-wrap-single chip, but
     // for power users who don't want to aim for a 20px target. The
@@ -842,7 +886,59 @@ export default class extends Controller {
   rowMatches(row) {
     if (!this.activeLevels.has(row.dataset.level)) return false
     if (this.query && !row.dataset.search.includes(this.query)) return false
+    if (!this.podMatchesResourceFilter(row.dataset.pod || row.dataset.container)) return false
     return true
+  }
+
+  // podMatchesResourceFilter — gates a row by the pod selector.
+  // Null filter (`resourceFilter`) means default = show everything.
+  // Empty array means operator deliberately hid all. Non-empty
+  // array means keep only rows whose container's resource_name is
+  // in the allow-set.
+  //
+  // Unknown containers (not in the pods snapshot we got at render
+  // — e.g. a brand-new pod spawned mid-session) get shown by
+  // default so the operator isn't surprised by "where did my log
+  // go" when scale events run. They flip into the filter once
+  // they're in a re-rendered snapshot.
+  podMatchesResourceFilter(containerName) {
+    if (this.resourceFilter === null) return true
+    if (!containerName) return true
+    const resource = this.containerToResource.get(containerName)
+    if (!resource) return true
+    return this.resourceFilter.has(resource)
+  }
+
+  // loadResourceFilter — reads the persisted resource_name list out
+  // of localStorage and returns either:
+  //   null        — no saved selection, show everything
+  //   Set<string> — saved selection (possibly empty = hide all)
+  loadResourceFilter() {
+    if (!this.podsFilterKeyValue) return null
+    try {
+      const raw = localStorage.getItem(this.podsFilterKeyValue)
+      if (raw === null) return null
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? new Set(parsed) : null
+    } catch (_e) {
+      return null
+    }
+  }
+
+  // onPodsFilterChanged — window event hook. The drawer dispatches
+  // this whenever its checkboxes change; we update our Set + re-
+  // apply the filter to the live tail (existing rows AND future
+  // ingest).
+  onPodsFilterChanged(event) {
+    const resources = event.detail && event.detail.resources
+
+    if (resources === null || resources === undefined) {
+      this.resourceFilter = null
+    } else {
+      this.resourceFilter = new Set(Array.isArray(resources) ? resources : [])
+    }
+
+    this.applyFilter()
   }
 
   // ── Chrome updates ────────────────────────────────────────────────

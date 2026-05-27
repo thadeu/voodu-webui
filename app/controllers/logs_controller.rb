@@ -40,6 +40,22 @@ class LogsController < ApplicationController
     )
   end
 
+  # pods_picker — drawer body fetched by Components::UI::Drawer when
+  # the operator clicks the multi-select picker on /logs. Returns
+  # bare markup (layout: false) since Drawer.injectHTML expects body
+  # fragment, not a full <html> document.
+  #
+  # The view holds the resource-name list + a Stimulus controller
+  # that persists selection to localStorage and dispatches a DOM
+  # event to log-stream so the live tail filters in lockstep.
+  def pods_picker
+    view = Views::Logs::PodsPicker.new(
+      island_key: current_island.key,
+      pods:       pods_for_picker
+    )
+    render view, layout: false
+  end
+
   def show
     view = Views::Logs::Show.new(
       **dashboard_context.merge(

@@ -54,6 +54,16 @@ class Components::Logs::Page < Components::Base
         controller: "log-stream logs-columns",
         log_stream_pod_value:        @pod_name.to_s,
         log_stream_stream_url_value: stream_url,
+        # Pods snapshot at render: list of { name, resource_name,
+        # scope } used by the pod-selector filter to map container
+        # names → resource_names (the user-facing identity the
+        # drawer's checkboxes operate on).
+        log_stream_pods_value:       pods_json,
+        # localStorage key the pod-selector drawer writes into.
+        # Must match Views::Logs::PodsPicker's storageKeyValue or
+        # the filter is read from the wrong bucket and silently
+        # falls back to "show all".
+        log_stream_pods_filter_key_value: pods_filter_storage_key,
         # Storage key namespaces the per-operator column layout.
         # Bump the version suffix when the persisted shape changes
         # so old payloads get ignored instead of mis-applied.
@@ -64,6 +74,30 @@ class Components::Logs::Page < Components::Base
       toolbar
       viewport
     end
+  end
+
+  # pods_json — minimal projection of the compact pod list for the
+  # log-stream controller's filter map. Only { name, resource_name,
+  # scope } needed; trimming the rest keeps the inline JSON tight.
+  def pods_json
+    @pods.map do |p|
+      {
+        name:          p[:name]          || p["name"],
+        resource_name: p[:resource_name] || p["resource_name"],
+        scope:         p[:scope]         || p["scope"]
+      }
+    end.to_json
+  end
+
+  # pods_filter_storage_key — namespaces the selection per-island
+  # so switching servers doesn't bleed a filter from server A onto
+  # server B. Pulled from the current request's path_parameters so
+  # we don't need to thread current_island down into the component.
+  def pods_filter_storage_key
+    key = request.path_parameters[:tenant_key]
+    return "" if key.blank?
+
+    "voodu:logs-pods:v1:#{key}"
   end
 
   # show_pod_picker? — only on the full-page surface AND when we've
@@ -137,8 +171,18 @@ class Components::Logs::Page < Components::Base
         Components::UI::PageHeader.new(title: "Logs")
           .with_subtitle { sub_line }
           .with_actions do
+            # Single-pod /logs/:name view keeps the old dropdown so
+            # the operator can navigate to a different specific pod
+            # via standard ScopePicker semantics. Multi-pod view
+            # (/logs root) uses the new drawer-style multi-select
+            # which filters the live tail client-side without
+            # changing the URL.
             if show_pod_picker?
-              render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
+              if @pod_name.present?
+                render Components::Logs::PodPicker.new(active_pod: @pod_name, pods: @pods)
+              else
+                render Components::Logs::PodSelectorButton.new(pods: @pods)
+              end
             end
             open_pod_btn if show_open_pod?
           end
