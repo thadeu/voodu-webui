@@ -157,9 +157,9 @@ class Components::Logs::ExportDrawer < Components::Base
     same_day = f.to_date == u.to_date
 
     if same_day
-      "#{f.strftime('%b %-d %H:%M')}–#{u.strftime('%H:%M')}"
+      "#{WebTime.strftime(f, '%b %-d %H:%M')}–#{WebTime.strftime(u, '%H:%M')}"
     else
-      "#{f.strftime('%b %-d %H:%M')} → #{u.strftime('%b %-d %H:%M')}"
+      "#{WebTime.strftime(f, '%b %-d %H:%M')} → #{WebTime.strftime(u, '%b %-d %H:%M')}"
     end
   end
 

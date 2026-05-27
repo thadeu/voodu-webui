@@ -48,8 +48,12 @@ export default class extends Controller {
 
     const formatted = strip.dataset.formatted || strip.dataset.value || ""
     const ts        = strip.dataset.ts || ""
+    // tz follows the same data-attribute path as ts — the Phlex
+    // Sparkline component stamps both at render time. Falls back
+    // to "UTC" when missing so older renders keep working.
+    const tz        = strip.dataset.tz || this.element.dataset.tz || "UTC"
 
-    this.tooltip.innerHTML = renderContent(formatted, ts, this.accentColor)
+    this.tooltip.innerHTML = renderContent(formatted, ts, this.accentColor, tz)
     this.tooltip.style.opacity = "1"
 
     this.drawActiveMarker(
@@ -215,9 +219,9 @@ export default class extends Controller {
 // Inline styles instead of CSS classes so the tooltip doesn't
 // depend on a stylesheet load order — works even when grafted into
 // <body> outside the component's scope.
-function renderContent(formatted, ts, color) {
+function renderContent(formatted, ts, color, tz) {
   const tsLine = ts
-    ? `<div style="color: var(--voodu-muted-2, #6c7790); font-size: 10px; margin-top: 2px;">${formatTs(ts)}</div>`
+    ? `<div style="color: var(--voodu-muted-2, #6c7790); font-size: 10px; margin-top: 2px;">${formatTs(ts, tz)}</div>`
     : ""
 
   return `
@@ -229,16 +233,33 @@ function renderContent(formatted, ts, color) {
   `
 }
 
-// formatTs — ISO → HH:MM:SS in the operator's locale. We use
-// toLocaleTimeString so the controller-side time zone matches the
-// operator's expectation, NOT the controller's UTC.
-function formatTs(iso) {
+// formatTs — ISO → HH:MM:SS in the operator's CHOSEN timezone,
+// not the browser's. The TZ name comes via the strip element's
+// `data-tz` attribute (populated by Components::UI::Sparkline
+// from WebTime.zone_name); falls back to UTC when missing so
+// orphan tooltips still produce a sensible string.
+//
+// Why explicit timeZone rather than `toLocaleTimeString(undefined)`?
+// Operators can remote-desktop / SSH from one TZ to a browser in
+// another (or just prefer a different display TZ than the OS
+// reports). The Settings → Display preferences is the source of
+// truth across the whole app — sparkline tooltips honour it too.
+function formatTs(iso, tz) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
 
-  return d.toLocaleTimeString(undefined, {
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
-  })
+  const zone = tz || "UTC"
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      hour:     "2-digit",
+      minute:   "2-digit",
+      second:   "2-digit",
+      hour12:   false,
+      timeZone: zone
+    }).format(d)
+  } catch (_e) {
+    return d.toISOString().substring(11, 19)
+  }
 }
 
 // escapeHtml — minimal guard for the `formatted` string. MetricsData

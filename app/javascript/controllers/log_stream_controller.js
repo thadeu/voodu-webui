@@ -70,7 +70,20 @@ export default class extends Controller {
   static values = {
     pod:       String,
     streamUrl: String,
-    bufferCap: { type: Number, default: 700 },
+    // bufferCap — max log rows held in memory + rendered in the DOM.
+    // Trade-off: too low and a noisy stream evicts lines the operator
+    // is actively reading (the symptom we saw: 234 lines/sec × cap
+    // 700 = ~3s before a line vanishes). Too high and 10k+ DOM
+    // nodes in the grid grind low-end machines on follow=on
+    // scroll-to-bottom.
+    //
+    // 10_000 gives ~45s of context at peak burst rates (~200/sec)
+    // and many minutes at normal cadence. ~5MB of DOM in the worst
+    // case (each row = 5 spans ≈ 500B); modern browsers handle this
+    // comfortably with the display:grid layout. Operators with
+    // extreme-volume pods can override per-page via
+    // `data-log-stream-buffer-cap-value` on the controller root.
+    bufferCap: { type: Number, default: 10000 },
   }
 
   static targets = [
@@ -164,7 +177,13 @@ export default class extends Controller {
 
   toggleWrap() {
     this.wrap = !this.wrap
-    this.refreshToggleButton(this.wrapTarget, this.wrap)
+    // The wrap toggle moved from the toolbar (Tailwind class swap)
+    // to a chip in the PAYLOAD header (CSS `[data-active="true"]`
+    // selector lights it up). We only need to flip the data-active
+    // flag; no class swap, no refreshToggleButton call.
+    if (this.hasWrapTarget) {
+      this.wrapTarget.dataset.active = this.wrap ? "true" : "false"
+    }
     this.listTarget.classList.toggle("log-wrap", this.wrap)
   }
 
@@ -532,15 +551,23 @@ export default class extends Controller {
     // Event bubbles up through the cells (row is display:contents).
     row.dataset.action = "dblclick->log-stream#toggleRowWrap"
     // Row has `display: contents` (theme.css) so it has no box —
-    // border-left and tooltip can't live on the row itself. We push
-    // border-left onto the .log-ts first cell and put `title` on the
-    // body cell where the operator's pointer mostly hovers. End-user
-    // visual is identical to the pre-contents layout.
+    // border-left and tooltip can't live on the row itself. Border
+    // stripe is delegated to whichever cell ends up leftmost (CSS
+    // cascade in theme.css `.log-row > .log-ts, .cols-hide-ts ...
+    // > .log-level, ...`). The pod-accent color travels via the
+    // `--row-accent` custom property set on the row AND on every
+    // cell below. Custom-property inheritance through `display:
+    // contents` is spec-compliant but had a known WebKit bug in
+    // Safari < 16.4 — pushing the value onto each cell directly is
+    // belt-and-suspenders so the colored stripe survives even when
+    // TIME / LVL / POD are hidden via the column-visibility popover
+    // and the body cell ends up the leftmost-rendered one.
+    row.style.setProperty("--row-accent", pc)
 
     const ts = document.createElement("span")
     ts.className = "log-ts"
     ts.textContent = fmtTime(log.ts)
-    ts.style.borderLeftColor = pc
+    ts.style.setProperty("--row-accent", pc)
     row.appendChild(ts)
 
     const lvl = document.createElement("span")
@@ -549,12 +576,14 @@ export default class extends Controller {
     lvl.style.color = tone.color
     lvl.style.background = tone.bg
     lvl.style.border = `1px solid ${tone.border}`
+    lvl.style.setProperty("--row-accent", pc)
     row.appendChild(lvl)
 
     const pod = document.createElement("span")
     pod.className = "log-pod"
     pod.textContent = sp
     pod.style.color = pc
+    pod.style.setProperty("--row-accent", pc)
     row.appendChild(pod)
 
     // IP column intentionally NOT rendered — operator deferred the
@@ -565,6 +594,7 @@ export default class extends Controller {
 
     const body = document.createElement("span")
     body.className = "log-body"
+    body.style.setProperty("--row-accent", pc)
     // Tooltip moves from row → body (row has display:contents so its
     // title attribute can't surface). Body covers the full payload
     // area where the operator hovers to read.

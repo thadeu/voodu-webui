@@ -95,11 +95,31 @@
   line-height: 1.7;
 }
 
-/* First cell carries the row's left accent stripe (was on .log-row
- * before the contents-based outer grid). Padding-left replaces what
- * was `.log-row { padding-left: 10px }`. */
-.log-row > .log-ts {
-  border-left: 2px solid var(--voodu-border-2);
+/* Leftmost-visible-cell stripe + padding —
+ *
+ * The row's left accent (pod-color stripe on data rows, transparent
+ * on the header) lives on whichever cell is currently leftmost
+ * AFTER applying the column-hide classes. When the operator hides
+ * `TIME` via the visibility popover, `LVL` becomes leftmost and
+ * needs to carry the stripe + 10px gutter; if `LVL` is also hidden,
+ * `POD` takes over; if everything but PAYLOAD is hidden, the body
+ * cell itself becomes leftmost.
+ *
+ * Without these cascading rules, the leftmost remaining cell would
+ * butt straight against the container edge (no stripe, no padding)
+ * — the symptom the operator hit when leaving only PAYLOAD on.
+ *
+ * Data rows pull the stripe color from `--row-accent`, a custom
+ * property the JS row renderer (log_stream_controller.js) sets on
+ * each row inline. Property inheritance works through `display:
+ * contents` so the cell child reads the value off the row. Header
+ * rows don't set the property — they get the transparent fallback
+ * via the dedicated `.log-header` selectors below. */
+.log-row > .log-ts,
+.log-list.cols-hide-ts > .log-row > .log-level,
+.log-list.cols-hide-ts.cols-hide-level > .log-row > .log-pod,
+.log-list.cols-hide-ts.cols-hide-level.cols-hide-pod > .log-row > .log-body {
+  border-left: 2px solid var(--row-accent, var(--voodu-border-2));
   padding-left: 10px;
 }
 
@@ -189,8 +209,13 @@
   font-weight: 700;
   letter-spacing: 0.7px;
   color: var(--voodu-muted-2);
-  padding-top: 4px;
-  padding-bottom: 4px;
+  /* Vertical padding gives breathing room for the 20px chips inside
+   * the body header cell (settings cog + copy-all). 7px top/bottom
+   * + 20px chip = 34px header strip — still tight, more legible
+   * than the previous 4px which crowded the chips against the
+   * border-bottom. */
+  padding-top: 7px;
+  padding-bottom: 7px;
   line-height: 1.4;
   white-space: nowrap;
   -webkit-user-select: none;
@@ -202,12 +227,228 @@
  * pixel-perfect with the columns underneath. The 2px transparent
  * border on the first cell stands in for the data rows' colored
  * pod-accent stripe — keeps the leading-edge geometry identical. */
-.log-header > .log-h-ts {
+/* Same leftmost-cell cascade as for data rows, but on the header
+ * row each rule applies a TRANSPARENT 2px border (geometry-only —
+ * keeps the header pixel-aligned with the colored stripes below
+ * without painting a visible color). */
+.log-header > .log-h-ts,
+.log-list.cols-hide-ts > .log-header > .log-h-level,
+.log-list.cols-hide-ts.cols-hide-level > .log-header > .log-h-pod,
+.log-list.cols-hide-ts.cols-hide-level.cols-hide-pod > .log-header > .log-h-body {
   border-left: 2px solid transparent;
   padding-left: 10px;
 }
 .log-header > .log-h-body {
   padding-right: 12px;
+}
+
+/* Resize handles on each non-body header cell. 4px wide grip on the
+ * right edge with col-resize cursor; the JS controller starts the
+ * drag on mousedown and rebuilds `.log-list`'s grid-template-columns
+ * with the new explicit width as the mouse moves. Stays invisible
+ * by default — only a faint accent line shows up on hover so the
+ * header stays clean.
+ *
+ * No `position: relative` override needed on `.log-hcell` — the
+ * `position: sticky` already applied above (header cells stick to
+ * scroll top) is itself a positioned value, so absolute children
+ * (resize handle, settings/copy chips on the body header) anchor
+ * to the sticky cell naturally. Adding `position: relative` here
+ * USED to override the sticky and silently broke the pinned
+ * header during live tail scroll. */
+.log-col-resize {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: -5px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 3;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.log-col-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.log-col-resize:hover::after,
+.log-col-resize.is-dragging::after {
+  background: var(--voodu-accent-line);
+}
+/* When any resize handle is dragging, freeze the whole viewport's
+ * cursor + disable text selection so the operator's drag feels
+ * sticky (no flickering between col-resize and text/I-beam). Class
+ * is added on document.body by the controller for the drag's
+ * duration. */
+body.log-cols-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body.log-cols-resizing * {
+  cursor: col-resize !important;
+}
+
+/* Header chips (copy-all + wrap + settings) inside the PAYLOAD
+ * header cell — same chip language as `.log-copy` / `.log-wrap-
+ * single` on data rows so the schema row feels coordinated with
+ * the live tail.
+ *
+ * Layout (right-to-left, 24px stride: 20px chip + 4px gap):
+ *   - Settings cog: right: 4px   → rightmost
+ *   - Wrap toggle:  right: 28px  → middle
+ *   - Copy all:     right: 52px  → leftmost of the trio
+ *
+ * Reading the trio left-to-right gives operator vocabulary in
+ * decreasing destructiveness: "copy what's there → reformat layout
+ * → change which columns I see." All 20×20 to match the per-row
+ * chips.
+ */
+.log-col-settings,
+.log-col-copy-all,
+.log-col-wrap {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--voodu-surface-3);
+  border: 1px solid var(--voodu-border-2);
+  color: var(--voodu-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.log-col-settings { right: 4px;  }
+.log-col-wrap     { right: 28px; }
+.log-col-copy-all { right: 52px; }
+
+.log-col-settings:hover,
+.log-col-copy-all:hover,
+.log-col-wrap:hover {
+  color: var(--voodu-text);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
+  border-color: var(--voodu-border);
+}
+.log-col-settings[aria-expanded="true"],
+.log-col-wrap[data-active="true"] {
+  color: var(--voodu-accent-2);
+  background: color-mix(in srgb, var(--voodu-accent) 25%, var(--voodu-surface-3));
+  border-color: var(--voodu-accent-line);
+}
+.log-col-copy-all[data-copied="true"] {
+  color: var(--voodu-green);
+  border-color: color-mix(in srgb, var(--voodu-green) 55%, transparent);
+  background: color-mix(in srgb, var(--voodu-green) 18%, var(--voodu-surface-3));
+}
+.log-col-settings svg,
+.log-col-copy-all svg,
+.log-col-wrap svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+/* Column visibility popover — anchored to the top-right of the
+ * viewport (sibling of the scroll container, both inside the
+ * `.relative .group` wrapper). Sits above sticky header (z:2),
+ * jump-to-top (z:20) is below it so the popover wins. */
+.log-cols-popover {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  z-index: 30;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--voodu-surface);
+  border: 1px solid var(--voodu-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.log-cols-popover[hidden] {
+  display: none;
+}
+.log-cols-popover-title {
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--voodu-muted-2);
+}
+.log-cols-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--voodu-text);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.log-cols-popover-row:hover {
+  background: var(--voodu-surface-2);
+}
+.log-cols-popover-row input[type="checkbox"] {
+  accent-color: var(--voodu-accent);
+  cursor: pointer;
+}
+.log-cols-popover-row.is-required {
+  cursor: not-allowed;
+  color: var(--voodu-muted-2);
+}
+.log-cols-popover-row.is-required:hover {
+  background: transparent;
+}
+.log-cols-popover-row.is-required input[type="checkbox"] {
+  cursor: not-allowed;
+}
+.log-cols-popover-label {
+  flex: 1;
+}
+.log-cols-popover-hint {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--voodu-muted-2);
+}
+
+/* Column hiding —
+ *
+ * With rows on `display: contents`, auto-placement fills the grid
+ * left-to-right per row. Removing a column means TWO things in
+ * lockstep:
+ *   1. Hide the data + header cells of that column via display:none
+ *      (these rules), so they don't consume grid slots.
+ *   2. Rebuild `.log-list` grid-template-columns to match the
+ *      remaining columns (handled by JS in logs_columns_controller).
+ *
+ * Doing only (1) without (2) would leave an empty trailing column
+ * still taking 1fr — body would render in the wrong slot and the
+ * layout would visibly split. Always change both. */
+.log-list.cols-hide-ts > .log-row > .log-ts,
+.log-list.cols-hide-ts > .log-row > .log-h-ts {
+  display: none;
+}
+.log-list.cols-hide-level > .log-row > .log-level,
+.log-list.cols-hide-level > .log-row > .log-h-level {
+  display: none;
+}
+.log-list.cols-hide-pod > .log-row > .log-pod,
+.log-list.cols-hide-pod > .log-row > .log-h-pod {
+  display: none;
 }
 
 /* Copy affordance —

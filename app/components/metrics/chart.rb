@@ -117,7 +117,12 @@ class Components::Metrics::Chart < Components::Base
         # fills container fully WITHOUT squishing text (every SVG
         # unit == 1 CSS pixel after takeover). Server-rendered
         # snapshot below uses @width/@height as a no-JS fallback.
-        metrics_chart_responsive_value: true
+        metrics_chart_responsive_value: true,
+        # Timezone the JS tooltip should format timestamps in.
+        # Matches the same WebTime.zone_name driving the server-
+        # rendered X-axis ticks, so a hover label and the axis
+        # tick directly below agree on TZ.
+        metrics_chart_timezone_value: WebTime.zone_name
       }
     ) do
       # ── Responsive strategy ────────────────────────────────────
@@ -372,14 +377,16 @@ class Components::Metrics::Chart < Components::Base
   # render_x_axis — 5 timestamps along the bottom. Format adapts
   # to the range (HH:MM:SS for ≤1h, HH:MM for ≤24h, MM/DD beyond).
   # Same logic as fmtAxisTime in pages-metrics.jsx so the labels
-  # match the inspiration.
+  # match the inspiration. Timestamps are converted into the
+  # operator's preferred timezone (Settings → Display preferences)
+  # via WebTime so chart x-axis ticks read in local time, not UTC.
   def render_x_axis(svg, x_min, x_max)
     span = x_max - x_min
 
     (0..(X_TICKS - 1)).each do |i|
       t = i.to_f / (X_TICKS - 1)
       ts_ms = x_min + t * span
-      ts = Time.at(ts_ms / 1000.0).utc
+      ts = Time.at(ts_ms / 1000.0)
 
       # X-axis labels: x is recomputed on resize as
       # `pad_left + (t * inner_w)`. Stash t on the element so JS
@@ -399,18 +406,19 @@ class Components::Metrics::Chart < Components::Base
     end
   end
 
-  # format_axis_time — pick format that fits the chart's range:
+  # format_axis_time — pick format that fits the chart's range and
+  # render in the operator's timezone:
   #   ≤ 1h    → HH:MM:SS
   #   ≤ 24h   → HH:MM
   #   beyond  → MM/DD
   def format_axis_time(ts)
-    if @range_ms <= 60 * 60 * 1000
-      ts.strftime("%H:%M:%S")
-    elsif @range_ms <= 24 * 60 * 60 * 1000
-      ts.strftime("%H:%M")
-    else
-      ts.strftime("%m/%d")
-    end
+    pattern =
+      if    @range_ms <= 60 * 60 * 1000      then "%H:%M:%S"
+      elsif @range_ms <= 24 * 60 * 60 * 1000 then "%H:%M"
+      else                                        "%m/%d"
+      end
+
+    WebTime.strftime(ts, pattern) || ""
   end
 
   # format_axis_number — Y-axis label compaction. "Nk" for >=1000

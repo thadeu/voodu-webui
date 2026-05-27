@@ -33,6 +33,15 @@ class ApplicationController < ActionController::Base
 
   before_action :require_tenant!
 
+  # WebTime memoises the operator's configured timezone in a
+  # thread-local hash for the duration of one request — keeps every
+  # `WebTime.in_zone(...)` call inside one render from re-hitting
+  # the Settings table. We must clear it BEFORE each request so a
+  # POST that updates the timezone reflects on the redirect, and
+  # so threads getting recycled across requests don't carry a
+  # stale memo from the previous operator action.
+  before_action { WebTime.clear_request_cache }
+
   # default_url_options — Rails calls this for EVERY url_for / named
   # route helper. By auto-injecting the current tenant_key we keep
   # call sites tidy: `metrics_path` Just Works instead of every

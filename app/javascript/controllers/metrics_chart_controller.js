@@ -53,7 +53,13 @@ export default class extends Controller {
     padTop:     { type: Number,  default: 14 },
     padBottom:  { type: Number,  default: 22 },
     baselineY:  { type: Number,  default: 178 },  // height - padBottom; precomputed server-side
-    responsive: { type: Boolean, default: false }
+    responsive: { type: Boolean, default: false },
+    // IANA name of the operator's chosen display timezone, threaded
+    // through from WebTime.zone_name server-side. Defaults to UTC
+    // when callers don't set it (legacy + tests). The tooltip's
+    // formatTs uses Intl.DateTimeFormat with this value so the
+    // timestamp line reflects Settings → Display preferences.
+    timezone:   { type: String,  default: "UTC" }
   }
 
   connect() {
@@ -333,9 +339,37 @@ export default class extends Controller {
     const d = new Date(iso)
     if (Number.isNaN(d.getTime())) return iso
 
-    const pad = (n) => String(n).padStart(2, "0")
-    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-           `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`
+    // Render in the operator's preferred timezone (Settings →
+    // Display preferences). The TZ name comes through the
+    // `timezoneValue` Stimulus value, populated server-side from
+    // WebTime.zone_name. Falls back to "UTC" when the value is
+    // missing (legacy callers / no operator preference set).
+    const tz = this.hasTimezoneValue && this.timezoneValue ? this.timezoneValue : "UTC"
+    try {
+      const fmt = new Intl.DateTimeFormat("en-CA", {
+        year:   "numeric",
+        month:  "2-digit",
+        day:    "2-digit",
+        hour:   "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+        timeZone: tz,
+        timeZoneName: "short"
+      })
+      // en-CA gives YYYY-MM-DD; the formatter returns parts like
+      // "2026-05-27, 14:38:15 BRT". Reshape with a parts walker so
+      // we get the exact "YYYY-MM-DD HH:MM:SS TZ" layout the
+      // operator's been seeing.
+      const parts = fmt.formatToParts(d).reduce((acc, p) => (acc[p.type] = p.value, acc), {})
+      return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} ${parts.timeZoneName || tz}`
+    } catch (_e) {
+      // Invalid IANA name → fall back to UTC rendering so the
+      // tooltip still shows something coherent.
+      const pad = (n) => String(n).padStart(2, "0")
+      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
+             `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`
+    }
   }
 
   formatRaw(v) {

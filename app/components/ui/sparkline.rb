@@ -72,7 +72,12 @@ class Components::UI::Sparkline < Components::Base
       viewBox: "0 0 #{@width} #{@height}",
       preserveAspectRatio: "none",
       class: "block overflow-visible",
-      data: { controller: "sparkline-tooltip" },
+      # data-tz carries the operator's chosen IANA zone name into JS
+      # so the tooltip controller's formatTs renders timestamps in
+      # Settings → Display preferences instead of the browser's
+      # local TZ (the previous default). Same WebTime.zone_name
+      # source as the chart axis ticks + ChartCard headlines.
+      data: { controller: "sparkline-tooltip", tz: WebTime.zone_name },
       style: "--voodu-spark-color: #{@color};"
     ) do |s|
       s.defs do

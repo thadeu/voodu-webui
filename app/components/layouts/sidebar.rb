@@ -38,8 +38,8 @@ class Components::Layouts::Sidebar < Components::Base
   NAV_ITEMS = [
     { id: :overview, label: "Overview", icon: :Squares2x2Outline,   path: :tenant_root },
     { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
-    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
     { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
+    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
     { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
     { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
   ].freeze

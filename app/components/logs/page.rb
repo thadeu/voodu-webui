@@ -46,20 +46,18 @@ class Components::Logs::Page < Components::Base
     div(
       class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 h-full",
       data: {
-        controller: "log-stream",
+        # Two Stimulus controllers ride the same root: `log-stream`
+        # (tail / filter / follow / copy / per-row wrap) and
+        # `logs-columns` (resize + visibility settings). Independent
+        # state machines that touch the same DOM — they don't share
+        # targets, so cohabitation is safe.
+        controller: "log-stream logs-columns",
         log_stream_pod_value:        @pod_name.to_s,
-        # Stream URL routes:
-        #
-        #   - With pod_name → /logs/:name/stream
-        #     (proxies /api/pat/v1/pods/:name/logs — one pod tail)
-        #   - Without       → /logs/stream
-        #     (proxies /api/pat/v1/logs — server-side fan-out across
-        #     every pod, each line prefixed with [pod-name])
-        #
-        # Same JS controller handles both — the multi-source response
-        # carries `[pod-name] ` line prefixes that the parser strips
-        # to attribute each line to its origin pod.
-        log_stream_stream_url_value: stream_url
+        log_stream_stream_url_value: stream_url,
+        # Storage key namespaces the per-operator column layout.
+        # Bump the version suffix when the persisted shape changes
+        # so old payloads get ignored instead of mis-applied.
+        logs_columns_storage_key_value: "voodu:logs-columns:v1"
       }
     ) do
       page_header
@@ -283,9 +281,7 @@ class Components::Logs::Page < Components::Base
   def actions
     div(class: "flex items-center gap-1.5 flex-wrap") do
       follow_btn
-      wrap_btn
       pause_btn
-      copy_all_btn
       clear_btn
       # Export drawer trigger — last action so the destructive-ish
       # workflow ("generate file, download") doesn't crowd the
@@ -294,37 +290,6 @@ class Components::Logs::Page < Components::Base
       # there would mean the operator can't see the live tail
       # while picking a period.
       render Components::Logs::ExportButton.new(current_pod: @pod_name) unless @drawer
-    end
-  end
-
-  # copy_all_btn — bulk version of the per-row copy affordance. Reads
-  # `body.textContent` from every currently-visible row (respects level
-  # pill filters + the search filter) and joins them with newlines into
-  # one clipboard write. Bypasses scroll position — the operator
-  # doesn't have to drag-select page-by-page to grab a long viewport.
-  #
-  # Same payload-only semantics as the per-row icon: no timestamps,
-  # no level chips, no pod names, no IPs. The raw lines already carry
-  # `"time":...` fields in their JSON, so paste-into-LLM/paste-into-
-  # an-incident-doc workflows stay clean.
-  def copy_all_btn
-    button(
-      type: "button",
-      data: { action: "click->log-stream#copyAll" },
-      class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) do
-      # Inline SVG (no Icon component) so the markup matches the
-      # per-row copy glyph in log_stream_controller.js — same shape,
-      # same affordance language.
-      svg(
-        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
-        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
-        class: "w-3 h-3", "aria-hidden": "true"
-      ) do |s|
-        s.rect(x: "5", y: "5", width: "9", height: "9", rx: "1.2")
-        s.path(d: "M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2")
-      end
-      span(data: { copy_all_label: true }) { "Copy all" }
     end
   end
 
@@ -369,26 +334,6 @@ class Components::Logs::Page < Components::Base
     end
   end
 
-  # wrap_btn — defaults to INACTIVE. Operator preference: long lines
-  # stay single-line with horizontal scroll so the column rhythm and
-  # drag-select-payload UX stay clean in dense viewports. Toggle on
-  # for stack-trace / multi-KB JSON inspection.
-  #
-  # Markup matches the inactive Pause/Clear chrome (neutral surface
-  # chip) so first paint reads the same as the live state. Class
-  # swap to active state is driven by log_stream_controller.js
-  # refreshToggleButton on click — same machinery as the Follow btn.
-  def wrap_btn
-    button(
-      type: "button",
-      data: {
-        log_stream_target: "wrap",
-        action: "click->log-stream#toggleWrap",
-        active: "false"
-      },
-      class: "inline-flex items-center px-3 h-8 border text-[12px] font-medium border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) { "Wrap" }
-  end
 
   # tailwind_source_anchor — invisible div whose only purpose is to
   # hold the INACTIVE toggle classes as a string so the Tailwind
@@ -492,6 +437,7 @@ class Components::Logs::Page < Components::Base
 
       jump_to_top
       jump_to_live
+      column_visibility_popover
     end
   end
 
@@ -513,10 +459,181 @@ class Components::Logs::Page < Components::Base
   # orientation chrome, not navigation.
   def column_header
     div(class: "log-row log-header", "aria-hidden": "true") do
-      span(class: "log-hcell log-h-ts")    { "TIME" }
-      span(class: "log-hcell log-h-level") { "LVL" }
-      span(class: "log-hcell log-h-pod")   { "POD" }
-      span(class: "log-hcell log-h-body")  { "PAYLOAD" }
+      column_header_cell("ts",    "TIME",    "log-h-ts",    resizable: true)
+      column_header_cell("level", "LVL",     "log-h-level", resizable: true)
+      column_header_cell("pod",   "POD",     "log-h-pod",   resizable: true)
+      column_header_cell("body",  "PAYLOAD", "log-h-body",  resizable: false) do
+        column_copy_all_button
+        column_wrap_button
+        column_settings_button
+      end
+    end
+  end
+
+  # column_header_cell — one schema-row cell with the column label,
+  # optional yield for trailing controls (settings cog goes here on
+  # the body column), and a right-edge resize handle for the
+  # resizable columns. The handle's mousedown is wired to the
+  # logs-columns Stimulus controller which tracks the drag delta and
+  # rebuilds `.log-list`'s grid-template-columns inline style.
+  def column_header_cell(key, label, modifier_class, resizable:)
+    span(
+      class: "log-hcell #{modifier_class}",
+      data:  { logs_columns_target: "headerCell", column_key: key }
+    ) do
+      plain label
+      yield if block_given?
+      next unless resizable
+
+      span(
+        class: "log-col-resize",
+        title: "Drag to resize",
+        data: {
+          action:     "mousedown->logs-columns#startResize",
+          column_key: key
+        },
+        "aria-hidden": "true"
+      )
+    end
+  end
+
+  # column_copy_all_button — chip next to the settings cog that
+  # triggers `log-stream#copyAll`. Moved from the toolbar into the
+  # header so the action sits with its semantic siblings (Payload
+  # column → Copy all the payloads → Configure columns). Frees a
+  # slot in the cramped Follow/Wrap/Pause/Clear/Export toolbar.
+  #
+  # Icon-only — same 2-rect copy glyph used by `.log-copy` per-row.
+  # Tooltip carries the "all" semantic. The `copyAll` Stimulus
+  # action flips `data-copied="true"` on the button for ~1.2s as
+  # visual confirmation (no label child = no text flip, just the
+  # accent-green chip flash).
+  def column_copy_all_button
+    button(
+      type:        "button",
+      class:       "log-col-copy-all",
+      title:       "Copy all visible payloads",
+      "aria-label": "Copy all currently visible log payloads to clipboard",
+      data: {
+        action: "click->log-stream#copyAll"
+      }
+    ) do
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
+        "aria-hidden": "true"
+      ) do |s|
+        s.rect(x: "5", y: "5", width: "9", height: "9", rx: "1.2")
+        s.path(d: "M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2")
+      end
+    end
+  end
+
+  # column_wrap_button — chip between copy-all and the settings cog.
+  # Replaces the old toolbar `Wrap` toggle: lives with its peer
+  # mini-actions on the PAYLOAD column ("things you do to the
+  # payload column"), freeing the top toolbar for page-level
+  # state controls (Follow / Pause / Clear / Export).
+  #
+  # Same `log-stream#toggleWrap` action + `wrap` target as before
+  # — the JS state machine doesn't care that the trigger moved.
+  # CSS `[data-active="true"]` lights it up in accent purple when
+  # global wrap is on, matching the per-row `.log-wrap-single`
+  # chip language.
+  def column_wrap_button
+    button(
+      type:        "button",
+      class:       "log-col-wrap",
+      title:       "Toggle wrap on all rows",
+      "aria-label": "Toggle wrap on all log rows",
+      data: {
+        log_stream_target: "wrap",
+        action: "click->log-stream#toggleWrap",
+        active: "false"
+      }
+    ) do
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
+        "aria-hidden": "true"
+      ) do |s|
+        s.line(x1: "2", y1: "4", x2: "14", y2: "4")
+        s.path(d: "M2 8h10a2 2 0 0 1 0 4H7")
+        s.polyline(points: "9,10 7,12 9,14")
+        s.line(x1: "2", y1: "12", x2: "4", y2: "12")
+      end
+    end
+  end
+
+  # column_settings_button — gear icon at the trailing edge of the
+  # PAYLOAD header. Clicking toggles the columns popover below. SVG
+  # is inlined (no Icon component round-trip) because the markup
+  # lives on a hot path and the glyph is trivial.
+  def column_settings_button
+    button(
+      type:        "button",
+      class:       "log-col-settings",
+      title:       "Column visibility",
+      "aria-label": "Choose visible log columns",
+      data: {
+        action: "click->logs-columns#togglePopover",
+        logs_columns_target: "settingsButton"
+      }
+    ) do
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.4", "stroke-linecap": "round", "stroke-linejoin": "round",
+        "aria-hidden": "true"
+      ) do |s|
+        s.circle(cx: "8", cy: "8", r: "1.6")
+        s.path(d: "M13 9.3a5 5 0 0 0 0-2.6l1.4-1.1-1.4-2.4-1.7.5a5 5 0 0 0-2.2-1.3L8.7 0.5h-2.4l-.4 1.9a5 5 0 0 0-2.2 1.3l-1.7-.5L1 5.6 2.4 6.7a5 5 0 0 0 0 2.6L1 10.4l1.4 2.4 1.7-.5a5 5 0 0 0 2.2 1.3l.4 1.9h2.4l.4-1.9a5 5 0 0 0 2.2-1.3l1.7.5 1.4-2.4z")
+      end
+    end
+  end
+
+  # column_visibility_popover — modal-less popover anchored to the
+  # right edge of the scroll container (parent `.relative`). Listed
+  # alongside the scroll area, NOT inside it, so it escapes the
+  # overflow:auto clip when open. Stimulus controls open/close via
+  # `togglePopover`; outside-click auto-closes via the controller's
+  # document listener.
+  #
+  # PAYLOAD ships as a permanently-checked + disabled row — operator
+  # can't hide the only column carrying actual data. The others are
+  # plain toggles persisted to localStorage.
+  def column_visibility_popover
+    div(
+      class:  "log-cols-popover",
+      hidden: true,
+      role:   "menu",
+      "aria-label": "Visible columns",
+      data:   { logs_columns_target: "popover" }
+    ) do
+      div(class: "log-cols-popover-title") { "Visible columns" }
+      column_visibility_row("ts",    "Time")
+      column_visibility_row("level", "Level")
+      column_visibility_row("pod",   "Pod")
+      column_visibility_row("body",  "Payload", required: true)
+    end
+  end
+
+  def column_visibility_row(key, label, required: false)
+    label_class = required ? "log-cols-popover-row is-required" : "log-cols-popover-row"
+
+    label(class: label_class) do
+      input(
+        type:     "checkbox",
+        checked:  true,
+        disabled: required,
+        data: {
+          action:     "change->logs-columns#toggleVisibility",
+          column_key: key,
+          required:   required ? "true" : "false",
+          logs_columns_target: "visibilityToggle"
+        }
+      )
+      span(class: "log-cols-popover-label") { label }
+      span(class: "log-cols-popover-hint") { "required" } if required
     end
   end
 

@@ -42,9 +42,84 @@ class Views::Settings::Index < Views::Base
   def body
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
       page_header
-      server_card
+      # Layout rhythm:
+      #   1. Preferences      (full width — operator-global, sets
+      #                        the rendering posture for the rest of
+      #                        the page)
+      #   2. API tokens       (full width — tabular list, individual
+      #                        rows want full reading width)
+      #   3. Server + About   (side-by-side grid — both are short
+      #                        key/value cards; sitting them in two
+      #                        columns at vmd+ kills the wasted
+      #                        whitespace they had as stacked
+      #                        full-width blocks, and they read as
+      #                        the "this server" pair which fits
+      #                        their semantic similarity)
+      preferences_card
       pat_card
-      about_card
+
+      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5 items-start") do
+        server_card
+        about_card
+      end
+    end
+  end
+
+  # preferences_card — operator-global display prefs. Today: timezone
+  # only. Saved via POST /settings/preferences which routes through
+  # SettingsController#update_preferences. Persists to the Setting
+  # table; every server-rendered timestamp (chart axes, About card
+  # boot time, sync chips) reads this value through WebTime.
+  #
+  # Sits ABOVE the per-server cards because it's a global pref —
+  # operators shouldn't have to scroll past per-server stuff to
+  # adjust app-wide rendering.
+  def preferences_card
+    current_tz = WebTime.zone_name
+
+    div(class: "bg-voodu-surface border border-voodu-border") do
+      div(class: "px-4 py-3 border-b border-voodu-border flex items-center gap-2") do
+        h2(class: "text-[13px] font-semibold text-voodu-text") { "Display preferences" }
+        span(class: "text-[11.5px] text-voodu-muted-2") { "applies globally to every server" }
+      end
+
+      form(action: update_preferences_settings_path, method: "post", class: "px-4 py-4 flex flex-col gap-3") do
+        input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+
+        div(class: "flex flex-col gap-1.5") do
+          label(for: "settings-timezone", class: "text-[11px] font-semibold uppercase tracking-[0.05em] text-voodu-muted-2") do
+            "Timezone"
+          end
+          input(
+            type: "text",
+            id:   "settings-timezone",
+            name: "timezone",
+            value: current_tz == "UTC" ? "" : current_tz,
+            placeholder: "America/Sao_Paulo",
+            spellcheck: "false",
+            autocomplete: "off",
+            class: "px-3 h-9 bg-voodu-bg-2 border border-voodu-border text-voodu-text text-[12.5px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+          )
+          span(class: "text-[11.5px] text-voodu-muted-2") do
+            plain "IANA name (e.g. "
+            span(class: "font-voodu-mono") { "America/Sao_Paulo" }
+            plain ", "
+            span(class: "font-voodu-mono") { "Europe/Lisbon" }
+            plain ", "
+            span(class: "font-voodu-mono") { "UTC" }
+            plain "). Leave blank to use UTC. Current: "
+            span(class: "font-voodu-mono text-voodu-text-2") { current_tz }
+            plain "."
+          end
+        end
+
+        div(class: "flex items-center justify-end gap-2") do
+          button(
+            type: "submit",
+            class: "inline-flex items-center px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent hover:text-white"
+          ) { "Save preferences" }
+        end
+      end
     end
   end
 
@@ -160,7 +235,7 @@ class Views::Settings::Index < Views::Base
   def registered_value
     age_secs = (Time.current - @current_island.created_at).to_i
     span do
-      plain @current_island.created_at.strftime("%Y-%m-%d %H:%M")
+      plain WebTime.strftime(@current_island.created_at, "%Y-%m-%d %H:%M")
       span(class: "text-voodu-muted ml-2") { "· #{age_label(age_secs)} ago" }
     end
   end
@@ -344,7 +419,7 @@ class Views::Settings::Index < Views::Base
         render(Components::UI::KvRow.new(key: "Memory total")) { memory_total_value }
         render(Components::UI::KvRow.new(key: "Disk total"))   { disk_total_value }
         render(Components::UI::KvRow.new(key: "Uptime"))       { uptime_value }
-        render(Components::UI::KvRow.new(key: "Boot time"))    { agent_field("host", "boot_time") }
+        render(Components::UI::KvRow.new(key: "Boot time"))    { boot_time_value }
         render(Components::UI::KvRow.new(key: "Links"))        { about_links }
       end
     end
@@ -393,6 +468,21 @@ class Views::Settings::Index < Views::Base
     else
       dash
     end
+  end
+
+  # boot_time_value — the host's last boot (UTC string from
+  # /system) rendered in the operator's preferred timezone via
+  # WebTime. Falls back to the raw agent value when WebTime can't
+  # parse it (e.g. unexpected wire format), then to dash if the
+  # field is absent altogether.
+  def boot_time_value
+    raw = @system&.dig("host", "boot_time")
+    return dash if raw.blank?
+
+    formatted = WebTime.strftime(raw, "%Y-%m-%d %H:%M")
+    return span(class: "font-voodu-mono") { raw.to_s } if formatted.nil?
+
+    span(class: "font-voodu-mono") { formatted }
   end
 
   def cpu_cores_value

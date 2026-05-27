@@ -198,7 +198,7 @@ class Components::Logs::ExportStatus < Components::Base
     u = @export.until_time
     return "—" if f.nil? || u.nil?
 
-    "#{f.strftime('%Y-%m-%d %H:%M')} → #{u.strftime('%Y-%m-%d %H:%M')}"
+    "#{WebTime.strftime(f, '%Y-%m-%d %H:%M')} → #{WebTime.strftime(u, '%Y-%m-%d %H:%M')}"
   end
 
   def pods_label
