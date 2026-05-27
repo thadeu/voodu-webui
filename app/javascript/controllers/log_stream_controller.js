@@ -19,6 +19,36 @@ const TOGGLE_INACTIVE_CLASSES = [
   "hover:text-voodu-text"
 ]
 
+// Copy icon — two overlapping rectangles, the standard "copy" glyph.
+// Inlined SVG (not a Phlex Icon component) because renderRow runs in
+// JS-land per log line and we don't want to pay a Rails round-trip for
+// 80 bytes of static markup. CSS sizes/strokes via .log-copy svg rules
+// in theme.css; this string only carries the path data.
+const COPY_ICON_SVG = `
+<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true">
+  <rect x="5" y="5" width="9" height="9" rx="1.2"></rect>
+  <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2"></path>
+</svg>
+`.trim()
+
+// Wrap-line icon — three horizontal lines, the middle one ending in a
+// return curve + left-pointing arrow tip. Reads as "this line wraps to
+// the next." Toggles wrap on a SINGLE row when the global Wrap chrome
+// is off (default), so the operator can briefly expand one payload
+// without leaving the rest of the dense viewport behind.
+const WRAP_ICON_SVG = `
+<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+     aria-hidden="true">
+  <line x1="2" y1="4" x2="14" y2="4"></line>
+  <path d="M2 8h10a2 2 0 0 1 0 4H7"></path>
+  <polyline points="9,10 7,12 9,14"></polyline>
+  <line x1="2" y1="12" x2="4" y2="12"></line>
+</svg>
+`.trim()
+
 // LogStreamController — live tail viewer.
 //
 // Two modes selected by the `streamUrl` data value:
@@ -57,13 +87,15 @@ export default class extends Controller {
     this.visibleCount  = 0
     this.paused        = false
     this.follow        = true
-    // Wrap defaults to true — long log lines (JSON dumps, stack
-    // traces, multi-KB payloads) wrap on the viewport instead of
-    // forcing horizontal scroll. Operators who want raw geometry
-    // toggle it off. Markup in page.rb#wrap_btn renders the active
-    // chrome at boot; the listTarget.classList line below makes
-    // sure the actual CSS behaviour matches.
-    this.wrap          = true
+    // Wrap defaults to FALSE — operator preference: long lines stay
+    // on one line and the row scrolls horizontally if needed, so the
+    // ts/level/pod columns stay aligned in dense viewports and the
+    // operator can drag-select a payload without hunting across
+    // wrapped fragments. Toggle Wrap on for stack-trace inspection.
+    // Markup in page.rb#wrap_btn renders the INACTIVE chrome at boot
+    // to match; the listTarget.classList line below keeps the CSS
+    // behaviour aligned with the boolean.
+    this.wrap          = false
     this.query         = ""
     this.activeLevels  = new Set(["HTTP", "INFO", "WARN", "ERROR"])
     this.userScrolled  = false
@@ -149,6 +181,12 @@ export default class extends Controller {
     this.query = (this.hasFilterTarget ? this.filterTarget.value : "").trim().toLowerCase()
     let count = 0
     for (const row of this.listTarget.children) {
+      // The sticky column-header row lives inside .log-list (so it
+      // shares the column-template grid) but is never a filter target.
+      // Skip it without flipping `hidden` — keep the header always
+      // visible.
+      if (row.classList.contains("log-header")) continue
+
       const ok = this.rowMatches(row)
       row.hidden = !ok
       if (ok) count++
@@ -161,7 +199,11 @@ export default class extends Controller {
 
   clear() {
     this.buffer = []
-    this.listTarget.innerHTML = ""
+    // Drop only data rows — the sticky column-header (.log-header)
+    // is structural and must survive a clear so the operator's next
+    // tailed line still shows up under the right column labels.
+    const dataRows = this.listTarget.querySelectorAll(".log-row:not(.log-header)")
+    for (const r of dataRows) r.remove()
     this.visibleCount = 0
     this.bufferTarget.textContent  = "0"
     this.visibleTarget.textContent = "0"
@@ -448,8 +490,14 @@ export default class extends Controller {
     this.buffer.push(log)
     while (this.buffer.length > this.bufferCapValue) {
       this.buffer.shift()
-      if (this.listTarget.firstChild) {
-        const dropped = this.listTarget.firstChild
+      // Pick the oldest DATA row to evict — skip the sticky column
+      // header, which is always the first child but isn't part of
+      // the rolling buffer.
+      let dropped = this.listTarget.firstElementChild
+      while (dropped && dropped.classList.contains("log-header")) {
+        dropped = dropped.nextElementSibling
+      }
+      if (dropped) {
         if (!dropped.hidden) this.visibleCount--
         this.listTarget.removeChild(dropped)
       }
@@ -476,12 +524,16 @@ export default class extends Controller {
     row.className = "log-row"
     row.dataset.level = log.level
     row.dataset.search = `${log.pod} ${log.ip} ${log.method || ""} ${log.path || ""} ${log.status || ""} ${log.message || ""}`.toLowerCase()
-    row.style.borderLeftColor = pc
-    row.title = `${fmtFullTime(log.ts)}  ${log.pod}  ${log.ip}`
+    // Row has `display: contents` (theme.css) so it has no box —
+    // border-left and tooltip can't live on the row itself. We push
+    // border-left onto the .log-ts first cell and put `title` on the
+    // body cell where the operator's pointer mostly hovers. End-user
+    // visual is identical to the pre-contents layout.
 
     const ts = document.createElement("span")
     ts.className = "log-ts"
     ts.textContent = fmtTime(log.ts)
+    ts.style.borderLeftColor = pc
     row.appendChild(ts)
 
     const lvl = document.createElement("span")
@@ -498,13 +550,18 @@ export default class extends Controller {
     pod.style.color = pc
     row.appendChild(pod)
 
-    const ip = document.createElement("span")
-    ip.className = "log-ip"
-    ip.textContent = log.ip
-    row.appendChild(ip)
+    // IP column intentionally NOT rendered — operator deferred the
+    // column until a real use case shows up. `log.ip` is still parsed,
+    // stays in `row.dataset.search` (so the filter input can still
+    // match IPs even though they're not visible), and the body's
+    // tooltip carries it for one-off inspection on hover.
 
     const body = document.createElement("span")
     body.className = "log-body"
+    // Tooltip moves from row → body (row has display:contents so its
+    // title attribute can't surface). Body covers the full payload
+    // area where the operator hovers to read.
+    body.title = `${fmtFullTime(log.ts)}  ${log.pod}  ${log.ip}`
 
     if (log.type === "request") {
       const method = document.createElement("span")
@@ -538,8 +595,175 @@ export default class extends Controller {
       body.appendChild(msg)
     }
 
+    // Per-row wrap toggle — sits to the LEFT of copy. Default state
+    // is inactive; clicking adds `.log-row-wrap` to the row, which
+    // a CSS override (theme.css) flips this single body to
+    // `white-space: pre-wrap` without disturbing other rows. Stays
+    // visible (data-active="true") when wrap is on for the row, so
+    // the operator can disable it without re-hovering precisely.
+    const wrapBtn = document.createElement("button")
+    wrapBtn.type = "button"
+    wrapBtn.className = "log-wrap-single"
+    wrapBtn.title = "Toggle wrap for this line"
+    wrapBtn.setAttribute("aria-label", "Toggle wrap for this log line")
+    wrapBtn.dataset.action = "click->log-stream#toggleRowWrap"
+    wrapBtn.innerHTML = WRAP_ICON_SVG
+    body.appendChild(wrapBtn)
+
+    // Floating copy affordance — top-right of the body cell, revealed
+    // on row hover (CSS-driven). Anchored to `.log-body` because the
+    // row has `display: contents` (no box, can't be a positioning
+    // context). Body IS the rightmost grid column, so top-right of
+    // body = top-right of the row visually.
+    //
+    // Clicking calls `copyRow` below which reads body.textContent and
+    // writes the raw payload (no timestamp, no level, no pod, no IP)
+    // to the clipboard — matches operator's mental model: "the line
+    // already has its own timestamp inside the JSON, just give me that."
+    const copy = document.createElement("button")
+    copy.type = "button"
+    copy.className = "log-copy"
+    copy.title = "Copy payload"
+    copy.setAttribute("aria-label", "Copy log payload to clipboard")
+    copy.dataset.action = "click->log-stream#copyRow"
+    copy.innerHTML = COPY_ICON_SVG
+    body.appendChild(copy)
+
     row.appendChild(body)
     return row
+  }
+
+  // copyRow — clipboard write of the body's textContent only. Strips
+  // every metadata column (ts/level/pod/ip) because the payload itself
+  // already carries a `"time":...` field in 99% of cases (structured
+  // JSON from our agents) and the columns are display chrome, not
+  // information the operator wants in their paste buffer.
+  //
+  // On success, the button flashes green for 1.2s via `data-copied`
+  // — visual feedback the click landed without nagging a toast.
+  // On clipboard-API failure (rare: insecure context, denied
+  // permission), falls back to selecting the body text so the
+  // operator can Ctrl+C manually.
+  async copyRow(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const btn = event.currentTarget
+    const row = btn.closest(".log-row")
+    if (!row) return
+    const body = row.querySelector(".log-body")
+    if (!body) return
+
+    const text = this.extractBodyText(body)
+    try {
+      await navigator.clipboard.writeText(text)
+      btn.dataset.copied = "true"
+      setTimeout(() => { delete btn.dataset.copied }, 1200)
+    } catch (e) {
+      // Manual-select fallback for browsers without clipboard API
+      // access (file://, insecure context, denied permission).
+      const range = document.createRange()
+      range.selectNodeContents(body)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+
+  // copyAll — bulk version of copyRow. Walks every visible row in the
+  // buffer (respects level pills + filter input via `!hidden`),
+  // extracts each body's payload, joins with newlines, single clipboard
+  // write. Independent of scroll position — operator doesn't have to
+  // drag-select page-by-page to grab a long viewport.
+  //
+  // "Visible" here means `row.hidden === false` after the level/search
+  // filters resolved — same set the viewport currently shows. Hidden
+  // rows skip silently.
+  //
+  // Feedback: the toolbar button's label flips to "Copied N" for 1.2s
+  // then back to "Copy all". Same idiom as per-row but with a count so
+  // the operator knows exactly how much landed in their buffer.
+  async copyAll(event) {
+    event.preventDefault()
+    const btn = event.currentTarget
+    if (!this.hasListTarget) return
+
+    const lines = []
+    for (const row of this.listTarget.children) {
+      if (row.hidden) continue
+      // Schema header has no payload to copy — skip it. Its
+      // .log-body cell only carries the literal "PAYLOAD" label.
+      if (row.classList.contains("log-header")) continue
+      const body = row.querySelector(".log-body")
+      if (!body) continue
+      lines.push(this.extractBodyText(body))
+    }
+
+    const text = lines.join("\n")
+    const label = btn.querySelector("[data-copy-all-label]")
+    const originalLabel = label ? label.textContent : null
+
+    try {
+      await navigator.clipboard.writeText(text)
+      if (label) label.textContent = `Copied ${lines.length}`
+      btn.dataset.copied = "true"
+      setTimeout(() => {
+        if (label && originalLabel) label.textContent = originalLabel
+        delete btn.dataset.copied
+      }, 1200)
+    } catch (e) {
+      // Clipboard API unavailable — fall back to selecting the entire
+      // list element so the operator can Ctrl+C. Less polished but
+      // never strands the action.
+      const range = document.createRange()
+      range.selectNodeContents(this.listTarget)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  }
+
+  // extractBodyText — pulls the payload string out of a `.log-body`
+  // span, ignoring the floating control buttons (copy, wrap toggle)
+  // that live inside it as siblings. `body.textContent` would include
+  // any text inside those buttons (today both are pure SVG so the
+  // result is the same, but tomorrow someone might add a text label
+  // — better to be explicit now than chase a copy-includes-the-word-
+  // "Copy" bug later).
+  extractBodyText(body) {
+    let out = ""
+    for (const node of body.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        out += node.nodeValue
+      } else if (node.nodeType === Node.ELEMENT_NODE
+                 && !node.classList.contains("log-copy")
+                 && !node.classList.contains("log-wrap-single")) {
+        out += node.textContent || ""
+      }
+    }
+    return out
+  }
+
+  // toggleRowWrap — flips `.log-row-wrap` on a single row so its
+  // body becomes pre-wrap / break-all while every other row stays in
+  // the current global mode. Lets the operator briefly expand ONE
+  // stack-trace / multi-KB JSON without losing the column rhythm of
+  // the surrounding dense viewport.
+  //
+  // `data-active` is mirrored onto the button so:
+  //   - CSS can keep the chip visible when wrap is on (without it
+  //     the chip would fade out as soon as the cursor leaves the row,
+  //     stranding the operator from un-wrapping).
+  //   - The active state reads visually (accent palette) so the
+  //     operator sees which rows they've expanded.
+  toggleRowWrap(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const btn = event.currentTarget
+    const row = btn.closest(".log-row")
+    if (!row) return
+
+    const wrapped = row.classList.toggle("log-row-wrap")
+    btn.dataset.active = wrapped ? "true" : "false"
   }
 
   rowMatches(row) {

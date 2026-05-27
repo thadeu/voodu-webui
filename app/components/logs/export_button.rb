@@ -28,10 +28,10 @@ class Components::Logs::ExportButton < Components::Base
       show_full_page_link: false,
       storage_key:         "voodu:drawer-width:export",
       trigger_attrs: {
-        class: "inline-flex items-center gap-1.5 px-2 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+        class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
       }
     )) do
-      render Icon::ArrowDownTrayOutline.new(class: "w-3 h-3")
+      render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5")
       span { "Export" }
     end
   end

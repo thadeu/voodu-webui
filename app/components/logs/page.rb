@@ -236,7 +236,7 @@ class Components::Logs::Page < Components::Base
       render Icon::MagnifyingGlassOutline.new(class: "w-3.5 h-3.5 shrink-0")
       input(
         type: "search",
-        placeholder: "filter by path, ip, method, status, message…",
+        placeholder: "filter by path, method, status, message…",
         data: {
           log_stream_target: "filter",
           action: "input->log-stream#applyFilter"
@@ -285,6 +285,7 @@ class Components::Logs::Page < Components::Base
       follow_btn
       wrap_btn
       pause_btn
+      copy_all_btn
       clear_btn
       # Export drawer trigger — last action so the destructive-ish
       # workflow ("generate file, download") doesn't crowd the
@@ -293,6 +294,37 @@ class Components::Logs::Page < Components::Base
       # there would mean the operator can't see the live tail
       # while picking a period.
       render Components::Logs::ExportButton.new(current_pod: @pod_name) unless @drawer
+    end
+  end
+
+  # copy_all_btn — bulk version of the per-row copy affordance. Reads
+  # `body.textContent` from every currently-visible row (respects level
+  # pill filters + the search filter) and joins them with newlines into
+  # one clipboard write. Bypasses scroll position — the operator
+  # doesn't have to drag-select page-by-page to grab a long viewport.
+  #
+  # Same payload-only semantics as the per-row icon: no timestamps,
+  # no level chips, no pod names, no IPs. The raw lines already carry
+  # `"time":...` fields in their JSON, so paste-into-LLM/paste-into-
+  # an-incident-doc workflows stay clean.
+  def copy_all_btn
+    button(
+      type: "button",
+      data: { action: "click->log-stream#copyAll" },
+      class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      # Inline SVG (no Icon component) so the markup matches the
+      # per-row copy glyph in log_stream_controller.js — same shape,
+      # same affordance language.
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
+        class: "w-3 h-3", "aria-hidden": "true"
+      ) do |s|
+        s.rect(x: "5", y: "5", width: "9", height: "9", rx: "1.2")
+        s.path(d: "M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2")
+      end
+      span(data: { copy_all_label: true }) { "Copy all" }
     end
   end
 
@@ -337,18 +369,24 @@ class Components::Logs::Page < Components::Base
     end
   end
 
-  # wrap_btn — defaults to ACTIVE. Long log lines (JSON dumps,
-  # stack traces) wrap by default; toggle off when the operator
-  # wants raw line geometry with horizontal scroll.
+  # wrap_btn — defaults to INACTIVE. Operator preference: long lines
+  # stay single-line with horizontal scroll so the column rhythm and
+  # drag-select-payload UX stay clean in dense viewports. Toggle on
+  # for stack-trace / multi-KB JSON inspection.
+  #
+  # Markup matches the inactive Pause/Clear chrome (neutral surface
+  # chip) so first paint reads the same as the live state. Class
+  # swap to active state is driven by log_stream_controller.js
+  # refreshToggleButton on click — same machinery as the Follow btn.
   def wrap_btn
     button(
       type: "button",
       data: {
         log_stream_target: "wrap",
         action: "click->log-stream#toggleWrap",
-        active: "true"
+        active: "false"
       },
-      class: "inline-flex items-center px-3 h-8 border text-[12px] font-medium border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
+      class: "inline-flex items-center px-3 h-8 border text-[12px] font-medium border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { "Wrap" }
   end
 
@@ -413,8 +451,15 @@ class Components::Logs::Page < Components::Base
   # can't express.
   def viewport
     div(class: "flex-1 min-h-[280px] bg-voodu-bg-2 border border-voodu-border flex flex-col overflow-hidden relative group") do
+      # pb-1.5 (not py-1.5) — top padding on a scrolling container
+      # gets honoured by `position: sticky; top: 0` as a 6px gap
+      # above the column header on initial load (sticky anchors to
+      # the padding edge of the scrollport). Dropping padding-top
+      # while keeping padding-bottom: header sits flush against the
+      # viewport's top border, last log row keeps a breathing strip
+      # before the bottom border.
       div(
-        class: "flex-1 overflow-auto py-1.5 min-w-0",
+        class: "flex-1 overflow-auto pb-1.5 min-w-0",
         tabindex: "0",
         role: "log",
         "aria-label": "Log stream",
@@ -423,16 +468,55 @@ class Components::Logs::Page < Components::Base
           action: "scroll->log-stream#onScroll"
         }
       ) do
+        # log-list — outer grid container so every row shares ONE
+        # column template (ts / level / pod / ip / body). With each
+        # row marked `display: contents` (theme.css), the cells flow
+        # directly into this grid, so the pod column auto-sizes to
+        # the widest pod name across the entire viewport instead of
+        # zig-zagging per-row. See `.log-list` / `.log-row` rules in
+        # voodu/theme.css for the layout invariants.
+        #
+        # Rendered BEFORE the empty-state placeholder so the sticky
+        # column header sits at the very top of the scroll area — the
+        # operator orients themselves on the column labels even before
+        # the first line arrives.
+        div(class: "log-list", data: { log_stream_target: "list" }) do
+          column_header
+        end
+
         div(
           data: { log_stream_target: "empty" },
           class: "px-4 py-10 text-center text-voodu-muted text-[12.5px]"
         ) { "Waiting for log lines…" }
-
-        div(data: { log_stream_target: "list" })
       end
 
       jump_to_top
       jump_to_live
+    end
+  end
+
+  # column_header — sticky column-name strip at the top of the log
+  # list. Rendered as a `.log-row.log-header` so its 5 cells flow into
+  # the same outer grid as the data rows — column widths stay
+  # perfectly aligned even when pod names grow long enough to expand
+  # the data column. Each cell is `position: sticky; top: 0` so the
+  # header stays pinned while the operator scrolls through the buffer.
+  #
+  # JS iterations over `.log-list` children (applyFilter, copyAll,
+  # buffer-cap drop, clear) explicitly skip elements with the
+  # `.log-header` class so the schema row never gets hidden, copied,
+  # or evicted with the data rows.
+  #
+  # `aria-hidden="true"` — the toolbar's filter input description
+  # ("filter by path, ip, method, status, message…") already names the
+  # columns for screen readers. The visual header is decorative
+  # orientation chrome, not navigation.
+  def column_header
+    div(class: "log-row log-header", "aria-hidden": "true") do
+      span(class: "log-hcell log-h-ts")    { "TIME" }
+      span(class: "log-hcell log-h-level") { "LVL" }
+      span(class: "log-hcell log-h-pod")   { "POD" }
+      span(class: "log-hcell log-h-body")  { "PAYLOAD" }
     end
   end
 
@@ -453,7 +537,12 @@ class Components::Logs::Page < Components::Base
       title: "Jump to top",
       "aria-label": "Jump to top of log stream",
       data: { action: "click->log-stream#jumpToTop" },
-      class: "absolute left-1/2 -translate-x-1/2 top-3.5 inline-flex items-center gap-1.5 px-3 h-8 " \
+      # top-10 (40px) clears the ~22px sticky column header + a small
+      # gap so the chip feels "inside the log area," not glued to the
+      # header. z-20 wins against the header's z-index: 2 (theme.css
+      # `.log-header > .log-hcell`) so the chip stays visible during
+      # scroll instead of disappearing behind the schema row.
+      class: "absolute left-1/2 -translate-x-1/2 top-10 z-20 inline-flex items-center gap-1.5 px-3 h-8 " \
              "border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium shadow-2xl " \
              "opacity-0 pointer-events-none transition-opacity duration-150 " \
              "group-hover:opacity-100 group-hover:pointer-events-auto " \

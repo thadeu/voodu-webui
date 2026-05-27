@@ -39,31 +39,112 @@
 
 /* ── Log stream rows ──
  *
- * One CSS class so the live tail keeps rendering thousands of nodes
- * cheaply — no per-row inline grid declaration. The Stimulus controller
- * only sets dynamic colours (level border, pod accent) per row;
- * everything else inherits from here.
+ * Layout strategy: ONE outer grid on `.log-list`, every `.log-row`
+ * marked `display: contents`. Result: all cells across all rows flow
+ * into the same 5-column grid, so column widths auto-fit the widest
+ * content GLOBALLY (pod column doesn't zig-zag between
+ * `controller.67ad` rows and `events.6cb4` rows).
  *
- * `.log-wrap` toggled on the parent <list> by the Wrap button: switches
- * the body cell from ellipsis to word-break. The grid template stays
+ * Why not per-row `display: grid`? Each row's auto-sized columns
+ * would be local to that row, producing visible misalignment between
+ * adjacent rows with different pod-name lengths. The outer grid lifts
+ * sizing to the list level — same trick browsers use for HTML tables.
+ *
+ * Trade-offs of `display: contents` we accept:
+ *   - The row itself has no box, so `position: relative`, `padding`,
+ *     and `border-left` can't live on `.log-row`. We move:
+ *       border-left → `.log-row > .log-ts` (first cell)
+ *       position    → `.log-row > .log-body` (anchors the copy btn)
+ *       padding-y   → each cell (consistent row height)
+ *   - `row.title` tooltip doesn't fire (no box). We move titles onto
+ *     `.log-body` in the JS renderer.
+ *   - `:hover` still works (cursor over any child satisfies the
+ *     ancestor selector), so the hover-reveal copy button is fine.
+ *
+ * `.log-wrap` toggled on the parent by the Wrap button: switches the
+ * body cell from ellipsis to word-break. The grid template stays
  * the same.
  */
 
-.log-row {
+.log-list {
   display: grid;
-  grid-template-columns: auto auto auto auto minmax(0, 1fr);
-  gap: 10px;
-  padding: 1px 12px 1px 10px;
-  border-left: 2px solid var(--voodu-border-2);
+  /* 4 columns: ts / level / pod / body. IP column intentionally
+   * dropped — operator deferred it; the parsed value still lives in
+   * row.dataset.search so the filter input keeps matching on IPs.
+   * Re-introducing the column = one extra `auto` track here + the
+   * matching header/data cells in page.rb and log_stream_controller. */
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 0;
+  align-items: baseline;
+}
+
+.log-row {
+  display: contents;
+}
+
+.log-row > .log-ts,
+.log-row > .log-level,
+.log-row > .log-pod,
+.log-row > .log-ip,
+.log-row > .log-body {
+  padding-top: 1px;
+  padding-bottom: 1px;
   font-family: var(--voodu-font-mono);
   font-size: 12px;
   line-height: 1.7;
-  white-space: pre;
 }
 
-.log-wrap .log-row {
+/* First cell carries the row's left accent stripe (was on .log-row
+ * before the contents-based outer grid). Padding-left replaces what
+ * was `.log-row { padding-left: 10px }`. */
+.log-row > .log-ts {
+  border-left: 2px solid var(--voodu-border-2);
+  padding-left: 10px;
+}
+
+/* Last cell is the positioning context for the floating copy
+ * button (was on .log-row before display:contents). Padding-right
+ * mirrors the old `.log-row { padding-right: 12px }`. */
+.log-row > .log-body {
+  position: relative;
+  padding-right: 12px;
+  min-width: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-wrap .log-row > .log-body {
   white-space: pre-wrap;
   word-break: break-all;
+  text-overflow: clip;
+}
+
+/* Selection scoping —
+ *
+ * Drag-to-select with the mouse used to grab the whole row (timestamp,
+ * level chip, pod name, IP, AND payload). Pasting that into Slack/an
+ * LLM dropped a wall of metadata before the actual log line. Locking
+ * the metadata columns to `user-select: none` and keeping the body
+ * `user-select: text` means a drag across any row only copies the
+ * payload — no metadata noise, no quoting cleanup.
+ *
+ * The columns still render and stay clickable (level pill / pod chip
+ * could grow click handlers later); they just don't participate in
+ * text selection. */
+.log-row .log-ts,
+.log-row .log-level,
+.log-row .log-pod,
+.log-row .log-ip,
+.log-row .log-copy,
+.log-row .log-wrap-single {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.log-row .log-body {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .log-row .log-ts    { color: var(--voodu-muted-2); white-space: nowrap; }
@@ -79,8 +160,166 @@
 }
 .log-row .log-pod   { white-space: nowrap; }
 .log-row .log-ip    { color: var(--voodu-muted); white-space: nowrap; }
-.log-row .log-body  { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.log-wrap .log-row .log-body { text-overflow: clip; }
+
+/* Column header —
+ *
+ * Sticky strip at the top of the log list. Same `display: contents`
+ * trick as the data rows: the 5 header cells flow into the same outer
+ * `.log-list` grid, so their widths track the data columns exactly
+ * (no second grid, no manual alignment math). Each cell is
+ * `position: sticky; top: 0` so the strip stays pinned while the
+ * operator scrolls.
+ *
+ * Visual: low-key uppercase labels in a tight 22px strip — present
+ * for orientation, never competing with the live data rows for
+ * attention. Same monospace face so the labels sit on the same
+ * vertical rhythm as the rows below. */
+.log-row.log-header {
+  display: contents;
+}
+
+.log-header > .log-hcell {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--voodu-bg-2);
+  border-bottom: 1px solid var(--voodu-border);
+  font-family: var(--voodu-font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  color: var(--voodu-muted-2);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: 1.4;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* First/last cell gutter — mirror the data rows' border-left padding
+ * (.log-row > .log-ts) and body-right padding so the header aligns
+ * pixel-perfect with the columns underneath. The 2px transparent
+ * border on the first cell stands in for the data rows' colored
+ * pod-accent stripe — keeps the leading-edge geometry identical. */
+.log-header > .log-h-ts {
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+}
+.log-header > .log-h-body {
+  padding-right: 12px;
+}
+
+/* Copy affordance —
+ *
+ * Floating in the top-right of the body cell, revealed on row hover.
+ * Clicking writes the body's textContent (the raw payload) to the
+ * clipboard, stripping the metadata columns.
+ *
+ * Anchored to `.log-body` (which has position: relative) rather than
+ * to the row, because the row is `display: contents` and has no box.
+ * Top-right of the body cell IS the top-right of the row visually
+ * since body is the rightmost grid column.
+ *
+ * A semi-opaque surface background masks the few characters of
+ * payload text behind the icon; without it a dense JSON line would
+ * bleed through. */
+.log-row .log-copy {
+  position: absolute;
+  top: 0px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--voodu-surface) 92%, transparent);
+  border: 1px solid var(--voodu-border);
+  color: var(--voodu-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+.log-row:hover .log-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
+.log-row .log-copy:hover {
+  color: var(--voodu-text);
+  background: var(--voodu-surface-2);
+}
+.log-row .log-copy[data-copied="true"] {
+  color: var(--voodu-green);
+  border-color: color-mix(in srgb, var(--voodu-green) 45%, transparent);
+  opacity: 1;
+}
+.log-row .log-copy svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+/* Per-row wrap toggle —
+ *
+ * Mirrors `.log-copy` (size, hover-reveal, accent on active) but sits
+ * 24px to the LEFT (right: 28px so there's a 4px gap between the two
+ * chips). Clicking flips `.log-row-wrap` on the row, which the rule
+ * below overrides into pre-wrap / break-all for THIS row's body only.
+ *
+ * `data-active="true"` keeps the chip visible after the cursor leaves
+ * — otherwise wrapping a row would strand the operator (chip hidden,
+ * can't click again to un-wrap without re-finding the right row). */
+.log-row .log-wrap-single {
+  position: absolute;
+  top: 0px;
+  right: 28px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--voodu-surface) 92%, transparent);
+  border: 1px solid var(--voodu-border);
+  color: var(--voodu-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+.log-row:hover .log-wrap-single,
+.log-row .log-wrap-single[data-active="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.log-row .log-wrap-single:hover {
+  color: var(--voodu-text);
+  background: var(--voodu-surface-2);
+}
+.log-row .log-wrap-single[data-active="true"] {
+  color: var(--voodu-accent-2);
+  border-color: var(--voodu-accent-line);
+  background: var(--voodu-accent-dim);
+}
+.log-row .log-wrap-single svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+/* Per-row wrap override —
+ *
+ * Flips the body of ONE row into wrap mode while the rest of the
+ * viewport stays in the current global mode. Specificity beats the
+ * default `.log-row > .log-body` rule (class chain on the row) but
+ * not the global `.log-wrap` (operator-driven, applied on the parent
+ * list), so the global toggle still wins if both are on — harmless
+ * since both produce the same wrap behaviour. */
+.log-row.log-row-wrap > .log-body {
+  white-space: pre-wrap;
+  word-break: break-all;
+  text-overflow: clip;
+}
 
 /* ── Live indicator dot ──
  *
