@@ -524,6 +524,13 @@ export default class extends Controller {
     row.className = "log-row"
     row.dataset.level = log.level
     row.dataset.search = `${log.pod} ${log.ip} ${log.method || ""} ${log.path || ""} ${log.status || ""} ${log.message || ""}`.toLowerCase()
+    // Double-click anywhere on the row → toggle per-row wrap. Same
+    // outcome as clicking the floating .log-wrap-single chip, but
+    // for power users who don't want to aim for a 20px target. The
+    // handler skips dblclicks that land on the control chips (so a
+    // fast double-click on copy doesn't accidentally wrap the row).
+    // Event bubbles up through the cells (row is display:contents).
+    row.dataset.action = "dblclick->log-stream#toggleRowWrap"
     // Row has `display: contents` (theme.css) so it has no box —
     // border-left and tooltip can't live on the row itself. We push
     // border-left onto the .log-ts first cell and put `title` on the
@@ -749,21 +756,57 @@ export default class extends Controller {
   // stack-trace / multi-KB JSON without losing the column rhythm of
   // the surrounding dense viewport.
   //
-  // `data-active` is mirrored onto the button so:
+  // Two entry points feed this single handler:
+  //   1. Click on the floating `.log-wrap-single` chip
+  //      (`click->log-stream#toggleRowWrap` set in renderRow on the
+  //      button).
+  //   2. Double-click anywhere on the row
+  //      (`dblclick->log-stream#toggleRowWrap` on the row itself).
+  //
+  // The two paths differ only in how the event arrives — both end up
+  // toggling the same class. We disambiguate when `event.target`
+  // resolves: if the dblclick landed on one of the control chips,
+  // skip (otherwise a fast double-click on Copy would also wrap the
+  // row, which is jarring).
+  //
+  // `data-active` is mirrored onto the chip so:
   //   - CSS can keep the chip visible when wrap is on (without it
   //     the chip would fade out as soon as the cursor leaves the row,
   //     stranding the operator from un-wrapping).
   //   - The active state reads visually (accent palette) so the
   //     operator sees which rows they've expanded.
   toggleRowWrap(event) {
+    // Skip dblclicks that originated on a control chip — those are
+    // already wired to their own click handlers and shouldn't double-
+    // fire as wrap toggles.
+    if (event.type === "dblclick" && event.target.closest(".log-copy, .log-wrap-single")) {
+      return
+    }
+
     event.preventDefault()
     event.stopPropagation()
-    const btn = event.currentTarget
-    const row = btn.closest(".log-row")
+
+    // currentTarget is the chip for the click path and the row for
+    // the dblclick path — handle both.
+    const node = event.currentTarget
+    const row = node.classList.contains("log-row") ? node : node.closest(".log-row")
     if (!row) return
 
     const wrapped = row.classList.toggle("log-row-wrap")
-    btn.dataset.active = wrapped ? "true" : "false"
+
+    // Find the chip on this row to mirror data-active. There's
+    // exactly one per row (created in renderRow).
+    const chip = row.querySelector(".log-wrap-single")
+    if (chip) chip.dataset.active = wrapped ? "true" : "false"
+
+    // Double-clicking text inside `.log-body` selects a word as a
+    // side-effect of the browser's default. Toggling wrap with a
+    // leftover word-selection looks broken (random highlight, no
+    // copy intent). Clear it so the toggle feels clean.
+    if (event.type === "dblclick") {
+      const sel = window.getSelection()
+      if (sel && sel.removeAllRanges) sel.removeAllRanges()
+    }
   }
 
   rowMatches(row) {
