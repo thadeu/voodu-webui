@@ -93,6 +93,15 @@ export default class extends Controller {
     this.isOpen = false
     this.removeListeners()
     this.unlockScroll()
+    // Invalidate the cached body so the NEXT open re-fetches `srcValue`
+    // fresh. Operator-visible payoff: closing the export drawer mid-
+    // ready-state and reopening it returns to the filter form (not
+    // the stale "Export ready" block); same goes for any other drawer
+    // whose server-side state may have advanced while the drawer was
+    // dismissed (recent exports list, refreshed pod snapshot, etc.).
+    // Fetch cost is a single small HTML fragment — imperceptible vs.
+    // the UX win of always-fresh content.
+    this.contentLoaded = false
   }
 
   // ── scroll lock ─────────────────────────────────────────────────

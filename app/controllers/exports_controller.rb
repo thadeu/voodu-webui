@@ -23,21 +23,34 @@ class ExportsController < ApplicationController
   # with current_island's pods (grouped by kind) + reads the
   # operator's current pod context from `?pod=` for smart defaults.
   def new
-    # `layout: false` so the drawer's lazy fetch receives bare body
-    # markup (no <html>/<head>). Same idiom logs#show uses for its
-    # embed branch.
-    render(
-      Components::Logs::ExportDrawer.new(
-        pods:           pods_grouped_by_kind,
-        current_pod:    params[:pod],
-        current_island: current_island,
-        # Last 5 exports for this island — surfaces in the drawer
-        # header so the operator can grab downloads they generated
-        # earlier (even if they closed the drawer mid-job).
-        recent_exports: current_island.log_exports.recent.limit(5).to_a
-      ),
-      layout: false
+    drawer = Components::Logs::ExportDrawer.new(
+      pods:           pods_grouped_by_kind,
+      current_pod:    params[:pod],
+      current_island: current_island,
+      # Last 5 exports for this island — surfaces in the drawer
+      # header so the operator can grab downloads they generated
+      # earlier (even if they closed the drawer mid-job).
+      recent_exports: current_island.log_exports.recent.limit(5).to_a
     )
+
+    respond_to do |format|
+      # HTML branch — drawer_controller's lazy fetch (`Accept:
+      # text/html`). Bare body markup so the injected innerHTML
+      # doesn't nest <html>/<head>. Same idiom logs#show uses.
+      format.html { render(drawer, layout: false) }
+
+      # turbo_stream branch — fires when the operator clicks the
+      # "New export" button on the ExportStatus block. We update
+      # the drawer body in place (target id="log-export-drawer-body")
+      # so the operator returns to the filter form WITHOUT closing
+      # the drawer first.
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.update(
+          "log-export-drawer-body",
+          drawer.call
+        )
+      end
+    end
   end
 
   # create — receive form POST from Components::Logs::ExportDrawer,

@@ -48,6 +48,8 @@ class Components::Logs::ExportStatus < Components::Base
       # (without one).
       raw(safe(turbo_cable_source_tag))
 
+      back_to_filter_row
+
       div(id: "log-export-#{@export.id}", class: "flex flex-col gap-5") do
         state_block
       end
@@ -55,6 +57,46 @@ class Components::Logs::ExportStatus < Components::Base
   end
 
   private
+
+  # back_to_filter_row — header strip with a "New export" anchor
+  # that returns the operator to the filter form WITHOUT having to
+  # close + reopen the drawer.
+  #
+  # `data-turbo-stream="true"` makes Turbo negotiate a turbo_stream
+  # response from /exports/new (the controller responds with
+  # `turbo_stream.update("log-export-drawer-body", ExportDrawer)`),
+  # so the drawer body swaps in place — the surrounding drawer
+  # chrome + scroll lock stay untouched.
+  def back_to_filter_row
+    div(class: "flex items-center gap-2 -mt-1") do
+      a(
+        href: new_export_url,
+        data: { turbo_stream: "true" },
+        class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
+      ) do
+        raw(safe(arrow_left_svg))
+        span { "New export" }
+      end
+    end
+  end
+
+  # new_export_url — drawer-form path. Mirrors retry_url but
+  # carries the embed=1 hint so the controller renders bare body
+  # (no Dashboard chrome) on the html fallback if the operator's
+  # browser drops the turbo_stream Accept header.
+  def new_export_url
+    pod = @export.pods.first
+    qs  = { embed: 1 }
+    qs[:pod] = pod if pod.present? && !@export.all_pods?
+    "/#{tenant_key}/exports/new?#{qs.to_query}"
+  end
+
+  # arrow_left_svg — tiny inline back arrow. Inlined (not the Icon
+  # component) for the same view_context-free reason as
+  # turbo_cable_source_tag — broadcasts run without view helpers.
+  def arrow_left_svg
+    %(<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4L6 8L10 12"/></svg>)
+  end
 
   # turbo_cable_source_tag — manually emits the <turbo-cable-stream-
   # source> custom element that turbo_stream_from would generate.
