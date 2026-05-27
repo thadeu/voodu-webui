@@ -21,9 +21,18 @@ Rails.application.routes.draw do
   # this routes entry.
   mount ActionCable.server => "/cable"
 
-  # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
-  # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
-  # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
+  # PWA — Rails 8 ships a built-in controller (Rails::PwaController) that
+  # serves manifest + service worker from app/views/pwa/*. We use the
+  # ERB versions so the SW can interpolate `asset_path(...)` for
+  # fingerprinted bundles in production (cache busts when CSS/JS hash
+  # changes) and the manifest stays a single source of truth.
+  #
+  # The .erb extension on app/views/pwa/service-worker.js.erb tells
+  # Rails to render it through the asset pipeline; the controller
+  # sets the right MIME (application/javascript). Layout adds the
+  # `<link rel="manifest">` + a tiny inline registration script.
+  get "manifest"        => "rails/pwa#manifest",        as: :pwa_manifest
+  get "service-worker"  => "rails/pwa#service_worker",  as: :pwa_service_worker
 
   # Island registry — operator-facing CRUD lives at the TENANT-LESS
   # root because it's the bootstrapping surface ("I have no islands

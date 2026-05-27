@@ -43,40 +43,44 @@ body {
   color: var(--voodu-accent-2);
 }
 
-/* Scrollbars — slim, blend with surfaces. */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #2a2a36;
-  border-radius: 8px;
-  border: 2px solid var(--voodu-bg);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #393948;
-}
-
-/* Utility: scrollbar-hidden — auto-overflow without the visible
- * scrollbar chrome. Matches the native-macOS behaviour where the
- * scroll affordance is the trackpad/wheel itself, not a permanent
- * UI element. Apply to dropdowns, modal bodies, drawer panels —
- * anywhere a scrollbar would steal pixels from a tight surface.
+/* Scrollbars — hidden globally.
  *
- *   Firefox:   scrollbar-width: none (standard)
- *   WebKit:    ::-webkit-scrollbar { display: none } (Safari/Chrome)
+ * Operator preference (consistent across the app): the scrollbar
+ * track is dead pixels. Wheel/trackpad/keyboard scroll still work
+ * — only the visual chrome is suppressed. Without this rule Safari
+ * persistently shows the bar (macOS "always show" + iPadOS default),
+ * which on tight surfaces like the pod-detail drawer or the chart
+ * grid steals a few px of horizontal real estate and breaks the
+ * grid's pixel rhythm.
  *
- * Element still scrolls via wheel/trackpad/keyboard; only the
- * visual chrome is suppressed.
+ * Coverage:
+ *   WebKit (Safari, Chrome, Edge, iOS): ::-webkit-scrollbar display:none
+ *   Firefox:                            scrollbar-width: none
+ *   Legacy IE/Edge:                     -ms-overflow-style: none
+ *
+ * Applied on `*` so every nested scroll container inherits the
+ * hidden state — no need to remember `class="scrollbar-hidden"` on
+ * each drawer / modal / overflow-auto block.
  */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Utility: scrollbar-hidden — kept as an explicit opt-in (now
+ * redundant with the global rule above) so existing call sites
+ * referencing the class don't break. Safe to remove the
+ * `class="scrollbar-hidden"` attributes in a follow-up sweep when
+ * touching those files. */
 @utility scrollbar-hidden {
   scrollbar-width: none;
+  -ms-overflow-style: none;
 
   &::-webkit-scrollbar {
     display: none;

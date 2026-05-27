@@ -233,13 +233,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Solid surface (not mix-with-transparent) so the chip reads as a
-   * tangible affordance over dense JSON payloads instead of a
-   * watermark blending into the text. Subtle shadow lifts the chip
-   * off the row plane for the same reason. */
-  background: var(--voodu-surface);
+  /* Background uses `surface-3` (#1c2330) — the brightest of the
+   * surface ramp — so the chip pops clearly off the log container's
+   * `bg-2` (#0c1018). The earlier `surface` (#11161f) was only ~5
+   * hex points above bg-2 and read as a watermark over dense JSON.
+   * Heavier shadow + slightly tighter border completes the lift. */
+  background: var(--voodu-surface-3);
   border: 1px solid var(--voodu-border-2);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
   color: var(--voodu-text-2);
   cursor: pointer;
   opacity: 0;
@@ -252,13 +253,13 @@
 }
 .log-row .log-copy:hover {
   color: var(--voodu-text);
-  background: var(--voodu-surface-2);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
   border-color: var(--voodu-border);
 }
 .log-row .log-copy[data-copied="true"] {
   color: var(--voodu-green);
   border-color: color-mix(in srgb, var(--voodu-green) 55%, transparent);
-  background: color-mix(in srgb, var(--voodu-green) 12%, var(--voodu-surface));
+  background: color-mix(in srgb, var(--voodu-green) 18%, var(--voodu-surface-3));
   opacity: 1;
 }
 .log-row .log-copy svg {
@@ -286,12 +287,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* Solid + shadowed for the same legibility reason as `.log-copy`:
-   * dense JSON payloads make semi-transparent chips look like a
-   * watermark instead of a clickable affordance. */
-  background: var(--voodu-surface);
+  /* Same surface-3 + heavy-shadow recipe as .log-copy — chip pops
+   * off the dark log container with no JSON text bleeding through. */
+  background: var(--voodu-surface-3);
   border: 1px solid var(--voodu-border-2);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
   color: var(--voodu-text-2);
   cursor: pointer;
   opacity: 0;
@@ -305,13 +305,17 @@
 }
 .log-row .log-wrap-single:hover {
   color: var(--voodu-text);
-  background: var(--voodu-surface-2);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
   border-color: var(--voodu-border);
 }
+/* Active state — `accent-dim` (#7c5cff22, 13% opacity) used to let
+ * JSON text bleed through the chip when wrap was on. Swap to a
+ * SOLID mix of accent into surface-3 so the chip stays a tangible
+ * purple square regardless of what payload sits underneath. */
 .log-row .log-wrap-single[data-active="true"] {
   color: var(--voodu-accent-2);
   border-color: var(--voodu-accent-line);
-  background: var(--voodu-accent-dim);
+  background: color-mix(in srgb, var(--voodu-accent) 38%, var(--voodu-surface-3));
 }
 .log-row .log-wrap-single svg {
   width: 12px;

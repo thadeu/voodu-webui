@@ -1,10 +1,27 @@
 {
-  "name": "VooduWebui",
+  "name": "Voodu",
+  "short_name": "Voodu",
+  "description": "Self-hosted PaaS operator console — pods, metrics, logs, deploys.",
+  "id": "voodu-webui",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#0a0d14",
+  "background_color": "#0a0d14",
   "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    },
     {
       "src": "/icon.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any"
     },
     {
       "src": "/icon.png",
@@ -13,10 +30,6 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": "/",
-  "display": "standalone",
-  "scope": "/",
-  "description": "VooduWebui.",
-  "theme_color": "red",
-  "background_color": "red"
+  "categories": ["productivity", "developer", "utilities"],
+  "prefer_related_applications": false
 }
