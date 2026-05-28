@@ -44,9 +44,13 @@ Rails.application.routes.draw do
   # Deliberately OUTSIDE the `:tenant_key` scope — the binary is
   # global and wants every island in one shot. Auth + loopback/
   # private-IP guards live in the controller itself (see
-  # Internal::LogPollerController).
+  # Internal::PollerController).
   namespace :internal do
-    get "log_poller/islands", to: "log_poller#islands", as: :log_poller_islands
+    get  "poller/islands", to: "poller#islands",             as: :poller_islands
+    # Inbound notification from the Go binary that a digest folder
+    # has been written. PollerDigestController persists the receipt
+    # row + enqueues PollerDigestJob; idempotent on sync_hash.
+    post "poller/digest",  to: "poller_digest#create",       as: :poller_digest
   end
 
   # Bare root — if any islands exist, ApplicationController redirects

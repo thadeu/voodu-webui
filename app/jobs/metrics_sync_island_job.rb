@@ -40,28 +40,29 @@ class MetricsSyncIslandJob < ApplicationJob
   discard_on Voodu::Client::AuthError
 
   def perform(island_id)
+    # POLLER_SPAWN=1 — the Go binary owns the per-island NDJSON
+    # pull; this job becomes a no-op so we don't double-fetch the
+    # same delta. Same flag as the log_tail jobs and the state
+    # jobs — single switch, all three lanes. Per-stream rollback
+    # (metrics-only off) lives on the binary side via
+    # `POLLER_METRICS=0`.
+    return if ENV["POLLER_SPAWN"] == "1"
+
     island = Island.find_by(id: island_id)
     return unless island # deleted between orchestrator + job dispatch
 
     client  = Voodu::Client.new(island)
     last_ts = MetricSample.last_ts_for(island.id)
 
-    batch = []
-    total = 0
-
-    client.metrics_dump(since: last_ts) do |row|
-      batch << row.merge(tenant_id: island.id)
-      next if batch.size < BATCH_SIZE
-
-      MetricSample.bulk_insert(batch)
-      total += batch.size
-      batch.clear
+    # Stream the controller's NDJSON into MetricsDigestService — the
+    # same persist + broadcast path the Go-fed PollerDigestJob uses.
+    # Keeps the wire shape, BATCH_SIZE, and broadcast contract in
+    # one place instead of forking the logic across two jobs.
+    rows = Enumerator.new do |yielder|
+      client.metrics_dump(since: last_ts) { |row| yielder << row }
     end
 
-    if batch.any?
-      MetricSample.bulk_insert(batch)
-      total += batch.size
-    end
+    total = MetricsDigestService.ingest_lines(island: island, rows: rows)
 
     # Log at INFO so a `tail -f log/development.log | grep metrics-sync`
     # gives a continuous feed of "how alive is the warehouse?" without
@@ -71,38 +72,5 @@ class MetricsSyncIslandJob < ApplicationJob
       "metrics-sync island=#{island.key} tenant=#{island.id} " \
       "since=#{last_ts} inserted=#{total}"
     )
-
-    # Live tick: nudge every page subscribed to this island's metrics
-    # stream that there's fresh data. Each subscriber re-fetches the
-    # metrics-charts turbo-frame at its CURRENT scope/range — the
-    # broadcast is just a "stale, reload" signal, not a content push.
-    # Same refetch the 30s polling tick would have done, but driven
-    # by real data arrival (often sub-second) instead of wall-clock.
-    #
-    # Only broadcasts when `total > 0` — empty pulls are the steady-
-    # state quiet period; no point waking every browser to no-op.
-    broadcast_tick(island) if total.positive?
-  end
-
-  private
-
-  # broadcast_tick — fire-and-forget ActionCable broadcast to the
-  # `metrics-#{island.id}` stream. The custom `metrics_tick` Turbo
-  # Stream action (see turbo_actions/metrics.js) calls frame.reload()
-  # on the metrics-charts frame. Target arg is required by
-  # Turbo::StreamsChannel but unused by our action — passing the
-  # frame id keeps the broadcast contract conventional.
-  #
-  # Rescued generically so a cable hiccup (e.g. solid_cable migration
-  # mid-sync) never fails the job itself — the polling controller is
-  # still ticking every 30s as backup.
-  def broadcast_tick(island)
-    Turbo::StreamsChannel.broadcast_action_to(
-      "metrics-#{island.id}",
-      action: :metrics_tick,
-      target: "metrics-charts"
-    )
-  rescue StandardError => e
-    Rails.logger.warn("metrics-sync broadcast failed island=#{island.id}: #{e.class} #{e.message}")
   end
 end

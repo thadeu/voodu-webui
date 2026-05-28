@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# bin/poller — Rails app binstub template.
+#
+# Installed into the host Rails app's `bin/` directory by
+# Poller::Railtie on first boot. Boots the Rails app (so autoload +
+# .env via dotenv-rails are available) and then hands off to
+# Poller::Runner, which exec(3)s the compiled Go binary.
+require_relative "../config/boot"
+require "poller/runner"
+
+Poller::Runner.start

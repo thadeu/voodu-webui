@@ -7,21 +7,21 @@
 
 # For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
 
-# ── Go build stage for the log_poller binary ─────────────────────
+# ── Go build stage for the poller binary ─────────────────────
 #
-# Compiles `gems/log_poller/src/log-poller` against the host's target
+# Compiles `gems/poller/dist/poller` against the host's target
 # arch. Isolated from the Ruby stages so the final image doesn't carry
 # Go toolchain weight. The compiled binary gets COPY'd into the Rails
 # build stage just before `COPY . .` resolves, so when the final stage
 # pulls /rails out of the build stage it inherits the artifact at
-# `gems/log_poller/src/log-poller` for the Puma plugin + binstub.
+# `gems/poller/dist/poller` for the Puma plugin + binstub.
 ARG GO_VERSION=1.23
-FROM docker.io/library/golang:${GO_VERSION}-alpine AS log-poller-build
+FROM docker.io/library/golang:${GO_VERSION}-alpine AS poller-build
 WORKDIR /src
-COPY gems/log_poller/src/go.mod gems/log_poller/src/go.sum ./
+COPY gems/poller/src/go.mod gems/poller/src/go.sum ./
 RUN go mod download
-COPY gems/log_poller/src/ ./
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/log-poller .
+COPY gems/poller/src/ ./
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/poller .
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 ARG RUBY_VERSION=3.4.2
@@ -81,11 +81,11 @@ RUN corepack prepare --activate && pnpm install --frozen-lockfile
 # Copy application code
 COPY . .
 
-# Drop the prebuilt log_poller binary in place. The Puma plugin
-# (lib/puma/plugin/log_poller.rb) + binstub (bin/log-poller) both
-# resolve the executable via LogPoller.binary_path, which expects
-# `gems/log_poller/src/log-poller` to exist when LOG_POLLER_SPAWN=1.
-COPY --from=log-poller-build /out/log-poller ./gems/log_poller/src/log-poller
+# Drop the prebuilt poller binary in place. The Puma plugin
+# (lib/puma/plugin/poller.rb) + binstub (bin/poller) both
+# resolve the executable via Poller.binary_path, which expects
+# `gems/poller/dist/poller` to exist when POLLER_SPAWN=1.
+COPY --from=poller-build /out/poller ./gems/poller/dist/poller
 
 # Precompile bootsnap code for faster boot times.
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495

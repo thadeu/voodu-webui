@@ -25,6 +25,16 @@ class MetricsSyncOrchestratorJob < ApplicationJob
   queue_as :default
 
   def perform
+    # POLLER_SPAWN=1 — the Go binary owns the per-island metrics
+    # dump and POSTs a digest envelope to Rails for ingest via
+    # PollerDigestJob (same persist path used here, just fed by
+    # the binary instead of by Faraday). This orchestrator becomes
+    # a no-op so we don't double-pull the same NDJSON delta. Same
+    # flag as the log_tail orchestrator and the state orchestrator
+    # — one switch toggles all three lanes. Per-stream rollback
+    # (metrics-only off) lives on the Go side via `POLLER_METRICS=0`.
+    return if ENV["POLLER_SPAWN"] == "1"
+
     Island.find_each do |island|
       MetricsSyncIslandJob.perform_later(island.id)
     end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_27_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_28_170000) do
   create_table "islands", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "endpoint", null: false
@@ -57,6 +57,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_27_140000) do
     t.index ["island_id", "container_name"], name: "index_pods_on_island_id_and_container_name", unique: true
     t.index ["island_id", "kind", "scope", "resource_name"], name: "index_pods_on_island_id_and_kind_and_scope_and_resource_name"
     t.index ["island_id"], name: "index_pods_on_island_id"
+  end
+
+  create_table "poller_digests", primary_key: "sync_hash", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.datetime "processed_at"
+    t.string "status", default: "queued", null: false
+    t.integer "tenant_id", null: false
+    t.string "type", null: false
+    t.index ["created_at"], name: "index_poller_digests_on_created_at"
+    t.index ["tenant_id", "type", "created_at"], name: "index_poller_digests_on_tenant_id_and_type_and_created_at"
   end
 
   create_table "settings", force: :cascade do |t|

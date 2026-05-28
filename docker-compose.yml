@@ -8,7 +8,7 @@ services:
     environment:
       RAILS_ENV: production
       WAREHOUSE: 1
-      LOG_POLLER_SPAWN: 1
+      POLLER_SPAWN: 1
       SOLID_QUEUE_IN_PUMA: 1
       LOG_TAIL_ENABLED: 1
       # SECRET_KEY_BASE / ACTIVE_RECORD_ENCRYPTION_* auto-generated on first

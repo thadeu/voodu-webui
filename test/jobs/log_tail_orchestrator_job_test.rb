@@ -6,11 +6,11 @@ class LogTailOrchestratorJobTest < ActiveJob::TestCase
   fixtures :islands
 
   teardown do
-    ENV.delete("LOG_POLLER_SPAWN")
+    ENV.delete("POLLER_SPAWN")
   end
 
-  test "early-returns without touching Island when LOG_POLLER_SPAWN=1" do
-    ENV["LOG_POLLER_SPAWN"] = "1"
+  test "early-returns without touching Island when POLLER_SPAWN=1" do
+    ENV["POLLER_SPAWN"] = "1"
 
     # Pin: no Island queries, no enqueues. If perform reached the
     # find_each path, the counter would increment.
@@ -24,14 +24,14 @@ class LogTailOrchestratorJobTest < ActiveJob::TestCase
       assert_no_enqueued_jobs do
         LogTailOrchestratorJob.new.perform
       end
-      assert_equal 0, calls, "Island.find_each must not be called when LOG_POLLER_SPAWN=1"
+      assert_equal 0, calls, "Island.find_each must not be called when POLLER_SPAWN=1"
     ensure
       Island.singleton_class.send(:remove_method, :find_each)
     end
   end
 
-  test "runs normal flow when LOG_POLLER_SPAWN is unset" do
-    ENV.delete("LOG_POLLER_SPAWN")
+  test "runs normal flow when POLLER_SPAWN is unset" do
+    ENV.delete("POLLER_SPAWN")
 
     # Force LogTail::Feature.enabled? -> true and TailLock/FilePath
     # to their permissive values so every fixture island is

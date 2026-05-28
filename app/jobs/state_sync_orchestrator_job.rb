@@ -22,6 +22,17 @@ class StateSyncOrchestratorJob < ApplicationJob
   queue_as :default
 
   def perform
+    # POLLER_SPAWN=1 — the out-of-process Go binary owns the
+    # state-snapshot fetch and POSTs a digest envelope to Rails for
+    # ingest via PollerDigestJob. This orchestrator becomes a no-op
+    # so Ruby + Go don't both hammer /api/pat/v1/pods + /system at
+    # the same cadence. Same flag the log_tail orchestrator + the
+    # metrics orchestrator check — one switch toggles all three
+    # lanes. Per-stream granularity (turning off just the state
+    # lane while keeping logs + metrics) lives on the Go side via
+    # `POLLER_STATE=0`.
+    return if ENV["POLLER_SPAWN"] == "1"
+
     Island.find_each do |island|
       StateSyncIslandJob.perform_later(island.id)
     end

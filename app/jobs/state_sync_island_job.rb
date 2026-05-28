@@ -41,6 +41,14 @@ class StateSyncIslandJob < ApplicationJob
   discard_on Voodu::Client::AuthError
 
   def perform(island_id)
+    # POLLER_SPAWN=1 — the Go binary owns the per-island state
+    # fetch; this job becomes a no-op so we don't double-hit
+    # /api/pat/v1/pods + /system. Same flag as the log_tail jobs
+    # and the metrics jobs — single switch, all three lanes.
+    # Per-stream rollback (state-only off) lives on the binary
+    # side via `POLLER_STATE=0`.
+    return if ENV["POLLER_SPAWN"] == "1"
+
     island = Island.find_by(id: island_id)
     return unless island # deleted between orchestrator + job dispatch
 
@@ -67,16 +75,18 @@ class StateSyncIslandJob < ApplicationJob
     pods_payload   = pods_payload_from(pods_response)
     system_payload = system_payload_from(system_response)
 
-    # Outer transaction. Wraps both replace_for_island! services
-    # (each of which is internally transactional → becomes a
-    # savepoint under SQLite) + the freshness timestamp update.
+    # Outer transaction. StateDigestService.persist is itself
+    # transactional (savepoint here under SQLite WAL), wrapping it
+    # in this outer transaction keeps the freshness timestamp
+    # update atomic with the snapshot replace — partial failure
+    # mid-sync leaves both the previous snapshot AND the previous
+    # last_synced_at intact so the staleness signal stays honest.
     ActiveRecord::Base.transaction do
-      PodSnapshot.replace_for_island!(island, pods_payload)
-      SystemSnapshot.replace_for_island!(island, system_payload)
+      StateDigestService.persist(island, pods_payload, system_payload)
 
       # update_columns skips callbacks + validations + dirty
       # tracking — perfect for "just touch this timestamp" with
-      # zero side-effects. update_at is preserved as a separate
+      # zero side-effects. updated_at is preserved as a separate
       # signal in case we ever care about "row touched" vs
       # "successfully synced".
       island.update_columns(last_synced_at: Time.current)
@@ -90,10 +100,11 @@ class StateSyncIslandJob < ApplicationJob
     IslandHealth.warm(island, online: true)
 
     # Push the fresh status to every open browser tab subscribed to
-    # this island's state channel. Avoids the "I refreshed and now
-    # I see the new state" reload pattern — the topbar pill +
-    # sidebar dot flip live.
-    broadcast_status_change(island, :online)
+    # this island's state channel. Uses StateDigestService's
+    # broadcast helper so the Go-fed digest path produces an
+    # identical UI update — sidebar pill + status dot + state_tick
+    # all in one place.
+    StateDigestService.broadcast_state_tick(island)
 
     elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round
     Rails.logger.info(
@@ -120,26 +131,13 @@ class StateSyncIslandJob < ApplicationJob
 
   # broadcast_status_change — pushes the new snapshot to any browser
   # tab subscribed to `island-state-#{id}`. Three signals per
-  # broadcast:
+  # broadcast (status pill + status dot + state_tick action).
   #
-  #   1. Replace `island-status-pill-#{id}` → re-rendered StatusPill
-  #      (topbar). Visible on every page.
-  #   2. Replace `island-status-dot-#{id}` → re-rendered StatusDot
-  #      (sidebar row). Visible on every page.
-  #   3. `state_tick` action → tells the page-side JS to
-  #      `frame.reload()` every `turbo-frame[data-state-frame]`
-  #      on the page (Overview body, /pods body) so the stale
-  #      banner / running counts / per-pod statuses flip live.
-  #
-  # We render the small Phlex components via `.call` directly —
-  # they don't touch request context or Rails helpers, so the
-  # standalone render is safe. The full body re-render is left
-  # to the page-side frame.reload() since reproducing the right
-  # view context (request URL, filters) from the job is brittle.
-  #
-  # Wrapped in a generic rescue so a Solid Cable transport blip
-  # doesn't fail the sync — next tick will retry the broadcast,
-  # and the already-warmed IslandHealth cache covers the gap.
+  # The :online path is now handled centrally by
+  # `StateDigestService.broadcast_state_tick` (so the Go-fed digest
+  # job emits an identical UI update). This local copy stays for
+  # the :offline branch, where the job knows the controller is dead
+  # and the digest service hasn't run.
   def broadcast_status_change(island, status)
     pill_html = Components::UI::StatusPill.new(status: status).call
     dot_html  = Components::UI::StatusDot.new(status: status).call
