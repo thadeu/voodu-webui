@@ -1,0 +1,25 @@
+# Fixtures for Island. pat_ciphertext is stored encrypted via
+# ActiveRecord Encryption — in test env the keys are hardcoded
+# in config/initializers/active_record_encryption.rb so the
+# ciphertexts below decrypt deterministically.
+#
+# We can't write the ciphertext by hand (it's keyed). Instead we
+# rely on the encrypted_load behaviour: when an `encrypts` column
+# value in a fixture is plaintext, Rails encrypts it on load. Set
+# config.active_record.encryption.encrypt_fixtures = true in test
+# env to opt in.
+alpha:
+  name: alpha
+  key: aaaaaa
+  endpoint: http://10.0.0.1:8687
+  pat_ciphertext: pat-alpha-secret
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+beta:
+  name: beta
+  key: bbbbbb
+  endpoint: http://10.0.0.2:8687
+  pat_ciphertext: pat-beta-secret
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

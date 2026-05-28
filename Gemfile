@@ -37,6 +37,11 @@ gem "rubyzip", "~> 2.3", require: false
 # needs it; loaded on-demand via `require "csv"` inside the job.
 gem "csv", "~> 3.3", require: false
 
+# log_poller — Go-based NDJSON poller for voodu islands. Ships a
+# compiled binary that the Puma plugin (config/puma.rb) spawns when
+# `LOG_POLLER_SPAWN=1`. Path-resolved local gem; no rubygems.org publish.
+gem "log_poller", path: "gems/log_poller"
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
   gem "bundler-audit", require: false

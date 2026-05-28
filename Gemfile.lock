@@ -1,3 +1,9 @@
+PATH
+  remote: gems/log_poller
+  specs:
+    log_poller (0.1.0)
+      puma (>= 5.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -399,6 +405,7 @@ DEPENDENCIES
   jbuilder
   jsbundling-rails
   kamal
+  log_poller!
   phlex-icons (~> 2.56)
   phlex-rails (~> 2.4)
   propshaft

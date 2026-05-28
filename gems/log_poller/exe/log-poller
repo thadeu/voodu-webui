@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# log-poller — shell fallback for the Go binary.
+#
+# If `make build` has not been run yet (or the binary is otherwise
+# missing), this wrapper is what the `executables = ["log-poller"]`
+# entry in the gemspec points at. The Puma plugin and the Rails
+# binstub both prefer the compiled binary via LogPoller.binary_path,
+# so this is rarely the chosen path.
+#
+# Env gate: same as the binary — if BIN_LOG_POLLER != "1", exit 0
+# cleanly so foreman / Puma do not restart-storm.
+set -euo pipefail
+
+if [[ "${BIN_LOG_POLLER:-}" != "1" ]]; then
+  exit 0
+fi
+
+GEM_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+COMPILED="$GEM_ROOT/src/log-poller"
+
+if [[ -x "$COMPILED" ]]; then
+  exec "$COMPILED" "$@"
+fi
+
+echo "[log_poller] binary not built — run 'make build' in gems/log_poller" >&2
+exit 0

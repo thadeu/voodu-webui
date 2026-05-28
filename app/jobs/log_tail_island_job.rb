@@ -79,6 +79,12 @@ class LogTailIslandJob < ApplicationJob
   discard_on Voodu::Client::AuthError
 
   def perform(island_id)
+    # LOG_POLLER_SPAWN=1 — Go binary owns tailing. This job becomes a
+    # no-op so we don't double-stream the same `docker logs`. The
+    # check also catches in-flight enqueues that landed before the
+    # flag flipped (orchestrator already filters too).
+    return if ENV["LOG_POLLER_SPAWN"] == "1"
+
     return unless LogTail::Feature.enabled?
     return if LogTail::TailLock.held?(island_id)
 

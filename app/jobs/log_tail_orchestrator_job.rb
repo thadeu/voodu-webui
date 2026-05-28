@@ -18,6 +18,14 @@ class LogTailOrchestratorJob < ApplicationJob
   queue_as :default
 
   def perform
+    # LOG_POLLER_SPAWN=1 — the out-of-process Go binary owns log
+    # polling. This orchestrator becomes a no-op so the two systems
+    # don't both spawn `docker logs` streams against the same pods.
+    # Default (unset / "0") keeps the in-Rails Ruby polling path
+    # alive; the flag is opt-in for the binary rollout AND a
+    # rollback lever if the binary misbehaves.
+    return if ENV["LOG_POLLER_SPAWN"] == "1"
+
     return unless LogTail::Feature.enabled?
 
     Island.find_each do |island|

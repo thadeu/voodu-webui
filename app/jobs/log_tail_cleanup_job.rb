@@ -15,6 +15,12 @@ class LogTailCleanupJob < ApplicationJob
   queue_as :default
 
   def perform
+    # LOG_POLLER_SPAWN=1 — Go binary owns the NDJSON tree, including
+    # retention sweeps. Bailing here avoids two cleanup paths
+    # racing on the same files (with the binary deleting bytes
+    # mid-File.size and this job tripping on Errno::ENOENT noise).
+    return if ENV["LOG_POLLER_SPAWN"] == "1"
+
     root = LogTail::FilePath.log_root
     return unless Dir.exist?(root)
 

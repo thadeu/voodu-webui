@@ -40,6 +40,15 @@ Rails.application.routes.draw do
   # route lives under /:tenant_key/.
   resources :islands, only: [:index, :new, :create, :edit, :update, :destroy]
 
+  # Internal-only API for the out-of-process log poller binary.
+  # Deliberately OUTSIDE the `:tenant_key` scope — the binary is
+  # global and wants every island in one shot. Auth + loopback/
+  # private-IP guards live in the controller itself (see
+  # Internal::LogPollerController).
+  namespace :internal do
+    get "log_poller/islands", to: "log_poller#islands", as: :log_poller_islands
+  end
+
   # Bare root — if any islands exist, ApplicationController redirects
   # to /<first-island-key>/; otherwise lands on /islands/new.
   root "dashboard#redirect_to_default"

@@ -111,7 +111,7 @@ network namespace, not the macOS network. Don't reach for it.
 | `ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` / `_DETERMINISTIC_KEY` / `_KEY_DERIVATION_SALT`                | Override the auto-generated AR Encryption keys. Set all three together.                |
 | `RAILS_MASTER_KEY`                                                                                    | Decrypt `config/credentials.yml.enc` if you ship encrypted credentials.                |
 | `DATABASE_URL`                                                                                        | Swap SQLite for Postgres later without rebuilding.                                     |
-| `METRICS_WAREHOUSE`                                                                                   | `1` enables the in-process metrics warehouse (default in the bundled compose).         |
+| `WAREHOUSE`                                                                                   | `1` enables the in-process metrics warehouse (default in the bundled compose).         |
 | `HOST_PORT`                                                                                           | Compose-only — external port forwarded to internal `3000` (default `3000`).            |
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
 | `TARGET_PORT`                                                                                         | Internal Rails port behind Thruster (default `3001`). Must differ from `HTTP_PORT`.    |

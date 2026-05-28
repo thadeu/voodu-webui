@@ -192,7 +192,7 @@ class MetricsData
 
   # fetch — Rails.cache-backed wrapper around the metric data source.
   #
-  # TWO backends, selected per-request by the METRICS_WAREHOUSE env:
+  # TWO backends, selected per-request by the WAREHOUSE env:
   #
   #   - HTTP path (default): calls Voodu::Client#metrics, which
   #     round-trips to the controller's /api/pat/v1/metrics and
@@ -200,14 +200,14 @@ class MetricsData
   #     default path; flipping the env back to false instantly
   #     restores this behaviour.
   #
-  #   - Warehouse path (ENV["METRICS_WAREHOUSE"]=true): calls
+  #   - Warehouse path (ENV["WAREHOUSE"]=true): calls
   #     MetricsWarehouse.query, which serves the SAME envelope from
   #     the local `metrics` SQLite database (populated by the
   #     MetricsSync jobs every 30s).
   #
   # Why a per-request flag instead of a hard switch?
   #
-  #   - A/B compare: operator runs `METRICS_WAREHOUSE=true bin/dev`
+  #   - A/B compare: operator runs `WAREHOUSE=true bin/dev`
   #     in one terminal, plain `bin/dev` in another, opens the same
   #     page in both. Bytes-for-bytes comparison.
   #   - Rollback is reverting one env var — no schema undo, no
@@ -260,14 +260,14 @@ class MetricsData
   end
 
   # warehouse_enabled? — env-flag gate. Boolean string ("true" / "1")
-  # so a shell `export METRICS_WAREHOUSE=true` flips the path. Empty
+  # so a shell `export WAREHOUSE=true` flips the path. Empty
   # / "false" / "0" / unset → HTTP path (default).
   #
   # Checked per request (not memoised) so a process can toggle the
   # flag mid-flight via Rails.application.config or a hot-reload
   # without restart. Cost is one ENV lookup per chart, negligible.
   def warehouse_enabled?
-    %w[true 1].include?(ENV["METRICS_WAREHOUSE"].to_s.downcase)
+    %w[true 1].include?(ENV["WAREHOUSE"].to_s.downcase)
   end
 
   # data_source_available? — guards the public methods against the
@@ -306,7 +306,7 @@ class MetricsData
   # hash order) hit the same cell; ANY param change invalidates
   # cleanly. Adding a new query param requires zero changes here.
 
-  # Cache key includes the backend tag so flipping METRICS_WAREHOUSE
+  # Cache key includes the backend tag so flipping WAREHOUSE
   # mid-session doesn't serve a stale entry from the other backend
   # (subtly different floats from rounding paths would make the
   # debug confusing — separate cells keep the A/B clean).
