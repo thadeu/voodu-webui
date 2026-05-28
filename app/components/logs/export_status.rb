@@ -5,123 +5,111 @@
 # job's state transitions (queued → running → ready / failed) morph
 # in place without a page reload.
 #
-# Wrapper layout:
+# Layout:
 #
-#   <div>                                ← outer wrapper, persists
+#   <div p-4>                            ← outer wrapper, persists
 #     <turbo-cable-stream-source …>      ← subscription, persists
-#     <div id="log-export-<id>">         ← BROADCAST TARGET — replaced
-#       {state-specific content}
+#     <header row>                       ← back button + section label + status pill
+#     <div id="log-export-<id>">         ← BROADCAST TARGET
+#       {state-specific content}         ← replaced by job broadcasts
 #     </div>
+#     <params summary>                   ← persistent footer
 #   </div>
 #
-# When LogExportJob#broadcast fires `broadcast_update_to("log-export-<id>",
-# target: "log-export-<id>", html: …)`, Turbo replaces the INNER HTML
-# of `<div id="log-export-<id>">`. The wrapper + subscription stay
-# intact across every state update.
-#
-# This component is ALSO returned by the form-submit `create` response
-# (turbo_stream.update("log-export-drawer-body", …)) — same call site
-# can render the initial post-submit state and every subsequent
-# broadcast.
+# CRITICAL — the broadcast target receives ONLY the state-block HTML
+# (via `ExportStatus.state_block_for(export)`), NOT the full
+# component. Shipping the whole component would re-nest the outer
+# wrapper + duplicate the back button + duplicate the cable source
+# every broadcast (was the bug behind the "two New export buttons"
+# screenshot). The class-method seam keeps both call sites aligned.
 class Components::Logs::ExportStatus < Components::Base
-  def initialize(export:)
-    @export = export
+  # state_block_for — class-method shim used by LogExportJob#broadcast
+  # to ship JUST the state-specific HTML into the broadcast target.
+  # Returns the bare markup the inner div should contain — no outer
+  # wrapper, no cable source, no back button.
+  def self.state_block_for(export)
+    new(export: export, inner_only: true).call
+  end
+
+  # inner_only — controls which slice of markup view_template emits.
+  # `false` (default) renders the full drawer body (wrapper, back
+  # button, broadcast-target div with state block, params summary).
+  # `true` renders ONLY the state block, for broadcast updates.
+  def initialize(export:, inner_only: false)
+    @export     = export
+    @inner_only = inner_only
   end
 
   def view_template
-    # NO outer `id="log-export-drawer-body"` here — ExportDrawer
-    # already owns that id as the broadcast target. If we duplicated
-    # it, `turbo_stream.update("log-export-drawer-body", html)` would
-    # nest a second `#log-export-drawer-body` inside the original
-    # (Turbo replaces innerHTML; it doesn't unwrap) and the operator
-    # would see nothing because of the duplicate-id ambiguity.
-    #
-    # Just the padded body + the subscription tag + the status
-    # target. Subscription is OUTSIDE `#log-export-<id>` so the
-    # job's broadcast (which targets the inner id) replaces only
-    # the visible state, not the cable connection.
-    div(class: "p-6 flex flex-col gap-5") do
-      # Emitted as raw HTML using the Turbo helper to compute the
-      # signed stream name (static method, no view_context
-      # dependency) — this component is callable from BOTH the
-      # controller (with view_context) AND LogExportJob#broadcast
-      # (without one).
+    return state_block if @inner_only
+
+    div(class: "p-4 flex flex-col gap-3.5") do
       raw(safe(turbo_cable_source_tag))
+      header_row
 
-      back_to_filter_row
-
-      div(id: "log-export-#{@export.id}", class: "flex flex-col gap-5") do
+      div(id: "log-export-#{@export.id}", class: "flex flex-col gap-3") do
         state_block
       end
+
+      params_summary
     end
   end
 
   private
 
-  # back_to_filter_row — header strip with a "New export" anchor
-  # that returns the operator to the filter form WITHOUT having to
-  # close + reopen the drawer.
-  #
-  # `data-turbo-stream="true"` makes Turbo negotiate a turbo_stream
-  # response from /exports/new (the controller responds with
-  # `turbo_stream.update("log-export-drawer-body", ExportDrawer)`),
-  # so the drawer body swaps in place — the surrounding drawer
-  # chrome + scroll lock stay untouched.
-  def back_to_filter_row
-    div(class: "flex items-center gap-2 -mt-1") do
-      a(
-        href: new_export_url,
-        data: { turbo_stream: "true" },
-        class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
-      ) do
-        raw(safe(arrow_left_svg))
-        span { "New export" }
-      end
+  # header_row — matches the PodsPicker drawer pattern: back chip on
+  # the left, "EXPORT" section label, hairline separator, status
+  # pill on the right. Compact (h-px line) so the header itself
+  # doesn't steal vertical space from the state card below.
+  def header_row
+    div(class: "flex items-center gap-2.5") do
+      back_to_filter_chip
+      span(
+        class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted shrink-0"
+      ) { "Export" }
+      span(class: "flex-1 h-px bg-voodu-border")
+      status_pill
     end
   end
 
-  # new_export_url — drawer-form path. Mirrors retry_url but
-  # carries the embed=1 hint so the controller renders bare body
-  # (no Dashboard chrome) on the html fallback if the operator's
-  # browser drops the turbo_stream Accept header.
-  def new_export_url
-    pod = @export.pods.first
-    qs  = { embed: 1 }
-    qs[:pod] = pod if pod.present? && !@export.all_pods?
-    "/#{tenant_key}/exports/new?#{qs.to_query}"
+  # back_to_filter_chip — "New export" anchor that turbo_streams a
+  # fresh ExportDrawer into `#log-export-drawer-body` (the parent
+  # ExportDrawer's root id). Lets the operator return to the filter
+  # without closing/reopening the drawer.
+  def back_to_filter_chip
+    a(
+      href: new_export_url,
+      data: { turbo_stream: "true" },
+      title: "Back to filter",
+      class: "inline-flex items-center gap-1 px-2 h-6 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors shrink-0"
+    ) do
+      raw(safe(arrow_left_svg))
+      span { "New" }
+    end
   end
 
-  # arrow_left_svg — tiny inline back arrow. Inlined (not the Icon
-  # component) for the same view_context-free reason as
-  # turbo_cable_source_tag — broadcasts run without view helpers.
-  def arrow_left_svg
-    %(<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4L6 8L10 12"/></svg>)
+  # status_pill — colored dot + label matching the export's state.
+  # Replaces the old block-level state_header that doubled up with
+  # the green Ready card below.
+  def status_pill
+    label, color = status_label_and_color
+    span(class: "inline-flex items-center gap-1.5 shrink-0") do
+      span(
+        class: "inline-block w-2 h-2 rounded-full",
+        style: "background: #{color}; box-shadow: 0 0 0 3px color-mix(in srgb, #{color} 18%, transparent);"
+      )
+      span(class: "text-[11px] uppercase tracking-wide text-voodu-muted-2 font-voodu-mono") { label }
+    end
   end
 
-  # turbo_cable_source_tag — manually emits the <turbo-cable-stream-
-  # source> custom element that turbo_stream_from would generate.
-  # `signed_stream_name` is a class method on Turbo::StreamsChannel
-  # so it works without a view_context.
-  def turbo_cable_source_tag
-    signed = Turbo::StreamsChannel.signed_stream_name("log-export-#{@export.id}")
-    %(<turbo-cable-stream-source channel="Turbo::StreamsChannel" signed-stream-name="#{signed}"></turbo-cable-stream-source>)
-  end
-
-  # tenant_key + manual URL builders — same reason as above: avoid
-  # path helpers (which need view_context). Routes are stable enough
-  # that hard-coding the prefix is fine; if they ever change, the
-  # helper-using callers (form action in ExportDrawer) would break
-  # first and surface the drift.
-  def tenant_key
-    @export.island.key
-  end
-
-  def download_url
-    "/#{tenant_key}/exports/#{@export.id}/download"
-  end
-
-  def retry_url
-    "/#{tenant_key}/exports/new"
+  def status_label_and_color
+    case @export.status
+    when "queued"  then ["Queued",  "var(--voodu-muted)"]
+    when "running" then ["Running", "var(--voodu-amber)"]
+    when "ready"   then ["Ready",   "var(--voodu-green)"]
+    when "failed"  then ["Failed",  "var(--voodu-red)"]
+    else                ["—",       "var(--voodu-muted)"]
+    end
   end
 
   def state_block
@@ -135,105 +123,104 @@ class Components::Logs::ExportStatus < Components::Base
   end
 
   def queued_state
-    state_header(:queued)
-    p(class: "text-[13px] text-voodu-text-2") do
-      plain "Export queued — picking up the job shortly."
+    div(class: "flex items-center gap-2 px-3 py-2.5 border border-voodu-border bg-voodu-surface text-[12.5px] text-voodu-text-2") do
+      span(
+        class: "inline-block w-1.5 h-1.5 rounded-full bg-voodu-muted shrink-0"
+      )
+      span { "Queued — picking up the job shortly." }
     end
-    params_summary
   end
 
   def running_state
-    state_header(:running)
-    div(class: "flex items-center gap-2 text-[13px] text-voodu-text-2") do
-      render Components::UI::Spinner.new(color: "var(--voodu-accent)", size: 14)
+    div(class: "flex items-center gap-2 px-3 py-2.5 border border-voodu-border bg-voodu-surface text-[12.5px] text-voodu-text-2") do
+      render Components::UI::Spinner.new(color: "var(--voodu-amber)", size: 12)
       span { "Reading warehouse files…" }
     end
-    params_summary
   end
 
   def ready_state
-    state_header(:ready)
-
-    div(class: "flex flex-col gap-3 px-4 py-3 border border-voodu-green/40 bg-voodu-green-dim") do
-      div(class: "flex items-center gap-2 text-[13px] text-voodu-text") do
-        render Icon::CheckCircleOutline.new(class: "w-4 h-4 text-voodu-green")
+    div(class: "flex flex-col gap-2.5 px-3 py-3 border border-voodu-green/40 bg-voodu-green-dim") do
+      div(class: "flex items-center gap-2 text-[12.5px] text-voodu-text") do
+        render Icon::CheckCircleOutline.new(class: "w-3.5 h-3.5 text-voodu-green")
         span(class: "font-medium") { "Export ready" }
+        span(class: "flex-1")
+        span(class: "text-[11px] text-voodu-muted") do
+          plain "expires in "
+          span(class: "font-voodu-mono") { time_until(@export.expires_at) }
+        end
       end
-      div(class: "text-[12.5px] text-voodu-text-2") do
-        span { "Matched " }
-        span(class: "font-voodu-mono text-voodu-text") { @export.line_count.to_s }
-        span { " lines · " }
-        span(class: "font-voodu-mono text-voodu-text") { format_bytes(@export.file_size_bytes) }
+      div(class: "text-[11.5px] text-voodu-muted") do
+        span(class: "font-voodu-mono text-voodu-text-2") { @export.line_count.to_s }
+        plain " lines · "
+        span(class: "font-voodu-mono text-voodu-text-2") { format_bytes(@export.file_size_bytes) }
       end
       a(
         href: download_url,
-        class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2 self-start"
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-white text-[12px] font-medium hover:bg-voodu-accent-2 self-start"
       ) do
         render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5")
         span { "Download" }
       end
-      div(class: "text-[11.5px] text-voodu-muted") do
-        plain "Expires in "
-        span(class: "font-voodu-mono") { time_until(@export.expires_at) }
-      end
     end
-
-    params_summary
   end
 
   def failed_state
-    state_header(:failed)
-    div(class: "flex flex-col gap-3 px-4 py-3 border border-voodu-red/40 bg-voodu-red-dim") do
-      div(class: "flex items-center gap-2 text-[13px] text-voodu-red") do
-        render Icon::ExclamationTriangleOutline.new(class: "w-4 h-4")
+    div(class: "flex flex-col gap-2.5 px-3 py-3 border border-voodu-red/40 bg-voodu-red-dim") do
+      div(class: "flex items-center gap-2 text-[12.5px] text-voodu-red") do
+        render Icon::ExclamationTriangleOutline.new(class: "w-3.5 h-3.5")
         span(class: "font-medium") { "Export failed" }
       end
-      div(class: "text-[12px] text-voodu-text-2 font-voodu-mono break-words") do
+      div(class: "text-[11.5px] text-voodu-text-2 font-voodu-mono break-words") do
         plain @export.error.to_s
       end
-      a(
-        href: retry_url,
-        data: { turbo_frame: "_top" },
-        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text self-start"
-      ) do
-        render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
-        span { "Try again" }
-      end
-    end
-
-    params_summary
-  end
-
-  def state_header(state)
-    label, color = case state
-    when :queued  then ["Queued",     "var(--voodu-muted)"]
-    when :running then ["Running",    "var(--voodu-amber)"]
-    when :ready   then ["Ready",      "var(--voodu-green)"]
-    when :failed  then ["Failed",     "var(--voodu-red)"]
-    end
-
-    div(class: "flex items-center gap-2") do
-      span(
-        class: "inline-block w-2 h-2 rounded-full",
-        style: "background: #{color}; box-shadow: 0 0 0 3px color-mix(in srgb, #{color} 18%, transparent);"
-      )
-      span(class: "text-[11px] uppercase tracking-wide text-voodu-muted font-voodu-mono") { label }
     end
   end
+
+  # ── Params summary (always visible) ──────────────────────────
 
   def params_summary
-    div(class: "flex flex-col gap-1 mt-1 text-[11.5px] text-voodu-muted") do
-      div { plain_kv("Period", period_label) }
-      div { plain_kv("Pods",   pods_label) }
-      div { plain_kv("Search", search_label) }
-      div { plain_kv("Format", format_label) }
+    div(class: "flex flex-col gap-0.5 text-[11px] text-voodu-muted border-t border-voodu-border pt-3") do
+      kv_row("Period", period_label)
+      kv_row("Pods",   pods_label)
+      kv_row("Search", search_label)
+      kv_row("Format", format_label)
     end
   end
 
-  def plain_kv(key, value)
-    span(class: "text-voodu-muted") { "#{key}: " }
-    span(class: "font-voodu-mono text-voodu-text-2") { value }
+  def kv_row(key, value)
+    div(class: "flex items-baseline gap-2 min-w-0") do
+      span(class: "text-voodu-muted shrink-0 w-14") { key }
+      span(class: "font-voodu-mono text-voodu-text-2 truncate") { value }
+    end
   end
+
+  # ── Raw helpers (no view_context) ───────────────────────────
+
+  def turbo_cable_source_tag
+    signed = Turbo::StreamsChannel.signed_stream_name("log-export-#{@export.id}")
+    %(<turbo-cable-stream-source channel="Turbo::StreamsChannel" signed-stream-name="#{signed}"></turbo-cable-stream-source>)
+  end
+
+  def arrow_left_svg
+    %(<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4L6 8L10 12"/></svg>)
+  end
+
+  def tenant_key
+    @export.island.key
+  end
+
+  def download_url
+    "/#{tenant_key}/exports/#{@export.id}/download"
+  end
+
+  def new_export_url
+    pod = @export.pods.first
+    qs  = { embed: 1 }
+    qs[:pod] = pod if pod.present? && !@export.all_pods?
+    "/#{tenant_key}/exports/new?#{qs.to_query}"
+  end
+
+  # ── Param formatters ────────────────────────────────────────
 
   def period_label
     f = @export.from_time
@@ -254,9 +241,6 @@ class Components::Logs::ExportStatus < Components::Base
     @export.content_regex? ? "/#{s}/i (regex)" : s
   end
 
-  # format_label — combines the inner format (ndjson/txt/csv) with
-  # the optional ZIP wrapping so the operator can tell at a glance
-  # what they're about to download.
   def format_label
     inner = case @export.format
             when "txt" then "Plain text"

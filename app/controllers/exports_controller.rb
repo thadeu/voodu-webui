@@ -44,10 +44,18 @@ class ExportsController < ApplicationController
       # the drawer body in place (target id="log-export-drawer-body")
       # so the operator returns to the filter form WITHOUT closing
       # the drawer first.
+      #
+      # `render_to_string(drawer, ...)` — NOT `drawer.call` — because
+      # ExportDrawer uses route helpers (`exports_path`, etc.) and
+      # bare `.call` runs the component without a view_context,
+      # blowing up with `undefined method 'url_options' for nil`.
+      # `render_to_string` wires the controller's view_context so
+      # the helpers resolve correctly.
       format.turbo_stream do
+        body_html = render_to_string(drawer, layout: false)
         render turbo_stream: turbo_stream.update(
           "log-export-drawer-body",
-          drawer.call
+          body_html.html_safe
         )
       end
     end

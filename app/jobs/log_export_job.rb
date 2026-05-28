@@ -246,10 +246,17 @@ class LogExportJob < ApplicationJob
   # failed) without polling. The target is "log-export-<id>" — the
   # drawer body wraps its content in that id.
   def broadcast(export)
+    # Ship ONLY the state-block markup — not the full ExportStatus
+    # component. Broadcasting `ExportStatus.new(...).call` would
+    # replace the inner div with another full wrapper (header row,
+    # cable source, params summary, AND another nested
+    # `#log-export-<id>` div), duplicating the back-to-filter chip
+    # and the cable subscription on every state transition. The
+    # class-method seam keeps the broadcast surgical.
     Turbo::StreamsChannel.broadcast_update_to(
       "log-export-#{export.id}",
       target: "log-export-#{export.id}",
-      html:   Components::Logs::ExportStatus.new(export: export).call
+      html:   Components::Logs::ExportStatus.state_block_for(export)
     )
   rescue StandardError => e
     Rails.logger.warn("log-export broadcast #{export.id} failed: #{e.class}: #{e.message}")
