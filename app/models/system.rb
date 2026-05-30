@@ -75,6 +75,19 @@ class System < ApplicationRecord
     host_block["boot_time"].to_s
   end
 
+  # booted_at — boot_time parsed to a Time, or nil when absent/garbage.
+  # Island#uptime derives live uptime as `now - booted_at` so the chip
+  # ticks up BETWEEN syncs (instead of freezing on the snapshot's
+  # uptime_seconds) and reads identically on every page.
+  def booted_at
+    raw = host_block["boot_time"]
+    return nil if raw.blank?
+
+    Time.iso8601(raw.to_s)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
   # cpu / mem / disk — top-level hashes mirroring /system's
   # structure. Each carries the relevant fields:
   #   cpu  → { percent, cores, load_1, load_5, load_15 }

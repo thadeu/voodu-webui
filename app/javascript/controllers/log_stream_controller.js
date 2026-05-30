@@ -49,6 +49,23 @@ const WRAP_ICON_SVG = `
 </svg>
 `.trim()
 
+// Resumable-reconnect tuning for the live streaming mode. A
+// `docker logs -f` connection can end at any time (idle proxy timeout,
+// pod restart, network blip); these govern how we reopen it WITHOUT
+// losing lines.
+//
+//   - On reconnect we ask the server for `since = lastSeenTs − MARGIN`,
+//     so docker's `--since` replays the gap. The margin (+ dedup) covers
+//     docker --since's 1-second granularity and cross-pod clock skew.
+//   - Reopened lines overlap the last second; we dedup by RAW line.
+//     Safe ONLY because timestamps=true puts a unique docker-nanosecond
+//     prefix on every line, so identical bytes ⇒ the same emission.
+const DEDUP_CAP          = 12_000 // raw-line keys retained for overlap dedup
+const RECONNECT_BASE_MS  = 400    // backoff base; doubles per consecutive fail
+const RECONNECT_MAX_MS   = 5_000
+const RECONNECT_RESET_MS = 4_000  // a connection that lasted longer resets backoff
+const SINCE_MARGIN_MS    = 3_000  // resume a few seconds before last-seen line
+
 // LogStreamController — live tail viewer.
 //
 // Two modes selected by the `streamUrl` data value:
@@ -127,6 +144,13 @@ export default class extends Controller {
     this.mockTimer     = null
     this.rateTimer     = null
     this.lineBuffer    = "" // partial-line carry between chunks
+
+    // Reconnect-overlap dedup: bounded FIFO of raw line strings already
+    // ingested, so the second of logs that docker --since replays on a
+    // reconnect doesn't render twice. warehouseSinceIso (set in
+    // ingestLine) is the resume watermark for BOTH modes.
+    this.seenKeys   = new Set()
+    this.seenOrder  = []
 
     this.streaming = this.streamUrlValue && this.streamUrlValue.length > 0
 
@@ -409,25 +433,52 @@ export default class extends Controller {
     })
   }
 
-  // runStreamingFetch — legacy long-lived fetch+reader. Kept for
-  // backward compat if a future page wires up an SSE-style endpoint.
+  // runStreamingFetch — long-lived chunked reader WITH resumable
+  // reconnect. The single biggest source of "lost lines" was: the live
+  // `docker logs -f` connection ends (timeout/blip/pod restart) and the
+  // old code just returned → the feed went silent forever. Now we loop:
+  // when a connection ends (not via user abort) we back off and reopen,
+  // asking `since=<watermark>` so docker --since replays the gap; the
+  // overlap is deduped by raw line. Net: nothing lost, nothing doubled.
   async runStreamingFetch() {
+    let attempt = 0
+
+    while (!this.streamAbort.signal.aborted) {
+      const startedAt = Date.now()
+      const outcome   = await this.openOneStream()
+
+      if (outcome === "abort") return
+
+      // A connection that lived a while (was actually delivering logs)
+      // resets the backoff — only rapid repeated failures escalate it.
+      if (Date.now() - startedAt > RECONNECT_RESET_MS) attempt = 0
+
+      attempt++
+
+      const delay = Math.min(RECONNECT_BASE_MS * 2 ** (attempt - 1), RECONNECT_MAX_MS)
+      await this.sleepAbortable(delay)
+    }
+  }
+
+  // openOneStream runs a single fetch+reader to completion. Returns
+  // "abort" (user/navigation teardown — stop looping) or "end" (stream
+  // closed or errored — the caller reconnects).
+  async openOneStream() {
     let resp
     try {
-      resp = await fetch(this.streamUrlValue, {
+      resp = await fetch(this.buildStreamUrl(), {
         signal: this.streamAbort.signal,
         headers: { "Accept": "text/plain" },
         credentials: "same-origin",
       })
     } catch (e) {
-      if (e.name === "AbortError") return
-      this.appendSyntheticError(`fetch failed: ${e.message}`)
-      return
+      if (e.name === "AbortError") return "abort"
+      return "end"
     }
 
     if (!resp.ok) {
-      this.appendSyntheticError(`HTTP ${resp.status} ${resp.statusText}`)
-      return
+      this.appendSyntheticError(`HTTP ${resp.status} ${resp.statusText} — reconnecting…`)
+      return "end"
     }
 
     const reader  = resp.body.getReader()
@@ -437,17 +488,39 @@ export default class extends Controller {
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
-        const text = decoder.decode(value, { stream: true })
-        this.consumeChunk(text)
+        this.consumeChunk(decoder.decode(value, { stream: true }))
       }
+
       if (this.lineBuffer) {
         this.ingestLine(this.lineBuffer)
         this.lineBuffer = ""
       }
     } catch (e) {
-      if (e.name === "AbortError") return
-      this.appendSyntheticError(`stream broke: ${e.message}`)
+      if (e.name === "AbortError") return "abort"
     }
+
+    return "end"
+  }
+
+  // buildStreamUrl — first connect uses the bare URL (tail=0 → fresh
+  // viewport). Every RECONNECT swaps to `since=<watermark − MARGIN>` so
+  // docker --since replays from just before the last line we saw.
+  //
+  // CRUCIAL: drop `tail` on reconnect. `docker logs --since=X --tail=0`
+  // caps the replay to zero lines — so since must govern alone. With
+  // tail removed the server defaults to "all lines since X", then keeps
+  // following. The margin + raw-line dedup close the 1s/skew overlap.
+  buildStreamUrl() {
+    if (!this.warehouseSinceIso) return this.streamUrlValue
+
+    const u = new URL(this.streamUrlValue, window.location.origin)
+    u.searchParams.delete("tail")
+    u.searchParams.set(
+      "since",
+      new Date(Date.parse(this.warehouseSinceIso) - SINCE_MARGIN_MS).toISOString(),
+    )
+
+    return u.pathname + u.search
   }
 
   // consumeChunk — accumulate bytes, split on \n, emit complete lines.
@@ -464,6 +537,19 @@ export default class extends Controller {
   }
 
   ingestLine(line) {
+    // Reconnect-overlap dedup. docker --since is 1-second granular, so a
+    // resume replays the last second. timestamps=true gives every raw
+    // line a unique docker-nanosecond prefix, so identical bytes ⇒ the
+    // same emission ⇒ safe to drop. Bounded FIFO so a long high-rate
+    // session doesn't grow the set unbounded.
+    if (this.seenKeys.has(line)) return
+
+    this.seenKeys.add(line)
+    this.seenOrder.push(line)
+    if (this.seenOrder.length > DEDUP_CAP) {
+      this.seenKeys.delete(this.seenOrder.shift())
+    }
+
     const parsed = parseLogLine(line, this.podValue)
     if (!parsed) return
 
@@ -639,10 +725,6 @@ export default class extends Controller {
     const body = document.createElement("span")
     body.className = "log-body"
     body.style.setProperty("--row-accent", pc)
-    // Tooltip moves from row → body (row has display:contents so its
-    // title attribute can't surface). Body covers the full payload
-    // area where the operator hovers to read.
-    body.title = `${fmtFullTime(log.ts)}  ${log.pod}  ${log.ip}`
 
     if (log.type === "request") {
       const method = document.createElement("span")

@@ -98,7 +98,8 @@ class LogsController < ApplicationController
     # to autoload any constants inside this block (we don't — the
     # client + chunk yield are already loaded).
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
-      voodu_client.logs_stream(params[:name], follow: follow_param, tail: tail_param) do |chunk|
+      voodu_client.logs_stream(params[:name], follow: follow_param, tail: tail_param,
+                               since: params[:since].presence, timestamps: timestamps_param) do |chunk|
         response.stream.write(chunk)
       end
     end
@@ -183,11 +184,13 @@ class LogsController < ApplicationController
     # for the dev-reloader rationale.
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
       voodu_client.logs_stream_multi(
-        follow: follow_param,
-        tail:   tail_param,
-        scope:  params[:scope],
-        kind:   params[:kind],
-        name:   params[:name]
+        follow:     follow_param,
+        tail:       tail_param,
+        scope:      params[:scope],
+        kind:       params[:kind],
+        name:       params[:name],
+        since:      params[:since].presence,
+        timestamps: timestamps_param
       ) do |chunk|
         response.stream.write(chunk)
       end
@@ -244,6 +247,14 @@ class LogsController < ApplicationController
 
   def tail_param
     (params[:tail].presence || "20").to_i
+  end
+
+  # timestamps_param — opt into docker's RFC3339Nano per-line prefix
+  # (`docker logs --timestamps`). The realtime viewer turns this on so
+  # every line carries a docker-clock timestamp: it anchors the resume
+  # watermark and makes the reconnect-overlap dedup exact.
+  def timestamps_param
+    params[:timestamps] == "true"
   end
 
   # parse_since — robust ISO8601 parse for the warehouse_stream

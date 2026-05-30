@@ -188,11 +188,16 @@ module Voodu
     # relative ("10m", "1h"), or unix string. Nil/empty skips the
     # flag. Used by polling consumers to advance a watermark and
     # avoid re-tailing the same lines every cycle.
-    def logs_stream(name, follow: true, tail: 20, since: nil, &on_chunk)
+    def logs_stream(name, follow: true, tail: 20, since: nil, timestamps: false, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
       params = { follow: follow, tail: tail }
       params[:since] = since if since.present?
+      # timestamps=true anchors each line to docker's clock (RFC3339Nano
+      # prefix). The viewer uses it to set a reliable resume watermark AND
+      # to dedup the overlap on reconnect — so no line is lost OR
+      # duplicated when the long-lived stream blips.
+      params[:timestamps] = true if timestamps
 
       streaming_conn.get("/api/pat/v1/pods/#{CGI.escape(name)}/logs", params) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|
@@ -217,7 +222,7 @@ module Voodu
     # since: same semantics as logs_stream above — passes through
     # to `docker logs --since`. Tail job sends a moving watermark
     # to fetch only new lines per poll.
-    def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, since: nil, &on_chunk)
+    def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, since: nil, timestamps: false, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
       params = { follow: follow, tail: tail }
@@ -225,6 +230,7 @@ module Voodu
       params[:kind]  = kind  if kind.present?
       params[:name]  = name  if name.present?
       params[:since] = since if since.present?
+      params[:timestamps] = true if timestamps
 
       streaming_conn.get("/api/pat/v1/logs", params) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|

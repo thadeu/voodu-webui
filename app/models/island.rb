@@ -160,25 +160,64 @@ class Island < ApplicationRecord
   # WAREHOUSE=0 → legacy Rails.cache lookup that OverviewData
   # warms after its /system fetch. Returns "—" when no snapshot
   # exists yet.
+  # Beyond this the host snapshot is too old to trust as "live" — used
+  # to blank the uptime instead of showing the value captured before a
+  # reboot. Keyed on the snapshot's own age (System#synced_at), NOT on
+  # island.status, which flips Online via the fast /health check while
+  # the heavier /system snapshot is still catching up after a boot.
+  UPTIME_FRESH_WINDOW = 60.seconds
+
+  # uptime — the ONE humanized uptime label, used by both the topbar
+  # chip (every page) and OverviewData. Single source so /overview and
+  # /metrics never disagree.
   def uptime
-    secs = uptime_seconds_from_source
+    secs = live_uptime_seconds
     return "—" if secs.nil? || secs <= 0
 
-    days  = secs / 86_400
-    hours = (secs % 86_400) / 3600
-    "#{days}d #{hours}h"
+    self.class.humanize_uptime(secs)
   end
 
-  # uptime_seconds_from_source — picks the warehouse or legacy
-  # cache source. Extracted so the formatting (uptime) and the
-  # raw number (callers that want their own format) share a
-  # single decision point.
+  # uptime_seconds_from_source — the raw snapshot number (no boot-time
+  # derivation), for callers that want their own format.
   def uptime_seconds_from_source
     if IslandState.warehouse?
       system&.uptime_seconds
     else
       Rails.cache.read(self.class.uptime_cache_key(id))
     end
+  end
+
+  # live_uptime_seconds — derives uptime from the absolute boot
+  # timestamp so it ticks up between 10s syncs and reads the same on
+  # every page. Returns nil (→ "—") when the snapshot is stale or
+  # missing, so a just-rebooted box doesn't show its PRE-reboot uptime.
+  def live_uptime_seconds
+    unless IslandState.warehouse?
+      return Rails.cache.read(self.class.uptime_cache_key(id))
+    end
+
+    snap = system
+    return nil if snap.nil?
+    return nil if snap.synced_at.nil? || snap.synced_at < UPTIME_FRESH_WINDOW.ago
+
+    boot = snap.booted_at
+    return snap.uptime_seconds if boot.nil?
+
+    [(Time.current - boot).to_i, 0].max
+  end
+
+  # humanize_uptime — "Nd Nh" / "Nh Nm" / "Nm" / "Ns" cascade. Class
+  # method so any surface can format consistently.
+  def self.humanize_uptime(secs)
+    days  = secs / 86_400
+    hours = (secs % 86_400) / 3600
+    mins  = (secs % 3600) / 60
+
+    return "#{days}d #{hours}h" if days.positive?
+    return "#{hours}h #{mins}m" if hours.positive?
+    return "#{mins}m"           if mins.positive?
+
+    "#{secs}s"
   end
 
   # Class-level cache-key + writer so OverviewData (the canonical

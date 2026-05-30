@@ -100,22 +100,13 @@ class OverviewData
     @system&.dig("host", "uptime_seconds").to_i
   end
 
-  # uptime_label — humanized topbar chip ("41d 2h", "3h 12m",
-  # "47s"). Renders "—" when uptime is 0 (no data yet) so the
-  # operator sees something explicit rather than "0s".
+  # uptime_label — delegates to Island#uptime so /overview, /metrics,
+  # and the topbar chip on every page share ONE source, format, and
+  # freshness guard (boot-time derived, blanks when the snapshot is
+  # stale). Kept as a method because the dashboard view threads
+  # @data&.uptime_label into the layout.
   def uptime_label
-    s = uptime_seconds
-    return "—" if s <= 0
-
-    days  = s / 86_400
-    hours = (s % 86_400) / 3600
-    mins  = (s % 3600) / 60
-
-    return "#{days}d #{hours}h" if days.positive?
-    return "#{hours}h #{mins}m" if hours.positive?
-    return "#{mins}m"           if mins.positive?
-
-    "#{s}s"
+    @island.uptime
   end
 
   # boot_time — ISO timestamp the host booted at. Used as a tooltip

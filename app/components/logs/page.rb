@@ -148,10 +148,14 @@ class Components::Logs::Page < Components::Base
   # Historical reads / scrollback live behind a filter UI
   # (planned) that hits the warehouse on demand.
   def stream_url
+    # timestamps=true → every line carries docker's RFC3339Nano prefix.
+    # The viewer's reconnect logic uses it to resume from a precise
+    # watermark and dedup the overlap, so a dropped/blipped stream loses
+    # nothing.
     if @pod_name
-      "#{pod_log_stream_path(name: @pod_name)}?follow=true&tail=0"
+      "#{pod_log_stream_path(name: @pod_name)}?follow=true&tail=0&timestamps=true"
     else
-      "#{logs_stream_path}?follow=true&tail=0"
+      "#{logs_stream_path}?follow=true&tail=0&timestamps=true"
     end
   end
 
