@@ -149,4 +149,29 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_match "metrics-charts", @response.body
     assert_match "grid", @response.body
   end
+
+  test "metrics stacks multiple dashboards in selection order for ?pid=a,b" do
+    cpu = @island.metric_dashboards.create!(name: "cpu-dash", panels: [HOST])
+    mem = @island.metric_dashboards.create!(name: "mem-dash", panels: [HOST])
+
+    get metrics_path(tenant_key: @key, pid: "#{cpu.to_param},#{mem.to_param}")
+
+    assert_response :success
+    # both section headers render…
+    assert_match "cpu-dash", @response.body
+    assert_match "mem-dash", @response.body
+    # …in selection order (cpu before mem).
+    assert_operator @response.body.index("cpu-dash"), :<, @response.body.index("mem-dash")
+    # multi trigger label reflects the count.
+    assert_match "2 dashboards", @response.body
+  end
+
+  test "multi ?pid silently drops unknown uuids and renders the rest" do
+    only = @island.metric_dashboards.create!(name: "real-dash", panels: [HOST])
+
+    get metrics_path(tenant_key: @key, pid: "#{only.to_param},does-not-exist")
+
+    assert_response :success
+    assert_match "real-dash", @response.body
+  end
 end

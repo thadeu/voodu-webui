@@ -122,7 +122,14 @@ class Views::Metrics::Index < Views::Base
         custom_trigger:      true,
         storage_key:         "voodu:drawer-width:dashboards"
       )) do
-        div(class: "relative", data: { controller: "dropdown" }) do
+        div(
+          class: "relative",
+          data: {
+            controller:                     "dropdown metric-multiselect",
+            metric_multiselect_base_value:     metrics_path,
+            metric_multiselect_selected_value: current_pids.join(",")
+          }
+        ) do
           button(
             type: "button",
             data: { action: "click->dropdown#toggle" },
@@ -136,7 +143,7 @@ class Views::Metrics::Index < Views::Base
           div(
             hidden: true,
             data:  { dropdown_target: "menu" },
-            class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[240px] max-h-[420px] " \
+            class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[260px] max-h-[420px] " \
                    "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
           ) do
             # Manage row — opens the wrapping drawer + closes the dropdown.
@@ -153,20 +160,33 @@ class Views::Metrics::Index < Views::Base
 
             div(class: "h-px bg-voodu-border")
 
+            # Host row — exclusive: navigates immediately and clears any
+            # dashboard selection (host is a single scope, not stackable).
             switch_menu_item(
               label:  "Host (default)",
               href:   metrics_path(scope_kind: "host"),
               active: !dashboard_mode?,
               icon:   :ChartBarOutline
             )
+
+            # Dashboard rows — checkbox toggles (no nav per click). Pick
+            # several, then "View selected" stacks them in pick order.
             all_dashboards.each do |d|
-              switch_menu_item(
-                label:  d.name,
-                href:   metrics_path(pid: d.uuid),
-                active: dashboard_mode? && @data.dashboard&.id == d.id,
-                icon:   d.pinned ? :BookmarkSolid : :Squares2x2Outline,
-                accent: d.pinned
-              )
+              multiselect_row(d, selected: current_pids.include?(d.uuid))
+            end
+
+            if all_dashboards.any?
+              div(class: "h-px bg-voodu-border")
+
+              button(
+                type: "button",
+                data: { action: "click->metric-multiselect#apply", metric_multiselect_target: "apply" },
+                class: "flex items-center justify-center gap-1.5 w-full px-3 py-2 min-h-[38px] " \
+                       "text-[12px] font-semibold text-voodu-accent-2 hover:bg-voodu-accent-dim"
+              ) do
+                render Icon::ArrowRightOutline.new(class: "w-3 h-3 shrink-0")
+                span(data: { metric_multiselect_target: "summary" }) { "View selected" }
+              end
             end
           end
         end
@@ -200,8 +220,56 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
+  # current_pids — the uuids currently in ?pid=, in order. Drives which
+  # rows start checked + the JS initial selection order.
+  def current_pids
+    @current_pids ||= request.query_parameters[:pid].to_s.split(",").map(&:strip).reject(&:blank?)
+  end
+
+  # multiselect_row — a checkbox dashboard row. Toggled client-side by
+  # metric_multiselect_controller (no nav); the shared "View selected"
+  # button navigates to the stacked view in selection order.
+  def multiselect_row(dash, selected:)
+    button(
+      type: "button",
+      data: {
+        action:                  "click->metric-multiselect#toggle",
+        metric_multiselect_target: "row",
+        uuid:                    dash.uuid,
+        checked:                 selected.to_s
+      },
+      class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
+             "text-[12.5px] text-voodu-text hover:bg-[#ffffff08]"
+    ) do
+      span(
+        data:  { role: "checkbox" },
+        class: tokens(
+          "inline-flex items-center justify-center w-3.5 h-3.5 border shrink-0",
+          selected ? "border-voodu-accent-line bg-voodu-accent-dim" : "border-voodu-border"
+        )
+      ) do
+        span(data: { role: "check" }, class: tokens("text-voodu-accent-2", selected ? nil : "hidden")) do
+          render Icon::CheckOutline.new(class: "w-2.5 h-2.5")
+        end
+      end
+
+      render(
+        dash.pinned ?
+          Icon::BookmarkSolid.new(class: "w-3.5 h-3.5 text-voodu-accent-2 shrink-0") :
+          Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+      )
+      span(class: "flex-1 truncate") { dash.name }
+    end
+  end
+
   # current_view_name — label for the switcher trigger.
   def current_view_name
+    if multi_mode?
+      n = @data.dashboards.size
+
+      return "#{n} dashboards"
+    end
+
     return @data.dashboard&.name.presence || "Dashboard" if dashboard_mode?
 
     "Host (default)"
@@ -230,7 +298,7 @@ class Views::Metrics::Index < Views::Base
   #     outline button that unpins it (→ host becomes the default).
   # Native POST (toolbar lives outside any turbo_frame).
   def pin_segment
-    if dashboard_mode?
+    if dashboard_mode? && !multi_mode?
       dash = @data.dashboard
       return pin_indicator(active: false, title: "No dashboard") if dash.nil?
 
@@ -305,7 +373,12 @@ class Views::Metrics::Index < Views::Base
   end
 
   def scope_subtitle
-    if dashboard_mode?
+    if multi_mode?
+      span do
+        plain "dashboards "
+        span(class: "font-voodu-mono text-voodu-text-2") { @data.dashboards.map(&:name).join(" + ") }
+      end
+    elsif dashboard_mode?
       dash = @data.dashboard
       span do
         plain "dashboard "
@@ -402,7 +475,12 @@ class Views::Metrics::Index < Views::Base
           )
         end
 
-        if dashboard_mode?
+        # Multi mode shows no shared Settings/Order — each stacked section
+        # keeps its own saved hide/reorder layout (display_kind per
+        # dashboard), edited from its single-dashboard view.
+        if multi_mode?
+          nil
+        elsif dashboard_mode?
           render Components::Metrics::DisplaySettingsButton.new(
             kind:                 @data.display_kind,
             scope_kind:           "host",
@@ -471,16 +549,53 @@ class Views::Metrics::Index < Views::Base
     # boxes — and operators can interleave resource/HTTP charts in
     # their preferred order via the Settings drawer.
     turbo_frame_tag("metrics-charts", src: current_request_url) do
-      div(
-        class: "flex flex-col gap-4 vmd:gap-5",
-        data: {
-          controller:                "metrics-display",
-          metrics_display_kind_value: @data.display_kind
-        }
-      ) do
-        all_charts = @data.charts + (@data.ingress_eligible? ? @data.http_charts : [])
-        render_chart_cards(all_charts)
+      if multi_mode?
+        div(class: "flex flex-col gap-5 vmd:gap-6") do
+          @data.sections.each { |sec| dashboard_section(sec) }
+        end
+      else
+        grid_for(@data)
       end
+    end
+  end
+
+  # multi_mode? — true when several dashboards are stacked (?pid=a,b).
+  def multi_mode?
+    @data.respond_to?(:multi?) && @data.multi?
+  end
+
+  # dashboard_section — one stacked dashboard in a multi-view: a name
+  # header + its own metrics-display grid (independent saved layout).
+  def dashboard_section(sec)
+    dash = sec.dashboard
+
+    div(class: "flex flex-col gap-3") do
+      div(class: "flex items-baseline gap-2.5") do
+        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0 self-center")
+        span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
+        end
+        span(class: "flex-1 h-px bg-voodu-border-2 self-center ml-1")
+      end
+
+      grid_for(sec)
+    end
+  end
+
+  # grid_for — the metrics-display-wrapped chart grid for ONE data
+  # object (a single dashboard/scope, or one section of a multi-view).
+  # Each carries its own display_kind so saved hide/reorder is scoped.
+  def grid_for(data)
+    div(
+      class: "flex flex-col gap-4 vmd:gap-5",
+      data: {
+        controller:                 "metrics-display",
+        metrics_display_kind_value: data.display_kind
+      }
+    ) do
+      all_charts = data.charts + (data.ingress_eligible? ? data.http_charts : [])
+      render_chart_cards(all_charts, data)
     end
   end
 
@@ -492,7 +607,7 @@ class Views::Metrics::Index < Views::Base
   # so the metrics-display controller can mutate gridTemplateColumns
   # at runtime. Server defaults to 2-col at vmd+ via Tailwind class;
   # JS overrides based on visible count + operator's saved cols pref.
-  def render_chart_cards(charts)
+  def render_chart_cards(charts, data)
     div(
       class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
       data:  { metrics_display_target: "grid" }
@@ -506,9 +621,9 @@ class Views::Metrics::Index < Views::Base
             color:           c[:color],
             unit:            c[:unit],
             points:          c[:points],
-            range_ms:        @data.range_ms,
+            range_ms:        data.range_ms,
             current:         c[:current],
-            expand_url:      expand_url_for(c),
+            expand_url:      expand_url_for(c, data),
             # data-metric-key the Settings/Order drawer matches on. In
             # dashboard mode it's the unique panel_key (charts can share
             # a metric); in scope mode there's one card per metric so the
@@ -548,20 +663,20 @@ class Views::Metrics::Index < Views::Base
   # response → opens shared modal). Echoes parent page scope/range
   # so the modal starts at the same view, layers on metric metadata
   # so the endpoint rebuilds the right single-chart slice.
-  def expand_url_for(chart)
+  def expand_url_for(chart, data)
     # Dashboard charts carry their own resolved scope_kind/scope_id
     # (each panel resolves to its own pod); scope-mode charts inherit
     # the page's single scope.
-    sk  = chart[:scope_kind] || (@data.respond_to?(:scope_kind) ? @data.scope_kind : nil)
-    sid = chart[:scope_id]   || (@data.respond_to?(:scope_id)   ? @data.scope_id   : nil)
+    sk  = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
+    sid = chart[:scope_id]   || (data.respond_to?(:scope_id)   ? data.scope_id   : nil)
 
     qp = {
       scope_kind: sk || "host",
       scope_id:   sid,
-      range:      @data&.range || "1h",
+      range:      data&.range || "1h",
       # `auto` is the default — omit from the URL so default views
       # have a clean `?range=1h` instead of `?range=1h&interval=auto`.
-      interval:   (@data&.interval && @data.interval != "auto") ? @data.interval : nil,
+      interval:   (data&.interval && data.interval != "auto") ? data.interval : nil,
       metric:     chart[:metric],
       scale:      chart[:scale],
       label:      chart[:label],

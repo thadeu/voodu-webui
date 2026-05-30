@@ -24,26 +24,55 @@ class Views::Metrics::Frame < Views::Base
     turbo_frame_tag("metrics-charts") do
       next if @data.nil?
 
-      # metrics-display controller: mirrors the wrapper in
-      # Views::Metrics::Index#chart_grid. Must carry the same
-      # controller + kindValue so the hide-filter + custom ordering
-      # re-apply correctly after each broadcast-tick swap.
-      div(
-        class: "flex flex-col gap-4 vmd:gap-5",
-        data: {
-          controller:                 "metrics-display",
-          metrics_display_kind_value: @data.display_kind
-        }
-      ) do
-        all_charts = @data.charts + (@data.ingress_eligible? ? @data.http_charts : [])
-        render_grid(all_charts)
+      # Mirrors Views::Metrics::Index#chart_grid — same multi/section vs
+      # single grid structure so the broadcast-tick swap is DOM-stable.
+      if multi_mode?
+        div(class: "flex flex-col gap-5 vmd:gap-6") do
+          @data.sections.each { |sec| dashboard_section(sec) }
+        end
+      else
+        grid_for(@data)
       end
     end
   end
 
   private
 
-  def render_grid(charts)
+  def multi_mode?
+    @data.respond_to?(:multi?) && @data.multi?
+  end
+
+  def dashboard_section(sec)
+    dash = sec.dashboard
+
+    div(class: "flex flex-col gap-3") do
+      div(class: "flex items-baseline gap-2.5") do
+        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0 self-center")
+        span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
+        end
+        span(class: "flex-1 h-px bg-voodu-border-2 self-center ml-1")
+      end
+
+      grid_for(sec)
+    end
+  end
+
+  def grid_for(data)
+    div(
+      class: "flex flex-col gap-4 vmd:gap-5",
+      data: {
+        controller:                 "metrics-display",
+        metrics_display_kind_value: data.display_kind
+      }
+    ) do
+      all_charts = data.charts + (data.ingress_eligible? ? data.http_charts : [])
+      render_grid(all_charts, data)
+    end
+  end
+
+  def render_grid(charts, data)
     div(
       class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
       data:  { metrics_display_target: "grid" }
@@ -57,9 +86,9 @@ class Views::Metrics::Frame < Views::Base
             color:           c[:color],
             unit:            c[:unit],
             points:          c[:points],
-            range_ms:        @data.range_ms,
+            range_ms:        data.range_ms,
             current:         c[:current],
-            expand_url:      expand_url_for(c),
+            expand_url:      expand_url_for(c, data),
             metric:          c[:panel_key] || c[:metric],
             section:         c[:section],
             default_visible: c.fetch(:default_visible, true),
@@ -90,17 +119,17 @@ class Views::Metrics::Frame < Views::Base
   # expand_url_for — mirrors Views::Metrics::Index#expand_url_for.
   # Drift between the two = the maximize button breaks after the
   # first broadcast tick swap.
-  def expand_url_for(chart)
-    sk  = chart[:scope_kind] || (@data.respond_to?(:scope_kind) ? @data.scope_kind : nil)
-    sid = chart[:scope_id]   || (@data.respond_to?(:scope_id)   ? @data.scope_id   : nil)
+  def expand_url_for(chart, data)
+    sk  = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
+    sid = chart[:scope_id]   || (data.respond_to?(:scope_id)   ? data.scope_id   : nil)
 
     qp = {
       scope_kind: sk || "host",
       scope_id:   sid,
-      range:      @data.range || "1h",
+      range:      data.range || "1h",
       # Match Views::Metrics::Index#expand_url_for — omit `interval`
       # when `auto` so URLs stay clean on the default path.
-      interval:   (@data.interval && @data.interval != "auto") ? @data.interval : nil,
+      interval:   (data.interval && data.interval != "auto") ? data.interval : nil,
       metric:     chart[:metric],
       scale:      chart[:scale],
       label:      chart[:label],

@@ -9,28 +9,7 @@
 # work naturally, and refresh keeps the same scope+range.
 class MetricsController < ApplicationController
   def index
-    if voodu_client.nil?
-      @data = nil
-    elsif (dashboard = resolve_dashboard)
-      # Dashboard mode — render the saved dashboard's panels.
-      @data = MetricDashboardData.new(
-        voodu_client,
-        current_island,
-        dashboard,
-        range:    params[:range],
-        interval: params[:interval]
-      )
-    else
-      # Scope mode — today's host / single-pod view.
-      @data = MetricsPageData.new(
-        voodu_client,
-        current_island,
-        scope_kind: params[:scope_kind],
-        scope_id:   params[:scope_id],
-        range:      params[:range],
-        interval:   params[:interval]
-      )
-    end
+    @data = voodu_client.nil? ? nil : build_metrics_data
 
     # Turbo-Frame request → polling tick. Render JUST the chart_grid
     # inside the matching frame tag; Turbo extracts it and swaps the
@@ -179,24 +158,43 @@ class MetricsController < ApplicationController
 
   private
 
-  # resolve_dashboard — decides whether /metrics renders in dashboard
-  # mode, and which dashboard:
+  # build_metrics_data — picks the /metrics data object:
   #
-  #   1. ?dashboard=<id> explicit → that dashboard (the switcher links
-  #      here). A stale/deleted id falls through to scope mode.
-  #   2. else, when NO scope params are present → the island's pinned
-  #      dashboard, if any (this is the "open /metrics → my pinned view"
-  #      behavior the pin button buys).
-  #   3. else → nil → scope mode (an explicit ?scope_kind/scope_id the
-  #      operator picked, or the host default).
-  def resolve_dashboard
-    if params[:pid].present?
-      return current_island.metric_dashboards.find_by(uuid: params[:pid])
+  #   1. ?pid=a,b,c with ≥2 valid dashboards → MultiDashboardData
+  #      (stacked, selection order).
+  #   2. ?pid=<uuid> (one) → MetricDashboardData (single dashboard).
+  #   3. no pid + no scope params + a pinned dashboard exists →
+  #      the pinned dashboard (the "open /metrics → my pinned" default).
+  #   4. else → MetricsPageData (host/pod scope).
+  def build_metrics_data
+    dashboards = explicit_dashboards
+
+    if dashboards.size > 1
+      return MultiDashboardData.new(voodu_client, current_island, dashboards,
+                                    range: params[:range], interval: params[:interval])
+    elsif dashboards.size == 1
+      return MetricDashboardData.new(voodu_client, current_island, dashboards.first,
+                                     range: params[:range], interval: params[:interval])
     end
 
-    return nil if params[:scope_kind].present? || params[:scope_id].present?
+    if params[:pid].blank? && params[:scope_kind].blank? && params[:scope_id].blank? &&
+       (pinned = current_island.metric_dashboards.pinned.first)
+      return MetricDashboardData.new(voodu_client, current_island, pinned,
+                                     range: params[:range], interval: params[:interval])
+    end
 
-    current_island.metric_dashboards.pinned.first
+    MetricsPageData.new(voodu_client, current_island,
+                        scope_kind: params[:scope_kind], scope_id: params[:scope_id],
+                        range: params[:range], interval: params[:interval])
+  end
+
+  # explicit_dashboards — ordered, deduped dashboards from ?pid=a,b,c
+  # (selection order preserved). Unknown/deleted uuids are dropped.
+  def explicit_dashboards
+    ids = params[:pid].to_s.split(",").map(&:strip).reject(&:blank?).uniq
+    return [] if ids.empty?
+
+    ids.filter_map { |id| current_island.metric_dashboards.find_by(uuid: id) }
   end
 
   # dashboard_display_items — one Settings/Order card per dashboard
