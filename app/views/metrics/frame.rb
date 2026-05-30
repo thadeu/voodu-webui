@@ -49,20 +49,40 @@ class Views::Metrics::Frame < Views::Base
       data:  { metrics_display_target: "grid" }
     ) do
       charts.each do |c|
-        render Components::Metrics::ChartCard.new(
-          label:           c[:label],
-          color:           c[:color],
-          unit:            c[:unit],
-          points:          c[:points],
-          range_ms:        @data.range_ms,
-          current:         c[:current],
-          expand_url:      expand_url_for(c),
-          metric:          c[:metric],
-          section:         c[:section],
-          default_visible: c.fetch(:default_visible, true),
-          capacity_label:  c[:capacity_label],
-          capacity_pct:    c[:capacity_pct]
-        )
+        if c[:missing]
+          render_missing_card(c)
+        else
+          render Components::Metrics::ChartCard.new(
+            label:           c[:label],
+            color:           c[:color],
+            unit:            c[:unit],
+            points:          c[:points],
+            range_ms:        @data.range_ms,
+            current:         c[:current],
+            expand_url:      expand_url_for(c),
+            metric:          c[:panel_key] || c[:metric],
+            section:         c[:section],
+            default_visible: c.fetch(:default_visible, true),
+            capacity_label:  c[:capacity_label],
+            capacity_pct:    c[:capacity_pct]
+          )
+        end
+      end
+    end
+  end
+
+  # render_missing_card — mirrors Views::Metrics::Index#render_missing_card
+  # so a dashboard panel with no running replica renders the same dashed
+  # placeholder after a broadcast-tick frame swap.
+  def render_missing_card(c)
+    div(class: "bg-voodu-surface border border-voodu-border border-dashed p-3.5 flex flex-col gap-2 min-w-0") do
+      span(
+        class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
+        style: "color: #{c[:color]};"
+      ) { c[:label] }
+
+      div(class: "flex items-center justify-center w-full h-[120px] text-[12px] text-voodu-muted text-center px-3") do
+        plain "no running replica for #{c[:source_label]}"
       end
     end
   end
@@ -71,9 +91,12 @@ class Views::Metrics::Frame < Views::Base
   # Drift between the two = the maximize button breaks after the
   # first broadcast tick swap.
   def expand_url_for(chart)
+    sk  = chart[:scope_kind] || (@data.respond_to?(:scope_kind) ? @data.scope_kind : nil)
+    sid = chart[:scope_id]   || (@data.respond_to?(:scope_id)   ? @data.scope_id   : nil)
+
     qp = {
-      scope_kind: @data.scope_kind || "host",
-      scope_id:   @data.scope_id,
+      scope_kind: sk || "host",
+      scope_id:   sid,
       range:      @data.range || "1h",
       # Match Views::Metrics::Index#expand_url_for — omit `interval`
       # when `auto` so URLs stay clean on the default path.

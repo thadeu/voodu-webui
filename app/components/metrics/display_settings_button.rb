@@ -17,14 +17,19 @@
 #     display_settings_url: metrics_display_settings_path
 #   )
 class Components::Metrics::DisplaySettingsButton < Components::Base
-  def initialize(kind:, scope_kind:, display_settings_url:)
+  def initialize(kind:, scope_kind:, display_settings_url:, dashboard_id: nil)
     @kind                 = kind
     @scope_kind           = scope_kind
     @display_settings_url = display_settings_url
+    @dashboard_id         = dashboard_id
   end
 
   def view_template
     src = "#{@display_settings_url}?kind=#{@kind}&scope_kind=#{@scope_kind}"
+    # In dashboard mode the drawer lists the active dashboard's panels
+    # (instead of the scope's fixed metric set) — the endpoint keys off
+    # this param.
+    src += "&pid=#{@dashboard_id}" if @dashboard_id
 
     render(Components::UI::Drawer.new(
       title:               "Settings",

@@ -125,6 +125,18 @@ Rails.application.routes.draw do
     get  "/metrics/chart",             to: "metrics#chart",            as: :metrics_chart
     get  "/metrics/display_settings",  to: "metrics#display_settings", as: :metrics_display_settings
 
+    # Saved metric dashboards — named multi-panel views the operator
+    # builds in the right-drawer builder. `show` is omitted: a dashboard
+    # is "viewed" via /metrics?dashboard=<id> (the existing metrics page
+    # renders its panels), not a standalone page. pin/unpin set the
+    # single per-island default that /metrics opens to.
+    resources :metric_dashboards, path: "metrics/dashboards", except: [:show] do
+      member do
+        post :pin
+        post :unpin
+      end
+    end
+
     # Log exports — operator-triggered NDJSON dumps from the local
     # log warehouse (storage/logs/). `show` renders the drawer body
     # (Turbo Stream target for status updates); `create` enqueues
