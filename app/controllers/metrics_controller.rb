@@ -11,7 +11,17 @@ class MetricsController < ApplicationController
   def index
     if voodu_client.nil?
       @data = nil
+    elsif (dashboard = resolve_dashboard)
+      # Dashboard mode — render the saved dashboard's panels.
+      @data = MetricDashboardData.new(
+        voodu_client,
+        current_island,
+        dashboard,
+        range:    params[:range],
+        interval: params[:interval]
+      )
     else
+      # Scope mode — today's host / single-pod view.
       @data = MetricsPageData.new(
         voodu_client,
         current_island,
@@ -143,6 +153,19 @@ class MetricsController < ApplicationController
   # fetch() call injects the response HTML into its panel body and
   # Stimulus auto-connects the sub-controller.
   def display_settings
+    # Dashboard mode — list the ACTIVE dashboard's panels (each a single
+    # toggle card keyed by its panel_key) so the operator hides/reorders
+    # exactly the charts on this dashboard. Falls through to the scope
+    # path (host/pod fixed metric set) when no dashboard is given.
+    if params[:pid].present? &&
+       (dash = current_island.metric_dashboards.find_by(uuid: params[:pid]))
+      render Views::Metrics::DisplaySettings.new(
+        kind:  "dashboard:#{dash.id}",
+        items: dashboard_display_items(dash)
+      ), layout: false
+      return
+    end
+
     kind       = params[:kind].to_s.presence || "host"
     scope_kind = params[:scope_kind].to_s == "pod" ? "pod" : "host"
 
@@ -152,6 +175,49 @@ class MetricsController < ApplicationController
       kind:  kind,
       items: items
     ), layout: false
+  end
+
+  private
+
+  # resolve_dashboard — decides whether /metrics renders in dashboard
+  # mode, and which dashboard:
+  #
+  #   1. ?dashboard=<id> explicit → that dashboard (the switcher links
+  #      here). A stale/deleted id falls through to scope mode.
+  #   2. else, when NO scope params are present → the island's pinned
+  #      dashboard, if any (this is the "open /metrics → my pinned view"
+  #      behavior the pin button buys).
+  #   3. else → nil → scope mode (an explicit ?scope_kind/scope_id the
+  #      operator picked, or the host default).
+  def resolve_dashboard
+    if params[:pid].present?
+      return current_island.metric_dashboards.find_by(uuid: params[:pid])
+    end
+
+    return nil if params[:scope_kind].present? || params[:scope_id].present?
+
+    current_island.metric_dashboards.pinned.first
+  end
+
+  # dashboard_display_items — one Settings/Order card per dashboard
+  # panel, keyed by the SAME panel_key the chart grid emits
+  # (MetricDashboard.panel_card_key) so hide + reorder line up. All
+  # single cards (no Latency/Errors grouping) since the operator
+  # already curated the exact set.
+  def dashboard_display_items(dash)
+    Array(dash.panels).each_with_index.map do |panel, i|
+      metric = panel["metric"].to_s
+
+      {
+        kind:            :single,
+        metric:          MetricDashboard.panel_card_key(i),
+        label:           panel["label"].to_s,
+        color:           panel["color"].to_s,
+        unit:            panel["unit"].to_s,
+        section:         MetricsPageData::INGRESS_METRICS.include?(metric) ? "http" : "resource",
+        default_visible: true
+      }
+    end
   end
 
 end

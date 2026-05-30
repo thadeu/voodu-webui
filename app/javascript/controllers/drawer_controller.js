@@ -50,18 +50,38 @@ export default class extends Controller {
     this.onResizeEnd   = this.onResizeEnd.bind(this)
     this.contentLoaded = false
 
+    // Dismiss listeners live for the WHOLE controller lifetime — tied
+    // to connect/disconnect so a Turbo reconnect (turbo_permanent
+    // transfer, frame render touching the header, …) re-establishes
+    // them automatically — and no-op while closed via the isOpen guard
+    // in each handler. This replaced add-on-open / remove-on-close +
+    // a setTimeout, which left the drawer stuck open (ESC + outside-
+    // click dead) whenever Turbo reconnected it mid-open. The opening
+    // click doesn't self-close because isOpen is still false during the
+    // trigger's pointerdown (open() flips it on `click`, after).
+    document.addEventListener("keydown", this.onKey)
+    document.addEventListener("pointerdown", this.onDocPointer)
+
     // Apply any persisted width for THIS drawer's storage key —
     // overrides the server default so the operator's chosen size
     // sticks across visits.
     const saved = localStorage.getItem(this.storageKeyValue)
     if (saved && this.hasPanelTarget) this.panelTarget.style.width = saved
+
+    // Restore open state if Turbo reconnected us while the panel is
+    // still open (turbo_permanent preserves the open DOM state). The
+    // listeners are already attached above; just re-flag + re-lock.
+    this.isOpen = this.hasPanelTarget && this.panelTarget.dataset.open === "true"
+    if (this.isOpen) {
+      this.contentLoaded = true
+      this.lockScroll()
+    }
   }
 
   disconnect() {
-    if (this.isOpen) {
-      this.removeListeners()
-      this.unlockScroll()
-    }
+    document.removeEventListener("keydown", this.onKey)
+    document.removeEventListener("pointerdown", this.onDocPointer)
+    if (this.isOpen) this.unlockScroll()
   }
 
   // ── open / close ────────────────────────────────────────────────
@@ -75,7 +95,6 @@ export default class extends Controller {
     this.isOpen = true
 
     this.lockScroll()
-    this.addListeners()
     this.loadIfNeeded()
 
     requestAnimationFrame(() => {
@@ -91,7 +110,6 @@ export default class extends Controller {
     delete this.panelTarget.dataset.open
     this.panelTarget.inert = true
     this.isOpen = false
-    this.removeListeners()
     this.unlockScroll()
     // Invalidate the cached body so the NEXT open re-fetches `srcValue`
     // fresh. Operator-visible payoff: closing the export drawer mid-
@@ -143,29 +161,23 @@ export default class extends Controller {
   // ── ESC + click-outside ─────────────────────────────────────────
 
   onKey(event) {
+    if (!this.isOpen) return
     if (event.key === "Escape") this.close()
   }
 
   onDocPointer(event) {
+    if (!this.isOpen) return
     // Don't dismiss while the operator is dragging the resize
     // handle past the panel edge.
     if (this.resizing) return
+    // The trigger lives inside this.element too, so the opening click
+    // is contained → never self-closes.
     if (this.element.contains(event.target)) return
     this.close()
   }
 
   isModifiedClick(event) {
     return event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1
-  }
-
-  addListeners() {
-    document.addEventListener("keydown", this.onKey)
-    setTimeout(() => document.addEventListener("pointerdown", this.onDocPointer), 0)
-  }
-
-  removeListeners() {
-    document.removeEventListener("keydown", this.onKey)
-    document.removeEventListener("pointerdown", this.onDocPointer)
   }
 
   // ── resize ──────────────────────────────────────────────────────

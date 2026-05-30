@@ -86,9 +86,196 @@ class Views::Metrics::Index < Views::Base
     render(
       Components::UI::PageHeader.new(title: "Metrics")
         .with_subtitle { page_sub }
-        .with_actions do
-          pod_actions if pod_scope?
+    )
+  end
+
+  # dashboard_mode? — true when @data is a MetricDashboardData (a saved
+  # dashboard is being rendered) vs a scope (host/pod) view.
+  def dashboard_mode?
+    @data.respond_to?(:dashboard?) && @data.dashboard?
+  end
+
+  # dashboard_switcher_group — one control that (a) shows the CURRENT
+  # view's name (the active dashboard, or "Host (default)") so it's
+  # obvious which view you're on, (b) opens the switcher/manager drawer
+  # on click, and (c) carries an attached Pin toggle when a dashboard is
+  # active. Present in both modes.
+  # dashboard_switcher_group — a dropdown (switch dashboards inline,
+  # without opening the drawer every time) + the attached pin. The
+  # dropdown lists Host + every dashboard; its top row "Manage
+  # dashboards" opens the right drawer for new/edit/delete.
+  def dashboard_switcher_group
+    div(class: "inline-flex items-stretch") do
+      # The Drawer WRAPS the dropdown (custom_trigger) so the "Manage"
+      # row inside the menu sits in the drawer's Stimulus scope, while
+      # the drawer PANEL renders as a sibling of the menu — not hidden
+      # or clipped to 0-width when the dropdown menu toggles.
+      render(Components::UI::Drawer.new(
+        title:               "Dashboards",
+        src:                 "#{metric_dashboards_path}?embed=1",
+        open_url:            metric_dashboards_path,
+        width:               "30vw",
+        min_width:           "300px",
+        max_width:           "min(100vw, 560px)",
+        show_full_page_link: false,
+        permanent:           false,
+        custom_trigger:      true,
+        storage_key:         "voodu:drawer-width:dashboards"
+      )) do
+        div(class: "relative", data: { controller: "dropdown" }) do
+          button(
+            type: "button",
+            data: { action: "click->dropdown#toggle" },
+            class: switcher_trigger_classes
+          ) do
+            render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+            span(class: "truncate max-w-[180px]") { current_view_name }
+            render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 text-voodu-muted shrink-0")
+          end
+
+          div(
+            hidden: true,
+            data:  { dropdown_target: "menu" },
+            class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[240px] max-h-[420px] " \
+                   "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+          ) do
+            # Manage row — opens the wrapping drawer + closes the dropdown.
+            button(
+              type: "button",
+              data: { action: "click->drawer#open click->dropdown#close" },
+              class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
+                     "text-[12px] font-medium text-voodu-text-2 hover:bg-[#ffffff08]"
+            ) do
+              render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+              span(class: "flex-1") { "Manage dashboards" }
+              render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted-2 shrink-0")
+            end
+
+            div(class: "h-px bg-voodu-border")
+
+            switch_menu_item(
+              label:  "Host (default)",
+              href:   metrics_path(scope_kind: "host"),
+              active: !dashboard_mode?,
+              icon:   :ChartBarOutline
+            )
+            all_dashboards.each do |d|
+              switch_menu_item(
+                label:  d.name,
+                href:   metrics_path(pid: d.uuid),
+                active: dashboard_mode? && @data.dashboard&.id == d.id,
+                icon:   d.pinned ? :BookmarkSolid : :Squares2x2Outline,
+                accent: d.pinned
+              )
+            end
+          end
         end
+      end
+
+      pin_segment
+    end
+  end
+
+  # all_dashboards — the island's saved dashboards (for the switcher
+  # dropdown list).
+  def all_dashboards
+    @all_dashboards ||= @current_island ? @current_island.metric_dashboards.order(:name).to_a : []
+  end
+
+  # switch_menu_item — a dropdown row that navigates to a view. Plain
+  # full-page nav (toolbar isn't in a turbo_frame); the active row is
+  # highlighted + checked.
+  def switch_menu_item(label:, href:, active:, icon:, accent: false)
+    a(
+      href: href,
+      data: { turbo: false },
+      class: tokens(
+        "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left text-[12.5px]",
+        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-[#ffffff08]"
+      )
+    ) do
+      render Icon.const_get(icon).new(class: tokens("w-3.5 h-3.5 shrink-0", accent ? "text-voodu-accent-2" : nil))
+      span(class: "flex-1 truncate") { label }
+      render Icon::CheckOutline.new(class: "w-3 h-3 text-voodu-accent-2 shrink-0") if active
+    end
+  end
+
+  # current_view_name — label for the switcher trigger.
+  def current_view_name
+    return @data.dashboard&.name.presence || "Dashboard" if dashboard_mode?
+
+    "Host (default)"
+  end
+
+  # The pin always renders, so the trigger always drops its right
+  # border → one shared divider, the two read as one grouped control.
+  def switcher_trigger_classes
+    "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border border-r-0 bg-voodu-surface " \
+      "text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+  end
+
+  # pinned_dashboard — the island's single pinned dashboard (the
+  # default /metrics opens to), or nil when host is the default.
+  def pinned_dashboard
+    return @pinned_dashboard if defined?(@pinned_dashboard)
+
+    @pinned_dashboard = @current_island&.metric_dashboards&.pinned&.first
+  end
+
+  # pin_segment — right half of the switcher group. ALWAYS shown, as a
+  # toggle for "is THIS view the default /metrics opens to":
+  #   - dashboard mode → pin/unpin THIS dashboard (filled when pinned)
+  #   - host mode      → host-as-default. Filled when nothing is pinned
+  #     (host IS the default); when a dashboard is pinned it's an
+  #     outline button that unpins it (→ host becomes the default).
+  # Native POST (toolbar lives outside any turbo_frame).
+  def pin_segment
+    if dashboard_mode?
+      dash = @data.dashboard
+      return pin_indicator(active: false, title: "No dashboard") if dash.nil?
+
+      if dash.pinned
+        pin_form(action: unpin_metric_dashboard_path(dash), active: true,
+                 title: "Unpin — /metrics stops opening to this dashboard")
+      else
+        pin_form(action: pin_metric_dashboard_path(dash), active: false,
+                 title: "Pin — open /metrics to this dashboard")
+      end
+    elsif (pinned = pinned_dashboard)
+      # On host while a dashboard is pinned: clicking makes host the
+      # default again (unpins it).
+      pin_form(action: unpin_metric_dashboard_path(pinned), active: false,
+               title: "Make host the default — unpins #{pinned.name}")
+    else
+      # Host is already the default (nothing pinned).
+      pin_indicator(active: true, title: "Host is the default /metrics view")
+    end
+  end
+
+  def pin_form(action:, active:, title:)
+    form(action: action, method: "post", data: { turbo: false }, class: "inline-flex") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      button(type: "submit", title: title, "aria-label": title, class: pin_btn_classes(active)) do
+        pin_icon(active)
+      end
+    end
+  end
+
+  # pin_indicator — non-submitting state (current view is already the
+  # default; nothing to toggle).
+  def pin_indicator(active:, title:)
+    span(title: title, class: "#{pin_btn_classes(active)} cursor-default") { pin_icon(active) }
+  end
+
+  def pin_icon(active)
+    render(active ? Icon::BookmarkSolid.new(class: "w-3.5 h-3.5") : Icon::BookmarkOutline.new(class: "w-3.5 h-3.5"))
+  end
+
+  def pin_btn_classes(active)
+    tokens(
+      "inline-flex items-center justify-center w-9 h-9 border",
+      active ? "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
+             : "border-voodu-border bg-voodu-surface text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text"
     )
   end
 
@@ -118,7 +305,17 @@ class Views::Metrics::Index < Views::Base
   end
 
   def scope_subtitle
-    if @data&.scope_kind == "pod" && (pod = @data.pod_record)
+    if dashboard_mode?
+      dash = @data.dashboard
+      span do
+        plain "dashboard "
+        span(class: "font-voodu-mono text-voodu-text-2") { dash&.name }
+        if dash
+          plain " · "
+          plain "#{dash.panels_count} #{dash.panels_count == 1 ? 'panel' : 'panels'}"
+        end
+      end
+    elsif @data&.scope_kind == "pod" && (pod = @data.pod_record)
       span do
         plain "pod "
         span(class: "font-voodu-mono text-voodu-text-2") { @data.scope_id }
@@ -171,46 +368,7 @@ class Views::Metrics::Index < Views::Base
   end
 
   def pod_scope?
-    @data&.scope_kind == "pod" && @data.scope_id.present?
-  end
-
-  # pod_actions — Logs + Open pod buttons only when a pod is the
-  # current scope. Matches the inspiration's conditional render.
-  # pod_actions — Logs + Open pod for the active scope. Both wrap
-  # the destination in a right-side Drawer so the operator can peek
-  # without losing chart context. Cmd-click still opens the full
-  # page in a new tab (Components::UI::Drawer's trigger is an
-  # anchor, not a button — see its docs).
-  def pod_actions
-    render(Components::UI::Drawer.new(
-      title:     "Logs · #{@data.scope_id}",
-      src:       "#{pod_logs_path(name: @data.scope_id)}?embed=1",
-      open_url:  pod_logs_path(name: @data.scope_id),
-      # Logs are content-heavy — allow drag up to 85vw for wide
-      # payloads. Same rationale as Components::Pods::Header
-      # #view_logs_btn.
-      max_width: "85vw",
-      trigger_attrs: { class: btn_secondary_classes }
-    )) do
-      render Icon::DocumentTextOutline.new(class: "w-3.5 h-3.5")
-      span { "Logs" }
-    end
-
-    # Pod drawer defaults narrower (30vw vs 40vw for Logs) — the
-    # drawer-mode Pods::Show drops the duplicate stat cards, so it
-    # has less to show; a thinner drawer keeps more of the Metrics
-    # page visible at the same time. Resizable handle still lets
-    # the operator override either way.
-    render(Components::UI::Drawer.new(
-      title:    "Pod · #{@data.scope_id}",
-      src:      "#{pod_path(name: @data.scope_id)}?embed=1",
-      open_url: pod_path(name: @data.scope_id),
-      width:    "70vw",
-      trigger_attrs: { class: btn_secondary_classes }
-    )) do
-      render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
-      span { "Open pod" }
-    end
+    @data.respond_to?(:scope_kind) && @data.scope_kind == "pod" && @data.scope_id.present?
   end
 
   # refresh_btn removed — the metrics-charts turbo-frame polls
@@ -219,18 +377,8 @@ class Views::Metrics::Index < Views::Base
   # redundant chrome that crowds the actions row; the polling tick
   # is the source of truth for "fresh data on screen".
 
-  def btn_secondary_classes
-    "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-  end
-
   def toolbar
     div(class: "flex items-center gap-2.5 flex-wrap") do
-      render Components::Metrics::PodPicker.new(
-        scope_kind:     @data&.scope_kind || "host",
-        scope_id:       @data&.scope_id,
-        current_island: @current_island,
-        pods:           @data&.all_pods || []
-      )
       render Components::Metrics::RangePicker.new(range: @data&.range || "1h")
       render Components::Metrics::IntervalPicker.new(
         current:      @data&.interval || "auto",
@@ -238,12 +386,30 @@ class Views::Metrics::Index < Views::Base
         extra_params: request.query_parameters.except(:interval)
       )
 
-      # Display settings button — pushed to the far right on wide
-      # viewports; wraps naturally on narrow ones. Only shown when
-      # there's an active scope (no island → no data → no charts to
-      # configure).
-      if @data
-        div(class: "ml-auto") do
+      # Right cluster, pushed far right (ml-auto), wraps on narrow
+      # viewports. Order: [view-name + pin group] · [pod picker] · Order.
+      # The pod picker sits right of the switcher group (scope mode only —
+      # dashboard mode shares one range/interval across its panels).
+      div(class: "ml-auto flex items-center gap-2 flex-wrap") do
+        dashboard_switcher_group
+
+        unless dashboard_mode?
+          render Components::Metrics::PodPicker.new(
+            scope_kind:     @data&.scope_kind || "host",
+            scope_id:       @data&.scope_id,
+            current_island: @current_island,
+            pods:           @data&.all_pods || []
+          )
+        end
+
+        if dashboard_mode?
+          render Components::Metrics::DisplaySettingsButton.new(
+            kind:                 @data.display_kind,
+            scope_kind:           "host",
+            display_settings_url: metrics_display_settings_path,
+            dashboard_id:         @data.dashboard&.uuid
+          )
+        elsif @data
           render Components::Metrics::DisplaySettingsButton.new(
             kind:                @data.display_kind,
             scope_kind:          @data.scope_kind,
@@ -332,20 +498,48 @@ class Views::Metrics::Index < Views::Base
       data:  { metrics_display_target: "grid" }
     ) do
       charts.each do |c|
-        render Components::Metrics::ChartCard.new(
-          label:           c[:label],
-          color:           c[:color],
-          unit:            c[:unit],
-          points:          c[:points],
-          range_ms:        @data.range_ms,
-          current:         c[:current],
-          expand_url:      expand_url_for(c),
-          metric:          c[:metric],
-          section:         c[:section],
-          default_visible: c.fetch(:default_visible, true),
-          capacity_label:  c[:capacity_label],
-          capacity_pct:    c[:capacity_pct]
-        )
+        if c[:missing]
+          render_missing_card(c)
+        else
+          render Components::Metrics::ChartCard.new(
+            label:           c[:label],
+            color:           c[:color],
+            unit:            c[:unit],
+            points:          c[:points],
+            range_ms:        @data.range_ms,
+            current:         c[:current],
+            expand_url:      expand_url_for(c),
+            # data-metric-key the Settings/Order drawer matches on. In
+            # dashboard mode it's the unique panel_key (charts can share
+            # a metric); in scope mode there's one card per metric so the
+            # metric name itself is unique.
+            metric:          c[:panel_key] || c[:metric],
+            section:         c[:section],
+            default_visible: c.fetch(:default_visible, true),
+            capacity_label:  c[:capacity_label],
+            capacity_pct:    c[:capacity_pct]
+          )
+        end
+      end
+    end
+  end
+
+  # render_missing_card — placeholder tile for a dashboard panel whose
+  # workload has no running replica right now (scaled to zero, deleted,
+  # mid-redeploy). Dashed border so it reads as "intentionally empty,
+  # not broken"; the panel returns the moment a replica comes back.
+  def render_missing_card(c)
+    div(
+      class: "bg-voodu-surface border border-voodu-border border-dashed p-3.5 flex flex-col gap-2 min-w-0",
+      data:  c[:panel_key] ? { metrics_display_target: "card", metric_key: c[:panel_key] } : {}
+    ) do
+      span(
+        class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
+        style: "color: #{c[:color]};"
+      ) { c[:label] }
+
+      div(class: "flex items-center justify-center w-full h-[120px] text-[12px] text-voodu-muted text-center px-3") do
+        plain "no running replica for #{c[:source_label]}"
       end
     end
   end
@@ -355,9 +549,15 @@ class Views::Metrics::Index < Views::Base
   # so the modal starts at the same view, layers on metric metadata
   # so the endpoint rebuilds the right single-chart slice.
   def expand_url_for(chart)
+    # Dashboard charts carry their own resolved scope_kind/scope_id
+    # (each panel resolves to its own pod); scope-mode charts inherit
+    # the page's single scope.
+    sk  = chart[:scope_kind] || (@data.respond_to?(:scope_kind) ? @data.scope_kind : nil)
+    sid = chart[:scope_id]   || (@data.respond_to?(:scope_id)   ? @data.scope_id   : nil)
+
     qp = {
-      scope_kind: @data&.scope_kind || "host",
-      scope_id:   @data&.scope_id,
+      scope_kind: sk || "host",
+      scope_id:   sid,
       range:      @data&.range || "1h",
       # `auto` is the default — omit from the URL so default views
       # have a clean `?range=1h` instead of `?range=1h&interval=auto`.

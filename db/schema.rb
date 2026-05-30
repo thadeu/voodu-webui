@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_28_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_30_130000) do
   create_table "islands", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "endpoint", null: false
@@ -41,6 +41,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_170000) do
     t.index ["expires_at"], name: "index_log_exports_on_expires_at"
     t.index ["island_id", "created_at"], name: "index_log_exports_on_island_id_and_created_at"
     t.index ["island_id"], name: "index_log_exports_on_island_id"
+  end
+
+  create_table "metric_dashboards", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "island_id", null: false
+    t.string "name", null: false
+    t.json "panels", default: [], null: false
+    t.boolean "pinned", default: false, null: false
+    t.datetime "updated_at", null: false
+    t.string "uuid", null: false
+    t.index ["island_id", "name"], name: "index_metric_dashboards_on_island_id_and_name", unique: true
+    t.index ["island_id"], name: "index_metric_dashboards_on_island_id"
+    t.index ["island_id"], name: "index_metric_dashboards_one_pinned_per_island", unique: true, where: "pinned = 1"
+    t.index ["uuid"], name: "index_metric_dashboards_on_uuid", unique: true
   end
 
   create_table "pods", force: :cascade do |t|
@@ -88,6 +102,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_28_170000) do
   end
 
   add_foreign_key "log_exports", "islands", on_delete: :cascade
+  add_foreign_key "metric_dashboards", "islands", on_delete: :cascade
   add_foreign_key "pods", "islands", on_delete: :cascade
   add_foreign_key "systems", "islands", on_delete: :cascade
 end

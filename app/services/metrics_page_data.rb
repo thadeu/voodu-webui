@@ -69,6 +69,12 @@ class MetricsPageData
     (pod["kind"] || pod[:kind]).to_s.presence || "pod"
   end
 
+  # dashboard? — false. Sibling MetricDashboardData returns true so the
+  # /metrics views branch their toolbar without an is_a? check.
+  def dashboard?
+    false
+  end
+
   def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil)
     @client     = client
     @island     = island
@@ -180,17 +186,7 @@ class MetricsPageData
   # math (it needs to know "where does the right edge land"
   # relative to now). Mirrors the inspiration's RANGES.ms.
   def range_ms
-    case @range
-    when "1m"  then 60 * 1000
-    when "5m"  then 5 * 60 * 1000
-    when "15m" then 15 * 60 * 1000
-    when "1h"  then 60 * 60 * 1000
-    when "6h"  then 6 * 60 * 60 * 1000
-    when "24h" then 24 * 60 * 60 * 1000
-    when "7d"  then 7 * 24 * 60 * 60 * 1000
-    when "30d" then 30 * 24 * 60 * 60 * 1000
-    else 60 * 60 * 1000
-    end
+    self.class.range_to_ms(@range)
   end
 
   # pod_record — the full pod hash from /pods?detail=true for the
@@ -233,20 +229,25 @@ class MetricsPageData
   # the display_settings endpoint can build spec cards without
   # instantiating a full MetricsPageData (which needs a live client).
   # All entries carry section: "resource".
+  #
+  # Each spec carries `scale` (matching the instance `chart_specs`)
+  # so catalog consumers — the dashboard builder + MetricDashboardData —
+  # capture a fully self-contained panel: metric + scale + label/color/
+  # unit, ready to hand straight to single_chart with no lookup.
   def self.resource_specs_for(scope_kind)
     base =
       if scope_kind == "host"
         [
-          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-accent)", unit: "%" },
-          { label: "Memory", metric: "mem_used_bytes",  color: "var(--voodu-blue)",   unit: "GB" },
-          { label: "Disk",   metric: "disk_used_bytes", color: "var(--voodu-teal)",   unit: "GB" }
+          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
+          { label: "Memory", metric: "mem_used_bytes",  color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
+          { label: "Disk",   metric: "disk_used_bytes", color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
         ]
       else
         [
-          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-accent)", unit: "%" },
-          { label: "Memory", metric: "mem_usage_bytes",    color: "var(--voodu-blue)",   unit: "MB" },
-          { label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)",  unit: "" },
-          { label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "" }
+          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-accent)", unit: "%",  scale: :percent    },
+          { label: "Memory", metric: "mem_usage_bytes",    color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
+          { label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto },
+          { label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto }
         ]
       end
 
@@ -266,15 +267,46 @@ class MetricsPageData
   # checks them in the group picker.
   def self.http_specs_static
     [
-      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   section: "http", default_visible: true },
-      { label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)",   unit: "ms", section: "http", default_visible: false },
-      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", section: "http", default_visible: true },
-      { label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", section: "http", default_visible: false },
-      { label: "3xx",         metric: "req_3xx",        color: "var(--voodu-sky)",    unit: "",   section: "http", default_visible: false },
-      { label: "4xx",         metric: "req_4xx",        color: "var(--voodu-rose)",   unit: "",   section: "http", default_visible: false },
-      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   section: "http", default_visible: true },
-      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   section: "http", default_visible: true }
+      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   scale: :count,      section: "http", default_visible: true },
+      { label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)",   unit: "ms", scale: :ms,         section: "http", default_visible: false },
+      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", scale: :ms,         section: "http", default_visible: true },
+      { label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", scale: :ms,         section: "http", default_visible: false },
+      { label: "3xx",         metric: "req_3xx",        color: "var(--voodu-sky)",    unit: "",   scale: :count,      section: "http", default_visible: false },
+      { label: "4xx",         metric: "req_4xx",        color: "var(--voodu-rose)",   unit: "",   scale: :count,      section: "http", default_visible: false },
+      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   scale: :count,      section: "http", default_visible: true },
+      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto, section: "http", default_visible: true }
     ]
+  end
+
+  # metric_catalog_for — the metrics a given source exposes, with full
+  # specs (incl. scale). Drives the dashboard builder's metric dropdown
+  # and MetricDashboardData. `kind` is the pod's workload kind (only
+  # "deployment" pods expose the HTTP family); ignored for host.
+  #
+  #   metric_catalog_for("host", nil)          → 3 host resource metrics
+  #   metric_catalog_for("pod",  "deployment") → 4 resource + 8 HTTP
+  #   metric_catalog_for("pod",  "statefulset")→ 4 resource
+  def self.metric_catalog_for(scope_kind, kind = nil)
+    specs = resource_specs_for(scope_kind)
+    specs += http_specs_static if scope_kind == "pod" && kind.to_s == "deployment"
+
+    specs
+  end
+
+  # range_to_ms — range id → milliseconds. Class method so both the
+  # instance `range_ms` and MetricDashboardData share one mapping.
+  def self.range_to_ms(range)
+    case range
+    when "1m"  then 60 * 1000
+    when "5m"  then 5 * 60 * 1000
+    when "15m" then 15 * 60 * 1000
+    when "1h"  then 60 * 60 * 1000
+    when "6h"  then 6 * 60 * 60 * 1000
+    when "24h" then 24 * 60 * 60 * 1000
+    when "7d"  then 7 * 24 * 60 * 60 * 1000
+    when "30d" then 30 * 24 * 60 * 60 * 1000
+    else 60 * 60 * 1000
+    end
   end
 
   # display_settings_items_for — what the Settings drawer renders.

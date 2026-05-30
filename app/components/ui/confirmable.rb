@@ -59,15 +59,22 @@ class Components::UI::Confirmable < Components::Base
   # Default hashes the form action + method so two confirmables in
   # the same frame get distinct ids automatically. Pass `id:` for
   # readability when the call site has a natural identifier.
+  # turbo_frame — when the confirmable lives INSIDE a turbo_frame and
+  # its action redirects somewhere without that frame, pass "_top" so
+  # the submit navigates the whole page (data-turbo:false is ignored
+  # for a submit inside a frame → "Content missing" on the redirect).
+  # Default nil keeps the native (data-turbo:false) submit used by
+  # top-level confirmables (e.g. the Islands delete).
   def initialize(title:, message:, form:, trigger: {},
                  id: nil,
                  confirm_label: "Confirm", cancel_label: "Cancel",
-                 danger: false, icon: nil)
+                 danger: false, icon: nil, turbo_frame: nil)
     @title         = title
     @message       = message
     @confirm_label = confirm_label
     @cancel_label  = cancel_label
     @danger        = danger
+    @turbo_frame   = turbo_frame
     @icon          = icon || (danger ? :ExclamationTriangleOutline : :CheckOutline)
 
     @form_action  = form.fetch(:action)
@@ -106,9 +113,8 @@ class Components::UI::Confirmable < Components::Base
       method: html_method,
       data: {
         confirmable_target: "form",
-        action:             "submit->confirmable#prompt",
-        turbo:              false
-      },
+        action:             "submit->confirmable#prompt"
+      }.merge(@turbo_frame ? { turbo_frame: @turbo_frame } : { turbo: false }),
       **@form_attrs
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)

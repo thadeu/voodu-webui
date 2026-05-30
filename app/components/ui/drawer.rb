@@ -86,6 +86,8 @@ class Components::UI::Drawer < Components::Base
                  max_width:           "min(100vw, 1200px)",
                  resizable:           true,
                  show_full_page_link: true,
+                 permanent:           true,
+                 custom_trigger:      false,
                  storage_key:         "voodu:drawer-width")
     @title               = title
     @src                 = src
@@ -96,28 +98,32 @@ class Components::UI::Drawer < Components::Base
     @resizable           = resizable
     @trigger_attrs       = trigger_attrs
     @show_full_page_link = show_full_page_link
+    @permanent           = permanent
+    @custom_trigger      = custom_trigger
     @storage_key         = storage_key
     @id                  = id || "drawer-#{Digest::SHA1.hexdigest(src.to_s)[0, 12]}"
   end
 
   def view_template(&trigger_body)
-    div(
-      # `data-turbo-permanent` + stable id → Turbo preserves THIS node
-      # across frame reloads. Required because the drawer's open
-      # state lives in the client (dataset + Stimulus instance), so
-      # a server-driven re-render would otherwise reset it.
-      id:    @id,
-      class: "contents",
-      data: {
-        controller: "drawer",
-        turbo_permanent: true,
-        drawer_src_value:         @src,
-        drawer_min_width_value:   @min_width,
-        drawer_max_width_value:   @max_width,
-        drawer_resizable_value:   @resizable.to_s,
-        drawer_storage_key_value: @storage_key
-      }
-    ) do
+    # `data-turbo-permanent` + stable id preserves THIS node across
+    # frame reloads (the open state lives client-side). Needed when the
+    # drawer's host frame re-renders (e.g. pod-show state_tick). Pass
+    # `permanent: false` when the trigger LABEL must update on a full
+    # navigation — otherwise the old label is carried over (the metrics
+    # dashboard switcher: navigating to another dashboard kept the old
+    # name). Omit the attribute entirely when not permanent (Turbo keys
+    # off attribute presence, so "false" would still pin it).
+    data = {
+      controller:               "drawer",
+      drawer_src_value:         @src,
+      drawer_min_width_value:   @min_width,
+      drawer_max_width_value:   @max_width,
+      drawer_resizable_value:   @resizable.to_s,
+      drawer_storage_key_value: @storage_key
+    }
+    data[:turbo_permanent] = true if @permanent
+
+    div(id: @id, class: "contents", data: data) do
       render_trigger(&trigger_body)
       render_panel
     end
@@ -128,7 +134,18 @@ class Components::UI::Drawer < Components::Base
   # render_trigger — anchor (NOT button) so cmd-click / middle-click
   # still gets browser-native "open in new tab" behaviour. The
   # Stimulus action only fires on plain left-click.
+  #
+  # custom_trigger: render the block AS-IS (no wrapping anchor) — the
+  # caller supplies its own element carrying `click->drawer#open`. Used
+  # when the trigger lives inside richer markup (e.g. a dropdown menu)
+  # but the drawer PANEL must stay a sibling of that markup so it isn't
+  # hidden/clipped when the menu toggles.
   def render_trigger(&trigger_body)
+    if @custom_trigger
+      yield
+      return
+    end
+
     a(
       href: @open_url,
       data: { action: "click->drawer#open" },
