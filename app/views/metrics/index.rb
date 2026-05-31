@@ -47,7 +47,7 @@ class Views::Metrics::Index < Views::Base
     div(
       class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5",
       data: {
-        controller: "auto-refresh",
+        controller: "auto-refresh fullscreen",
         auto_refresh_storage_key_value: "voodu:auto-refresh:#{@current_island.id}"
       }
     ) do
@@ -494,7 +494,25 @@ class Views::Metrics::Index < Views::Base
             display_settings_url: metrics_display_settings_path
           )
         end
+
+        fullscreen_button if @data
       end
+    end
+  end
+
+  # fullscreen_button — blows the live chart grid up to a 97vw × 97vh
+  # overlay (fullscreen_controller). Handy for a multi-dashboard stack:
+  # see every selected panel at once. Esc / backdrop / ✕ exit.
+  def fullscreen_button
+    button(
+      type:  "button",
+      data:  { action: "click->fullscreen#open" },
+      title: "Fullscreen",
+      "aria-label": "View charts fullscreen",
+      class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface " \
+             "text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      render Icon::ArrowsPointingOutOutline.new(class: "w-3.5 h-3.5")
     end
   end
 
@@ -548,14 +566,74 @@ class Views::Metrics::Index < Views::Base
     # so the visual cue stays without breaking the grid into two
     # boxes — and operators can interleave resource/HTTP charts in
     # their preferred order via the Settings drawer.
-    turbo_frame_tag("metrics-charts", src: current_request_url) do
-      if multi_mode?
-        div(class: "flex flex-col gap-5 vmd:gap-6") do
-          @data.sections.each { |sec| dashboard_section(sec) }
+    # Backdrop — sibling of the panel, dim layer behind the fullscreen
+    # overlay. Hidden until fullscreen_controller#open; clicking it exits.
+    div(
+      hidden: true,
+      data:  { fullscreen_target: "backdrop", action: "click->fullscreen#close" },
+      class: "fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
+    )
+
+    # Panel — the LIVE grid. fullscreen_controller toggles fixed 97vw/97vh
+    # classes ON this element, so the turbo-frame inside keeps swapping on
+    # the realtime tick (no clone). The chrome bar + frame are children
+    # the frame swap never touches (chrome is a sibling of the frame).
+    div(data: { fullscreen_target: "panel" }, class: "min-w-0") do
+      fullscreen_chrome
+      div(data: { fullscreen_target: "body" }) do
+        turbo_frame_tag("metrics-charts", src: current_request_url) do
+          if multi_mode?
+            div(class: "flex flex-col gap-5 vmd:gap-6") do
+              @data.sections.each { |sec| dashboard_section(sec) }
+            end
+          else
+            grid_for(@data)
+          end
         end
-      else
-        grid_for(@data)
       end
+    end
+  end
+
+  # fullscreen_chrome — slim sticky bar shown only in fullscreen: the
+  # view name on the left, the close (✕) pinned top-right. Sticky so it
+  # stays reachable while the operator scrolls the stacked panels.
+  # Sibling of the turbo-frame → realtime swaps never remove it.
+  def fullscreen_chrome
+    div(
+      hidden: true,
+      data:  { fullscreen_target: "chrome" },
+      class: "sticky top-0 z-10 flex items-center justify-between gap-3 h-10 px-3 " \
+             "bg-voodu-surface-2/95 backdrop-blur-sm border-b border-voodu-border-2"
+    ) do
+      div(class: "flex items-center gap-2 min-w-0") do
+        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+        span(class: "text-[12px] font-medium text-voodu-text-2 truncate") { fullscreen_title }
+      end
+
+      button(
+        type:  "button",
+        data:  { action: "click->fullscreen#close" },
+        title: "Exit fullscreen (Esc)",
+        "aria-label": "Exit fullscreen",
+        class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface shrink-0"
+      ) do
+        render Icon::XMarkOutline.new(class: "w-4 h-4")
+      end
+    end
+  end
+
+  # fullscreen_title — what the chrome bar labels the overlay with:
+  # the joined dashboard names (multi), the single dashboard, or the
+  # scope (host/pod).
+  def fullscreen_title
+    if multi_mode?
+      @data.dashboards.map(&:name).join("  +  ")
+    elsif dashboard_mode?
+      @data.dashboard&.name.to_s
+    elsif @data.respond_to?(:scope_kind) && @data.scope_kind == "pod"
+      @data.scope_id.to_s
+    else
+      "Host"
     end
   end
 
