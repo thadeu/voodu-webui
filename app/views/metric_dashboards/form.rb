@@ -14,7 +14,8 @@ class Views::MetricDashboards::Form < Views::Base
   FRAME_ID = "dashboards-panel"
 
   def initialize(island:, dashboard:, pods: [], embed: true,
-                 current_path: nil, islands: [], current_island: nil)
+                 current_path: nil, islands: [], current_island: nil,
+                 return_to: nil)
     @island         = island
     @dashboard      = dashboard
     @pods           = pods
@@ -22,6 +23,7 @@ class Views::MetricDashboards::Form < Views::Base
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
+    @return_to      = return_to
   end
 
   def view_template
@@ -89,6 +91,11 @@ class Views::MetricDashboards::Form < Views::Base
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if @dashboard.persisted?
+      # return_to — the /metrics URL the operator opened the builder from
+      # (often a multi-dashboard ?pid=a,b view). Carried through so a
+      # save lands them back on the exact view they were on, not the
+      # single edited dashboard.
+      input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 
       name_field
       add_panel_row

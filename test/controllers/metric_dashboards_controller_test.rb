@@ -166,6 +166,27 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_match "2 dashboards", @response.body
   end
 
+  test "update redirects to return_to (the multi-dashboard view it was opened from)" do
+    a = @island.metric_dashboards.create!(name: "dash-a", panels: [HOST])
+    b = @island.metric_dashboards.create!(name: "dash-b", panels: [HOST])
+
+    multi = metrics_path(tenant_key: @key, pid: "#{a.to_param},#{b.to_param}")
+    patch metric_dashboard_path(tenant_key: @key, id: b.to_param),
+          params: { return_to: multi, metric_dashboard: { name: "dash-b", panels: [HOST].to_json } }
+
+    assert_redirected_to multi
+  end
+
+  test "update ignores an off-site return_to and falls back to the single dashboard" do
+    d = @island.metric_dashboards.create!(name: "dash-x", panels: [HOST])
+
+    patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
+          params: { return_to: "https://evil.example.com/steal",
+                    metric_dashboard: { name: "dash-x", panels: [HOST].to_json } }
+
+    assert_redirected_to metrics_path(tenant_key: @key, pid: d.to_param)
+  end
+
   test "multi ?pid silently drops unknown uuids and renders the rest" do
     only = @island.metric_dashboards.create!(name: "real-dash", panels: [HOST])
 

@@ -33,7 +33,8 @@ class MetricDashboardsController < ApplicationController
       island:    current_island,
       dashboard: @dashboard,
       pods:      compact_pods,
-      embed:     true
+      embed:     true,
+      return_to: referer_return_to
     ), layout: false
   end
 
@@ -42,8 +43,10 @@ class MetricDashboardsController < ApplicationController
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
-      redirect_to metrics_path(pid: @dashboard.uuid),
-                  notice: "Dashboard #{@dashboard.name} created."
+      # A brand-new dashboard isn't in the prior ?pid= set, so default to
+      # showing it solo — but honor an explicit return_to if one rode in.
+      redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
+                  notice: "Dashboard #{@dashboard.name} created.")
     else
       render_form_full_page(status: :unprocessable_entity)
     end
@@ -54,7 +57,8 @@ class MetricDashboardsController < ApplicationController
       island:    current_island,
       dashboard: @dashboard,
       pods:      compact_pods,
-      embed:     true
+      embed:     true,
+      return_to: referer_return_to
     ), layout: false
   end
 
@@ -63,8 +67,11 @@ class MetricDashboardsController < ApplicationController
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
-      redirect_to metrics_path(pid: @dashboard.uuid),
-                  notice: "Dashboard #{@dashboard.name} updated."
+      # Land back on the exact /metrics view the operator opened the
+      # builder from (e.g. a multi-dashboard ?pid=a,b stack), not the
+      # single edited dashboard.
+      redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
+                  notice: "Dashboard #{@dashboard.name} updated.")
     else
       render_form_full_page(status: :unprocessable_entity)
     end
@@ -108,8 +115,39 @@ class MetricDashboardsController < ApplicationController
       embed:          false,
       current_path:   current_path,
       islands:        all_islands,
-      current_island: current_island
+      current_island: current_island,
+      return_to:      return_to_path
     ), status: status
+  end
+
+  # referer_return_to — the /metrics URL the builder was opened from,
+  # taken from the Referer header (the drawer edit/new fetch carries the
+  # operator's current page). Rendered into a hidden field so the save
+  # can route back to it.
+  def referer_return_to
+    internal_metrics_path(request.referer)
+  end
+
+  # return_to_path — the sanitized return target submitted with the form.
+  def return_to_path
+    internal_metrics_path(params[:return_to])
+  end
+
+  # internal_metrics_path — sanitize a candidate URL down to a same-app
+  # /metrics path (+ query), or nil. Open-redirect guard: only a relative
+  # path on THIS tenant's metrics route is accepted (cross-tenant or
+  # absolute external URLs are rejected).
+  def internal_metrics_path(url)
+    return nil if url.blank?
+
+    uri  = URI.parse(url)
+    path = uri.path.to_s
+    return nil unless path.start_with?("/") && !path.start_with?("//")
+    return nil unless path == metrics_path
+
+    uri.query.present? ? "#{path}?#{uri.query}" : path
+  rescue URI::InvalidURIError
+    nil
   end
 
   def compact_pods

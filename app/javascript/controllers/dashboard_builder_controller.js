@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import Sortable from "sortablejs"
 
 // DashboardBuilderController — drives Views::MetricDashboards::Form.
 //
@@ -27,6 +28,40 @@ export default class extends Controller {
     this.currentMetric = null
 
     this.populateMetrics()
+    this.render()
+    this.sync()
+    this.initSortable()
+  }
+
+  disconnect() {
+    if (this.sortable) this.sortable.destroy()
+  }
+
+  // initSortable — drag-reorder the panel chips. The grip handle
+  // (data-role="panel-handle") is the only drag affordance so the remove
+  // button + label stay clickable. onEnd mirrors the DOM move back into
+  // the panels array, then re-renders to refresh each chip's index (the
+  // remove button reads it) and re-syncs the hidden field.
+  initSortable() {
+    if (!this.hasListTarget) return
+
+    this.sortable = new Sortable(this.listTarget, {
+      animation:     150,
+      handle:        "[data-role='panel-handle']",
+      ghostClass:    "opacity-30",
+      chosenClass:   "ring-1",
+      forceFallback: true,
+      fallbackClass: "shadow-lg",
+      onEnd:         (e) => this.reorder(e.oldIndex, e.newIndex)
+    })
+  }
+
+  reorder(from, to) {
+    if (from === to || from == null || to == null) return
+
+    const [moved] = this.panels.splice(from, 1)
+    this.panels.splice(to, 0, moved)
+
     this.render()
     this.sync()
   }
@@ -136,6 +171,13 @@ export default class extends Controller {
   chip(panel, index) {
     const row = document.createElement("div")
     row.className = "flex items-center gap-2 px-2.5 h-9 border border-voodu-border bg-voodu-surface"
+
+    const handle = document.createElement("span")
+    handle.className = "inline-flex items-center justify-center w-4 h-6 text-voodu-muted-2 hover:text-voodu-text cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
+    handle.setAttribute("data-role", "panel-handle")
+    handle.setAttribute("aria-label", "Drag to reorder")
+    handle.textContent = "⠿"
+    row.appendChild(handle)
 
     const dot = document.createElement("span")
     dot.className = "inline-block w-2 h-2 rounded-full shrink-0"
