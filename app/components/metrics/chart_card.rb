@@ -103,6 +103,7 @@ class Components::Metrics::ChartCard < Components::Base
         range_ms: @range_ms,
         height:   200
       )
+      stat_footer
     end
   end
 
@@ -125,47 +126,66 @@ class Components::Metrics::ChartCard < Components::Base
   def card_header
     s = stats
 
-    div(class: "flex items-baseline flex-wrap gap-2.5") do
-      span(
-        class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
-        style: "color: #{@color};"
-      ) { @label }
-
-      # [http] inline badge — replaces the old HTTP section divider.
-      # Same visual signal ("this metric comes from ingress logs") but
-      # without splitting the grid into two boxes.
-      if @section == "http"
+    # Header carries ONLY the identity + headline now: label + [http]
+    # badge + current value + capacity, with the maximize pinned
+    # top-right (shrink-0, outside the wrapping flow so it never orphans
+    # at narrow widths). The min/avg/max strip moved to stat_footer
+    # under the chart — mirrors the expand modal's layout, keeps the
+    # header clean and uncluttered on a 4-up grid.
+    div(class: "flex items-start justify-between gap-2") do
+      div(class: "flex items-baseline flex-wrap gap-x-2.5 gap-y-1 min-w-0") do
         span(
-          class: "text-[9.5px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.06em] " \
-                 "border border-voodu-border px-1 py-px translate-y-[-1px]",
-          title: "HTTP metric (ingress)"
-        ) { "http" }
-      end
+          class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
+          style: "color: #{@color};"
+        ) { @label }
 
-      # Render number + unit. For percent metrics the unit is part
-      # of the formatted string (so we can show "<0.01%" without
-      # the magnitude tier rendering "<0.01" with a separate "%"
-      # span looking like "<0.01 %"). For everything else the
-      # number stays plain and the unit hangs in its own muted
-      # span.
-      span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
-        if percent_unit?
-          plain format_current(@current || s[:current])
-        else
-          plain format_current(@current || s[:current])
-          span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+        # [http] inline badge — replaces the old HTTP section divider.
+        # Same visual signal ("this metric comes from ingress logs") but
+        # without splitting the grid into two boxes.
+        if @section == "http"
+          span(
+            class: "text-[9.5px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.06em] " \
+                   "border border-voodu-border px-1 py-px translate-y-[-1px]",
+            title: "HTTP metric (ingress)"
+          ) { "http" }
         end
+
+        # Render number + unit. For percent metrics the unit is part
+        # of the formatted string (so we can show "<0.01%" without
+        # the magnitude tier rendering "<0.01" with a separate "%"
+        # span looking like "<0.01 %"). For everything else the
+        # number stays plain and the unit hangs in its own muted
+        # span.
+        span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
+          if percent_unit?
+            plain format_current(@current || s[:current])
+          else
+            plain format_current(@current || s[:current])
+            span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+          end
+        end
+
+        capacity_chip if @capacity_label
       end
 
-      capacity_chip if @capacity_label
+      maximize_link if @expand_url
+    end
+  end
 
-      div(class: "flex-1")
+  # stat_footer — min/avg/max strip BELOW the chart, mirroring the
+  # expand modal's footer (Views::Metrics::ChartModalBody#stat_strip).
+  # Frees the header of the stats clutter so it stays clean even on a
+  # 4-up grid. Skipped when there's no data (the chart shows its own
+  # empty state).
+  def stat_footer
+    return if @points.empty?
 
+    s = stats
+
+    div(class: "flex items-center flex-wrap gap-4 px-0.5") do
       stat_chip("min", s[:min])
       stat_chip("avg", s[:avg])
       stat_chip("max", s[:max])
-
-      maximize_link if @expand_url
     end
   end
 
@@ -191,10 +211,13 @@ class Components::Metrics::ChartCard < Components::Base
     end
   end
 
+  # stat_chip — footer min/avg/max chip. Matches the expand modal's
+  # stat_strip vocabulary (muted label + emphasized value) so the
+  # inline card and the modal read the same.
   def stat_chip(label, value)
     span(class: "text-[11px] font-voodu-mono text-voodu-muted") do
       plain "#{label} "
-      span(class: "text-voodu-text-2") { format_value(value) }
+      span(class: "text-voodu-text font-semibold") { format_value(value) }
     end
   end
 
