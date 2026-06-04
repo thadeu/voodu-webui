@@ -65,15 +65,22 @@ export default class extends Controller {
   }
 
   connect() {
-    this.onGlobalKey = this.onGlobalKey.bind(this)
-    this.onLocalKey  = this.onLocalKey.bind(this)
-    this.selected    = 0
-    this.flat        = []
-    this.commands    = []
-    this.loaded      = false
-    this.fetching    = null
+    this.onGlobalKey    = this.onGlobalKey.bind(this)
+    this.onLocalKey     = this.onLocalKey.bind(this)
+    this.onTriggerClick = this.onTriggerClick.bind(this)
+    this.selected       = 0
+    this.flat           = []
+    this.commands       = []
+    this.loaded         = false
+    this.fetching       = null
 
     document.addEventListener("keydown", this.onGlobalKey)
+    // Global click delegation for openers. The palette is mounted at the
+    // layout root, so triggers elsewhere (the topbar search box / icon)
+    // are OUTSIDE this controller's scope — a `click->command-palette#open`
+    // action there can't resolve. A delegated document listener opens for
+    // any `[data-command-palette-open]` element, no matter where it lives.
+    document.addEventListener("click", this.onTriggerClick)
 
     // Warm from cache + opportunistic background prefetch. The point
     // is to make the first ⌘K of this page-load INSTANT, with no
@@ -87,7 +94,19 @@ export default class extends Controller {
 
   disconnect() {
     document.removeEventListener("keydown", this.onGlobalKey)
+    document.removeEventListener("click", this.onTriggerClick)
     if (this.isOpen) this.unlockScroll()
+  }
+
+  // onTriggerClick — delegated opener. Any element carrying
+  // `data-command-palette-open` (topbar search box + mobile icon)
+  // opens the palette, even though it sits outside this controller's
+  // DOM subtree.
+  onTriggerClick(event) {
+    if (!event.target.closest("[data-command-palette-open]")) return
+
+    event.preventDefault()
+    if (!this.isOpen) this.open()
   }
 
   // ── lifecycle ───────────────────────────────────────────────────

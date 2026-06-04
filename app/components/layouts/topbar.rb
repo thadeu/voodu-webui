@@ -205,7 +205,7 @@ class Components::Layouts::Topbar < Components::Base
   def search_box
     button(
       type: "button",
-      data: { action: "click->command-palette#open" },
+      data: { command_palette_open: "" },
       class: "hidden vmd:flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-[260px] vlg:w-[320px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text-2 transition-colors",
       role: "search",
       "aria-label": "Open command palette"
@@ -224,7 +224,7 @@ class Components::Layouts::Topbar < Components::Base
   def search_icon
     button(
       type: "button",
-      data: { action: "click->command-palette#open" },
+      data: { command_palette_open: "" },
       class: "vmd:hidden inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 shrink-0",
       aria: { label: "Open command palette" }
     ) do
