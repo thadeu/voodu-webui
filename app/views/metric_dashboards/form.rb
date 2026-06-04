@@ -195,7 +195,7 @@ class Views::MetricDashboards::Form < Views::Base
   end
 
   def option_classes
-    "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-[#ffffff08]"
+    "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-voodu-hover"
   end
 
   # panels_list — chips rendered by the Stimulus controller from the
@@ -230,7 +230,7 @@ class Views::MetricDashboards::Form < Views::Base
 
       button(
         type:  "submit",
-        class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
+        class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
       ) { @dashboard.persisted? ? "Save changes" : "Create dashboard" }
     end
   end

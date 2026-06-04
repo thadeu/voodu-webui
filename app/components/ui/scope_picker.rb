@@ -140,7 +140,7 @@ class Components::UI::ScopePicker < Components::Base
       data: data_attrs,
       class: tokens(
         "flex items-center gap-2.5 w-full px-3 py-2 min-h-[38px] text-left",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-[#ffffff08]"
+        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
       )
     ) do
       leading_indicator(opt)

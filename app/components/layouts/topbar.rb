@@ -50,11 +50,31 @@ class Components::Layouts::Topbar < Components::Base
       div(class: "hidden vmd:block flex-1")
       search_box
       search_icon
+      theme_toggle
       updated_pill if @current_island && @updated_at
     end
   end
 
   private
+
+  # theme_toggle — sun/moon quick switch. The initial theme is resolved
+  # before paint by the inline script in application.html.erb (sets
+  # html[data-theme]); theme_controller flips it on click + keeps the
+  # icon in sync. Shows the icon for the theme you'd switch TO (sun in
+  # dark, moon in light). The wrong-icon default (sun) is corrected by
+  # the controller's connect() the instant it mounts.
+  def theme_toggle
+    button(
+      type:  "button",
+      data:  { controller: "theme", action: "click->theme#toggle" },
+      title: "Toggle theme",
+      "aria-label": "Toggle light / dark theme",
+      class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text shrink-0"
+    ) do
+      span(data: { theme_target: "sun" }) { render Icon::SunOutline.new(class: "w-4 h-4") }
+      span(data: { theme_target: "moon" }, hidden: true) { render Icon::MoonOutline.new(class: "w-4 h-4") }
+    end
+  end
 
   # Hamburger — visible only below 1100px. Triggers the mobile-nav drawer.
   def hamburger

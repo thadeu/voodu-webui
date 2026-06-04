@@ -7,9 +7,27 @@
     <meta name="apple-mobile-web-app-title" content="Voodu">
     <meta name="application-name" content="Voodu">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0a0d14">
+    <meta name="theme-color" content="#0a0d14" media="(prefers-color-scheme: dark)">
+    
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
+
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("voodu:theme");
+          var sys = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          var theme = stored || sys;
+
+          document.documentElement.dataset.theme = theme;
+
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", theme === "light" ? "#fff" : "#0a0d14");
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
 
     <%= yield :head %>
 

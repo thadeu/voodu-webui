@@ -77,7 +77,7 @@ class Views::Islands::Index < Views::Base
   def add_server_btn
     a(
       href: new_island_path,
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2 shrink-0"
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2 shrink-0"
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
       span { "Add server" }

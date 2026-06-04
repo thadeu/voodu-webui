@@ -151,7 +151,7 @@ class Views::Metrics::Index < Views::Base
               type: "button",
               data: { action: "click->drawer#open click->dropdown#close" },
               class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
-                     "text-[12px] font-medium text-voodu-text-2 hover:bg-[#ffffff08]"
+                     "text-[12px] font-medium text-voodu-text-2 hover:bg-voodu-hover"
             ) do
               render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
               span(class: "flex-1") { "Manage dashboards" }
@@ -211,7 +211,7 @@ class Views::Metrics::Index < Views::Base
       data: { turbo: false },
       class: tokens(
         "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left text-[12.5px]",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-[#ffffff08]"
+        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
       )
     ) do
       render Icon.const_get(icon).new(class: tokens("w-3.5 h-3.5 shrink-0", accent ? "text-voodu-accent-2" : nil))
@@ -239,7 +239,7 @@ class Views::Metrics::Index < Views::Base
         checked:                 selected.to_s
       },
       class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
-             "text-[12.5px] text-voodu-text hover:bg-[#ffffff08]"
+             "text-[12.5px] text-voodu-text hover:bg-voodu-hover"
     ) do
       span(
         data:  { role: "checkbox" },

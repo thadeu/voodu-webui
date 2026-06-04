@@ -293,11 +293,15 @@ class Components::Logs::Page < Components::Base
   end
 
   LEVEL_PILLS = %w[HTTP INFO WARN ERROR].freeze
+  # Theme-aware tones (CSS vars + color-mix) so the pre-painted pills
+  # track the active theme — the bright base on dark, the darkened
+  # variants (theme.css) on light. Kept in lockstep with the JS
+  # LEVEL_TONE in log_stream_controller.js.
   LEVEL_DEFAULT_TONE = {
-    "HTTP"  => { color: "#60a5fa", bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.40)"  },
-    "INFO"  => { color: "#9a82ff", bg: "rgba(124,92,255,0.12)",  border: "rgba(124,92,255,0.40)"  },
-    "WARN"  => { color: "#fbbf24", bg: "rgba(251,191,36,0.12)",  border: "rgba(251,191,36,0.40)"  },
-    "ERROR" => { color: "#f87171", bg: "rgba(248,113,113,0.14)", border: "rgba(248,113,113,0.45)" }
+    "HTTP"  => { color: "var(--voodu-blue)",     bg: "color-mix(in srgb, var(--voodu-blue) 12%, transparent)",     border: "color-mix(in srgb, var(--voodu-blue) 40%, transparent)" },
+    "INFO"  => { color: "var(--voodu-accent-2)", bg: "color-mix(in srgb, var(--voodu-accent-2) 12%, transparent)", border: "color-mix(in srgb, var(--voodu-accent-2) 40%, transparent)" },
+    "WARN"  => { color: "var(--voodu-amber)",    bg: "color-mix(in srgb, var(--voodu-amber) 12%, transparent)",    border: "color-mix(in srgb, var(--voodu-amber) 40%, transparent)" },
+    "ERROR" => { color: "var(--voodu-red)",      bg: "color-mix(in srgb, var(--voodu-red) 14%, transparent)",      border: "color-mix(in srgb, var(--voodu-red) 45%, transparent)" }
   }.freeze
 
   def level_pills
@@ -726,7 +730,7 @@ class Components::Logs::Page < Components::Base
         log_stream_target: "jumpToLive",
         action: "click->log-stream#jumpToLive"
       },
-      class: "absolute left-1/2 -translate-x-1/2 bottom-3.5 inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-white text-[12px] font-medium shadow-2xl"
+      class: "absolute left-1/2 -translate-x-1/2 bottom-3.5 inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12px] font-medium shadow-2xl"
     ) do
       render Icon::ChevronDownOutline.new(class: "w-3 h-3")
       span { "Jump to live" }

@@ -15,7 +15,7 @@
 # buttons).
 class Components::UI::Button < Components::Base
   VARIANTS = {
-    primary:   "bg-voodu-accent text-white hover:bg-voodu-accent-2",
+    primary:   "bg-voodu-accent text-voodu-on-accent hover:bg-voodu-accent-2",
     secondary: "bg-voodu-surface text-voodu-text border border-voodu-border hover:bg-voodu-surface-2",
     ghost:     "bg-transparent text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text",
     danger:    "bg-transparent text-voodu-red border border-voodu-red/40 hover:bg-voodu-red-dim",

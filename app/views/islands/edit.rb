@@ -176,7 +176,7 @@ class Views::Islands::Edit < Views::Base
 
     button(
       type: "submit", form: "edit-server-form",
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-white text-[12.5px] font-medium hover:bg-voodu-accent-2"
+      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
     ) do
       render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
       span { "Save changes" }

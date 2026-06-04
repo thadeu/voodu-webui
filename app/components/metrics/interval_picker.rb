@@ -88,7 +88,7 @@ class Components::Metrics::IntervalPicker < Components::Base
       data: @turbo_stream ? { turbo_stream: "true" } : { turbo: false },
       class: tokens(
         "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-[#ffffff08]"
+        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
       )
     ) do
       span(

@@ -116,7 +116,7 @@ class Views::Settings::Index < Views::Base
         div(class: "flex items-center justify-end gap-2") do
           button(
             type: "submit",
-            class: "inline-flex items-center px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent hover:text-white"
+            class: "inline-flex items-center px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent hover:text-voodu-on-accent"
           ) { "Save preferences" }
         end
       end

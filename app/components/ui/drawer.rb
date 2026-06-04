@@ -171,7 +171,7 @@ class Components::UI::Drawer < Components::Base
         "fixed top-0 right-0 h-screen z-[60]",
         "flex flex-col",
         "bg-voodu-bg-2 border-l border-voodu-border",
-        "shadow-[-12px_0_32px_rgba(0,0,0,0.55)]",
+        "shadow-[var(--voodu-shadow-drawer)]",
         # Slide animation. Start off-screen; controller toggles the
         # `data-open` attribute via `prompt -> #open`.
         "translate-x-full transition-transform duration-200 ease-out",

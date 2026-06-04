@@ -156,7 +156,7 @@ class Components::Logs::ExportStatus < Components::Base
       end
       a(
         href: download_url,
-        class: "inline-flex items-center justify-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-white text-[12px] font-medium hover:bg-voodu-accent-2 self-start"
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12px] font-medium hover:bg-voodu-accent-2 self-start"
       ) do
         render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5")
         span { "Download" }

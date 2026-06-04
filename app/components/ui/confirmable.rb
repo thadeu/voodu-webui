@@ -215,7 +215,7 @@ class Components::UI::Confirmable < Components::Base
         type: "button",
         data: { action: "click->confirmable#confirm" },
         class: tokens(
-          "inline-flex items-center gap-1.5 px-3 h-9 border text-white text-[12.5px] font-medium",
+          "inline-flex items-center gap-1.5 px-3 h-9 border text-voodu-on-accent text-[12.5px] font-medium",
           @danger ? "border-voodu-red/60 bg-voodu-red hover:bg-voodu-red/90"
                   : "border-voodu-accent-line bg-voodu-accent hover:bg-voodu-accent-2"
         )

@@ -113,9 +113,9 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       render img(
-        src:   "/mono-white-512.png",
+        src:   "/mark-mint.svg",
         alt:   "Clowk",
-        class: "h-7.5 w-auto",
+        class: "h-8 w-auto",
         aria:  { hidden: "true" }
       )
 
@@ -175,7 +175,7 @@ class Components::Layouts::Sidebar < Components::Base
       title: "See all servers",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
-        "hover:bg-[#ffffff08] hover:text-voodu-accent-2 transition-colors",
+        "hover:bg-voodu-hover hover:text-voodu-accent-2 transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1.5 vmd:group-data-[collapsed]:min-h-0"
       )
     ) do
@@ -217,7 +217,7 @@ class Components::Layouts::Sidebar < Components::Base
         # When collapsed, the avatar tile itself carries the accent
         # tint — doubling them (row bg + avatar bg both purple)
         # reads as two stacked highlights.
-        selected ? "bg-voodu-accent-dim border-voodu-accent-line vmd:group-data-[collapsed]:bg-transparent vmd:group-data-[collapsed]:border-transparent" : "border-transparent hover:bg-[#ffffff08]"
+        selected ? "bg-voodu-accent-dim border-voodu-accent-line vmd:group-data-[collapsed]:bg-transparent vmd:group-data-[collapsed]:border-transparent" : "border-transparent hover:bg-voodu-hover"
       )
     ) do
       # Status dot — expanded view only. DOM id is the Turbo
@@ -339,7 +339,7 @@ class Components::Layouts::Sidebar < Components::Base
       class:          tokens(
         "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-2 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-[#ffffff08] hover:text-voodu-text"
+        active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-voodu-hover hover:text-voodu-text"
       )
     ) do
       # Icon wrapper — relative so the collapsed badge can position

@@ -18,7 +18,7 @@ class Components::UI::Avatar < Components::Base
 
   def view_template
     px = SIZES.fetch(@size, 36)
-    fallback_class = "rounded-full shrink-0 flex items-center justify-center font-semibold text-white " \
+    fallback_class = "rounded-full shrink-0 flex items-center justify-center font-semibold text-voodu-on-accent " \
                      "bg-gradient-to-br from-voodu-accent-2 to-voodu-accent"
 
     if @url.present?

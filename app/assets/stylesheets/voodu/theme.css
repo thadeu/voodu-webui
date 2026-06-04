@@ -181,6 +181,14 @@
 .log-row .log-pod   { white-space: nowrap; }
 .log-row .log-ip    { color: var(--voodu-muted); white-space: nowrap; }
 
+/* Message payload — dark keeps the per-level tint (`--log-tone`, set
+ * inline by the JS row renderer); light forces a neutral near-black
+ * (`--voodu-log-payload` = #333) so dense logs read cleanly on white.
+ * The level stays legible via the LVL chip. The light rule is more
+ * specific than the base, so it wins without `!important`. */
+.log-row .log-msg { color: var(--log-tone, var(--voodu-text)); }
+html[data-theme="light"] .log-row .log-msg { color: var(--voodu-log-payload); }
+
 /* Column header —
  *
  * Sticky strip at the top of the log list. Same `display: contents`
@@ -336,7 +344,7 @@ body.log-cols-resizing * {
 .log-col-copy-all:hover,
 .log-col-wrap:hover {
   color: var(--voodu-text);
-  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, var(--voodu-mix-fg));
   border-color: var(--voodu-border);
 }
 .log-col-settings[aria-expanded="true"],
@@ -371,7 +379,7 @@ body.log-cols-resizing * {
   padding: 6px;
   background: var(--voodu-surface);
   border: 1px solid var(--voodu-border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--voodu-shadow-lg);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -481,7 +489,7 @@ body.log-cols-resizing * {
    * Heavier shadow + slightly tighter border completes the lift. */
   background: var(--voodu-surface-3);
   border: 1px solid var(--voodu-border-2);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--voodu-shadow-sm);
   color: var(--voodu-text-2);
   cursor: pointer;
   opacity: 0;
@@ -494,7 +502,7 @@ body.log-cols-resizing * {
 }
 .log-row .log-copy:hover {
   color: var(--voodu-text);
-  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, var(--voodu-mix-fg));
   border-color: var(--voodu-border);
 }
 .log-row .log-copy[data-copied="true"] {
@@ -532,7 +540,7 @@ body.log-cols-resizing * {
    * off the dark log container with no JSON text bleeding through. */
   background: var(--voodu-surface-3);
   border: 1px solid var(--voodu-border-2);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--voodu-shadow-sm);
   color: var(--voodu-text-2);
   cursor: pointer;
   opacity: 0;
@@ -546,7 +554,7 @@ body.log-cols-resizing * {
 }
 .log-row .log-wrap-single:hover {
   color: var(--voodu-text);
-  background: color-mix(in srgb, var(--voodu-surface-3) 80%, white);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, var(--voodu-mix-fg));
   border-color: var(--voodu-border);
 }
 /* Active state — `accent-dim` (#7c5cff22, 13% opacity) used to let
@@ -645,6 +653,11 @@ body.log-cols-resizing * {
   --voodu-muted:   #7a7a88;
   --voodu-muted-2: #5a5a66;
 
+  /* Log payload text — dark uses the bright body text; light overrides
+   * to a neutral near-black (see light block) so a wall of logs reads
+   * cleanly on white. */
+  --voodu-log-payload: var(--voodu-text);
+
   /* ── Accent: Voodu purple ── */
   --voodu-accent:      #7c5cff;
   --voodu-accent-2:    #9a82ff;
@@ -710,9 +723,17 @@ body.log-cols-resizing * {
   --voodu-r-md: 0;
   --voodu-r-lg: 0;
 
+  /* ── Interaction (theme-flippable: dark mixes toward white, light toward black) ── */
+  --voodu-hover:     #ffffff08; /* subtle row / menu hover overlay */
+  --voodu-mix-fg:    #ffffff;   /* color the chip hovers mix toward */
+  --voodu-on-accent: #ffffff;   /* text on accent-filled buttons */
+
   /* ── Shadow ── */
   --voodu-shadow-inset: 0 1px 0 0 rgba(255, 255, 255, 0.025) inset;
   --voodu-shadow-pop:   0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--voodu-border);
+  --voodu-shadow-sm:    0 2px 5px rgba(0, 0, 0, 0.55);
+  --voodu-shadow-lg:    0 8px 24px rgba(0, 0, 0, 0.55);
+  --voodu-shadow-drawer: -12px 0 32px rgba(0, 0, 0, 0.55);
 
   /* ── Fonts ── */
   --voodu-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -721,6 +742,73 @@ body.log-cols-resizing * {
   /* ── Base sizing ── */
   --voodu-font-size-base: 13px;
   --voodu-line-height:    1.45;
+}
+
+/* ── Light theme ──
+ *
+ * Overrides the dark base above when html[data-theme="light"]. The
+ * no-flash inline script (application.html.erb) resolves
+ * localStorage > prefers-color-scheme and sets the attribute before
+ * first paint; theme_controller.js flips it on toggle. Dark stays the
+ * :root default, so data-theme="dark" falls straight through to it.
+ *
+ * Same brand hues — accent purple is unchanged; only lightness is
+ * remapped (deep navy → off-white surfaces, light text → near-black)
+ * and the low-contrast semantic / chart tones are darkened so they
+ * stay legible on white. mix-fg flips to near-black so the chip hovers
+ * darken instead of lighten; shadows go soft slate.
+ */
+html[data-theme="light"] {
+  /* --voodu-bg:        #f5f6f9; */
+  /* --voodu-bg-2:      #eceef3; */
+  --voodu-bg:        #fff;
+  --voodu-bg-2:      #fcfcfc;
+  --voodu-surface:   #ffffff;
+  --voodu-surface-2: #f3f5f8;
+  --voodu-surface-3: #e9edf3;
+
+  --voodu-border:    #e3e7ee;
+  --voodu-border-2:  #d2d8e2;
+
+  --voodu-text:    #1b212b;
+  --voodu-text-2:  #4a515e;
+  --voodu-muted:   #6b7280;
+  --voodu-muted-2: #99a1b0;
+  --voodu-log-payload: #333333;
+
+  --voodu-accent:      #7c5cff;
+  --voodu-accent-2:    #6438f0;
+  --voodu-accent-dim:  #7c5cff1a;
+  --voodu-accent-line: #7c5cff55;
+
+  --voodu-green:     #059669;
+  --voodu-green-dim: #05966918;
+  --voodu-amber:     #d97706;
+  --voodu-amber-dim: #d9770618;
+  --voodu-red:       #dc2626;
+  --voodu-red-dim:   #dc262618;
+  --voodu-blue:      #2563eb;
+
+  /* Chart palette — same hues, darkened for white-bg contrast. */
+  --voodu-teal:   #0d9488;
+  --voodu-cyan:   #0891b2;
+  --voodu-indigo: #6366f1;
+  --voodu-orange: #ea580c;
+  --voodu-pink:   #db2777;
+  --voodu-gold:   #ca8a04;
+  --voodu-violet: #9333ea;
+  --voodu-sky:    #0284c7;
+  --voodu-rose:   #e11d48;
+
+  /* Interaction + shadows for light. */
+  --voodu-hover:        #00000008;
+  --voodu-mix-fg:       #0a0d14;
+  --voodu-on-accent:    #ffffff;
+  --voodu-shadow-inset: 0 1px 0 0 rgba(255, 255, 255, 0.6) inset;
+  --voodu-shadow-pop:   0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--voodu-border);
+  --voodu-shadow-sm:    0 1px 3px rgba(15, 23, 42, 0.12);
+  --voodu-shadow-lg:    0 10px 28px rgba(15, 23, 42, 0.14);
+  --voodu-shadow-drawer: -10px 0 30px rgba(15, 23, 42, 0.1);
 }
 
 /* ── Tailwind @theme mapping ──
@@ -752,6 +840,10 @@ body.log-cols-resizing * {
   --color-voodu-accent-2:    var(--voodu-accent-2);
   --color-voodu-accent-dim:  var(--voodu-accent-dim);
   --color-voodu-accent-line: var(--voodu-accent-line);
+
+  /* Interaction */
+  --color-voodu-hover:     var(--voodu-hover);
+  --color-voodu-on-accent: var(--voodu-on-accent);
 
   /* Semantic */
   --color-voodu-green:     var(--voodu-green);

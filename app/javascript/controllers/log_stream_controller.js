@@ -734,7 +734,7 @@ export default class extends Controller {
       body.appendChild(method)
       body.appendChild(document.createTextNode(" "))
       const path = document.createElement("span")
-      path.style.color = "var(--voodu-text)"
+      path.style.color = "var(--voodu-log-payload)"
       path.textContent = log.path
       body.appendChild(path)
     } else if (log.type === "response") {
@@ -752,8 +752,13 @@ export default class extends Controller {
       dur.textContent = ` · ${log.durationMs}ms`
       body.appendChild(dur)
     } else {
+      // Message text. Dark keeps the level tint (`--log-tone`); light
+      // forces a neutral near-black (`--voodu-log-payload`, see
+      // theme.css) so a wall of logs reads cleanly on white — the level
+      // is already conveyed by the LVL chip.
       const msg = document.createElement("span")
-      msg.style.color = tone.color
+      msg.className = "log-msg"
+      msg.style.setProperty("--log-tone", tone.color)
       msg.textContent = log.message
       body.appendChild(msg)
     }
@@ -1213,14 +1218,31 @@ const CLIENT_IPS = [
   "10.0.4.18", "24.122.91.4", "89.30.214.7", "203.0.113.42", "198.51.100.16",
 ]
 
-const LEVEL_TONE = {
-  HTTP:  { color: "#60a5fa", bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.40)"  },
-  INFO:  { color: "#9a82ff", bg: "rgba(124,92,255,0.12)",  border: "rgba(124,92,255,0.40)"  },
-  WARN:  { color: "#fbbf24", bg: "rgba(251,191,36,0.12)",  border: "rgba(251,191,36,0.40)"  },
-  ERROR: { color: "#f87171", bg: "rgba(248,113,113,0.14)", border: "rgba(248,113,113,0.45)" },
+// tone — a level chip's {color, bg, border} built from a theme var so
+// it tracks the active theme. Dark uses the bright base tones; light
+// resolves the darkened variants (see theme.css), so the chips read with
+// proper contrast on white. color-mix keeps the translucent bg/border
+// tints theme-aware too. var() in an inline style re-resolves live on
+// toggle, so even already-rendered rows recolor when the theme flips.
+function tone(v, bgPct = 12, borderPct = 40) {
+  return {
+    color:  `var(${v})`,
+    bg:     `color-mix(in srgb, var(${v}) ${bgPct}%, transparent)`,
+    border: `color-mix(in srgb, var(${v}) ${borderPct}%, transparent)`,
+  }
 }
 
-const POD_ACCENT_PALETTE = ["#60a5fa", "#34d399", "#fbbf24", "#22d3ee", "#a78bfa", "#f472b6", "#fb923c"]
+const LEVEL_TONE = {
+  HTTP:  tone("--voodu-blue"),
+  INFO:  tone("--voodu-accent-2"),
+  WARN:  tone("--voodu-amber"),
+  ERROR: tone("--voodu-red", 14, 45),
+}
+
+const POD_ACCENT_PALETTE = [
+  "var(--voodu-blue)", "var(--voodu-green)", "var(--voodu-amber)", "var(--voodu-cyan)",
+  "var(--voodu-violet)", "var(--voodu-pink)", "var(--voodu-orange)",
+]
 
 function pick(arr)       { return arr[Math.floor(Math.random() * arr.length)] }
 function pickWeighted(w) {
@@ -1267,16 +1289,17 @@ function makeLog(podName) {
 
 function methodColor(m) {
   return ({
-    GET: "#34d399", POST: "#60a5fa", PUT: "#fbbf24", PATCH: "#fbbf24",
-    DELETE: "#f87171", HEAD: "#7a7a88", OPTIONS: "#7a7a88",
+    GET: "var(--voodu-green)", POST: "var(--voodu-blue)",
+    PUT: "var(--voodu-amber)", PATCH: "var(--voodu-amber)",
+    DELETE: "var(--voodu-red)", HEAD: "var(--voodu-muted)", OPTIONS: "var(--voodu-muted)",
   })[m] || "var(--voodu-text-2)"
 }
 
 function statusColor(s) {
-  if (s >= 500) return "#f87171"
-  if (s >= 400) return "#fbbf24"
-  if (s >= 300) return "#60a5fa"
-  return "#34d399"
+  if (s >= 500) return "var(--voodu-red)"
+  if (s >= 400) return "var(--voodu-amber)"
+  if (s >= 300) return "var(--voodu-blue)"
+  return "var(--voodu-green)"
 }
 
 function podColor(name) {
