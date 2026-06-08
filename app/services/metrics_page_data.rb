@@ -838,5 +838,4 @@ class MetricsPageData
 
     [1_000_000_000.0, "GB"]
   end
-
 end
