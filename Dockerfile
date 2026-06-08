@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/poller .
 
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 ARG RUBY_VERSION=3.4.2
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+FROM docker.io/library/ruby:$RUBY_VERSION AS base
 
 # Rails app lives here
 WORKDIR /rails
