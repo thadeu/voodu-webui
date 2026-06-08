@@ -69,6 +69,10 @@ RUN curl -sL https://github.com/nodenv/node-build/archive/master.tar.gz | tar xz
 # Install application gems
 COPY vendor/* ./vendor/
 COPY Gemfile Gemfile.lock .ruby-version ./
+# Path gems (e.g. gem "poller", path: "gems/poller") need their gemspec
+# readable at install time, so the whole gems/ tree must exist first.
+# Copying the dir wholesale also covers any new path gem added later.
+COPY gems ./gems
 
 RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
