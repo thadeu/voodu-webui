@@ -16,7 +16,7 @@
 # pulls /rails out of the build stage it inherits the artifact at
 # `gems/poller/dist/poller` for the Puma plugin + binstub.
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25
 ARG RUBY_VERSION=3.4.2
 FROM docker.io/library/golang:${GO_VERSION}-alpine AS poller-build
 WORKDIR /src
