@@ -66,3 +66,6 @@ func (r *DedupRing) Record(hash uint64) {
 
 // Len returns the current number of populated slots.
 func (r *DedupRing) Len() int { return r.size }
+
+// Cap returns the ring's fixed capacity.
+func (r *DedupRing) Cap() int { return len(r.buf) }

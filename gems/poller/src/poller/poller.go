@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/voodu/poller/client"
 )
 
@@ -78,6 +77,10 @@ func (p *IslandPoller) ringFor(pod string) *DedupRing {
 	}
 
 	r := NewDedupRing(DedupRingCapacity)
+	// Warm the fresh ring from disk so a poller restart does not
+	// re-write lines the previous process already persisted (the
+	// `since=oldestWatermark` re-fetch overlap). See seedRing.
+	p.seedRing(pod, r)
 	p.rings[pod] = r
 
 	return r
@@ -196,7 +199,7 @@ func (p *IslandPoller) tick(ctx context.Context) {
 			ts = time.Now()
 		}
 
-		h := xxhash.Sum64String(pod + "|" + ts.Format(time.RFC3339Nano) + "|" + msg)
+		h := lineHash(pod, ts, msg)
 		ring := p.ringFor(pod)
 		if ring.Seen(h) {
 			deduped++
