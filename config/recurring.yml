@@ -60,13 +60,6 @@ common: &common
     # decommissioned pods don't leak the tree.
     schedule: every day at 3:00 am
 
-  log_export_cleanup:
-    class: LogExportCleanupJob
-    # Hourly — reaps LogExport rows whose expires_at has passed
-    # (24h post-ready by default) + orphan .partial files left
-    # by crashed export jobs.
-    schedule: every hour
-
 development:
   <<: *common
 

@@ -4,8 +4,9 @@
 # filtered by [pods, from, until_, content_search]. Yields one
 # parsed hash per matching line.
 #
-# Used by LogExportJob to build the export artifact, and by future
-# search features (filter on /logs against the local NDJSON).
+# Backs the /logs/analytics search + export (LogSearchData,
+# LogSurroundingData, LogsAnalyticsController#export) over the local
+# NDJSON warehouse.
 #
 # Implementation: sequential scan of the relevant per-day files,
 # stop-early when `until_` falls inside a file's range. With our

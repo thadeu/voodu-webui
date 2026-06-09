@@ -4,9 +4,8 @@ require "csv"
 
 # LogTail::LineFormatter — turns a parsed warehouse line (the
 # { ts:, pod:, stream:, level:, msg:, raw:, parsed: } hash) into one
-# serialised output line for a given format. Single source of truth so
-# the async LogExportJob and the synchronous /logs/analytics/export
-# produce byte-identical output.
+# serialised output line for a given format. The single serialiser
+# behind the /logs/analytics export (LogsAnalyticsController#export).
 #
 # Line-oriented formats only (ndjson / txt / csv) — each #line returns a
 # string WITH its trailing newline. JSON-array output is built by the
@@ -37,8 +36,8 @@ module LogTail
     end
 
     # ndjson_line — the FULL parsed record (ts/pod/stream/level/msg/raw/
-    # parsed), one JSON object per line. Matches what the warehouse stores
-    # and what LogExportJob's ndjson emits, so raw context survives export.
+    # parsed), one JSON object per line. Matches what the warehouse stores,
+    # so raw context survives export.
     def ndjson_line(hash)
       "#{JSON.generate(hash)}\n"
     end

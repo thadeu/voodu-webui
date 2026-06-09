@@ -36,11 +36,6 @@ class Island < ApplicationRecord
   has_many :pods, dependent: :destroy
   has_one  :system, dependent: :destroy
 
-  # Log exports persisted by the operator. `dependent: :destroy` so
-  # removing an island also reaps its export rows (and the
-  # before_destroy callback on LogExport wipes the on-disk file).
-  has_many :log_exports, dependent: :destroy
-
   # Saved metric dashboards (named multi-panel views on /metrics).
   # `dependent: :destroy` reaps them with the island; the DB foreign
   # key cascades too.

@@ -156,20 +156,6 @@ Rails.application.routes.draw do
       end
     end
 
-    # Log exports — operator-triggered NDJSON dumps from the local
-    # log warehouse (storage/logs/). `show` renders the drawer body
-    # (Turbo Stream target for status updates); `create` enqueues
-    # the LogExportJob; `download` send_files the artifact.
-    #
-    # Routes intentionally narrow — no index page yet (drawer
-    # surfaces "recent exports"; standalone listing is a follow-up).
-    # `new` returns the drawer body (form), `create` enqueues the
-    # job + responds with turbo_stream that morphs the drawer body
-    # into the status block.
-    get  "/exports/new",           to: "exports#new",      as: :new_export
-    post "/exports",               to: "exports#create",   as: :exports
-    get  "/exports/:id",           to: "exports#show",     as: :export,           constraints: { id: /\d+/ }
-    get  "/exports/:id/download",  to: "exports#download", as: :download_export,  constraints: { id: /\d+/ }
 
     get  "/alerts",   to: "alerts#index",   as: :alerts
     get  "/settings", to: "settings#index", as: :settings

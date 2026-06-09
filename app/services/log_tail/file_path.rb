@@ -20,7 +20,6 @@ module LogTail
     module_function
 
     LOG_ROOT     = "storage/logs"
-    EXPORT_ROOT  = "storage/exports"
 
     # Cap per (pod, day) file in bytes. 250MB matches the operator
     # decision — drop+warn behaviour kicks in when a file hits this.
@@ -40,10 +39,6 @@ module LogTail
       Rails.root.join(LOG_ROOT)
     end
 
-    def export_root
-      Rails.root.join(EXPORT_ROOT)
-    end
-
     # Per-island directory: storage/logs/<island_id>/
     def island_dir(island_id)
       log_root.join(island_id.to_s)
@@ -58,11 +53,6 @@ module LogTail
     # `date` is a Date or anything responding to #strftime.
     def daily_file(island_id, pod_name, date)
       pod_dir(island_id, pod_name).join("#{date.strftime('%Y-%m-%d')}.ndjson")
-    end
-
-    # Export artifact path: storage/exports/<id>.<ext>
-    def export_file(export_id, ext: "ndjson")
-      export_root.join("#{export_id}.#{ext}")
     end
 
     # ensure_dir — mkdir_p on demand. Writer calls before every open

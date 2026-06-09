@@ -39,7 +39,10 @@ class Components::Layouts::Sidebar < Components::Base
     { id: :overview, label: "Overview", icon: :Squares2x2Outline,   path: :tenant_root },
     { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
     { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
-    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs },
+    # Logs lands on Analytics (the primary surface); `active_prefix`
+    # keeps the item highlighted across the whole /logs/* family
+    # (Analytics AND Follow), since the href no longer equals the prefix.
+    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs_analytics, active_prefix: :logs },
     { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
     { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
   ].freeze
@@ -387,10 +390,13 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def nav_active?(item)
-    href = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
-    return @current_path == href if item[:path] == :tenant_root
+    return @current_path == public_send("#{item[:path]}_path", tenant_key: nav_tenant_key) if item[:path] == :tenant_root
 
-    @current_path.start_with?(href)
+    # `active_prefix` lets an item highlight across a URL family wider
+    # than its href (e.g. Logs links to /logs/analytics but stays active
+    # on /logs too). Falls back to the item's own path.
+    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", tenant_key: nav_tenant_key)
+    @current_path.start_with?(prefix)
   end
 
   # collapse_footer — explicit chevron button at the bottom of the

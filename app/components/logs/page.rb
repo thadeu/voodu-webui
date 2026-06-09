@@ -336,13 +336,8 @@ class Components::Logs::Page < Components::Base
       follow_btn
       pause_btn
       clear_btn
-      # Export drawer trigger — last action so the destructive-ish
-      # workflow ("generate file, download") doesn't crowd the
-      # live-tail toggles. Hidden in drawer mode (Metrics peek)
-      # because the peek already has limited width and an export
-      # there would mean the operator can't see the live tail
-      # while picking a period.
-      render Components::Logs::ExportButton.new(current_pod: @pod_name) unless @drawer
+      # Export moved to Analytics (richer copy/download popover over the
+      # warehouse). Follow keeps the live-tail controls only.
     end
   end
 
