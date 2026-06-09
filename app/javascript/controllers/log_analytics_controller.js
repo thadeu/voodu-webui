@@ -139,11 +139,21 @@ export default class extends Controller {
     })
   }
 
-  // updateCustomLabel — the date-range button always shows the active
-  // window as "<from> – <until>" (presets fill it too). Falls back to
-  // "Custom" only if the pickers are somehow empty.
+  // updateCustomLabel — what the date button shows:
+  //   - preset  → a RELATIVE label ("5m → now"). The query resolves the
+  //     window at run time (range=<preset>), so a frozen timestamp would
+  //     lie — it'd look fixed while the results are actually dynamic.
+  //   - custom  → the FIXED absolute window the operator picked
+  //     ("Jun 9, 19:12 – 19:17").
   updateCustomLabel() {
     if (!this.hasCustomLabelTarget) return
+
+    const range = this.rangeTarget.value
+    if (range !== "custom") {
+      this.customLabelTarget.textContent = `${range} → now`
+
+      return
+    }
 
     const from = this.hasFromInputTarget ? this.fromInputTarget.value : ""
     const until = this.hasUntilInputTarget ? this.untilInputTarget.value : ""
@@ -253,23 +263,25 @@ export default class extends Controller {
     if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = this.scrollerTarget.scrollHeight
   }
 
-  // copyAll — copy every shown row's raw line (newline-joined). Reads the
-  // per-row copy buttons' data-raw within the scroll container, so it
-  // covers the rendered + loaded pages, not the surrounding modal.
-  copyAll(event) {
-    if (!this.hasScrollerTarget) return
+  // copyExport — fetch the export endpoint for the current query (same
+  // URL the Download items link to) and put the body on the clipboard.
+  // So "Copy" and "Download" return identical content for a given format.
+  async copyExport(event) {
+    const btn = event.currentTarget
+    const url = btn.dataset.exportUrl
+    if (!url) return
 
-    const lines = Array.from(this.scrollerTarget.querySelectorAll("[data-raw]"))
-      .map((el) => el.dataset.raw)
-      .filter(Boolean)
-    if (!lines.length) return
+    try {
+      const resp = await fetch(url, { headers: { Accept: "text/plain" } })
+      if (!resp.ok) return
 
-    navigator.clipboard.writeText(lines.join("\n")).then(() => {
-      const btn = event.currentTarget
+      await navigator.clipboard.writeText(await resp.text())
       const prev = btn.getAttribute("title")
-      btn.setAttribute("title", `Copied ${lines.length} lines`)
+      btn.setAttribute("title", "Copied")
       setTimeout(() => btn.setAttribute("title", prev || ""), 1200)
-    })
+    } catch (_e) {
+      // Network/clipboard denied — no-op; the Download item still works.
+    }
   }
 
   // copyLine — copy a row's raw payload. Brief title flip is the only

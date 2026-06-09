@@ -132,6 +132,10 @@ Rails.application.routes.draw do
     # the `:name` matcher would otherwise swallow "analytics".
     get "/logs/analytics",             to: "logs_analytics#index",       as: :logs_analytics
     get "/logs/analytics/surrounding", to: "logs_analytics#surrounding", as: :logs_analytics_surrounding
+    # Synchronous export of the CURRENT query (same filters), streamed as
+    # a download — `fmt` (not `format`, which Rails reserves for the
+    # response Mime). Copy actions fetch the same endpoint.
+    get "/logs/analytics/export",      to: "logs_analytics#export",      as: :logs_analytics_export
 
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }

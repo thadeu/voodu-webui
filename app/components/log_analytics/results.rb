@@ -111,14 +111,16 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     end
   end
 
-  # header_actions — small icon cluster mirroring the Follow column
-  # header: jump to top / bottom of the result set, and copy every shown
-  # line. Acts on the results scroll container (log-analytics targets).
+  # header_actions — jump to top / bottom + the Export results popover
+  # (CloudWatch-style: Copy to clipboard / Download, reusing the active
+  # query's filters). Pinned in the table header, reachable while scrolling.
   def header_actions
-    div(class: "flex items-center gap-0.5 shrink-0") do
-      header_icon("Jump to top",        :ArrowUpOutline,          "jumpTop")
-      header_icon("Jump to bottom",     :ArrowDownOutline,        "jumpBottom")
-      header_icon("Copy all shown logs", :ClipboardDocumentOutline, "copyAll")
+    div(class: "flex items-center gap-1 shrink-0") do
+      div(class: "flex items-center gap-0.5") do
+        header_icon("Jump to top",    :ArrowUpOutline,   "jumpTop")
+        header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
+      end
+      export_menu
     end
   end
 
@@ -132,6 +134,84 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     ) do
       render Icon.const_get(icon).new(class: "w-3.5 h-3.5")
     end
+  end
+
+  # export_menu — Export results dropdown. Copy items fetch the export
+  # endpoint and put the body on the clipboard; Download items link to it
+  # (data-turbo=false so the browser handles the attachment). Both carry
+  # the current query's frozen window + filters, so the file matches the
+  # results on screen.
+  def export_menu
+    div(class: "relative", data: { controller: "dropdown" }) do
+      button(
+        type:  "button",
+        title: "Export results",
+        data:  { action: "click->dropdown#toggle" },
+        class: "inline-flex items-center gap-1.5 px-2 h-6 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
+      ) do
+        render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5")
+        span(class: "hidden vmd:inline") { "Export" }
+        render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 opacity-70")
+      end
+
+      div(
+        hidden: true,
+        data:  { dropdown_target: "menu" },
+        class: "absolute right-0 top-[calc(100%+4px)] z-40 min-w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+      ) do
+        export_section("Copy to clipboard")
+        copy_item("CSV",  "csv")
+        copy_item("JSON", "json")
+        copy_item("Text", "txt")
+        div(class: "h-px bg-voodu-border")
+        export_section("Download")
+        download_item("NDJSON", "ndjson")
+        download_item("CSV",    "csv")
+        download_item("Text",   "txt")
+      end
+    end
+  end
+
+  def export_section(text)
+    div(class: "px-3 pt-2 pb-1 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { text }
+  end
+
+  def copy_item(label, fmt)
+    button(
+      type:  "button",
+      data:  { action: "click->log-analytics#copyExport click->dropdown#close", export_url: export_url(fmt) },
+      class: export_item_classes
+    ) do
+      render Icon::ClipboardDocumentOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+      span(class: "flex-1") { label }
+    end
+  end
+
+  def download_item(label, fmt)
+    a(
+      href:     export_url(fmt),
+      download: "",
+      data:     { turbo: false, action: "click->dropdown#close" },
+      class:    export_item_classes
+    ) do
+      render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+      span(class: "flex-1") { label }
+    end
+  end
+
+  def export_item_classes
+    "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12px] text-voodu-text hover:bg-voodu-hover"
+  end
+
+  def export_url(fmt)
+    logs_analytics_export_path(
+      fmt:   fmt,
+      q:     @data.search.presence,
+      regex: (@data.regex? ? "1" : nil),
+      from:  @data.from_iso,
+      until: @data.until_iso,
+      pods:  @data.pods.presence
+    )
   end
 
   def delimited(number)

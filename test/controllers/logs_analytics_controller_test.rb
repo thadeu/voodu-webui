@@ -74,6 +74,36 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "export streams the current query as a download, applying filters" do
+    seed("web", [
+      [@base,             "GET /health 200"],
+      [@base + 1.second,  "callid=8342416038 finished"]
+    ])
+    window = { from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid" }
+
+    # NDJSON — full records, only the matching line, as an attachment.
+    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "ndjson")
+    assert_response :success
+    assert_match %r{application/x-ndjson}, @response.media_type
+    assert_match(/attachment; filename=.*\.ndjson/, @response.headers["Content-Disposition"])
+    assert_match "callid=8342416038 finished", @response.body
+    assert_no_match "GET /health 200", @response.body
+
+    # CSV — column header present.
+    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "csv")
+    assert_response :success
+    assert_match "text/csv", @response.media_type
+    assert @response.body.start_with?("ts,pod,stream,level,msg\n"), "csv header"
+
+    # JSON — a parseable array of the matched rows.
+    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "json")
+    assert_response :success
+    rows = JSON.parse(@response.body)
+    assert_equal 1, rows.size
+    assert_equal "callid=8342416038 finished", rows.first["msg"]
+    assert_match(/\[\n\s+\{/, @response.body, "Copy JSON is pretty-printed, not inline")
+  end
+
   test "surrounding renders the modal anchored on the selected line" do
     lines = (0..6).map { |i| [@base + i.seconds, "line-#{i}"] }
     seed("web", lines)
