@@ -27,6 +27,18 @@ const CHIP_INACTIVE = [
   "hover:text-voodu-text"
 ]
 
+// Preset key → window duration (ms). A preset is a shortcut that fills
+// the date-range button + pickers with [now - Δ, now]. Keep the keys in
+// lockstep with LogSearchData::RANGES.
+const RANGE_MS = {
+  "5m": 5 * 60 * 1000,
+  "30m": 30 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "3h": 3 * 60 * 60 * 1000,
+  "12h": 12 * 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000
+}
+
 export default class extends Controller {
   static targets = [
     "form",
@@ -37,8 +49,10 @@ export default class extends Controller {
     "untilInput",
     "fromHidden",
     "untilHidden",
-    "podInput",
+    "customLabel",
+    "podCheckbox",
     "podLabel",
+    "allPods",
     "scroller",
     "surroundingHost"
   ]
@@ -51,7 +65,13 @@ export default class extends Controller {
   }
 
   connect() {
-    if (this.rangeValue === "custom") this.fillCustomInputsFromWindow()
+    if (this.rangeValue === "custom") {
+      this.fillCustomInputsFromWindow()
+    } else {
+      this.fillFromPreset(this.rangeValue)
+    }
+    this.updateCustomLabel()
+    this.refreshPodScope()
   }
 
   // fillCustomInputsFromWindow — populate the datetime-local inputs from
@@ -67,9 +87,9 @@ export default class extends Controller {
     }
   }
 
-  // selectRange — a preset chip was clicked. Repaint the active chip,
-  // write the hidden range field, then either reveal the custom-range
-  // inputs (no submit) or re-query immediately.
+  // selectRange — a preset is a SHORTCUT, not a separate mode: it fills
+  // the date-range button + pickers with [now - Δ, now] so the button
+  // always shows the active window, then re-queries (range=<preset>).
   selectRange(event) {
     event.preventDefault()
     const value = event.currentTarget.dataset.range
@@ -77,18 +97,38 @@ export default class extends Controller {
 
     this.rangeTarget.value = value
     this.repaintPresets(value)
-
-    if (value === "custom") {
-      this.customRangeTarget.classList.remove("hidden")
-      this.prefillCustomDefaults()
-      if (this.hasFromInputTarget) this.fromInputTarget.focus()
-
-      return
-    }
-
-    this.customRangeTarget.classList.add("hidden")
-    this.clearCustomInputs()
+    this.fillFromPreset(value)
     this.formTarget.requestSubmit()
+  }
+
+  // openCustom — the date-range button's popover opened. For a preset,
+  // refresh the pickers to the live [now - Δ, now] so the popover shows
+  // the current span; for an already-custom window, leave the operator's
+  // values intact. Opening does NOT switch to custom — only Apply does.
+  openCustom() {
+    if (this.rangeTarget.value !== "custom") this.fillFromPreset(this.rangeTarget.value)
+  }
+
+  // applyCustom — Apply clicked in the popover. Commit an explicit custom
+  // window and re-query (normalizeDates syncs the hidden UTC fields on
+  // submit). The button keeps showing the chosen span.
+  applyCustom() {
+    this.rangeTarget.value = "custom"
+    this.repaintPresets("custom")
+    this.updateCustomLabel()
+    this.formTarget.requestSubmit()
+  }
+
+  // fillFromPreset — set the pickers (and thus the date-button label) to
+  // the [now - Δ, now] window for a preset key. No-op for unknown keys.
+  fillFromPreset(range) {
+    const ms = RANGE_MS[range]
+    if (!ms) return
+
+    const now = new Date()
+    if (this.hasFromInputTarget) this.fromInputTarget.value = formatLocal(new Date(now.getTime() - ms))
+    if (this.hasUntilInputTarget) this.untilInputTarget.value = formatLocal(now)
+    this.updateCustomLabel()
   }
 
   repaintPresets(activeValue) {
@@ -99,50 +139,93 @@ export default class extends Controller {
     })
   }
 
-  // prefillCustomDefaults — seed empty custom inputs with a last-30m
-  // window so they always hold a complete, submittable value.
-  prefillCustomDefaults() {
-    const now = new Date()
+  // updateCustomLabel — the date-range button always shows the active
+  // window as "<from> – <until>" (presets fill it too). Falls back to
+  // "Custom" only if the pickers are somehow empty.
+  updateCustomLabel() {
+    if (!this.hasCustomLabelTarget) return
 
-    if (this.hasFromInputTarget && !this.fromInputTarget.value) {
-      this.fromInputTarget.value = formatLocal(new Date(now.getTime() - 30 * 60 * 1000))
-    }
-
-    if (this.hasUntilInputTarget && !this.untilInputTarget.value) {
-      this.untilInputTarget.value = formatLocal(now)
-    }
+    const from = this.hasFromInputTarget ? this.fromInputTarget.value : ""
+    const until = this.hasUntilInputTarget ? this.untilInputTarget.value : ""
+    this.customLabelTarget.textContent = from && until ? formatRangeLabel(from, until) : "Custom"
   }
 
-  // selectPod — a row in the DS pod dropdown was clicked. Write the
-  // hidden pods[] value, update the trigger label, and re-run the query
-  // (preserving the rest of the form). The dropdown closes via its own
-  // action on the same button.
-  selectPod(event) {
-    const btn = event.currentTarget
-    const value = btn.dataset.pod || ""
-    const label = btn.dataset.label || "All pods"
+  // togglePod — a pod checkbox flipped. Reflect it (box + check + label).
+  // No submit until Apply.
+  togglePod() {
+    this.refreshPodScope()
+  }
 
-    if (this.hasPodInputTarget) this.podInputTarget.value = value
-    if (this.hasPodLabelTarget) this.podLabelTarget.textContent = label
-
+  // selectAllPods — "All pods" row: clear the selection and re-run now
+  // (exclusive, like the metrics Host row).
+  selectAllPods() {
+    this.podCheckboxTargets.forEach((cb) => { cb.checked = false })
+    this.refreshPodScope()
     this.formTarget.requestSubmit()
   }
 
-  clearCustomInputs() {
-    if (this.hasFromInputTarget) this.fromInputTarget.value = ""
-    if (this.hasUntilInputTarget) this.untilInputTarget.value = ""
-    if (this.hasFromHiddenTarget) this.fromHiddenTarget.value = ""
-    if (this.hasUntilHiddenTarget) this.untilHiddenTarget.value = ""
+  // applyPods — Apply the chosen pod scope (the checked pods[] checkboxes
+  // serialise with the form). Dropdown closes via its own action.
+  applyPods() {
+    this.formTarget.requestSubmit()
+  }
+
+  // refreshPodScope — mirror metric-multiselect#refresh: paint each row's
+  // checkbox box + check from its native checkbox, then sync the trigger
+  // label and the "All pods" active state.
+  refreshPodScope() {
+    const boxes = this.hasPodCheckboxTarget ? this.podCheckboxTargets : []
+    let count = 0
+    let single = ""
+
+    boxes.forEach((cb) => {
+      const on = cb.checked
+      if (on) {
+        count += 1
+        single = cb.dataset.label || cb.value
+      }
+
+      const row = cb.closest("label")
+      const box = row && row.querySelector("[data-role='checkbox']")
+      const check = row && row.querySelector("[data-role='check']")
+
+      if (box) {
+        box.classList.toggle("border-voodu-accent-line", on)
+        box.classList.toggle("bg-voodu-accent-dim", on)
+        box.classList.toggle("border-voodu-border", !on)
+      }
+
+      if (check) check.classList.toggle("hidden", !on)
+    })
+
+    if (this.hasPodLabelTarget) {
+      this.podLabelTarget.textContent = count === 0 ? "All pods" : count === 1 ? single : `${count} pods`
+    }
+
+    if (this.hasAllPodsTarget) {
+      const none = count === 0
+      this.allPodsTarget.classList.toggle("bg-voodu-accent-dim", none)
+      this.allPodsTarget.classList.toggle("text-voodu-accent-2", none)
+      const check = this.allPodsTarget.querySelector("[data-role='check']")
+      if (check) check.classList.toggle("hidden", !none)
+    }
   }
 
   // normalizeDates — runs on submit (before Turbo serialises the form).
-  // Reads the VISIBLE local datetime-local inputs and writes their UTC
-  // equivalent into the HIDDEN companions (which carry name=from/until).
-  // We never write the "…Z" string back into the datetime-local itself —
-  // the browser would reject it and blank the visible value.
+  // Only a custom window submits explicit from/until: we write the UTC
+  // equivalent of the VISIBLE local pickers into the HIDDEN companions
+  // (never the "…Z" string back into the datetime-local — the browser
+  // would reject it and blank the field). For a preset, the visible
+  // pickers are display-only, so we clear the hidden fields and let
+  // range=<preset> drive the (relative) window server-side.
   normalizeDates() {
-    this.syncHidden(this.hasFromInputTarget && this.fromInputTarget, this.hasFromHiddenTarget && this.fromHiddenTarget)
-    this.syncHidden(this.hasUntilInputTarget && this.untilInputTarget, this.hasUntilHiddenTarget && this.untilHiddenTarget)
+    if (this.rangeTarget.value === "custom") {
+      this.syncHidden(this.hasFromInputTarget && this.fromInputTarget, this.hasFromHiddenTarget && this.fromHiddenTarget)
+      this.syncHidden(this.hasUntilInputTarget && this.untilInputTarget, this.hasUntilHiddenTarget && this.untilHiddenTarget)
+    } else {
+      if (this.hasFromHiddenTarget) this.fromHiddenTarget.value = ""
+      if (this.hasUntilHiddenTarget) this.untilHiddenTarget.value = ""
+    }
   }
 
   syncHidden(localInput, hidden) {
@@ -239,4 +322,22 @@ function utcToLocalInput(iso) {
   if (isNaN(d.getTime())) return ""
 
   return formatLocal(d)
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+// formatRangeLabel — two datetime-local values → a compact chip label,
+// e.g. "Jun 9, 14:23 – 14:53" (same day) or "Jun 9 14:23 – Jun 10 09:00".
+function formatRangeLabel(fromVal, untilVal) {
+  const f = new Date(fromVal)
+  const u = new Date(untilVal)
+  if (isNaN(f.getTime()) || isNaN(u.getTime())) return "Custom"
+
+  const pad = (n) => String(n).padStart(2, "0")
+  const day = (d) => `${MONTHS[d.getMonth()]} ${d.getDate()}`
+  const time = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+
+  return f.toDateString() === u.toDateString()
+    ? `${day(f)}, ${time(f)} – ${time(u)}`
+    : `${day(f)} ${time(f)} – ${day(u)} ${time(u)}`
 }

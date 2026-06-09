@@ -75,6 +75,20 @@ class LogSearchDataTest < ActiveSupport::TestCase
     assert_equal "from worker", data.rows.first[:msg]
   end
 
+  test "multi-pod scope scans exactly the requested pods" do
+    seed("web", [[@base, "from web"]])
+    seed("worker", [[@base, "from worker"]])
+    seed("api", [[@base, "from api"]])
+
+    data = search(from: iso(@base - 1.second), until: iso(@base + 10.seconds), pods: %w[web worker])
+
+    assert_equal 2, data.matched
+    msgs = data.rows.map { |r| r[:msg] }
+    assert_includes msgs, "from web"
+    assert_includes msgs, "from worker"
+    assert_not_includes msgs, "from api"
+  end
+
   test "no pod scope scans every pod on disk" do
     seed("web", [[@base, "from web"]])
     seed("worker", [[@base, "from worker"]])

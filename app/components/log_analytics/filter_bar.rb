@@ -35,18 +35,42 @@ class Components::LogAnalytics::FilterBar < Components::Base
     ) do
       input(type: "hidden", name: "range", value: @data.range, data: { log_analytics_target: "range" })
 
-      preset_row
-      custom_range_row
-      query_row
+      main_row
     end
   end
 
   private
 
-  def preset_row
-    div(class: "flex flex-wrap items-center gap-1.5") do
+  # main_row — the header: query controls + Run on the left, the
+  # time-range presets pushed to the far right. Stacks on mobile (search
+  # full width, then regex / pods / Run, then the presets wrap below).
+  def main_row
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2.5") do
+      query_group
+      div(class: "hidden vmd:block vmd:flex-1")
+      preset_group
+    end
+  end
+
+  # query_group — search + regex + pod scope + Run, left-aligned.
+  def query_group
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 min-w-0") do
+      search_input
+      div(class: "flex items-center gap-2") do
+        regex_toggle
+        pod_scope
+        run_button
+      end
+    end
+  end
+
+  # preset_group — time-range chips, right-aligned in the header row.
+  # The fixed presets submit on click; Custom is a dropdown whose
+  # popover holds the From/Until pickers (see custom_chip).
+  def preset_group
+    div(class: "flex flex-wrap items-center gap-1.5 vmd:justify-end shrink-0") do
       LogSearchData::RANGES.each_key { |key| preset_chip(key, key) }
-      preset_chip("custom", "Custom")
+      custom_chip
     end
   end
 
@@ -67,19 +91,56 @@ class Components::LogAnalytics::FilterBar < Components::Base
     ) { label }
   end
 
-  # custom_range_row — two datetime-local inputs, hidden unless the
-  # Custom preset is active. Values are normalised local→UTC on submit
-  # (log-analytics#normalizeDates), same as the export form.
-  def custom_range_row
+  # custom_chip — the date-range button: it ALWAYS reflects the active
+  # window as "<from> – <until>" (the controller fills it on connect and
+  # whenever a preset is picked — presets are just shortcuts that feed
+  # this button). Clicking opens the popover to fine-tune; Apply commits
+  # an explicit custom window. Still a `preset` target (data-range=
+  # "custom") so it highlights when the active selection is a manual
+  # range. "Custom" is only the pre-JS placeholder.
+  def custom_chip
+    div(class: "relative", data: { controller: "dropdown" }) do
+      button(
+        type: "button",
+        data: {
+          log_analytics_target: "preset",
+          range:  "custom",
+          action: "click->dropdown#toggle click->log-analytics#openCustom"
+        },
+        class: tokens(
+          "inline-flex items-center gap-1.5 px-2.5 h-7 border text-[11.5px] font-medium transition-colors",
+          @data.custom? ? CHIP_ACTIVE : CHIP_INACTIVE
+        )
+      ) do
+        render Icon::CalendarDaysOutline.new(class: "w-3 h-3 shrink-0")
+        span(data: { log_analytics_target: "customLabel" }) { "Custom" }
+        render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 opacity-70")
+      end
+
+      custom_popover
+    end
+  end
+
+  # custom_popover — the From/Until pickers, anchored under the chip.
+  # Each datetime-local is display-only (no name); a hidden companion
+  # carries the UTC value (see labeled_datetime). Apply re-runs the query.
+  def custom_popover
     div(
-      data:  { log_analytics_target: "customRange" },
-      class: tokens(
-        "flex flex-col vmd:flex-row vmd:items-end gap-2.5",
-        ("hidden" unless @data.custom?)
-      )
+      hidden: true,
+      data:  { dropdown_target: "menu" },
+      class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[280px] max-w-[calc(100vw-24px)] border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3 flex flex-col gap-3 text-left"
     ) do
+      span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted") { "Custom range" }
       labeled_datetime("From",  "from")
       labeled_datetime("Until", "until")
+      button(
+        type: "button",
+        data: { action: "click->log-analytics#applyCustom click->dropdown#close" },
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent/20 transition-colors"
+      ) do
+        render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
+        span { "Apply range" }
+      end
     end
   end
 
@@ -106,18 +167,8 @@ class Components::LogAnalytics::FilterBar < Components::Base
     end
   end
 
-  def query_row
-    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
-      search_input
-      regex_toggle
-      pod_scope
-      div(class: "flex-1 hidden vmd:block")
-      run_button
-    end
-  end
-
   def search_input
-    div(class: "flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface flex-1 vmd:max-w-[420px] text-voodu-muted") do
+    div(class: "flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-full vmd:w-[300px] text-voodu-muted") do
       render Icon::MagnifyingGlassOutline.new(class: "w-3.5 h-3.5 shrink-0")
       input(
         type: "search",
@@ -143,12 +194,9 @@ class Components::LogAnalytics::FilterBar < Components::Base
     end
   end
 
-  # pod_scope — single-pod scope for v1 (All pods, or one container),
-  # via the design-system dropdown. Multi-pod selection is a follow-up;
-  # the service + URL already accept an array (pods[]), so widening this
-  # to a multi-select is additive.
+  # pod_scope — multi-select pod scope via the design-system dropdown.
   def pod_scope
-    render Components::LogAnalytics::PodScopePicker.new(pods: @pods, selected: @data.pods.first)
+    render Components::LogAnalytics::PodScopePicker.new(pods: @pods, selected: @data.pods)
   end
 
   def run_button

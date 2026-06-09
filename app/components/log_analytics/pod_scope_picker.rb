@@ -1,28 +1,26 @@
 # frozen_string_literal: true
 
-# Components::LogAnalytics::PodScopePicker — pod scope for the analytics
-# filter bar, using the design-system dropdown (the `dropdown` Stimulus
-# controller + the ScopePicker visual language) instead of a native
-# <select> (whose OS-rendered menu doesn't match the DS).
+# Components::LogAnalytics::PodScopePicker — multi-select pod scope for
+# the analytics filter bar. Mirrors the metrics dashboard multiselect
+# (Views::Metrics::Index#multiselect_row): a left checkbox box +
+# data-role check, a surface-2 menu, and a centred accent footer — so it
+# reads as the SAME design-system control, not a new pattern.
 #
-# Unlike Components::UI::ScopePicker (whose rows are <a href> that
-# navigate), this one lives INSIDE the filter <form>: each row is a
-# button that sets a hidden `pods[]` input and re-runs the query
-# (log-analytics#selectPod → requestSubmit), so the active q / range /
-# custom dates are preserved and the URL stays bookmarkable. The look
-# (trigger + grouped menu + option rows + check on active) mirrors the
-# DS picker so the two read as the same control.
+# Difference from metrics: that one navigates to ?pid=…; this lives in
+# the filter <form>, so each row wraps a sr-only native checkbox named
+# `pods[]` (the form serialises the selection — LogSearchData reads an
+# array). The box/check visuals are JS-driven (log-analytics
+# #refreshPodScope) exactly like metric-multiselect#refresh.
 #
-#   selected: the active container name, or nil for "All pods".
+#   selected: array of container names currently in scope ([] = all).
 class Components::LogAnalytics::PodScopePicker < Components::Base
-  def initialize(pods:, selected: nil)
+  def initialize(pods:, selected: [])
     @pods     = Array(pods)
-    @selected = selected.presence
+    @selected = Array(selected).map(&:to_s).reject(&:blank?)
   end
 
   def view_template
     div(class: "relative", data: { controller: "dropdown" }) do
-      input(type: "hidden", name: "pods[]", value: @selected, data: { log_analytics_target: "podInput" })
       trigger_button
       menu
     end
@@ -30,21 +28,27 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
 
   private
 
-  def selected_label
-    return "All pods" if @selected.nil?
+  def trigger_label
+    case @selected.size
+    when 0 then "All pods"
+    when 1 then single_label
+    else        "#{@selected.size} pods"
+    end
+  end
 
-    pod = @pods.find { |p| pod_name(p) == @selected }
-    pod ? pod_label(pod) : @selected
+  def single_label
+    pod = @pods.find { |p| pod_name(p) == @selected.first }
+    pod ? pod_label(pod) : @selected.first
   end
 
   def trigger_button
     button(
       type: "button",
       data: { action: "click->dropdown#toggle" },
-      class: "inline-flex items-center gap-2 px-2.5 h-8 min-w-[150px] vmd:max-w-[200px] border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] hover:bg-voodu-surface-2"
+      class: "inline-flex items-center gap-2 px-2.5 h-8 min-w-[150px] vmd:max-w-[220px] border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] hover:bg-voodu-surface-2"
     ) do
       render Icon::CubeOutline.new(class: "w-3 h-3 shrink-0 text-voodu-muted")
-      span(class: "min-w-0 truncate font-voodu-mono text-voodu-text", data: { log_analytics_target: "podLabel" }) { selected_label }
+      span(class: "min-w-0 truncate font-voodu-mono text-voodu-text", data: { log_analytics_target: "podLabel" }) { trigger_label }
       div(class: "flex-1")
       render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 text-voodu-muted shrink-0")
     end
@@ -53,11 +57,34 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
   def menu
     div(
       hidden: true,
-      data: { dropdown_target: "menu" },
-      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[220px] max-w-[320px] max-h-[360px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+      data:  { dropdown_target: "menu" },
+      class: "absolute left-0 top-[calc(100%+4px)] z-40 min-w-[240px] max-w-[calc(100vw-24px)] max-h-[360px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
-      option_row(value: "", label: "All pods", icon: :Squares2x2Outline, active: @selected.nil?)
+      all_pods_row
+      div(class: "h-px bg-voodu-border")
       pod_options
+      footer
+    end
+  end
+
+  # all_pods_row — exclusive "show everything": clears the selection and
+  # re-runs immediately (mirrors the metrics Host row). Highlighted +
+  # checked when nothing is selected.
+  def all_pods_row
+    active = @selected.empty?
+    button(
+      type: "button",
+      data: { log_analytics_target: "allPods", action: "click->log-analytics#selectAllPods click->dropdown#close" },
+      class: tokens(
+        "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left text-[12.5px]",
+        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
+      )
+    ) do
+      render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+      span(class: "flex-1 truncate") { "All pods" }
+      span(data: { role: "check" }, class: tokens("text-voodu-accent-2", active ? nil : "hidden")) do
+        render Icon::CheckOutline.new(class: "w-3 h-3")
+      end
     end
   end
 
@@ -69,7 +96,7 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
       name = pod_name(pod)
       next if name.blank?
 
-      option_row(value: name, label: pod_label(pod), meta: name, status: pod_status(pod), active: @selected == name)
+      pod_row(pod, name)
     end
   end
 
@@ -77,39 +104,52 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
     div(class: "px-3 py-1.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted bg-voodu-bg-2 border-y border-voodu-border") { text }
   end
 
-  def option_row(value:, label:, active:, icon: nil, status: nil, meta: nil)
-    button(
-      type: "button",
-      data: {
-        action: "click->log-analytics#selectPod click->dropdown#close",
-        pod:    value,
-        label:  label
-      },
-      class: tokens(
-        "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
-      )
+  # pod_row — a label wrapping a sr-only native checkbox (form value) and
+  # the metrics-style checkbox box + check (toggled by the controller).
+  def pod_row(pod, name)
+    selected = @selected.include?(name)
+    label(
+      class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] cursor-pointer text-[12.5px] text-voodu-text hover:bg-voodu-hover"
     ) do
-      leading(icon, status)
-
-      div(class: "min-w-0 flex-1 flex flex-col") do
-        span(class: tokens("font-voodu-mono text-[12px] truncate", active ? "font-semibold text-voodu-accent-2" : "font-medium text-voodu-text")) { label }
-        if meta.present?
-          span(class: "text-[10px] text-voodu-muted font-voodu-mono truncate") { meta }
-        end
-      end
-
-      render Icon::CheckOutline.new(class: "w-3 h-3 text-voodu-accent-2 shrink-0") if active
+      input(
+        type:    "checkbox",
+        name:    "pods[]",
+        value:   name,
+        checked: selected,
+        class:   "sr-only",
+        data:    { log_analytics_target: "podCheckbox", label: pod_label(pod), action: "change->log-analytics#togglePod" }
+      )
+      checkbox_box(selected)
+      render Components::UI::StatusDot.new(status: (pod_status(pod).presence || "running").to_sym, size: 6)
+      span(class: "flex-1 min-w-0 font-voodu-mono truncate") { pod_label(pod) }
     end
   end
 
-  def leading(icon, status)
-    span(class: "inline-flex shrink-0", style: "color: var(--voodu-muted);") do
-      if icon
-        render Icon.const_get(icon).new(class: "w-3 h-3")
-      else
-        render Components::UI::StatusDot.new(status: (status.presence || "running").to_sym, size: 6)
+  def checkbox_box(selected)
+    span(
+      data:  { role: "checkbox" },
+      class: tokens(
+        "inline-flex items-center justify-center w-3.5 h-3.5 border shrink-0",
+        selected ? "border-voodu-accent-line bg-voodu-accent-dim" : "border-voodu-border"
+      )
+    ) do
+      span(data: { role: "check" }, class: tokens("text-voodu-accent-2", selected ? nil : "hidden")) do
+        render Icon::CheckOutline.new(class: "w-2.5 h-2.5")
       end
+    end
+  end
+
+  def footer
+    return if @pods.empty?
+
+    div(class: "h-px bg-voodu-border")
+    button(
+      type: "button",
+      data: { action: "click->log-analytics#applyPods click->dropdown#close" },
+      class: "flex items-center justify-center gap-1.5 w-full px-3 py-2 min-h-[38px] text-[12px] font-semibold text-voodu-accent-2 hover:bg-voodu-accent-dim"
+    ) do
+      render Icon::CheckOutline.new(class: "w-3 h-3 shrink-0")
+      span { "Apply" }
     end
   end
 
