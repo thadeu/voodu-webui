@@ -200,14 +200,21 @@ class LogTailIslandJob < ApplicationJob
         parsed = LogTail::Parser.parse(raw_line)
         ts     = parsed[:ts]
 
-        # Defensive client-side dedupe — `--since` is inclusive
-        # (docker returns lines AT the watermark too), so without
-        # this guard we'd re-append the boundary line each poll.
-        # ISO8601 string compare works because the parser
-        # normalises everything to UTC.
-        next if last_seen_ts && ts && ts <= last_seen_ts
+        # STRICT `<`, not `<=`: docker's `--since` is inclusive AND
+        # second-granular, so the boundary line is re-delivered on resume.
+        # An inclusive guard here silently DROPS a distinct line that
+        # shares the watermark's exact timestamp; instead we let it
+        # through and rely on the Writer's disk-seeded dedupe to suppress
+        # a genuine re-delivered duplicate (same ts+msg fingerprint).
+        next if last_seen_ts && ts && ts < last_seen_ts
 
-        writer.append(parsed[:pod], parsed)
+        # Only advance the watermark for lines the Writer actually
+        # persisted. append returns false under disk pressure / cap (line
+        # dropped) or on a dedupe hit; advancing past a DROPPED line would
+        # make the next run's `since` skip it for good (the pre-watermark
+        # cold-start used to re-fetch and recover it).
+        next unless writer.append(parsed[:pod], parsed)
+
         new_count += 1
         newest_ts = ts if ts && (newest_ts.nil? || ts > newest_ts)
       end
