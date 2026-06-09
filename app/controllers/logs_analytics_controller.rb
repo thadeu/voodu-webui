@@ -44,10 +44,23 @@ class LogsAnalyticsController < ApplicationController
       island:   current_island,
       pod:      params[:pod].to_s,
       ts:       params[:ts].to_s,
-      before:   (params[:before].presence || LogSurroundingData::DEFAULT_CONTEXT).to_i,
-      after:    (params[:after].presence  || LogSurroundingData::DEFAULT_CONTEXT).to_i,
-      all_pods: params[:all_pods] == "1"
+      all_pods: params[:all_pods] == "1",
+      expand:   params[:expand].to_i
     )
+
+    # `fmt` present → export the EXACT batch on screen (the same window /
+    # expand the modal shows) as a download. Otherwise render the modal.
+    if EXPORT_TYPES.key?(params[:fmt].to_s)
+      fmt = params[:fmt].to_s
+      send_data(
+        format_rows(data.rows, fmt),
+        filename:    "surrounding-#{current_island.key}-#{Time.current.utc.strftime('%Y%m%d-%H%M%S')}.#{EXPORT_TYPES[fmt][:ext]}",
+        type:        EXPORT_TYPES[fmt][:mime],
+        disposition: "attachment"
+      )
+
+      return
+    end
 
     render Views::LogsAnalytics::Surrounding.new(data: data), layout: false
   end
@@ -91,6 +104,19 @@ class LogsAnalyticsController < ApplicationController
     head = LogTail::LineFormatter.header(fmt)
     body << head if head
     each_export_record(data) { |hash| body << LogTail::LineFormatter.line(hash, fmt) }
+    body
+  end
+
+  # format_rows — serialise an already-materialised array of rows (the
+  # surrounding window) into the requested format. Same formatter as the
+  # streaming export, so output matches.
+  def format_rows(rows, fmt)
+    return JSON.pretty_generate(rows.map { |h| LogTail::LineFormatter.row_hash(h) }) if fmt == "json"
+
+    body = +""
+    head = LogTail::LineFormatter.header(fmt)
+    body << head if head
+    rows.each { |h| body << LogTail::LineFormatter.line(h, fmt) }
     body
   end
 

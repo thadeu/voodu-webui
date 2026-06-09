@@ -308,9 +308,10 @@ export default class extends Controller {
     const ts = btn.dataset.ts || ""
     const pod = btn.dataset.pod || ""
     const allPods = btn.dataset.allPods === "1"
+    const expand = btn.dataset.expand || "0"
     if (!ts) return
 
-    const params = new URLSearchParams({ ts, pod, all_pods: allPods ? "1" : "0" })
+    const params = new URLSearchParams({ ts, pod, all_pods: allPods ? "1" : "0", expand })
 
     try {
       const resp = await fetch(`${this.surroundingUrlValue}?${params.toString()}`, {

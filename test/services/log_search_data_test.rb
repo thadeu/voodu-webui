@@ -185,6 +185,19 @@ class LogSearchDataTest < ActiveSupport::TestCase
     assert_equal 5, sur.rows.size
   end
 
+  test "surrounding signals more? when the slice is cut, not when the window fits" do
+    seed("web", (0..10).map { |i| [@base + i.seconds, "line-#{i}"] })
+
+    cut = LogSurroundingData.new(island: @island, pod: "web", ts: iso(@base + 5.seconds), before: 2, after: 2)
+    assert_equal 5, cut.rows.size
+    assert cut.more?, "11 scanned > 5 shown → there is more to reveal"
+    assert_equal 1, cut.next_expand
+
+    full = LogSurroundingData.new(island: @island, pod: "web", ts: iso(@base + 5.seconds), before: 100, after: 100)
+    assert_equal 11, full.rows.size
+    assert_not full.more?, "the whole window is shown → nothing more"
+  end
+
   test "surrounding reports not-found when the anchor is gone" do
     seed("web", [[@base, "only-line"]])
 

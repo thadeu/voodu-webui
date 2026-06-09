@@ -104,6 +104,19 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/\[\n\s+\{/, @response.body, "Copy JSON is pretty-printed, not inline")
   end
 
+  test "surrounding exports the shown batch as a download" do
+    seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
+
+    get logs_analytics_surrounding_path(tenant_key: @key),
+        params: { pod: "web", ts: iso(@base + 3.seconds), fmt: "csv" }
+
+    assert_response :success
+    assert_match "text/csv", @response.media_type
+    assert_match(/attachment; filename=.*surrounding.*\.csv/, @response.headers["Content-Disposition"])
+    assert @response.body.start_with?("ts,pod,stream,level,msg\n"), "csv header"
+    assert_match "line-3", @response.body
+  end
+
   test "surrounding renders the modal anchored on the selected line" do
     lines = (0..6).map { |i| [@base + i.seconds, "line-#{i}"] }
     seed("web", lines)

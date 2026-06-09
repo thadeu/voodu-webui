@@ -1,69 +1,76 @@
 # frozen_string_literal: true
 
-# LogSurroundingData — the "Surrounding Logs" window for one anchor
-# line on /logs/analytics. Mirrors CloudWatch's drill-in: the operator
-# clicks a result row and gets the lines immediately before/after it in
-# its own log stream, regardless of the search filter that surfaced it.
+# LogSurroundingData — the "Surrounding Logs" window for one anchor line
+# on /logs/analytics. The operator clicks a result row and gets the lines
+# immediately before/after it in its log stream, regardless of the search
+# filter that surfaced it.
 #
-# A "log stream" here is one pod (the controller's per-container fan-
-# out), so the default scope is the anchor's pod. `all_pods: true`
-# widens to every pod in the window for cross-pod correlation
-# ("what else fired around the moment this errored?").
+# A "log stream" here is one pod (the controller's per-container fan-out),
+# so the default scope is the anchor's pod. `all_pods: true` widens to
+# every pod in the window for cross-pod correlation.
 #
-# Strategy: scan a tight time radius (WINDOW) around the anchor ts with
-# NO content filter, sort chronologically, locate the anchor, then keep
-# `before` lines up to it and `after` lines past it. Time-radius rather
-# than pure count keeps the scan bounded even for a chatty pod; SCAN_CAP
-# is the backstop.
+# `expand` (0, 1, 2…) is the "Load more" level: each step scales BOTH the
+# scanned time radius AND the kept context, so the operator can pull in
+# more of a long-running process without leaving the modal. `more?` says
+# whether another step would reveal anything.
+#
+# Strategy: scan a time radius (WINDOW × (expand+1)) around the anchor
+# with NO content filter, sort chronologically, locate the anchor, then
+# keep `before`/`after` lines around it. Time-radius scan keeps a chatty
+# pod bounded; SCAN_CAP is the memory backstop.
 class LogSurroundingData
-  # Time radius scanned on each side of the anchor. Generous enough
-  # that `before`/`after` line counts are satisfiable for typical
-  # traffic without scanning a whole day.
+  # Base time radius scanned on each side of the anchor (× expand+1).
   WINDOW = 5.minutes
 
-  # Backstop on lines pulled into memory before slicing.
+  # Memory backstop on lines pulled in before slicing.
   SCAN_CAP = 10_000
 
-  # Default context lines kept on each side of the anchor.
-  DEFAULT_CONTEXT = 100
+  # Base context kept on each side of the anchor (× expand+1, capped at
+  # MAX_CONTEXT). 1000 covers most call/process traces in one shot.
+  DEFAULT_CONTEXT = 1_000
 
-  # Clamp on operator-supplied context so a hand-edited URL can't ask
-  # us to keep more than we scan.
-  MAX_CONTEXT = 1_000
+  # Hard ceiling on kept context per side, and on the Load more level.
+  MAX_CONTEXT = 5_000
+  MAX_EXPAND  = 4
 
-  attr_reader :island, :pod, :anchor_ts
+  attr_reader :island, :pod, :anchor_ts, :expand
 
   # @param island   [Island]
-  # @param pod       [String]  anchor pod (the row's pod)
-  # @param ts        [String]  anchor timestamp (ISO8601, as rendered
-  #                            in the results table)
-  # @param before    [Integer] lines to keep before the anchor
-  # @param after     [Integer] lines to keep after the anchor
+  # @param pod       [String]  anchor pod
+  # @param ts        [String]  anchor timestamp (ISO8601)
   # @param all_pods  [Boolean] widen scope to every pod in the window
-  def initialize(island:, pod:, ts:, before: DEFAULT_CONTEXT, after: DEFAULT_CONTEXT, all_pods: false)
+  # @param expand    [Integer] Load more level (0 = default window)
+  # @param before/after [Integer, nil] explicit context override (tests);
+  #        defaults to the expand-scaled context.
+  def initialize(island:, pod:, ts:, all_pods: false, expand: 0, before: nil, after: nil)
     @island    = island
     @pod       = pod.to_s
     @anchor_ts = ts.to_s
-    @before    = before.to_i.clamp(0, MAX_CONTEXT)
-    @after     = after.to_i.clamp(0, MAX_CONTEXT)
     @all_pods  = all_pods
+    @expand    = expand.to_i.clamp(0, MAX_EXPAND)
+
+    ctx     = [DEFAULT_CONTEXT * (@expand + 1), MAX_CONTEXT].min
+    @before = (before || ctx).to_i.clamp(0, MAX_CONTEXT)
+    @after  = (after  || ctx).to_i.clamp(0, MAX_CONTEXT)
+    @window = WINDOW * (@expand + 1)
   end
 
   def all_pods?
     @all_pods
   end
 
-  # rows — the sliced window, chronological (oldest → newest), each a
-  # plain hash matching LogSearchData#rows shape.
+  def next_expand
+    @expand + 1
+  end
+
+  # rows — the sliced window, chronological (oldest → newest).
   def rows
     load!
     @rows
   end
 
-  # anchor_index — index of the anchor line WITHIN #rows, or nil when
-  # the anchor couldn't be located (e.g. the line was reaped between
-  # the search and the drill-in). View highlights this row + scrolls
-  # it into view.
+  # anchor_index — index of the anchor WITHIN #rows, or nil when it
+  # couldn't be located (reaped between the search and the drill-in).
   def anchor_index
     load!
     @anchor_index
@@ -77,6 +84,14 @@ class LogSurroundingData
     rows.empty?
   end
 
+  # more? — would another Load more step reveal more lines? True when the
+  # current scan cut lines off the slice or hit the scan cap, and we're
+  # below the expand ceiling.
+  def more?
+    load!
+    @more
+  end
+
   private
 
   def load!
@@ -86,6 +101,7 @@ class LogSurroundingData
     if anchor.nil?
       @rows = []
       @anchor_index = nil
+      @more = false
       @loaded = true
 
       return
@@ -95,8 +111,8 @@ class LogSurroundingData
     LogTail::Reader.each_line(
       island_id:      island.id,
       pods:           @all_pods ? nil : [@pod],
-      from:           anchor - WINDOW,
-      until_:         anchor + WINDOW,
+      from:           anchor - @window,
+      until_:         anchor + @window,
       content_search: nil,
       regex:          false,
       limit:          SCAN_CAP
@@ -108,8 +124,6 @@ class LogSurroundingData
     idx = locate_anchor(scanned)
 
     if idx.nil?
-      # Anchor not found — return the centre of the window so the
-      # operator still sees the neighbourhood rather than a blank.
       @rows = scanned.first(@before + @after + 1)
       @anchor_index = nil
     else
@@ -119,12 +133,14 @@ class LogSurroundingData
       @anchor_index = idx - lo
     end
 
+    # More to reveal if the slice didn't cover everything scanned, or the
+    # scan itself was capped — and we can still grow.
+    @more = @expand < MAX_EXPAND && (scanned.size > @rows.size || scanned.size >= SCAN_CAP)
     @loaded = true
   end
 
   # locate_anchor — exact (ts, pod) match first; fall back to the first
-  # line at/after the anchor ts so a vanished exact line still anchors
-  # roughly the right spot.
+  # line at/after the anchor ts.
   def locate_anchor(rows)
     rows.index { |r| r[:ts] == @anchor_ts && r[:pod] == @pod } ||
       rows.index { |r| r[:ts] >= @anchor_ts }
