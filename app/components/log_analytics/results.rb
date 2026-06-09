@@ -54,37 +54,11 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
         dot
         span(class: "font-voodu-mono") { "#{delimited(@data.elapsed_ms)} ms" }
       end
-
-      jump_controls unless @data.empty?
     end
   end
 
   def dot
     span(class: "text-voodu-border-2") { "·" }
-  end
-
-  # jump_controls — Top | Bottom pair, right-aligned in the summary bar
-  # (which stays pinned above the scrolling list). Acts on the results
-  # scroll container so the operator can leap to either end of a long
-  # result set without dragging the scrollbar.
-  def jump_controls
-    div(class: "inline-flex items-center shrink-0 border border-voodu-border bg-voodu-surface") do
-      jump_btn("Top", :ArrowUpOutline, "jumpTop")
-      span(class: "w-px self-stretch bg-voodu-border", "aria-hidden": "true")
-      jump_btn("Bottom", :ArrowDownOutline, "jumpBottom")
-    end
-  end
-
-  def jump_btn(label, icon, action)
-    button(
-      type: "button",
-      title: "Jump to #{label.downcase}",
-      data: { action: "click->log-analytics##{action}" },
-      class: "inline-flex items-center gap-1 px-2 h-6 text-[10.5px] font-medium text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
-    ) do
-      span(class: "hidden vmd:inline") { label }
-      render Icon.const_get(icon).new(class: "w-3 h-3")
-    end
   end
 
   # truncation_note — only when the SCAN was bounded (matched ≥
@@ -122,16 +96,41 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   end
 
   # table_header — CloudWatch-style two-column label strip (@timestamp /
-  # @message). Decorative orientation chrome; the Row summary carries the
-  # chevron in the same left gutter so the columns line up.
+  # @message), pinned above the scroll, with the row actions (jump + copy)
+  # right-aligned like the live-tail column header. Labels are decorative
+  # (aria-hidden); the buttons carry their own aria-labels.
   def table_header
-    div(
-      class: "flex items-center gap-3 px-2.5 py-1.5 border-b border-voodu-border bg-voodu-surface text-[9.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted shrink-0",
-      "aria-hidden": "true"
+    div(class: "flex items-center gap-3 px-2.5 py-1.5 border-b border-voodu-border bg-voodu-surface shrink-0") do
+      span(class: "flex items-center gap-3 min-w-0 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted", "aria-hidden": "true") do
+        span(class: "w-3 shrink-0")
+        span(class: "shrink-0") { "@timestamp" }
+        span { "@message" }
+      end
+      div(class: "flex-1")
+      header_actions
+    end
+  end
+
+  # header_actions — small icon cluster mirroring the Follow column
+  # header: jump to top / bottom of the result set, and copy every shown
+  # line. Acts on the results scroll container (log-analytics targets).
+  def header_actions
+    div(class: "flex items-center gap-0.5 shrink-0") do
+      header_icon("Jump to top",        :ArrowUpOutline,          "jumpTop")
+      header_icon("Jump to bottom",     :ArrowDownOutline,        "jumpBottom")
+      header_icon("Copy all shown logs", :ClipboardDocumentOutline, "copyAll")
+    end
+  end
+
+  def header_icon(label, icon, action)
+    button(
+      type:         "button",
+      title:        label,
+      "aria-label": label,
+      data:         { action: "click->log-analytics##{action}" },
+      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
     ) do
-      span(class: "w-3 shrink-0")
-      span(class: "shrink-0") { "@timestamp" }
-      span { "@message" }
+      render Icon.const_get(icon).new(class: "w-3.5 h-3.5")
     end
   end
 

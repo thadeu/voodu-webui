@@ -253,6 +253,25 @@ export default class extends Controller {
     if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = this.scrollerTarget.scrollHeight
   }
 
+  // copyAll — copy every shown row's raw line (newline-joined). Reads the
+  // per-row copy buttons' data-raw within the scroll container, so it
+  // covers the rendered + loaded pages, not the surrounding modal.
+  copyAll(event) {
+    if (!this.hasScrollerTarget) return
+
+    const lines = Array.from(this.scrollerTarget.querySelectorAll("[data-raw]"))
+      .map((el) => el.dataset.raw)
+      .filter(Boolean)
+    if (!lines.length) return
+
+    navigator.clipboard.writeText(lines.join("\n")).then(() => {
+      const btn = event.currentTarget
+      const prev = btn.getAttribute("title")
+      btn.setAttribute("title", `Copied ${lines.length} lines`)
+      setTimeout(() => btn.setAttribute("title", prev || ""), 1200)
+    })
+  }
+
   // copyLine — copy a row's raw payload. Brief title flip is the only
   // feedback; the clipboard write is the function.
   copyLine(event) {
