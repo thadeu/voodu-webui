@@ -45,7 +45,10 @@ class Components::UI::Modal < Components::Base
   SIZES = {
     sm: "w-[min(400px,calc(100vw-24px))]",
     md: "w-[min(520px,calc(100vw-24px))]",
-    lg: "w-[min(720px,calc(100vw-24px))]"
+    lg: "w-[min(720px,calc(100vw-24px))]",
+    # xl — near-full-width for dense, wide content (log windows). Caps
+    # at 1600px so it doesn't sprawl on ultrawide monitors.
+    xl: "w-[min(95vw,1600px)]"
   }.freeze
 
   def initialize(title:, subtitle: nil, icon: nil, size: :md,

@@ -189,6 +189,31 @@
 .log-row .log-msg { color: var(--log-tone, var(--voodu-text)); }
 html[data-theme="light"] .log-row .log-msg { color: var(--voodu-log-payload); }
 
+/* Log analytics (/logs/analytics) results loading overlay —
+ *
+ * The filter bar submits into the `logs-analytics-results` Turbo Frame.
+ * While the request is in flight Turbo marks the frame `busy` (+
+ * aria-busy) and keeps the previous results painted underneath. This
+ * rule flashes the spinner overlay (Components::LogAnalytics::Results
+ * #loading_overlay) on for exactly that window — hidden otherwise, so
+ * the initial inline render (no fetch) shows no overlay. */
+.la-results-loading { display: none; }
+turbo-frame[busy] .la-results-loading,
+turbo-frame[aria-busy="true"] .la-results-loading { display: flex; }
+
+/* Each analytics result row is a <details> whose detail panel is in the
+ * DOM even while collapsed. With "Load more" the list can reach ~20k
+ * rows in one scroll container, so off-screen rows would otherwise pay
+ * full layout + style-recalc on every scroll. content-visibility:auto
+ * lets the browser skip rendering work for rows outside the viewport
+ * (the big win for a long log list); contain-intrinsic-size keeps the
+ * scrollbar stable, with `auto` remembering each row's real height once
+ * it's been on screen (so expanded rows don't misjump). */
+.la-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
+}
+
 /* Column header —
  *
  * Sticky strip at the top of the log list. Same `display: contents`
@@ -762,19 +787,29 @@ html[data-theme="light"] {
   /* --voodu-bg:        #f5f6f9; */
   /* --voodu-bg-2:      #eceef3; */
   --voodu-bg:        #fff;
-  --voodu-bg-2:      #fcfcfc;
+  --voodu-bg-2:      #f6f7f9;
   --voodu-surface:   #ffffff;
-  --voodu-surface-2: #f3f5f8;
-  --voodu-surface-3: #e9edf3;
+  --voodu-surface-2: #eaedf2;
+  --voodu-surface-3: #dde2ea;
 
-  --voodu-border:    #e3e7ee;
-  --voodu-border-2:  #d2d8e2;
+  /* Borders carry most of the "crisp vs pastel" weight on white —
+   * the earlier #e3e7ee/#d2d8e2 pair was nearly invisible against
+   * surfaces, so rows/cards blurred together (vs CloudWatch's clear
+   * separators). Darkened a notch for definition without going slate. */
+  --voodu-border:    #d0d6e0;
+  --voodu-border-2:  #b6bfcd;
 
+  /* Text ramp pulled darker so secondary/muted copy reads as
+   * intentional grey, not washed-out. text stays near-black. */
   --voodu-text:    #1b212b;
-  --voodu-text-2:  #4a515e;
-  --voodu-muted:   #6b7280;
-  --voodu-muted-2: #99a1b0;
-  --voodu-log-payload: #333333;
+  --voodu-text-2:  #353c49;
+  --voodu-muted:   #555e6d;
+  --voodu-muted-2: #7b8497;
+  /* Log body text — near-black on white, matching CloudWatch's crisp
+   * black @message column (a slate-grey here read as washed-out next to
+   * it). Scoped to log payload only; app chrome (--voodu-text) stays
+   * the softer #1b212b so headings/labels don't turn harsh. */
+  --voodu-log-payload: #0e1116;
 
   --voodu-accent:      #7c5cff;
   --voodu-accent-2:    #6438f0;
@@ -830,10 +865,11 @@ html[data-theme="light"] {
   --color-voodu-border-2: var(--voodu-border-2);
 
   /* Text */
-  --color-voodu-text:    var(--voodu-text);
-  --color-voodu-text-2:  var(--voodu-text-2);
-  --color-voodu-muted:   var(--voodu-muted);
-  --color-voodu-muted-2: var(--voodu-muted-2);
+  --color-voodu-text:        var(--voodu-text);
+  --color-voodu-text-2:      var(--voodu-text-2);
+  --color-voodu-muted:       var(--voodu-muted);
+  --color-voodu-muted-2:     var(--voodu-muted-2);
+  --color-voodu-log-payload: var(--voodu-log-payload);
 
   /* Accent */
   --color-voodu-accent:      var(--voodu-accent);

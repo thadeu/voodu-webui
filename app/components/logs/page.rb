@@ -170,6 +170,7 @@ class Components::Logs::Page < Components::Base
   # primitive.
   def page_header
     div(class: "flex flex-col gap-3") do
+      render Components::Logs::ModeTabs.new(active: :follow) unless @drawer
       back_link if show_back_link?
       render(
         Components::UI::PageHeader.new(title: "Logs")

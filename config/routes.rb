@@ -118,6 +118,21 @@ Rails.application.routes.draw do
     # See same ordering note above for /logs/stream.
     get "/logs/pods_picker", to: "logs#pods_picker", as: :pods_picker_logs
 
+    # Logs analytics — historical search over the local NDJSON warehouse
+    # (LogSearchData), distinct from the live tail above. `index` is
+    # dual-mode (mirrors the Turbo-Frame branch in metrics / logs#show):
+    # a frame request re-renders ONLY the results table so the filter bar
+    # re-queries without reloading the chrome; a full navigation renders
+    # the whole page with the query applied, so a URL like
+    # /logs/analytics?range=1h&q=callid is bookmarkable + shareable.
+    # `surrounding` returns the Surrounding Logs modal body (bare markup,
+    # fetched + injected by the log-analytics Stimulus controller).
+    #
+    # MUST precede `/logs/:name` for the same reason as /logs/stream —
+    # the `:name` matcher would otherwise swallow "analytics".
+    get "/logs/analytics",             to: "logs_analytics#index",       as: :logs_analytics
+    get "/logs/analytics/surrounding", to: "logs_analytics#surrounding", as: :logs_analytics_surrounding
+
     get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
     get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
 
