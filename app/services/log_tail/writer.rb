@@ -54,6 +54,18 @@ module LogTail
     # warehouse and /logs view.
     DEDUPE_WINDOW_PER_FILE = 5_000
 
+    # On opening a (pod, date) file we seed the dedupe window from the
+    # TAIL of what's already on disk, so a fresh Writer (every job run /
+    # restart / cache-lost resume) still recognises lines it persisted
+    # in a previous run and never re-appends them. Without this seed the
+    # window only protected within a single run, so the tail job's
+    # cold-start backfill (tail=N, no `since`) re-wrote the overlap on
+    # every recycle — the source of the 8–16× duplicate lines observed
+    # in the warehouse. Bounded read: we pull at most this many bytes
+    # from the end (≈ the recent window; far cheaper than slurping a
+    # 50MB day file).
+    SEED_FROM_DISK_BYTES = 1 * 1024 * 1024  # 1 MB
+
     def initialize(island_id)
       @island_id   = island_id
       @handles     = {}  # { [pod, date_str] => File }
@@ -76,14 +88,18 @@ module LogTail
       date     = today
       key      = [pod_name, date]
 
-      # Skip if we've recently written this exact line. Belt-and-
-      # suspenders defense: even if the tail job's watermark dedupe
-      # fails for any reason (job retry, controller --since boundary
-      # weirdness), we never write the same line twice to disk.
-      return false if already_written?(key, parsed_hash)
-
+      # Open the handle FIRST — ensure_handle seeds this bucket's dedupe
+      # window from the file tail, so the check below sees lines written
+      # by previous runs, not just this one.
       handle, size = ensure_handle(key)
       return false if handle.nil?
+
+      # Skip if we've already written this exact line (this run or a
+      # prior one, via the disk-seeded window). Belt-and-suspenders: even
+      # if the tail job's watermark dedupe fails (job retry, cold-start
+      # backfill, controller --since boundary), we never write the same
+      # line twice to disk.
+      return false if already_written?(key, parsed_hash)
 
       line = JSON.generate(parsed_hash) + "\n"
       bytes = line.bytesize
@@ -187,7 +203,50 @@ module LogTail
 
       @handles[key] = file
       @sizes[key]   = size
+      seed_dedupe_from_disk(key, path)
       [file, size]
+    end
+
+    # seed_dedupe_from_disk — populate this bucket's dedupe window from
+    # the lines already on disk, so a fresh Writer dedupes against prior
+    # runs (not just within the current one). Reads only the file's tail
+    # (SEED_FROM_DISK_BYTES) since the overlap a re-tail can produce is
+    # always among the most recent lines. Runs once per (pod, date) per
+    # Writer (ensure_handle returns the cached handle on later appends).
+    def seed_dedupe_from_disk(key, path)
+      return if @seen.key?(key)
+
+      window = {}
+      read_tail_lines(path, DEDUPE_WINDOW_PER_FILE).each do |raw|
+        parsed = begin
+          JSON.parse(raw)
+        rescue JSON::ParserError, EncodingError
+          nil
+        end
+        window[fingerprint(parsed)] = true if parsed.is_a?(Hash)
+      end
+      @seen[key] = window
+    rescue StandardError => e
+      Rails.logger.warn("log-tail dedupe seed failed island=#{@island_id} #{path}: #{e.class}: #{e.message}")
+      @seen[key] ||= {}
+    end
+
+    # read_tail_lines — up to `limit` most-recent complete lines from the
+    # end of `path`, reading at most SEED_FROM_DISK_BYTES. After a mid-
+    # file seek we drop the first (partial) line.
+    def read_tail_lines(path, limit)
+      size = File.size(path)
+      return [] if size.zero?
+
+      File.open(path, "r") do |f|
+        if size > SEED_FROM_DISK_BYTES
+          f.seek(size - SEED_FROM_DISK_BYTES)
+          f.gets
+        end
+        f.each_line.map(&:chomp).last(limit)
+      end
+    rescue Errno::ENOENT
+      []
     end
 
     # rotate_stale — close handles whose date != the active date.

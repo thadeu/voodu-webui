@@ -73,6 +73,16 @@ class LogTailIslandJob < ApplicationJob
   # the per-pod buffer × pod count for the duration of one poll.
   TAIL_PER_POLL = 500
 
+  # Watermark TTL. The "newest ts we've persisted" survives across job
+  # recycles (every MAX_RUNTIME) and process restarts so a new run
+  # resumes with `?since=<watermark>` instead of cold-starting with
+  # `tail=N` (which re-fetched + re-wrote the overlap every recycle —
+  # the root cause of duplicate lines in the warehouse). Capped at the
+  # log retention window: a resume after a longer gap than that falls
+  # back to a bounded cold-start backfill, which the Writer's disk-
+  # seeded dedupe then de-duplicates anyway.
+  WATERMARK_TTL = LogTail::FilePath::RETENTION_DAYS.days
+
   # discard_on AuthError: orchestrator will keep trying, but
   # auth doesn't self-heal. Re-raising would create a retry
   # storm without value.
@@ -102,7 +112,10 @@ class LogTailIslandJob < ApplicationJob
     client       = Voodu::Client.new(island)
     writer       = LogTail::Writer.new(island.id)
     started_at   = Time.current
-    last_seen_ts = nil  # ISO8601 string; "we've stored everything up to here"
+    # Resume from the persisted watermark so a recycle/restart continues
+    # with `since` instead of re-fetching a `tail=N` backfill. nil only
+    # on a first-ever run (or after the watermark TTL lapsed).
+    last_seen_ts = read_watermark(island.id)
     appended     = 0
 
     Rails.logger.info(
@@ -119,7 +132,10 @@ class LogTailIslandJob < ApplicationJob
         break
       end
 
-      appended += poll_once(client, writer, last_seen_ts) { |new_ts| last_seen_ts = new_ts }
+      appended += poll_once(client, writer, last_seen_ts) do |new_ts|
+        last_seen_ts = new_ts
+        write_watermark(island.id, new_ts)
+      end
 
       sleep POLL_INTERVAL_SECONDS
     end
@@ -127,12 +143,30 @@ class LogTailIslandJob < ApplicationJob
     writer&.close
   end
 
+  # Watermark store — durable (solid_cache) so it outlives the job. Keyed
+  # per island; value is the newest persisted ts (ISO8601 string).
+  def watermark_key(island_id)
+    "log-tail:watermark:#{island_id}"
+  end
+
+  def read_watermark(island_id)
+    Rails.cache.read(watermark_key(island_id))
+  end
+
+  def write_watermark(island_id, ts)
+    return if ts.blank?
+
+    Rails.cache.write(watermark_key(island_id), ts, expires_in: WATERMARK_TTL)
+  end
+
   # poll_once — single one-shot fetch from the controller. Two
   # modes based on whether we have a watermark:
   #
   #   - cold start (no watermark): asks for the last TAIL_PER_POLL
-  #     lines as backfill. Establishes the watermark from the
-  #     newest line returned.
+  #     lines as backfill. Now that the watermark is persisted, this
+  #     only happens on a first-ever run or after the watermark TTL
+  #     lapsed — NOT on every recycle. Establishes the watermark from
+  #     the newest line returned.
   #
   #   - warm (watermark set): uses `?since=<last_seen_ts>` and
   #     unlimited tail. Docker returns ONLY lines newer than the
@@ -140,9 +174,9 @@ class LogTailIslandJob < ApplicationJob
   #     cheaper on bandwidth (loopback) AND on docker daemon
   #     (no need to seek backward N lines to apply --tail).
   #
-  # Client-side dedupe is a defensive belt for the cold-start
-  # backfill (where `tail=N` can overlap with rows that landed
-  # in a previous run's last batch).
+  # Client-side dedupe (the `ts <= last_seen_ts` guard below) drops the
+  # inclusive-boundary line; the Writer's disk-seeded dedupe backstops
+  # any cold-start overlap, so a re-fetch can never re-write a line.
   def poll_once(client, writer, last_seen_ts)
     line_buffer = +""
     new_count   = 0
