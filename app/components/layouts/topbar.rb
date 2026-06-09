@@ -33,7 +33,10 @@ class Components::Layouts::Topbar < Components::Base
       # min-w-0 lets children with `truncate` actually shrink; without
       # it flexbox happily lets a long island name push the right
       # cluster (search + updated pill) past the viewport edge.
-      class: "flex h-14 items-center gap-2 vmd:gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none min-w-0",
+      # voodu-dark — AWS-style fixed-dark topbar: force the dark palette
+      # on this subtree so the bar stays dark even in light theme (see
+      # `html[data-theme="light"] .voodu-dark` in theme.css).
+      class: "voodu-dark flex h-14 items-center gap-2 vmd:gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none min-w-0",
       role: "banner"
     ) do
       hamburger

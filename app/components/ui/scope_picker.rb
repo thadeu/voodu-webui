@@ -88,7 +88,7 @@ class Components::UI::ScopePicker < Components::Base
       data: { dropdown_target: "menu" },
       # scrollbar-hidden — native-macOS feel; the 280–360px panel
       # can't afford to lose 10px to a permanent scrollbar track.
-      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[280px] max-w-[360px] max-h-[400px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[280px] max-w-[360px] max-h-[400px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
       render_primary_section
       render_pod_sections

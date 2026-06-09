@@ -73,7 +73,7 @@ class Components::Metrics::MetricPicker < Components::Base
     div(
       hidden: true,
       data: { dropdown_target: "menu" },
-      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[240px] max-w-[320px] max-h-[420px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[240px] max-w-[320px] max-h-[420px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
       @sections.each do |section|
         section_label(section[:label])

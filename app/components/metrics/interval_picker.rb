@@ -74,7 +74,7 @@ class Components::Metrics::IntervalPicker < Components::Base
     div(
       hidden: true,
       data: { dropdown_target: "menu" },
-      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[160px] max-h-[360px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+      class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[160px] max-h-[360px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
       OPTIONS.each { |opt| option_row(opt) }
     end

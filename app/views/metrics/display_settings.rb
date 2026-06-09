@@ -228,7 +228,7 @@ class Views::Metrics::DisplaySettings < Views::Base
         class: tokens(
           "hidden",
           "absolute top-full mt-2 z-50",
-          "border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl",
+          "border border-voodu-border-2 bg-voodu-surface shadow-2xl",
           "p-2 space-y-0.5",
           "min-w-[220px]"
         )

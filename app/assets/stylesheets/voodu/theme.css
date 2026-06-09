@@ -846,6 +846,83 @@ html[data-theme="light"] {
   --voodu-shadow-drawer: -10px 0 30px rgba(15, 23, 42, 0.1);
 }
 
+/* ── Force-dark scope (.voodu-dark) ──
+ *
+ * AWS-console pattern: the topbar stays dark regardless of the page
+ * theme, so it reads as a fixed chrome bar above the themed sidebar +
+ * content (nice contrast in light mode). We re-pin the dark palette on
+ * any `.voodu-dark` subtree, but ONLY under light — in dark mode the
+ * :root defaults already apply, so this rule is unneeded there.
+ *
+ * Specificity matters: `html[data-theme="light"] .voodu-dark` (0,2,1)
+ * must beat the light override `html[data-theme="light"]` (0,1,1), or
+ * the light values would win inside the topbar. Keep the values in
+ * lockstep with the :root dark block above. */
+html[data-theme="light"] .voodu-dark {
+  --voodu-bg:        #0a0d14;
+  --voodu-bg-2:      #0c1018;
+  --voodu-surface:   #11161f;
+  --voodu-surface-2: #161c27;
+  --voodu-surface-3: #1c2330;
+
+  --voodu-border:    #1f2632;
+  --voodu-border-2:  #29303f;
+
+  --voodu-text:    #e8e8ee;
+  --voodu-text-2:  #b4b4c0;
+  --voodu-muted:   #7a7a88;
+  --voodu-muted-2: #5a5a66;
+  --voodu-log-payload: #e8e8ee;
+
+  --voodu-accent:      #7c5cff;
+  --voodu-accent-2:    #9a82ff;
+  --voodu-accent-dim:  #7c5cff22;
+  --voodu-accent-line: #7c5cff66;
+
+  --voodu-green:     #34d399;
+  --voodu-green-dim: #34d39922;
+  --voodu-amber:     #fbbf24;
+  --voodu-amber-dim: #fbbf2422;
+  --voodu-red:       #f87171;
+  --voodu-red-dim:   #f8717122;
+  --voodu-blue:      #60a5fa;
+
+  --voodu-hover:     #ffffff08;
+  --voodu-mix-fg:    #ffffff;
+
+  /* Re-map the Tailwind @theme tokens too. The utilities (bg-voodu-*,
+   * text-voodu-*, border-voodu-*) read --color-voodu-*, which is
+   * declared only on :root — so its `var(--voodu-*)` was resolved
+   * against :root's LIGHT values and wouldn't pick up the dark
+   * overrides above. Re-declaring it here re-resolves against this
+   * subtree's dark --voodu-* (set just above), so the utilities go
+   * dark too. Without this the topbar stayed white in light mode. */
+  --color-voodu-bg:        var(--voodu-bg);
+  --color-voodu-bg-2:      var(--voodu-bg-2);
+  --color-voodu-surface:   var(--voodu-surface);
+  --color-voodu-surface-2: var(--voodu-surface-2);
+  --color-voodu-surface-3: var(--voodu-surface-3);
+  --color-voodu-border:    var(--voodu-border);
+  --color-voodu-border-2:  var(--voodu-border-2);
+  --color-voodu-text:        var(--voodu-text);
+  --color-voodu-text-2:      var(--voodu-text-2);
+  --color-voodu-muted:       var(--voodu-muted);
+  --color-voodu-muted-2:     var(--voodu-muted-2);
+  --color-voodu-log-payload: var(--voodu-log-payload);
+  --color-voodu-accent:      var(--voodu-accent);
+  --color-voodu-accent-2:    var(--voodu-accent-2);
+  --color-voodu-accent-dim:  var(--voodu-accent-dim);
+  --color-voodu-accent-line: var(--voodu-accent-line);
+  --color-voodu-hover:     var(--voodu-hover);
+  --color-voodu-green:     var(--voodu-green);
+  --color-voodu-green-dim: var(--voodu-green-dim);
+  --color-voodu-amber:     var(--voodu-amber);
+  --color-voodu-amber-dim: var(--voodu-amber-dim);
+  --color-voodu-red:       var(--voodu-red);
+  --color-voodu-red-dim:   var(--voodu-red-dim);
+  --color-voodu-blue:      var(--voodu-blue);
+}
+
 /* ── Tailwind @theme mapping ──
  * Surfaces every CSS var as a Tailwind utility token. Pattern: a CSS
  * var named `--voodu-foo` becomes `--color-voodu-foo` here, which

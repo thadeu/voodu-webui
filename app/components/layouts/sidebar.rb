@@ -108,7 +108,17 @@ class Components::Layouts::Sidebar < Components::Base
   def brand
     div(
       class: tokens(
-        "flex items-center gap-2.5 px-3.5 h-14 border-b border-voodu-border shrink-0",
+        # voodu-dark + bg-voodu-bg — the brand cell aligns with the
+        # (always-dark) topbar at h-14, so we pin it dark too. That makes
+        # the top strip one continuous dark bar (logo + topbar) in light
+        # mode, AWS-style, while the nav below stays themed. No-op in dark
+        # mode (the force-dark scope only matches under light).
+        #
+        # -mr-px: the aside's themed right border would otherwise show as
+        # a light seam alongside this dark cell (between logo and topbar).
+        # The 1px negative margin lets the dark bg paint over that border
+        # for the h-14 strip only; the border stays themed below the nav.
+        "voodu-dark flex items-center gap-2.5 px-3.5 h-14 -mr-px border-b border-voodu-border bg-voodu-bg shrink-0",
         "vmd:group-data-[collapsed]:px-0 vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:gap-0"
       )
     ) do

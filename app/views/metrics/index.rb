@@ -144,7 +144,7 @@ class Views::Metrics::Index < Views::Base
             hidden: true,
             data:  { dropdown_target: "menu" },
             class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[260px] max-h-[420px] " \
-                   "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface-2 shadow-2xl"
+                   "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
           ) do
             # Manage row — opens the wrapping drawer + closes the dropdown.
             button(
