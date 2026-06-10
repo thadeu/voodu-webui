@@ -46,7 +46,8 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def summary_bar
     div(class: "flex items-center justify-between gap-3") do
-      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0") do
+      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0",
+          data: { log_analytics_target: "summary" }) do
         span do
           span(class: "font-voodu-mono text-voodu-text-2") { @data.truncated? ? "#{delimited(@data.matched)}+" : delimited(@data.matched) }
           plain " matched"
@@ -116,6 +117,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # query's filters). Pinned in the table header, reachable while scrolling.
   def header_actions
     div(class: "flex items-center gap-1 shrink-0") do
+      header_icon("Clear results", :BackspaceOutline, "clear")
       div(class: "flex items-center gap-0.5") do
         header_icon("Jump to top",    :ArrowUpOutline,   "jumpTop")
         header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
@@ -127,9 +129,8 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   def header_icon(label, icon, action)
     button(
       type:         "button",
-      title:        label,
       "aria-label": label,
-      data:         { action: "click->log-analytics##{action}" },
+      data:         { action: "click->log-analytics##{action}", tooltip: label },
       class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
     ) do
       render Icon.const_get(icon).new(class: "w-3.5 h-3.5")

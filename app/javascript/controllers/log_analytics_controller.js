@@ -54,6 +54,7 @@ export default class extends Controller {
     "podLabel",
     "allPods",
     "scroller",
+    "summary",
     "surroundingHost"
   ]
 
@@ -250,6 +251,16 @@ export default class extends Controller {
 
     const d = new Date(raw)
     hidden.value = isNaN(d.getTime()) ? "" : d.toISOString()
+  }
+
+  // clear — wipe the current results buffer (rows + summary) so the
+  // operator can tweak the filter and Run fresh. Client-side only; the
+  // filter inputs are left intact, and the next Run re-renders the
+  // frame from the server.
+  clear(event) {
+    event.preventDefault()
+    if (this.hasScrollerTarget) this.scrollerTarget.innerHTML = ""
+    if (this.hasSummaryTarget) this.summaryTarget.textContent = "Cleared — Run to search again."
   }
 
   // jumpTop / jumpBottom — leap to either end of the results scroll

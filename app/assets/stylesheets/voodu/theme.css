@@ -1002,3 +1002,47 @@ html[data-theme="light"] .voodu-dark {
   --breakpoint-vmd: 1100px;
   --breakpoint-vlg: 1280px;
 }
+
+/* ── Hover tooltip ──────────────────────────────────────────────────
+ *
+ * A CSS-only tooltip: add `data-tooltip="…"` to any element and a
+ * styled bubble appears on hover AND keyboard focus (focus-visible),
+ * with no JS and no native-`title` delay. Keep an `aria-label` for
+ * screen readers — `data-tooltip` is the VISUAL layer only.
+ *
+ * Positioned BELOW the element (the icon buttons that use it sit at
+ * the top of a panel, where an above-tooltip would clip). nowrap so
+ * short labels stay one line; pointer-events:none so the bubble never
+ * eats the hover.
+ */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  z-index: 60;
+  white-space: nowrap;
+  padding: 4px 7px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 500;
+  color: var(--voodu-text);
+  background: var(--voodu-surface-2);
+  border: 1px solid var(--voodu-border-2);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
