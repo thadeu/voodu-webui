@@ -20,7 +20,8 @@ class Components::UI::StatusDot < Components::Base
     offline:    "var(--voodu-red)",
     error:      "var(--voodu-red)",
     stopped:    "var(--voodu-muted)",
-    pending:    "var(--voodu-muted)"
+    pending:    "var(--voodu-muted)",
+    unknown:    "var(--voodu-muted)"
   }.freeze
 
   def initialize(status:, size: 7, pulse: nil)

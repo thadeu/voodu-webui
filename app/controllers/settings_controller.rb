@@ -29,15 +29,13 @@ class SettingsController < ApplicationController
     redirect_to settings_path, alert: "Couldn't revoke token: #{e.message}"
   end
 
-  # reconnect — drops the cached health status + immediately
-  # re-probes the agent. Topbar status pill flips within the
-  # same response cycle (status_for re-populates the cache as a
-  # side effect). Also invalidates IslandSystem so the next
+  # reconnect — immediately re-probes the agent. refresh! warms the
+  # health cache with the result, so the topbar status pill reflects it
+  # on the redirect render. Also invalidates IslandSystem so the next
   # Settings render shows fresh agent data.
   def reconnect
-    IslandHealth.invalidate(current_island)
     IslandSystem.invalidate(current_island)
-    new_status = IslandHealth.status_for(current_island)
+    new_status = IslandHealth.refresh!(current_island)
 
     notice =
       if new_status == :online

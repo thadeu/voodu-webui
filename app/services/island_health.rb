@@ -35,31 +35,36 @@ class IslandHealth
 
   STATUSES = [:online, :offline, :unknown].freeze
 
-  # status_for — read-or-probe. Cache hit returns instantly; miss
-  # spends one HTTP round-trip. Result is :online | :offline.
-  # On exotic failures (the PAT isn't valid, the network is gone)
-  # the status is :offline — same bucket as "controller is down"
-  # because from the operator's perspective the symptom is the
-  # same: the WebUI can't see live data.
-  # WAREHOUSE=1 and WAREHOUSE=0 share THIS method untouched. The
-  # split lives in WHO warms the cache:
+  # status_for — READ-ONLY. Returns the cached status (:online |
+  # :offline) or :unknown on a cold miss. NEVER probes synchronously:
+  # rendering N islands is N cache reads, never N blocking HTTP calls.
+  # A cold render shows :unknown for the few seconds until the next warm
+  # tick, then the Turbo Stream broadcast flips the pill live.
+  #
+  # The cache is the single source of truth; WHO warms it:
   #
   #   WAREHOUSE=0 — `OverviewData.fetch_from_http!` warms after its
-  #                 /system call (success → :online, failure →
-  #                 :offline).
+  #                 /system call (success → :online, failure → :offline).
   #
-  #   WAREHOUSE=1 — `StateSyncIslandJob` warms every 10s after its
-  #                 fetch (same online/offline contract). With
-  #                 the job ticking 3× per TTL window, the cache
-  #                 is always warm — sub-ms read on every page,
-  #                 status flips within ~10s of a `systemctl stop`.
+  #   WAREHOUSE=1 — `StateSyncIslandJob` warms every ~10s after its fetch
+  #                 + broadcasts to `island-state-#{id}`. 3× per TTL → the
+  #                 cache is always warm, status flips within ~10s of a
+  #                 `systemctl stop`. This IS the only probe path.
   #
-  # Either way the cache is the single source of truth read here,
-  # and the status_for surface stays free of warehouse branching.
-  def self.status_for(island, client: nil)
-    Rails.cache.fetch(cache_key(island), expires_in: TTL) do
-      probe(island, client) ? :online : :offline
-    end
+  # For a user-triggered "check the connection right now" (Settings
+  # reconnect), call #refresh! — the only place that probes on demand.
+  def self.status_for(island)
+    Rails.cache.read(cache_key(island)) || :unknown
+  end
+
+  # refresh! — the intentional, synchronous probe: hit the controller
+  # now, warm the cache with the result, and return it (:online |
+  # :offline). For user-triggered reconnect flows, NEVER the render path.
+  def self.refresh!(island, client: nil)
+    online = probe(island, client)
+    warm(island, online: online)
+
+    online ? :online : :offline
   end
 
   # warm — write a known status into the cache without probing.
@@ -74,10 +79,9 @@ class IslandHealth
     )
   end
 
-  # invalidate — drop the cached status, forcing the next read to
-  # probe. Wire this from the "Refresh" UI action when we want
-  # the topbar's status pill to flip immediately rather than wait
-  # for TTL.
+  # invalidate — drop the cached status. The next status_for read then
+  # returns :unknown until a warm tick refills it (it no longer probes).
+  # For an immediate re-probe, use #refresh! instead.
   def self.invalidate(island)
     Rails.cache.delete(cache_key(island))
   end

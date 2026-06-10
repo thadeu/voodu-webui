@@ -18,7 +18,8 @@ class Components::UI::StatusPill < Components::Base
     offline:    { label: "Offline",    color: "var(--voodu-red)",   bg: "var(--voodu-red-dim)" },
     error:      { label: "Error",      color: "var(--voodu-red)",   bg: "var(--voodu-red-dim)" },
     stopped:    { label: "Stopped",    color: "var(--voodu-muted)", bg: "#7a7a8818" },
-    pending:    { label: "Pending",    color: "var(--voodu-muted)", bg: "#7a7a8818" }
+    pending:    { label: "Pending",    color: "var(--voodu-muted)", bg: "#7a7a8818" },
+    unknown:    { label: "Unknown",    color: "var(--voodu-muted)", bg: "#7a7a8818" }
   }.freeze
 
   def initialize(status:, label: nil)
