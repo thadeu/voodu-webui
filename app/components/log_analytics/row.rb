@@ -64,16 +64,18 @@ class Components::LogAnalytics::Row < Components::Base
 
   def detail_panel
     div(class: "px-2.5 pb-3 pt-1 vmd:pl-[26px] flex flex-col gap-2.5") do
-      field_grid
+      div(class: "flex items-start justify-between gap-3") do
+        field_grid
+        row_actions
+      end
       raw_block
-      row_actions
     end
   end
 
   # field_grid — the parsed envelope (time / pod / stream / level) as a
   # compact key/value strip. Mirrors CloudWatch's expanded-row fields.
   def field_grid
-    div(class: "flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] font-voodu-mono") do
+    div(class: "flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] font-voodu-mono flex-1 min-w-0") do
       field("@timestamp", @row[:ts])
       field("@pod",       @row[:pod])
       field("@stream",    @row[:stream].presence || "stdout")
@@ -99,7 +101,7 @@ class Components::LogAnalytics::Row < Components::Base
   end
 
   def row_actions
-    div(class: "flex items-center gap-1.5 flex-wrap") do
+    div(class: "flex items-center gap-1.5 shrink-0") do
       copy_button
       surrounding_button if @surroundable
     end
