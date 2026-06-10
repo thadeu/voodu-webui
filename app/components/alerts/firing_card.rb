@@ -32,7 +32,29 @@ class Components::Alerts::FiringCard < Components::Base
           plain "firing for #{Island.humanize_uptime(@event.duration_seconds)}"
           plain " · started #{ago(@event.started_at)}"
         end
+        metrics_link
       end
+    end
+  end
+
+  # Small inline link under the firing meta — jump to the target's
+  # chart on /metrics. Reads the live rule (includes-loaded in
+  # AlertsPageData#firing_events) for the target; the event only
+  # snapshots a label string. Falls back to the bare metrics page if
+  # the rule is somehow gone.
+  def metrics_link
+    rule = @event.alert_rule
+    href = rule ? metrics_path(rule.metrics_link_params) : metrics_path
+
+    a(
+      href:  href,
+      title: "Open metrics for #{@event.target_label}",
+      class: "inline-flex items-center gap-1 mt-1.5 w-fit px-2 h-6 text-[11px] " \
+             "bg-voodu-surface text-voodu-text border border-voodu-border " \
+             "hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      render Icon::ChartBarOutline.new(class: "w-3 h-3 shrink-0")
+      span { "Open metrics" }
     end
   end
 

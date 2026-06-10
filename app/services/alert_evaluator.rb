@@ -23,30 +23,40 @@
 # (a firing alert holds, surfaced as last_status "stale", until real
 # samples say otherwise).
 class AlertEvaluator
-  # Warehouse bucket width — the controller-side sampler cadence.
+  # Warehouse bucket width AND the floor for the observed sample
+  # cadence. The local sampler ticks every 15s, but a remote island
+  # can deliver pod/system samples far more sparsely (e.g. every
+  # ~210s). Everything time-sensitive below scales off the cadence
+  # ESTIMATED from the data (cadence_for), not this fixed value — so a
+  # coarse-cadence island isn't permanently "NO DATA"/"stale".
   BUCKET_SECONDS = 15
 
-  # Extra range on top of duration so sync lag can't starve the
-  # window of buckets. Must be ≥ STALE_AFTER (+ a bucket): the window
-  # is anchored at the newest bucket, which stale? tolerates being up
-  # to STALE_AFTER old — if the query range were shorter than that
-  # lag, the oldest buckets of a still-trusted window would fall
-  # before the range start and get silently cut, firing on partial
-  # evidence.
+  # Minimum lookback for the warehouse query. Must be wide enough to
+  # see SEVERAL samples even on a coarse-cadence island, otherwise we
+  # can't estimate the cadence (or even find a fresh sample) for a
+  # short-duration rule. 15min captures ~4 samples at a 210s cadence.
+  MIN_LOOKBACK = 15 * 60
+
+  # Extra range on top of duration (for long-duration rules where
+  # duration + slack already exceeds MIN_LOOKBACK).
   WINDOW_SLACK = 120
 
-  # Newest bucket older than this ⇒ the series is stale (island
-  # offline or sync wedged). 90s = 3 missed sampler ticks.
-  STALE_AFTER = 90
+  # Staleness floor + multiplier. The newest sample is stale when it's
+  # older than max(STALE_FLOOR, cadence × STALE_CADENCES). Dense island
+  # (cadence 15s) ⇒ 90s; coarse island (cadence 210s) ⇒ ~10.5min, so a
+  # normal 206s-old sample reads as FRESH, not offline.
+  STALE_FLOOR     = 90
+  STALE_CADENCES  = 3
 
-  # Fraction of expected buckets that must exist in the window before
-  # we trust an all-breaching verdict. Below it: no_data, not firing.
+  # Fraction of EXPECTED samples (duration ÷ cadence) that must exist
+  # in the window before we trust an all-breaching verdict — always at
+  # least 1. Below it: no_data, not firing.
   MIN_COVERAGE = 0.6
 
-  # Hysteresis: this many consecutive trailing buckets must be clean
-  # before a firing alert resolves (~45s under threshold) — keeps a
-  # value oscillating around the threshold from flapping the badge.
-  RESOLVE_BUCKETS = 3
+  # Hysteresis: this many consecutive trailing samples must be clean
+  # before a firing alert resolves — keeps a value oscillating around
+  # the threshold from flapping the badge.
+  RESOLVE_SAMPLES = 3
 
   # Same cutoff MetricsPageData#capacity_for_pod uses: above 1 TiB the
   # cgroup "limit" is docker's kernel-max sentinel (no limit set), and
@@ -83,17 +93,20 @@ class AlertEvaluator
     series = fetch_series(rule)
 
     return mark_no_data(rule) if series.empty?
-    return mark_no_data(rule, last_value: series.last[:value]) if stale?(series)
+
+    cadence    = cadence_for(series)
+    last_value = series.last[:value]
+
+    return mark_no_data(rule, last_value: last_value) if stale?(series, cadence)
 
     window = window_for(rule, series)
 
-    return mark_no_data(rule, last_value: series.last[:value]) if window.size < min_buckets(rule)
+    return mark_no_data(rule, last_value: last_value) if window.size < min_samples(rule, cadence)
 
-    last_value   = series.last[:value]
     transitioned = false
 
     if rule.firing?
-      if series.last(RESOLVE_BUCKETS).none? { |p| breach?(rule, p[:value]) }
+      if series.last(RESOLVE_SAMPLES).none? { |p| breach?(rule, p[:value]) }
         resolve!(rule, last_value)
         transitioned = true
       else
@@ -198,8 +211,21 @@ class AlertEvaluator
     false
   end
 
-  def stale?(series)
-    Time.current.to_i - series.last[:epoch] > STALE_AFTER
+  # cadence_for — the typical gap between samples, estimated from the
+  # series (median, so a single long gap doesn't skew it), floored at
+  # BUCKET_SECONDS. Drives staleness + coverage so the evaluator
+  # adapts to whatever cadence an island actually delivers.
+  def cadence_for(series)
+    return BUCKET_SECONDS if series.size < 2
+
+    gaps = series.each_cons(2).map { |a, b| b[:epoch] - a[:epoch] }.reject(&:zero?).sort
+    return BUCKET_SECONDS if gaps.empty?
+
+    [gaps[gaps.size / 2], BUCKET_SECONDS].max
+  end
+
+  def stale?(series, cadence)
+    Time.current.to_i - series.last[:epoch] > [STALE_FLOOR, cadence * STALE_CADENCES].max
   end
 
   def window_for(rule, series)
@@ -208,8 +234,14 @@ class AlertEvaluator
     series.select { |p| p[:epoch] > window_end - rule.duration_seconds }
   end
 
-  def min_buckets(rule)
-    ((rule.duration_seconds / BUCKET_SECONDS) * MIN_COVERAGE).ceil
+  # Minimum samples required in the window — a fraction of the expected
+  # count (duration ÷ cadence), but never fewer than 1. On a coarse
+  # island where cadence > duration, the window holds just the newest
+  # sample and that single fresh reading is enough to act on.
+  def min_samples(rule, cadence)
+    expected = rule.duration_seconds.to_f / cadence
+
+    [(expected * MIN_COVERAGE).ceil, 1].max
   end
 
   # ---- series construction -------------------------------------------
@@ -270,7 +302,7 @@ class AlertEvaluator
       @island,
       source:   source,
       metric:   metric,
-      range:    "#{rule.duration_seconds + WINDOW_SLACK}s",
+      range:    "#{[rule.duration_seconds + WINDOW_SLACK, MIN_LOOKBACK].max}s",
       interval: "#{BUCKET_SECONDS}s",
       scope:    rule.host_target? ? nil : rule.target_scope,
       name:     rule.host_target? ? nil : rule.target_name

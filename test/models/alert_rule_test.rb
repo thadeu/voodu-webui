@@ -138,6 +138,36 @@ class AlertRuleTest < ActiveSupport::TestCase
     assert_equal "—", AlertRule.format_metric_value(nil, "cpu")
   end
 
+  test "metrics_link_params points host rules at the host scope" do
+    rule = @island.alert_rules.new(metric_kind: "cpu", target_kind: "host")
+
+    assert_equal({ scope_kind: "host" }, rule.metrics_link_params)
+  end
+
+  test "metrics_link_params resolves a pod rule to a live replica container" do
+    rule = @island.alert_rules.create!(
+      name: "ctrl", metric_kind: "cpu", target_kind: "pod",
+      target_scope: "fsw", target_name: "controller",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+    @island.pods.create!(
+      scope: "fsw", resource_name: "controller", container_name: "fsw-controller.e1e1",
+      kind: "deployment", replica_id: "e1e1", payload: "{}", synced_at: Time.current
+    )
+
+    assert_equal({ scope_kind: "pod", scope_id: "fsw-controller.e1e1" }, rule.metrics_link_params)
+  end
+
+  test "metrics_link_params falls back to host when the deployment has no live replica" do
+    rule = @island.alert_rules.create!(
+      name: "ctrl", metric_kind: "cpu", target_kind: "pod",
+      target_scope: "fsw", target_name: "controller",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+
+    assert_equal({ scope_kind: "host" }, rule.metrics_link_params)
+  end
+
   test "condition_label composes comparator, value and duration" do
     rule = @island.alert_rules.new(
       metric_kind: "disk", comparator: "gte", threshold: 85, duration_seconds: 300

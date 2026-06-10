@@ -9,11 +9,12 @@
 # the same body Views::Alerts::Frame returns, so the swap is
 # DOM-stable.
 class Views::Alerts::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil)
+  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :active)
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
     @data           = data
+    @active_tab     = active_tab
   end
 
   def view_template
@@ -52,7 +53,7 @@ class Views::Alerts::Index < Views::Base
       # still reloads just this frame regardless of target.
       turbo_frame_tag("alerts-live", src: current_request_url, target: "_top") do
         div(class: "flex flex-col gap-4 vmd:gap-5") do
-          render Components::Alerts::LiveBody.new(data: @data)
+          render Components::Alerts::LiveBody.new(data: @data, active_tab: @active_tab)
         end
       end
     end

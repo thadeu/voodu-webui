@@ -71,6 +71,7 @@ class Components::Alerts::RulesTable < Components::Base
 
   def actions_row(rule)
     div(class: "flex items-center gap-1.5 shrink-0") do
+      metrics_link(rule)
       toggle_button(rule)
 
       render Components::UI::Button.new(
@@ -83,6 +84,20 @@ class Components::Alerts::RulesTable < Components::Base
       end
 
       delete_button(rule)
+    end
+  end
+
+  # Jump straight to this rule's target on /metrics — host grid or the
+  # deployment's chart. Plain anchor: it sits inside the alerts-live
+  # frame (target=_top), so it navigates the whole page as intended.
+  def metrics_link(rule)
+    render Components::UI::Button.new(
+      variant: :ghost, size: :sm, tag: :a,
+      href: metrics_path(rule.metrics_link_params),
+      title: "Open metrics for #{rule.target_label}"
+    ) do
+      render Icon::ChartBarOutline.new(class: "w-3.5 h-3.5")
+      span(class: "hidden vmd:inline") { "Metrics" }
     end
   end
 

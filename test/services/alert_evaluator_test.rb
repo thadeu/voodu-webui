@@ -161,6 +161,63 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     assert_equal 0, rule.alert_events.firing.count
   end
 
+  test "coarse-cadence island evaluates the latest sample instead of NO DATA" do
+    # A remote island delivers pod samples every ~210s, not 15s. A
+    # 60s-duration rule's window holds just the newest sample, and that
+    # sample is ~2 cadence-cycles old — fixed 15s/90s assumptions would
+    # wrongly read NO DATA / stale. Cadence adaptation evaluates it.
+    rule = make_rule(
+      name: "controller cpu", metric_kind: "cpu", threshold: 38, duration: 60,
+      target_kind: "pod", target_scope: "fsw", target_name: "controller"
+    )
+    # 4 samples 210s apart, newest 130s old, all breaching.
+    [840, 630, 420, 130].each_with_index do |age, i|
+      insert_sample(
+        NOW.to_i - age, source: "pod",
+        payload: { cpu_percent: 90.0 + i, scope: "fsw", name: "controller", container: "fsw-controller.e1e1" }
+      )
+    end
+
+    assert_equal 1, AlertEvaluator.run(@island)
+
+    rule.reload
+    assert rule.firing, "a fresh breaching sample on a coarse-cadence island must fire"
+    assert_equal "firing", rule.last_status
+  end
+
+  test "coarse-cadence rule under threshold reads ok, not no_data" do
+    rule = make_rule(
+      name: "controller cpu", metric_kind: "cpu", threshold: 50, duration: 60,
+      target_kind: "pod", target_scope: "fsw", target_name: "controller"
+    )
+    [840, 630, 420, 130].each do |age|
+      insert_sample(
+        NOW.to_i - age, source: "pod",
+        payload: { cpu_percent: 0.07, scope: "fsw", name: "controller", container: "fsw-controller.e1e1" }
+      )
+    end
+
+    AlertEvaluator.run(@island)
+
+    rule.reload
+    assert_not rule.firing
+    assert_equal "ok", rule.last_status
+    assert_in_delta 0.07, rule.last_value, 0.001
+  end
+
+  test "genuinely stale data (older than the cadence allowance) still holds" do
+    rule = make_rule(name: "cpu", metric_kind: "cpu", threshold: 90, duration: 60, comparator: "gte")
+    # Two samples 210s apart, newest 700s old — beyond 3× cadence (630s).
+    insert_sample(NOW.to_i - 910, source: "system", payload: { cpu_percent: 95.0 })
+    insert_sample(NOW.to_i - 700, source: "system", payload: { cpu_percent: 95.0 })
+
+    AlertEvaluator.run(@island)
+
+    rule.reload
+    assert_not rule.firing, "a sample older than the cadence allowance must not fire"
+    assert_equal "no_data", rule.last_status
+  end
+
   test "sparse coverage below the gate reads as no_data" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
     # only 3 of the expected 8 buckets exist (gate is ceil(8 * 0.6) = 5)

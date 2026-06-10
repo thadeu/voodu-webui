@@ -5,10 +5,16 @@
 # primary-DB reads (rules + events + pod snapshot); the page renders
 # instantly even with the controller offline.
 class AlertsPageData
-  attr_reader :island
+  # Cap on the windowed history list — a 30d window on a noisy island
+  # could be thousands of rows; the timeline shows the most recent
+  # MAX_HISTORY and notes the truncation.
+  MAX_HISTORY = 200
 
-  def initialize(island)
-    @island = island
+  attr_reader :island, :history_filter
+
+  def initialize(island, history_filter: AlertHistoryFilter.new)
+    @island         = island
+    @history_filter = history_filter
   end
 
   def rules
@@ -30,18 +36,42 @@ class AlertsPageData
                              .order(started_at: :desc).to_a
   end
 
-  # Closed episodes for the history list. Firing ones live in their
-  # own section; mixing them in here would double-render.
+  # Closed episodes inside the active filter window, newest first,
+  # capped at MAX_HISTORY. Firing ones live in their own tab.
   def history
-    @history ||= island.alert_events.resolved.recent.to_a
+    @history ||= history_scope.order(resolved_at: :desc).limit(MAX_HISTORY).to_a
   end
 
+  # Count within the window — the "TIMELINE · N" header. Distinct from
+  # history_count (the tab badge), which is the all-time total.
+  def history_window_count
+    @history_window_count ||= history_scope.count
+  end
+
+  def history_truncated?
+    history_window_count > MAX_HISTORY
+  end
+
+  # Counts for the tab bar — cheap COUNT queries that DON'T load the
+  # rows, so visiting the History tab doesn't pay to count firing
+  # events and vice-versa. The row loaders above stay lazy, so only
+  # the active tab's rows are ever materialised.
   def firing_count
-    firing_events.size
+    @firing_count ||= island.alert_events.firing
+                            .joins(:alert_rule).where(alert_rules: { enabled: true })
+                            .count
+  end
+
+  def rules_count
+    @rules_count ||= island.alert_rules.count
+  end
+
+  def history_count
+    @history_count ||= island.alert_events.resolved.count
   end
 
   def rules?
-    rules.any?
+    rules_count.positive?
   end
 
   # Form targets — distinct workloads from the state-sync pod
@@ -55,5 +85,11 @@ class AlertsPageData
                        .reject { |scope, name, _kind| scope.blank? || name.blank? }
                        .sort
                        .map { |scope, name, kind| { scope: scope, name: name, kind: kind.to_s } }
+  end
+
+  private
+
+  def history_scope
+    island.alert_events.resolved.where(resolved_at: history_filter.window.first..history_filter.window.last)
   end
 end

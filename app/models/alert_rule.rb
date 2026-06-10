@@ -82,6 +82,22 @@ class AlertRule < ApplicationRecord
     alert_events.firing.first
   end
 
+  # Params to deep-link this rule's target into /metrics so the
+  # operator lands straight on the relevant chart grid. Host rules go
+  # to the host scope; pod rules resolve a current replica's container
+  # name (the metrics page keys pod scope by container, not by
+  # deployment). A deployment with no live replica falls back to the
+  # host grid rather than a blank pod view.
+  def metrics_link_params
+    return { scope_kind: "host" } if host_target?
+
+    container = island.pods
+                      .where(scope: target_scope, resource_name: target_name)
+                      .order(:container_name).limit(1).pick(:container_name)
+
+    container ? { scope_kind: "pod", scope_id: container } : { scope_kind: "host" }
+  end
+
   def host_target?
     target_kind == "host"
   end
