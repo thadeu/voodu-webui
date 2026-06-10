@@ -39,9 +39,15 @@ class IslandPats
   rescue Voodu::Client::AuthError => e
     Rails.logger.info("island_pats: PAT lacks admin scope: #{e.message}")
     Result.new(ok: false, forbidden: true)
+  rescue Voodu::Client::TransportError => e
+    # Controller offline / timeout — the common case. Never surface the
+    # raw "Net::ReadTimeout with #<TCPSocket:(closed)>"; the operator
+    # gets a friendly line, the detail goes to the log.
+    Rails.logger.warn("island_pats: transport #{e.message}")
+    Result.new(ok: false, error: "Controller unreachable — tokens will load once it's back online.")
   rescue Voodu::Client::Error => e
     Rails.logger.warn("island_pats: #{e.class} #{e.message}")
-    Result.new(ok: false, error: e.message)
+    Result.new(ok: false, error: "The controller returned an error loading tokens.")
   end
 
   def self.invalidate(island)
