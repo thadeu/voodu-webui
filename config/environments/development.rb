@@ -25,8 +25,15 @@ Rails.application.configure do
     config.action_controller.perform_caching = false
   end
 
-  # Change to :null_store to avoid any caching.
-  config.cache_store = :memory_store
+  # file_store — NOT :memory_store. The health + state caches are WRITTEN
+  # by the jobs/poller process (bin/jobs) and READ by the web process
+  # (Puma). :memory_store is per-process, so the job's warmed `:online`
+  # status was invisible to renders — the pill flickered :unknown →
+  # :online on every navigation. file_store lives on the filesystem +
+  # is shared across processes (prod uses solid_cache for the same
+  # cross-process guarantee; file_store avoids the cache-DB schema dance
+  # in dev).
+  config.cache_store = :file_store, Rails.root.join("tmp/cache")
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local
