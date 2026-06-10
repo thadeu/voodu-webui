@@ -43,34 +43,40 @@ class Views::AlertDestinations::Form < Views::Base
       title:    persisted? ? "Edit destination" : "New destination",
       subtitle: "POST a request to this target when an alert fires or resolves",
       icon:     :PaperAirplaneOutline,
-      size:     :md,
+      size:     :lg,
       close_to: alerts_path(tab: "destinations")
     ).with_footer { footer_actions }
   end
 
+  # Two columns at vmd+ (the connection on the left, the payload on the
+  # right where the tall body editor has room); stacks on narrow.
   def form_body
     form(
       action: persisted? ? alert_destination_path(@destination) : alert_destinations_path,
       method: "post",
       data:   { turbo: false },
       id:     "destination-form",
-      class:  "flex flex-col gap-4 px-5 py-4"
+      class:  "px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if persisted?
       input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
 
-      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-        field(label: "Name", error: @destination.errors[:name].first) do
-          text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
+      div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
+        div(class: "flex flex-col gap-4 vmd:flex-1 min-w-0") do
+          field(label: "Name", error: @destination.errors[:name].first) do
+            text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
+          end
+          field(label: "Type") { type_static }
+          url_field
+          auth_header_field
         end
-        field(label: "Type") { type_static }
-      end
 
-      url_field
-      auth_header_field
-      body_template_field
-      triggers_field
+        div(class: "flex flex-col gap-4 vmd:flex-1 min-w-0") do
+          body_template_field
+          triggers_field
+        end
+      end
     end
   end
 
@@ -129,7 +135,7 @@ class Views::AlertDestinations::Form < Views::Base
   # Optional JSON body template with {{tokens}}. A popover offers
   # starter templates per provider (fills the textarea).
   def body_template_field
-    div(class: "flex flex-col gap-1.5", data: { controller: "template-picker" }) do
+    div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: { controller: "template-picker" }) do
       div(class: "flex items-center justify-between") do
         span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
         templates_popover
@@ -137,18 +143,25 @@ class Views::AlertDestinations::Form < Views::Base
 
       textarea(
         name: "alert_destination[body_template]",
-        rows: 6, spellcheck: "false", autocapitalize: "off", autocomplete: "off",
+        rows: 12, spellcheck: "false", autocapitalize: "off", autocomplete: "off",
         placeholder: %({\n  "text": "{{rule}} is {{state}} on {{target}} ({{value}}{{unit}})"\n}),
         data:  { template_picker_target: "textarea" },
-        class: tokens(input_classes, "font-voodu-mono text-[12px] leading-relaxed py-2 h-auto resize-y")
+        class: tokens(input_classes, "font-voodu-mono text-[12px] leading-relaxed py-2 h-auto min-h-[220px] resize-y vmd:flex-1")
       ) { @destination.body_template }
 
       if (err = @destination.errors[:body_template].first)
         error_line(err)
       else
-        div(class: "text-[11.5px] text-voodu-muted") do
-          plain "Valid JSON, sent as-is (blank = default payload). Tokens: "
-          span(class: "font-voodu-mono text-voodu-text-2") { TOKENS.join(" ") }
+        div(class: "flex flex-col gap-1 text-[11.5px] text-voodu-muted") do
+          div do
+            plain "Valid JSON, sent as-is (blank = default payload). Tokens: "
+            span(class: "font-voodu-mono text-voodu-text-2") { TOKENS.join(" ") }
+          end
+          div do
+            plain "Filters (Liquid-style): "
+            span(class: "font-voodu-mono text-voodu-text-2") { "{{dedup_key | slice: 0, 6}}" }
+            plain " · slice · truncate · upcase · downcase · strip · default"
+          end
         end
       end
     end

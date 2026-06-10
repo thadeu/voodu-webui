@@ -28,7 +28,7 @@
 #   subtitle:  — small line under the title. Optional.
 #   icon:      — icon symbol (PhlexIcons::Hero const name) shown in
 #                the header avatar. Optional.
-#   size:      — :sm (400) | :md (520) | :lg (720). Default :md.
+#   size:      — :sm (400) | :md (520) | :lg (1024). Default :md.
 #                (Always capped by `100vw - 24px` so it never exceeds
 #                the viewport on mobile.)
 #   blur:      — backdrop CSS `backdrop-blur`. Default true.
@@ -45,7 +45,7 @@ class Components::UI::Modal < Components::Base
   SIZES = {
     sm: "w-[min(400px,calc(100vw-24px))]",
     md: "w-[min(520px,calc(100vw-24px))]",
-    lg: "w-[min(720px,calc(100vw-24px))]",
+    lg: "w-[min(1024px,calc(100vw-24px))]",
     # xl — near-full-width for dense, wide content (log windows). Caps
     # at 1600px so it doesn't sprawl on ultrawide monitors.
     xl: "w-[min(95vw,1600px)]"
