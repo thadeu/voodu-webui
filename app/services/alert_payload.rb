@@ -1,17 +1,16 @@
 # frozen_string_literal: true
 
-# AlertPayload — builds the JSON body sent to a destination for a
-# fire/resolve transition. The shape depends on the destination kind:
+# AlertPayload — builds the JSON body POSTed to a destination for a
+# fire/resolve transition.
 #
-#   slack    → { text: "..." } (Slack incoming-webhook render)
-#   telegram → { chat_id:, text: } (Bot API sendMessage)
-#   webhook  → a flat structured object for generic consumers
-#              (Zapier, custom endpoints).
+#   custom body template → rendered verbatim (operator JSON with
+#                          {{tokens}}); a String the client sends as-is.
+#   no template          → a default structured object (a Hash the
+#                          client marshals) for generic consumers.
 #
-# Alert facts are read from the AlertEvent snapshot (rule name,
-# target, metric, threshold) so the payload is truthful even if the
-# rule was edited after firing. Destination config (chat_id) comes
-# from the destination. The deep link is included only when
+# Alert facts come from the AlertEvent snapshot (rule name, target,
+# metric, threshold) so the payload is truthful even if the rule was
+# edited after firing. The deep link is included only when
 # APP_BASE_URL is set (jobs have no request host for absolute URLs).
 class AlertPayload
   def self.for(event, transition, destination)
@@ -25,30 +24,6 @@ class AlertPayload
   end
 
   def build
-    case @destination.kind
-    when "slack"    then slack
-    when "telegram" then telegram
-    else webhook
-    end
-  end
-
-  def slack
-    emoji = firing? ? ":rotating_light:" : ":white_check_mark:"
-    line  = "#{emoji} *#{@event.rule_name}* #{state_word} — `#{@event.target_label}` " \
-            "at #{value} (threshold #{@event.format_value(@event.threshold)})"
-    line += "\n<#{link}|Open alerts>" if link
-
-    { text: line }
-  end
-
-  def telegram
-    { chat_id: @destination.chat_id, text: telegram_text }
-  end
-
-  # A custom body template (operator JSON with {{tokens}}) renders to
-  # a verbatim string the client sends as-is; otherwise the default
-  # structured object (a Hash the client marshals).
-  def webhook
     return WebhookTemplate.render(@destination.body_template, template_tokens) if @destination.custom_body?
 
     {
@@ -70,8 +45,7 @@ class AlertPayload
   # Tokens available to a webhook body template — formatted for human
   # messages: numbers rounded (no float noise; pair with {{unit}} for
   # "90%"), timestamps humanised in the operator's timezone. The
-  # default structured payload (above) keeps raw values + ISO for
-  # machine consumers.
+  # default structured payload keeps raw values + ISO for machines.
   def template_tokens
     {
       "rule"        => @event.rule_name,
@@ -86,7 +60,14 @@ class AlertPayload
       "island"      => @event.island&.name,
       "started_at"  => human_time(@event.started_at),
       "resolved_at" => human_time(@event.resolved_at),
-      "url"         => link
+      "url"         => link,
+
+      # PagerDuty Events API v2: one template handles both transitions.
+      # event_action trigger↔resolve; dedup_key is the episode id —
+      # stable across the firing→resolved of the SAME AlertEvent, so a
+      # resolve closes the incident the trigger opened.
+      "event_action" => firing? ? "trigger" : "resolve",
+      "dedup_key"    => @event.to_dedup_key
     }
   end
 
@@ -104,19 +85,6 @@ class AlertPayload
 
   def state_word
     firing? ? "firing" : "resolved"
-  end
-
-  def value
-    @event.format_value(@event.last_value)
-  end
-
-  # Plain text (no parse_mode) so rule names with Markdown specials
-  # (_, *, [) don't need escaping and can't break the message.
-  def telegram_text
-    emoji = firing? ? "🚨" : "✅"
-    base  = "#{emoji} #{@event.rule_name} #{state_word} — #{@event.target_label} " \
-            "at #{value} (threshold #{@event.format_value(@event.threshold)})"
-    link ? "#{base}\n#{link}" : base
   end
 
   # Absolute /alerts URL, only when APP_BASE_URL is set (jobs can't

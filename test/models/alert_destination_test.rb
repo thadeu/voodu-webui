@@ -33,11 +33,6 @@ class AlertDestinationTest < ActiveSupport::TestCase
     assert_includes d.errors[:endpoint].first, "http"
   end
 
-  test "slack endpoint must be a hooks.slack.com URL" do
-    assert_not build(kind: "slack", endpoint: "https://example.com/x").valid?
-    assert build(kind: "slack", endpoint: "https://hooks.slack.com/services/T/B/X").valid?
-  end
-
   test "at least one trigger required" do
     d = build(on_firing: false, on_resolved: false)
     assert_not d.valid?
@@ -64,30 +59,6 @@ class AlertDestinationTest < ActiveSupport::TestCase
     assert_not d.notifies?("resolved")
   end
 
-  test "telegram requires a bot token and a chat_id" do
-    d = @island.alert_destinations.new(name: "tg", kind: "telegram", on_firing: true)
-    assert_not d.valid?
-    assert d.errors[:secret].any?
-    assert d.errors[:chat_id].any?
-
-    d.secret = "123:AAA"
-    d.chat_id = "555"
-    assert d.valid?, d.errors.full_messages.join(", ")
-  end
-
-  test "telegram derives the sendMessage URL from the bot token" do
-    d = @island.alert_destinations.create!(
-      name: "tg", kind: "telegram", secret: "123:AAA", chat_id: "555", on_firing: true
-    )
-    assert_equal "https://api.telegram.org", d.endpoint
-    assert_equal "https://api.telegram.org/bot123:AAA/sendMessage", d.delivery_url
-    assert_equal({}, d.auth_header, "telegram authenticates via the URL, no header")
-  end
-
-  test "delivery_url is the endpoint for slack/webhook" do
-    assert_equal "https://example.com/h", build(endpoint: "https://example.com/h").delivery_url
-  end
-
   test "webhook body_template must be valid JSON when present" do
     bad = build(body_template: "{not json")
     assert_not bad.valid?
@@ -97,10 +68,9 @@ class AlertDestinationTest < ActiveSupport::TestCase
     assert build(body_template: nil).valid?
   end
 
-  test "custom_body? only for webhook with a template" do
+  test "custom_body? is true only with a body template" do
     assert build(body_template: '{"a":1}').custom_body?
     assert_not build(body_template: nil).custom_body?
-    assert_not build(kind: "slack", endpoint: "https://hooks.slack.com/x", body_template: '{"a":1}').custom_body?
   end
 
   test "auth_header builds the custom header when name and value are set" do
@@ -120,6 +90,6 @@ class AlertDestinationTest < ActiveSupport::TestCase
 
   test "endpoint_masked hides the path/token" do
     assert_equal "https://hooks.slack.com/…",
-                 build(kind: "slack", endpoint: "https://hooks.slack.com/services/T/B/SECRET").endpoint_masked
+                 build(endpoint: "https://hooks.slack.com/services/T/B/SECRET").endpoint_masked
   end
 end

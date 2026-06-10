@@ -43,7 +43,7 @@ class Components::Alerts::DestinationsTable < Components::Base
              "border-b border-voodu-border-2 last:border-b-0"
     ) do
       div(class: "flex items-center gap-2.5 flex-1 min-w-0") do
-        kind_badge(dest)
+        render Icon::PaperAirplaneOutline.new(class: "w-4 h-4 shrink-0 text-voodu-muted-2")
 
         div(class: "flex flex-col gap-0.5 min-w-0") do
           div(class: "flex items-center gap-2 min-w-0") do
@@ -63,19 +63,6 @@ class Components::Alerts::DestinationsTable < Components::Base
     end
   end
 
-  KIND_BADGE = {
-    "slack"    => [:info,    "SLACK"],
-    "telegram" => [:accent,  "TELEGRAM"],
-    "webhook"  => [:neutral, "WEBHOOK"]
-  }.freeze
-
-  def kind_badge(dest)
-    variant, label = KIND_BADGE.fetch(dest.kind, [:neutral, dest.kind.to_s.upcase])
-
-    span(class: "w-[84px] shrink-0") do
-      render Components::UI::Badge.new(variant: variant) { label }
-    end
-  end
 
   def paused_tag
     span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted-2 border border-voodu-border-2 px-1.5 py-0.5") do
@@ -173,9 +160,9 @@ class Components::Alerts::DestinationsTable < Components::Base
       render Icon::PaperAirplaneOutline.new(class: "w-7 h-7 text-voodu-muted-2")
       div(class: "text-[14px] font-semibold text-voodu-text") { "No destinations yet" }
       div(class: "text-[12.5px] text-voodu-muted max-w-[46ch]") do
-        plain "Add a Slack channel or a webhook and your rules will POST "
-        plain "there on fire/resolve. Rules notify all destinations unless "
-        plain "you narrow them per rule."
+        plain "Add a webhook (Slack, Telegram, PagerDuty, Zapier or any "
+        plain "endpoint) and your rules POST there on fire/resolve. Rules "
+        plain "notify all destinations unless you narrow them per rule."
       end
       render Components::UI::Button.new(variant: :primary, size: :md, tag: :a, href: new_alert_destination_path) do
         render Icon::PlusOutline.new(class: "w-3.5 h-3.5")

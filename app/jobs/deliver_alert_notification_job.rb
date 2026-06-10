@@ -26,7 +26,7 @@ class DeliverAlertNotificationJob < ApplicationJob
     return unless destination.enabled?
 
     payload = AlertPayload.for(event, transition, destination)
-    WebhookClient.post(destination.delivery_url, payload, headers: destination.auth_header)
+    WebhookClient.post(destination.endpoint, payload, headers: destination.auth_header)
 
     destination.update_columns(
       last_delivered_at: Time.current, last_status: "ok", last_error: nil

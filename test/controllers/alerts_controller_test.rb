@@ -152,7 +152,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
 
   test "destinations tab renders the destinations table" do
     @island.alert_destinations.create!(
-      name: "ops-slack", kind: "slack", endpoint: "https://hooks.slack.com/services/T/B/X"
+      name: "ops-slack", kind: "webhook", endpoint: "https://hooks.slack.com/services/T/B/X"
     )
 
     get alerts_path(tenant_key: @key, tab: "destinations")

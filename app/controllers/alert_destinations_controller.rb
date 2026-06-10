@@ -14,7 +14,7 @@ class AlertDestinationsController < ApplicationController
 
   def new
     @destination = current_island.alert_destinations.new(
-      kind: "slack", on_firing: true, on_resolved: true, enabled: true
+      kind: "webhook", on_firing: true, on_resolved: true, enabled: true
     )
     render_form
   end
@@ -52,7 +52,7 @@ class AlertDestinationsController < ApplicationController
   # one-off.
   def test
     WebhookClient.post(
-      @destination.delivery_url, AlertPayload.for(sample_event, "firing", @destination),
+      @destination.endpoint, AlertPayload.for(sample_event, "firing", @destination),
       headers: @destination.auth_header
     )
     @destination.update_columns(last_delivered_at: Time.current, last_status: "ok", last_error: nil)
@@ -77,17 +77,19 @@ class AlertDestinationsController < ApplicationController
 
   def destination_attributes
     attrs = params.require(:alert_destination)
-                  .permit(:name, :kind, :endpoint, :secret, :secret_header, :chat_id,
+                  .permit(:name, :endpoint, :secret, :secret_header,
                           :body_template, :on_firing, :on_resolved, :enabled)
                   .to_h
 
-    # Blank ENCRYPTED fields on edit mean "keep the stored value" —
+    # Single kind today; force it rather than trusting the form.
+    attrs["kind"] = "webhook"
+
+    # Blank ENCRYPTED secret on edit means "keep the stored value" —
     # never overwrite a credential with an empty string just because
-    # the operator left the masked field untouched. The header NAME is
-    # not encrypted (shown on edit), so a blank there is honoured as a
-    # deliberate clear.
-    attrs.delete("endpoint") if @destination&.persisted? && attrs["endpoint"].blank?
-    attrs.delete("secret")   if @destination&.persisted? && attrs["secret"].blank?
+    # the operator left the masked field untouched. The URL field is
+    # pre-filled (revealable via the eye), so a blank there is a
+    # deliberate clear and surfaces the presence error.
+    attrs.delete("secret") if @destination&.persisted? && attrs["secret"].blank?
     attrs
   end
 

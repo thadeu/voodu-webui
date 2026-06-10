@@ -10,10 +10,9 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_10_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
   create_table "alert_destinations", force: :cascade do |t|
     t.text "body_template"
-    t.string "chat_id"
     t.datetime "created_at", null: false
     t.boolean "enabled", default: true, null: false
     t.text "endpoint_ciphertext", null: false

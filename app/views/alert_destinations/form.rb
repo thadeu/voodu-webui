@@ -1,14 +1,22 @@
 # frozen_string_literal: true
 
-# Views::AlertDestinations::Form — New/Edit destination modal, same
-# shell as Views::AlertRules::Form. The `destination-form` Stimulus
-# controller shows the right fields per kind (slack = one URL;
-# webhook = URL + optional secret).
+# Views::AlertDestinations::Form — New/Edit destination modal. One
+# generic kind (webhook): a URL + optional auth header + optional JSON
+# body template with {{tokens}}. The body-template popover ships
+# starter templates for Slack / Telegram / PagerDuty / Zapier so any
+# provider is a copy-and-tweak away — no hardcoded provider config.
 #
-# On edit, secret fields render empty (we never echo a stored
-# credential) with a hint that leaving them blank keeps the current
-# value — same UX as the island PAT edit.
+# The URL is encrypted at rest; on edit it's pre-filled (masked) with
+# an eye toggle so the operator can verify it. The auth header value
+# stays blank-keeps (more sensitive; not pre-filled).
 class Views::AlertDestinations::Form < Views::Base
+  # Token list shown under the body field.
+  TOKENS = %w[
+    {{rule}} {{state}} {{target}} {{metric}} {{value}} {{threshold}}
+    {{peak}} {{unit}} {{island}} {{started_at}} {{resolved_at}} {{url}}
+    {{event_action}} {{dedup_key}}
+  ].freeze
+
   def initialize(current_path:, destination:, islands: [], current_island: nil)
     @current_path   = current_path
     @islands        = islands
@@ -33,7 +41,7 @@ class Views::AlertDestinations::Form < Views::Base
   def modal
     Components::UI::Modal.new(
       title:    persisted? ? "Edit destination" : "New destination",
-      subtitle: "Send a request to this target when an alert fires or resolves",
+      subtitle: "POST a request to this target when an alert fires or resolves",
       icon:     :PaperAirplaneOutline,
       size:     :md,
       close_to: alerts_path(tab: "destinations")
@@ -44,142 +52,135 @@ class Views::AlertDestinations::Form < Views::Base
     form(
       action: persisted? ? alert_destination_path(@destination) : alert_destinations_path,
       method: "post",
-      data:   { turbo: false, controller: "destination-form" },
+      data:   { turbo: false },
       id:     "destination-form",
       class:  "flex flex-col gap-4 px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if persisted?
+      input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
         field(label: "Name", error: @destination.errors[:name].first) do
           text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
         end
-
-        field(label: "Type", error: @destination.errors[:kind].first) do
-          kind_select
-        end
+        field(label: "Type") { type_static }
       end
 
-      endpoint_field
-      telegram_field
-      secret_field
+      url_field
+      auth_header_field
       body_template_field
-
       triggers_field
     end
   end
 
-  def kind_select
-    select_input(
-      name: "alert_destination[kind]",
-      data: { destination_form_target: "kind", action: "change->destination-form#kindChanged" }
-    ) do
-      option(value: "slack",    selected: (@destination.kind == "slack") || nil)    { "Slack" }
-      option(value: "webhook",  selected: (@destination.kind == "webhook") || nil)  { "Generic webhook" }
-      option(value: "telegram", selected: (@destination.kind == "telegram") || nil) { "Telegram" }
+  # Single kind — render it as a static, read-only field (matches the
+  # form's other inputs visually) plus the hidden kind above.
+  def type_static
+    div(class: tokens(input_classes, "text-[13px] flex items-center text-voodu-muted cursor-default")) do
+      "Generic webhook"
     end
   end
 
-  # slack / webhook — the destination URL. Hidden + disabled for
-  # telegram (its URL is derived from the bot token).
-  def endpoint_field
-    div(data: { destination_form_target: "urlWrap" }) do
-      field(
-        label: "Webhook URL",
-        hint:  endpoint_hint,
-        error: @destination.errors[:endpoint].first
-      ) do
-        text_input(
-          name: "alert_destination[endpoint]",
-          value: nil,
-          placeholder: persisted? ? "•••••• (unchanged)" : "https://hooks.slack.com/services/…",
-          mono: true
+  def url_field
+    field(label: "Webhook URL", hint: url_hint, error: @destination.errors[:endpoint].first) do
+      div(class: "relative", data: { controller: "reveal" }) do
+        input(
+          # New: visible while pasting. Edit: pre-filled + masked, eye reveals.
+          type:  persisted? ? "password" : "text",
+          name:  "alert_destination[endpoint]",
+          value: persisted? ? @destination.endpoint : nil,
+          placeholder: "https://hooks.slack.com/… · https://api.telegram.org/bot…/sendMessage",
+          autocomplete: "off", spellcheck: "false",
+          data: { reveal_target: "input" },
+          class: tokens(input_classes, "pr-10 font-voodu-mono text-[12.5px]")
         )
+        button(
+          type: "button",
+          title: "Show / hide URL",
+          data: { action: "click->reveal#toggle" },
+          class: "absolute right-[1px] top-[1px] bottom-[1px] px-2.5 text-voodu-muted hover:text-voodu-text border-l border-voodu-border bg-voodu-surface inline-flex items-center"
+        ) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
       end
     end
   end
 
-  # telegram — bot token (encrypted, blank-keeps) + chat_id (plain,
-  # shown). Hidden + disabled for the other kinds.
-  def telegram_field
-    div(hidden: true, data: { destination_form_target: "telegramWrap" }, class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-      field(label: "Bot token", hint: telegram_token_hint, error: @destination.errors[:secret].first) do
-        text_input(
-          name: "alert_destination[secret]", value: nil,
-          placeholder: persisted? ? "•••••• (unchanged)" : "123456789:AAH…", mono: true
-        )
-      end
-      field(label: "Chat ID", hint: "Where to send — see /getUpdates.", error: @destination.errors[:chat_id].first) do
-        text_input(name: "alert_destination[chat_id]", value: @destination.chat_id, placeholder: "987654321", mono: true)
-      end
-    end
+  def url_hint
+    persisted? ? "Leave blank to keep the current URL." : "http(s) endpoint we POST to. The eye reveals it."
   end
 
-  def telegram_token_hint
-    persisted? ? "Leave blank to keep the current token." : "From @BotFather (123456:AA…)."
-  end
-
-  # Generic webhook only — an optional custom auth header. Free-form
-  # name + value so any scheme works (Authorization: Bearer …,
-  # x-api-key: …, Authorization: Token token="…"). The name is shown
-  # on edit; the value is masked and kept-if-blank.
-  def secret_field
-    div(hidden: true, data: { destination_form_target: "authWrap" }, class: "flex flex-col gap-1.5") do
+  # Optional custom auth header — free-form name + value so any scheme
+  # works (Authorization: Bearer …, x-api-key: …, etc.).
+  def auth_header_field
+    div(class: "flex flex-col gap-1.5") do
       span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Auth header (optional)" }
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-2") do
-        text_input(
-          name: "alert_destination[secret_header]", value: @destination.secret_header,
-          placeholder: "Authorization / x-api-key", mono: true
-        )
-        text_input(
-          name: "alert_destination[secret]", value: nil,
-          placeholder: persisted? ? "•••••• (unchanged)" : "Bearer … / your-key", mono: true
-        )
+        text_input(name: "alert_destination[secret_header]", value: @destination.secret_header,
+                   placeholder: "Authorization / x-api-key", mono: true)
+        text_input(name: "alert_destination[secret]", value: nil,
+                   placeholder: persisted? ? "•••••• (unchanged)" : "Bearer … / your-key", mono: true)
       end
 
-      if (err = @destination.errors[:secret].first || @destination.errors[:secret_header].first)
-        div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
-          span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
-          span { err }
-        end
-      else
-        div(class: "text-[11.5px] text-voodu-muted") do
-          "Header name + value. Leave blank for no auth; leave value blank on edit to keep it."
-        end
-      end
+      hint_or_error(:secret, "Header name + value. Blank = no auth; value blank on edit keeps it.")
     end
   end
 
-  # Generic webhook only — an optional custom JSON body with {{token}}
-  # placeholders. Blank → the default structured payload. Hidden +
-  # disabled for the other kinds.
-  TEMPLATE_TOKENS = %w[
-    {{rule}} {{state}} {{target}} {{metric}} {{value}} {{threshold}}
-    {{peak}} {{unit}} {{island}} {{started_at}} {{resolved_at}} {{url}}
-  ].freeze
-
+  # Optional JSON body template with {{tokens}}. A popover offers
+  # starter templates per provider (fills the textarea).
   def body_template_field
-    div(hidden: true, data: { destination_form_target: "bodyWrap" }, class: "flex flex-col gap-1.5") do
-      span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
+    div(class: "flex flex-col gap-1.5", data: { controller: "template-picker" }) do
+      div(class: "flex items-center justify-between") do
+        span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
+        templates_popover
+      end
 
       textarea(
         name: "alert_destination[body_template]",
         rows: 6, spellcheck: "false", autocapitalize: "off", autocomplete: "off",
         placeholder: %({\n  "text": "{{rule}} is {{state}} on {{target}} ({{value}}{{unit}})"\n}),
+        data:  { template_picker_target: "textarea" },
         class: tokens(input_classes, "font-voodu-mono text-[12px] leading-relaxed py-2 h-auto resize-y")
       ) { @destination.body_template }
 
       if (err = @destination.errors[:body_template].first)
-        div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
-          span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
-          span { err }
-        end
+        error_line(err)
       else
         div(class: "text-[11.5px] text-voodu-muted") do
           plain "Valid JSON, sent as-is (blank = default payload). Tokens: "
-          span(class: "font-voodu-mono text-voodu-text-2") { TEMPLATE_TOKENS.join(" ") }
+          span(class: "font-voodu-mono text-voodu-text-2") { TOKENS.join(" ") }
+        end
+      end
+    end
+  end
+
+  def templates_popover
+    div(class: "relative", data: { controller: "dropdown" }) do
+      button(
+        type: "button",
+        title: "Insert a starter template",
+        data: { action: "click->dropdown#toggle" },
+        class: "inline-flex items-center gap-1 px-2 h-6 text-[11px] text-voodu-text-2 border border-voodu-border bg-voodu-surface hover:bg-voodu-surface-2 transition-colors"
+      ) do
+        render Icon::DocumentDuplicateOutline.new(class: "w-3 h-3 shrink-0")
+        span { "Templates" }
+        render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 opacity-70")
+      end
+
+      div(
+        hidden: true,
+        data:  { dropdown_target: "menu" },
+        class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl py-1"
+      ) do
+        PROVIDER_TEMPLATES.each do |label, json|
+          button(
+            type: "button",
+            data: { template: json, action: "click->template-picker#fill click->dropdown#close" },
+            class: "flex items-center gap-2 w-full px-3 py-2 text-left text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+          ) do
+            render Icon::DocumentDuplicateOutline.new(class: "w-3 h-3 shrink-0 text-voodu-muted")
+            span { label }
+          end
         end
       end
     end
@@ -198,8 +199,7 @@ class Views::AlertDestinations::Form < Views::Base
   def checkbox_row(name, label, checked)
     label(class: "inline-flex items-center gap-2 text-[12.5px] text-voodu-text-2 cursor-pointer select-none") do
       input(type: "hidden", name: name, value: "0")
-      input(type: "checkbox", name: name, value: "1", checked: checked,
-            class: "w-3.5 h-3.5 accent-voodu-accent")
+      input(type: "checkbox", name: name, value: "1", checked: checked, class: "w-3.5 h-3.5 accent-voodu-accent")
       span { label }
     end
   end
@@ -213,16 +213,7 @@ class Views::AlertDestinations::Form < Views::Base
     end
   end
 
-  def endpoint_hint
-    # On edit the hint is static ("blank keeps current") — don't wire
-    # the Stimulus target so the controller leaves it alone. On new,
-    # attach the target so kindChanged tailors it per type.
-    return span { "Leave blank to keep the current URL." } if persisted?
-
-    span(data: { destination_form_target: "endpointHint" }) { "The incoming-webhook URL (https)." }
-  end
-
-  # ---- shared field plumbing (same look as Views::AlertRules::Form) ----
+  # ---- shared field plumbing ----
 
   def field(label:, hint: nil, error: nil)
     div(class: "flex flex-col gap-1.5") do
@@ -231,13 +222,22 @@ class Views::AlertDestinations::Form < Views::Base
       yield
 
       if error
-        div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
-          span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
-          span { error }
-        end
+        error_line(error)
       elsif hint
         div(class: "text-[11.5px] text-voodu-muted") { hint }
       end
+    end
+  end
+
+  def hint_or_error(field, hint)
+    err = @destination.errors[field].first
+    err ? error_line(err) : div(class: "text-[11.5px] text-voodu-muted") { hint }
+  end
+
+  def error_line(message)
+    div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
+      span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
+      span { message }
     end
   end
 
@@ -249,23 +249,13 @@ class Views::AlertDestinations::Form < Views::Base
     )
   end
 
-  def select_input(name:, data: nil)
-    select(
-      name:  name,
-      data:  data,
-      class: tokens(input_classes, "text-[13px] appearance-none cursor-pointer")
-    ) { yield }
-  end
-
   def input_classes
     "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
       "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
   end
 
   def footer_actions
-    span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") do
-      plain "Delivered asynchronously, with retries."
-    end
+    span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") { "Delivered asynchronously, with retries." }
 
     div(class: "flex-1")
 
@@ -283,4 +273,48 @@ class Views::AlertDestinations::Form < Views::Base
       span { persisted? ? "Save changes" : "Create destination" }
     end
   end
+
+  # Starter body templates per provider. The operator fills the URL
+  # (and provider-specific bits like chat_id / routing_key) separately.
+  PROVIDER_TEMPLATES = {
+    "Slack" => <<~JSON.strip,
+      {
+        "text": "🚨 *{{rule}}* — {{state}}\\n`{{target}}` at {{value}}{{unit}} (threshold {{threshold}}{{unit}})"
+      }
+    JSON
+    "Telegram" => <<~JSON.strip,
+      {
+        "chat_id": "YOUR_CHAT_ID",
+        "parse_mode": "HTML",
+        "disable_web_page_preview": true,
+        "text": "🚨 <b>{{rule}}</b>\\n<i>{{state}}</i>\\n\\n📦 <code>{{target}}</code>\\n📊 {{metric}}: {{value}}{{unit}} (limite {{threshold}}{{unit}})\\n🕐 {{started_at}}"
+      }
+    JSON
+    "PagerDuty" => <<~JSON.strip,
+      {
+        "routing_key": "YOUR_ROUTING_KEY",
+        "event_action": "{{event_action}}",
+        "dedup_key": "{{dedup_key}}",
+        "payload": {
+          "summary": "{{rule}} {{state}} — {{target}} at {{value}}{{unit}}",
+          "severity": "critical",
+          "source": "{{island}}",
+          "custom_details": { "metric": "{{metric}}", "value": "{{value}}{{unit}}", "threshold": "{{threshold}}{{unit}}" }
+        }
+      }
+    JSON
+    "Zapier" => <<~JSON.strip
+      {
+        "event": "{{state}}",
+        "rule": "{{rule}}",
+        "target": "{{target}}",
+        "metric": "{{metric}}",
+        "value": "{{value}}",
+        "unit": "{{unit}}",
+        "threshold": "{{threshold}}",
+        "island": "{{island}}",
+        "started_at": "{{started_at}}"
+      }
+    JSON
+  }.freeze
 end

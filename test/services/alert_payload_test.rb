@@ -18,29 +18,6 @@ class AlertPayloadTest < ActiveSupport::TestCase
     @island.alert_destinations.new({ name: "d", kind: kind }.merge(attrs))
   end
 
-  test "slack payload is a text message naming rule, state and value" do
-    p = AlertPayload.for(@event, "firing", dest("slack", endpoint: "https://hooks.slack.com/services/T/B/X"))
-
-    assert p.key?(:text)
-    assert_includes p[:text], "Host CPU ≥ 90%"
-    assert_includes p[:text], "firing"
-    assert_includes p[:text], "95%"
-  end
-
-  test "resolved slack payload reads resolved" do
-    d = dest("slack", endpoint: "https://hooks.slack.com/services/T/B/X")
-    assert_includes AlertPayload.for(@event, "resolved", d)[:text], "resolved"
-  end
-
-  test "telegram payload carries chat_id and a plain text line" do
-    p = AlertPayload.for(@event, "firing", dest("telegram", secret: "1:AA", chat_id: "555"))
-
-    assert_equal "555", p[:chat_id]
-    assert_includes p[:text], "Host CPU ≥ 90%"
-    assert_includes p[:text], "95%"
-    assert_not p.key?(:parse_mode), "plain text — no markdown escaping pitfalls"
-  end
-
   test "webhook with a body template renders it to a verbatim JSON string" do
     d = dest("webhook", endpoint: "https://x.example/h",
              body_template: '{"text":"{{rule}} {{state}}","v":"{{value}}{{unit}}"}')
@@ -50,6 +27,32 @@ class AlertPayloadTest < ActiveSupport::TestCase
     parsed = JSON.parse(out)
     assert_equal "Host CPU ≥ 90% firing", parsed["text"]
     assert_equal "95%", parsed["v"]
+  end
+
+  test "pagerduty tokens: event_action flips, dedup_key is the stable episode id" do
+    d = dest("webhook", endpoint: "https://x.example/h",
+             body_template: '{"action":"{{event_action}}","key":"{{dedup_key}}"}')
+
+    # Same persisted event → same dedup_key across both transitions, so
+    # a resolve closes the incident the trigger opened.
+    rule = @island.alert_rules.create!(
+      name: "cpu", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+    ev = rule.alert_events.create!(
+      island: @island, state: "firing", started_at: 1.minute.ago,
+      threshold: 90, rule_name: rule.name, metric_kind: "cpu", target_label: "host alpha"
+    )
+
+    firing = JSON.parse(AlertPayload.for(ev, "firing", d))
+    resolved = JSON.parse(AlertPayload.for(ev, "resolved", d))
+
+    assert_equal "trigger", firing["action"]
+    assert_equal "resolve", resolved["action"]
+    assert_equal ev.to_dedup_key, firing["key"]
+    assert_equal firing["key"], resolved["key"], "dedup_key stable across transitions"
+    assert_not_equal ev.id.to_s, firing["key"], "opaque hash, not the raw id"
+    assert_match(/\A[0-9a-f]{64}\z/, firing["key"], "sha256 hex")
   end
 
   test "template tokens round noisy numbers and humanise the date" do

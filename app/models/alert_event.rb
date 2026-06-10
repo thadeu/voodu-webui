@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+
 # AlertEvent — one firing episode of a rule. Carries snapshots of the
 # rule's display attributes (name, metric, target, threshold) taken
 # at fire time, so the history list renders join-free and an edited
@@ -35,5 +37,16 @@ class AlertEvent < ApplicationRecord
   # Episode length — open episodes measure against now.
   def duration_seconds
     ((resolved_at || Time.current) - started_at).to_i
+  end
+
+  # Opaque, stable deduplication key for outbound notifications (e.g.
+  # a PagerDuty dedup_key). Derived from the episode's identity so
+  # it's IDENTICAL across this event's firing→resolved transition —
+  # letting a resolve close the incident its trigger opened — without
+  # leaking the raw sequential DB id to the receiver.
+  DEDUP_KEY_NAMESPACE = "voodu:alert_event"
+
+  def to_dedup_key
+    Digest::SHA256.hexdigest("#{DEDUP_KEY_NAMESPACE}:#{id}")
   end
 end

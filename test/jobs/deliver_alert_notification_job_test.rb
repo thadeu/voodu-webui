@@ -79,20 +79,6 @@ class DeliverAlertNotificationJobTest < ActiveJob::TestCase
     assert_requested stub
   end
 
-  test "telegram delivers to the derived sendMessage URL with chat_id" do
-    tg = @island.alert_destinations.create!(
-      name: "tg", kind: "telegram", secret: "123:AAA", chat_id: "555"
-    )
-    stub = stub_request(:post, "https://api.telegram.org/bot123:AAA/sendMessage")
-           .with(body: hash_including("chat_id" => "555"))
-           .to_return(status: 200, body: '{"ok":true}')
-
-    DeliverAlertNotificationJob.perform_now(@event.id, tg.id, "firing")
-
-    assert_requested stub
-    assert_equal "ok", tg.reload.last_status
-  end
-
   test "disabled destination is a no-op" do
     @dest.update!(enabled: false)
     DeliverAlertNotificationJob.perform_now(@event.id, @dest.id, "firing")

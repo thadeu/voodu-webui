@@ -61,8 +61,9 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
       secret_header: "Authorization", secret: "Bearer keep"
     )
 
+    # The URL is pre-filled in the real form, so it's re-submitted.
     patch alert_destination_path(tenant_key: @key, id: d.id), params: {
-      alert_destination: { name: "hdr", kind: "webhook", endpoint: "",
+      alert_destination: { name: "hdr", endpoint: "https://#{PUBLIC}/h",
                            secret_header: "", secret: "", on_firing: "1", on_resolved: "1" }
     }
 
@@ -70,29 +71,6 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Bearer keep", d.secret, "blank value keeps the stored credential"
     assert_nil d.secret_header.presence, "blank header name clears it (not secret)"
     assert_equal({}, d.auth_header)
-  end
-
-  test "create persists a telegram destination (token + chat_id)" do
-    post alert_destinations_path(tenant_key: @key), params: {
-      alert_destination: {
-        name: "beto", kind: "telegram", secret: "123:AAA", chat_id: "555", on_firing: "1"
-      }
-    }
-
-    d = AlertDestination.order(:id).last
-    assert_equal "telegram", d.kind
-    assert_equal "123:AAA", d.secret
-    assert_equal "555", d.chat_id
-    assert_equal "https://api.telegram.org/bot123:AAA/sendMessage", d.delivery_url
-    assert_redirected_to alerts_path(tenant_key: @key, tab: "destinations")
-  end
-
-  test "telegram without a chat_id re-renders with the error" do
-    post alert_destinations_path(tenant_key: @key), params: {
-      alert_destination: { name: "beto", kind: "telegram", secret: "123:AAA", on_firing: "1" }
-    }
-
-    assert_response :unprocessable_entity
   end
 
   test "create persists a webhook body template" do
@@ -120,27 +98,27 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "valid JSON"
   end
 
-  test "invalid create re-renders with the inline error" do
+  test "invalid create (non-http endpoint) re-renders with the inline error" do
     post alert_destinations_path(tenant_key: @key), params: {
-      alert_destination: { name: "bad", kind: "slack", endpoint: "https://evil.example/x", on_firing: "1" }
+      alert_destination: { name: "bad", endpoint: "ftp://evil.example/x", on_firing: "1" }
     }
 
     assert_response :unprocessable_entity
-    assert_includes response.body, "hooks.slack.com"
+    assert_includes response.body, "http(s) URL"
   end
 
-  test "blank endpoint on edit keeps the stored value" do
+  test "edit re-saves the (pre-filled, revealable) endpoint" do
     d = @island.alert_destinations.create!(
       name: "keep", kind: "webhook", endpoint: "https://#{PUBLIC}/keep"
     )
 
     patch alert_destination_path(tenant_key: @key, id: d.id), params: {
-      alert_destination: { name: "keep2", kind: "webhook", endpoint: "", on_firing: "1", on_resolved: "1" }
+      alert_destination: { name: "keep2", endpoint: "https://#{PUBLIC}/new", on_firing: "1", on_resolved: "1" }
     }
 
     d.reload
     assert_equal "keep2", d.name
-    assert_equal "https://#{PUBLIC}/keep", d.endpoint
+    assert_equal "https://#{PUBLIC}/new", d.endpoint
   end
 
   test "test action delivers and records ok" do

@@ -21,7 +21,7 @@ class AlertNotifierTest < ActiveJob::TestCase
       on_firing: true, on_resolved: false
     )
     @both = @island.alert_destinations.create!(
-      name: "slack", kind: "slack", endpoint: "https://hooks.slack.com/services/T/B/X",
+      name: "slack", kind: "webhook", endpoint: "https://hooks.slack.com/services/T/B/X",
       on_firing: true, on_resolved: true
     )
   end
