@@ -157,8 +157,17 @@ Rails.application.routes.draw do
     end
 
 
-    get  "/alerts",   to: "alerts#index",   as: :alerts
-    get  "/settings", to: "settings#index", as: :settings
+    get "/alerts",   to: "alerts#index",   as: :alerts
+
+    # Alert rules — operator-defined thresholds over the metrics
+    # warehouse (CRUD + pause/resume). `show` is omitted: a rule is
+    # "viewed" on /alerts itself. `defaults` seeds the host-level
+    # starter pack (disk/cpu/mem) for a zero-rules island.
+    resources :alert_rules, path: "alerts/rules", only: [:new, :create, :edit, :update, :destroy] do
+      member     { post :toggle }
+      collection { post :defaults }
+    end
+    get "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same tenant scope so the
     # per-server context (current_island) flows through naturally.
     post   "/settings/reconnect",       to: "settings#reconnect",  as: :reconnect_settings

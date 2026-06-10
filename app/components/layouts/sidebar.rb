@@ -361,32 +361,45 @@ class Components::Layouts::Sidebar < Components::Base
         render icon_klass.new(class: "w-4 h-4 shrink-0")
 
         # Collapsed-state badge — small dot in the top-right of the
-        # icon. Only renders when there's a count > 0; only visible
-        # when the sidebar is collapsed.
-        if badge_count&.positive?
-          span(
-            class: "hidden vmd:group-data-[collapsed]:inline-flex absolute -top-1 -right-1 items-center justify-center min-w-[12px] h-[12px] px-1 text-[9px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red rounded-full leading-none",
-            aria:  { label: "#{badge_count} alerts" }
-          ) { badge_count.to_s }
+        # icon, visible only when the sidebar is collapsed. The
+        # id-bearing wrapper ALWAYS renders (even at count 0) so the
+        # AlertsLive broadcast has a stable `update` target; the
+        # NavBadge inside renders nothing when nothing is firing.
+        if item[:badge] && nav_island
+          span(id: "alerts-badge-dot-#{nav_island.id}") do
+            render Components::Alerts::NavBadge.new(count: badge_count, variant: :dot)
+          end
         end
       end
 
       span(class: "flex-1 text-left vmd:group-data-[collapsed]:hidden") { item[:label] }
 
-      # Expanded-state badge — inline right-aligned pill, same look
-      # as before. Hidden when collapsed (the icon badge takes over).
-      if badge_count&.positive?
-        span(class: "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red vmd:group-data-[collapsed]:hidden") { badge_count.to_s }
+      # Expanded-state badge — inline right-aligned pill. Hidden when
+      # collapsed (the icon badge takes over). Same always-rendered
+      # wrapper contract as the dot above.
+      if item[:badge] && nav_island
+        span(id: "alerts-badge-pill-#{nav_island.id}", class: "vmd:group-data-[collapsed]:hidden") do
+          render Components::Alerts::NavBadge.new(count: badge_count, variant: :pill)
+        end
       end
     end
   end
 
+  # Firing count for the island the nav links point at. Scoped to ONE
+  # island on purpose — the sidebar nav is per-island context; other
+  # islands' incidents surface on their own pages (cross-island
+  # roll-up is an explicit non-goal for v1).
   def nav_badge_count(key)
     return nil unless key
+    return nil if nav_island.nil?
 
     case key
-    when :alerts_count then 2 # TODO: real alerts feed
+    when :alerts_count then AlertRule.firing_count_for(nav_island.id)
     end
+  end
+
+  def nav_island
+    @current_island || @islands.first
   end
 
   def nav_active?(item)

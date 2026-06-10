@@ -45,6 +45,14 @@ common: &common
     # invoke docker stats).
     schedule: every 15 seconds
 
+  alerts_evaluation:
+    class: AlertsEvaluationOrchestratorJob
+    # 30s — two warehouse sync ticks (14s) land between evaluations,
+    # so each pass sees fresh buckets without re-judging the same
+    # data. Local SQLite reads only; detection latency ceiling is
+    # rule duration + ~45s, fine for infra alerting.
+    schedule: every 30 seconds
+
   log_tail_orchestrator:
     class: LogTailOrchestratorJob
     # 1 min cadence — fast enough to recover from a crashed tail job

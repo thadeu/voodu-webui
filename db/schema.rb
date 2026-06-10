@@ -10,7 +10,52 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_09_225620) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_09_230100) do
+  create_table "alert_events", force: :cascade do |t|
+    t.integer "alert_rule_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "island_id", null: false
+    t.float "last_value"
+    t.string "metric_kind", null: false
+    t.float "peak_value"
+    t.datetime "resolved_at"
+    t.string "rule_name", null: false
+    t.datetime "started_at", null: false
+    t.string "state", default: "firing", null: false
+    t.string "target_label", null: false
+    t.float "threshold", null: false
+    t.datetime "updated_at", null: false
+    t.index ["alert_rule_id"], name: "index_alert_events_on_alert_rule_id"
+    t.index ["alert_rule_id"], name: "index_alert_events_one_firing_per_rule", unique: true, where: "state = 'firing'"
+    t.index ["island_id", "started_at"], name: "index_alert_events_on_island_id_and_started_at"
+    t.index ["island_id", "state"], name: "index_alert_events_on_island_id_and_state"
+    t.index ["island_id"], name: "index_alert_events_on_island_id"
+  end
+
+  create_table "alert_rules", force: :cascade do |t|
+    t.string "comparator", default: "gte", null: false
+    t.datetime "created_at", null: false
+    t.integer "duration_seconds", default: 300, null: false
+    t.boolean "enabled", default: true, null: false
+    t.boolean "firing", default: false, null: false
+    t.datetime "firing_since"
+    t.integer "island_id", null: false
+    t.datetime "last_evaluated_at"
+    t.string "last_status"
+    t.float "last_value"
+    t.string "metric_kind", null: false
+    t.string "name", null: false
+    t.string "target_kind", default: "host", null: false
+    t.string "target_name"
+    t.string "target_scope"
+    t.float "threshold", null: false
+    t.datetime "updated_at", null: false
+    t.index ["island_id", "enabled"], name: "index_alert_rules_on_island_id_and_enabled"
+    t.index ["island_id", "firing"], name: "index_alert_rules_on_island_id_and_firing"
+    t.index ["island_id", "name"], name: "index_alert_rules_on_island_id_and_name", unique: true
+    t.index ["island_id"], name: "index_alert_rules_on_island_id"
+  end
+
   create_table "islands", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "endpoint", null: false
@@ -83,6 +128,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_225620) do
     t.index ["island_id"], name: "index_systems_on_island_id", unique: true
   end
 
+  add_foreign_key "alert_events", "alert_rules", on_delete: :cascade
+  add_foreign_key "alert_events", "islands", on_delete: :cascade
+  add_foreign_key "alert_rules", "islands", on_delete: :cascade
   add_foreign_key "metric_dashboards", "islands", on_delete: :cascade
   add_foreign_key "pods", "islands", on_delete: :cascade
   add_foreign_key "systems", "islands", on_delete: :cascade
