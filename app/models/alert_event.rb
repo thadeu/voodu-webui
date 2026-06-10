@@ -26,6 +26,12 @@ class AlertEvent < ApplicationRecord
     AlertRule.format_metric_value(value, metric_kind)
   end
 
+  # Unit derived from the snapshotted metric_kind (no dependency on
+  # the live rule, which may be edited/gone).
+  def unit
+    AlertRule::PERCENT_KINDS.include?(metric_kind) ? "%" : "req/s"
+  end
+
   # Episode length — open episodes measure against now.
   def duration_seconds
     ((resolved_at || Time.current) - started_at).to_i

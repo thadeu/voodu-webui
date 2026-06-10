@@ -133,6 +133,7 @@ class AlertEvaluator
 
   def fire!(rule, window, last_value)
     started_at = Time.zone.at(window.first[:epoch])
+    event      = nil
 
     rule.transaction do
       # Re-check enabled inside the transaction: the operator may have
@@ -142,7 +143,7 @@ class AlertEvaluator
       # `enabled` scope then never re-evaluates (permanent red card).
       return false unless AlertRule.where(id: rule.id, enabled: true).exists?
 
-      rule.alert_events.create!(
+      event = rule.alert_events.create!(
         island:       @island,
         state:        "firing",
         started_at:   started_at,
@@ -157,15 +158,19 @@ class AlertEvaluator
     end
 
     AlertsLive.broadcast(@island)
+    AlertNotifier.enqueue(event, "firing") if event
   rescue ActiveRecord::RecordNotUnique
     # A concurrent tick already opened the episode (partial unique
-    # index on one-firing-per-rule). Adopt its verdict.
+    # index on one-firing-per-rule). Adopt its verdict — and don't
+    # notify; the tick that actually created the event already did.
     rule.update_columns(firing: true, firing_since: started_at)
   end
 
   def resolve!(rule, last_value)
+    event = rule.open_event
+
     rule.transaction do
-      rule.open_event&.update!(
+      event&.update!(
         state:       "resolved",
         resolved_at: Time.current,
         last_value:  last_value
@@ -174,6 +179,7 @@ class AlertEvaluator
     end
 
     AlertsLive.broadcast(@island)
+    AlertNotifier.enqueue(event, "resolved") if event
   end
 
   # While an episode stays open, keep its live numbers honest so the

@@ -10,7 +10,29 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_09_230100) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_10_150000) do
+  create_table "alert_destinations", force: :cascade do |t|
+    t.text "body_template"
+    t.string "chat_id"
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.text "endpoint_ciphertext", null: false
+    t.integer "island_id", null: false
+    t.string "kind", null: false
+    t.datetime "last_delivered_at"
+    t.string "last_error"
+    t.string "last_status"
+    t.string "name", null: false
+    t.boolean "on_firing", default: true, null: false
+    t.boolean "on_resolved", default: true, null: false
+    t.text "secret_ciphertext"
+    t.string "secret_header"
+    t.datetime "updated_at", null: false
+    t.index ["island_id", "enabled"], name: "index_alert_destinations_on_island_id_and_enabled"
+    t.index ["island_id", "name"], name: "index_alert_destinations_on_island_id_and_name", unique: true
+    t.index ["island_id"], name: "index_alert_destinations_on_island_id"
+  end
+
   create_table "alert_events", force: :cascade do |t|
     t.integer "alert_rule_id", null: false
     t.datetime "created_at", null: false
@@ -30,6 +52,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_230100) do
     t.index ["island_id", "started_at"], name: "index_alert_events_on_island_id_and_started_at"
     t.index ["island_id", "state"], name: "index_alert_events_on_island_id_and_state"
     t.index ["island_id"], name: "index_alert_events_on_island_id"
+  end
+
+  create_table "alert_rule_destinations", force: :cascade do |t|
+    t.integer "alert_destination_id", null: false
+    t.integer "alert_rule_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["alert_destination_id"], name: "index_alert_rule_destinations_on_alert_destination_id"
+    t.index ["alert_rule_id", "alert_destination_id"], name: "index_alert_rule_destinations_unique", unique: true
+    t.index ["alert_rule_id"], name: "index_alert_rule_destinations_on_alert_rule_id"
   end
 
   create_table "alert_rules", force: :cascade do |t|
@@ -128,8 +160,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_09_230100) do
     t.index ["island_id"], name: "index_systems_on_island_id", unique: true
   end
 
+  add_foreign_key "alert_destinations", "islands", on_delete: :cascade
   add_foreign_key "alert_events", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_events", "islands", on_delete: :cascade
+  add_foreign_key "alert_rule_destinations", "alert_destinations", on_delete: :cascade
+  add_foreign_key "alert_rule_destinations", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_rules", "islands", on_delete: :cascade
   add_foreign_key "metric_dashboards", "islands", on_delete: :cascade
   add_foreign_key "pods", "islands", on_delete: :cascade

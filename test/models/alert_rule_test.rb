@@ -168,6 +168,38 @@ class AlertRuleTest < ActiveSupport::TestCase
     assert_equal({ scope_kind: "host" }, rule.metrics_link_params)
   end
 
+  test "destinations_for: no selection notifies all enabled destinations wanting the transition" do
+    rule = @island.alert_rules.create!(
+      name: "cpu", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+    firing_only = @island.alert_destinations.create!(
+      name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true, on_resolved: false
+    )
+    both = @island.alert_destinations.create!(
+      name: "b", kind: "webhook", endpoint: "https://b.example/h", on_firing: true, on_resolved: true
+    )
+    disabled = @island.alert_destinations.create!(
+      name: "c", kind: "webhook", endpoint: "https://c.example/h", enabled: false
+    )
+
+    assert_equal [firing_only.id, both.id].sort, rule.destinations_for("firing").map(&:id).sort
+    assert_equal [both.id], rule.destinations_for("resolved").map(&:id)
+    assert_not_includes rule.destinations_for("firing").map(&:id), disabled.id
+  end
+
+  test "destinations_for: an explicit subset overrides the all-default" do
+    rule = @island.alert_rules.create!(
+      name: "cpu", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+    a = @island.alert_destinations.create!(name: "a", kind: "webhook", endpoint: "https://a.example/h")
+    @island.alert_destinations.create!(name: "b", kind: "webhook", endpoint: "https://b.example/h")
+    rule.update!(alert_destinations: [a])
+
+    assert_equal [a.id], rule.destinations_for("firing").map(&:id)
+  end
+
   test "condition_label composes comparator, value and duration" do
     rule = @island.alert_rules.new(
       metric_kind: "disk", comparator: "gte", threshold: 85, duration_seconds: 300

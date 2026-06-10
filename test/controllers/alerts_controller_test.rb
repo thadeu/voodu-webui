@@ -92,6 +92,8 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes response.body, "Open metrics"
     assert_includes response.body, metrics_path(tenant_key: @key, scope_kind: "pod", scope_id: "fsw-controller.e1e1")
+    assert_includes response.body, "Open rule"
+    assert_includes response.body, edit_alert_rule_path(tenant_key: @key, id: rule.id)
   end
 
   test "history tab renders the timeline and the date filter" do
@@ -146,6 +148,29 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_not_includes response.body, "No resolved alerts in this range"
+  end
+
+  test "destinations tab renders the destinations table" do
+    @island.alert_destinations.create!(
+      name: "ops-slack", kind: "slack", endpoint: "https://hooks.slack.com/services/T/B/X"
+    )
+
+    get alerts_path(tenant_key: @key, tab: "destinations")
+
+    assert_response :success
+    assert_includes response.body, "ops-slack"
+    assert_includes response.body, "New destination"
+  end
+
+  test "rule form lists the destinations to notify" do
+    @island.alert_destinations.create!(name: "ops", kind: "webhook", endpoint: "https://x.example/h")
+
+    get new_alert_rule_path(tenant_key: @key)
+
+    assert_response :success
+    assert_includes response.body, "Notify destinations"
+    assert_includes response.body, "ops"
+    assert_includes response.body, "alert_rule[alert_destination_ids][]"
   end
 
   test "an unknown tab falls back to active" do

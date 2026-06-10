@@ -44,8 +44,9 @@ class Island < ApplicationRecord
   # Alert rules + their firing episodes. Events also cascade through
   # alert_rules, but the direct association lets the /alerts history
   # render island-wide without joining rules.
-  has_many :alert_rules,  dependent: :destroy
-  has_many :alert_events, dependent: :destroy
+  has_many :alert_rules,        dependent: :destroy
+  has_many :alert_events,       dependent: :destroy
+  has_many :alert_destinations, dependent: :destroy
 
   before_validation :normalize_endpoint
   before_validation :ensure_key, on: :create

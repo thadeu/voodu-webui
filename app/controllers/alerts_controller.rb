@@ -25,7 +25,7 @@ class AlertsController < ApplicationController
   # active_tab — which panel to render: active (firing) | rules |
   # history. Defaults to active; an unknown ?tab= falls back rather
   # than 404ing a bookmarked URL.
-  TABS = %w[active rules history].freeze
+  TABS = %w[active rules destinations history].freeze
 
   def active_tab
     t = params[:tab].to_s

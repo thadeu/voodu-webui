@@ -32,29 +32,39 @@ class Components::Alerts::FiringCard < Components::Base
           plain "firing for #{Island.humanize_uptime(@event.duration_seconds)}"
           plain " · started #{ago(@event.started_at)}"
         end
-        metrics_link
+        action_links
       end
     end
   end
 
-  # Small inline link under the firing meta — jump to the target's
-  # chart on /metrics. Reads the live rule (includes-loaded in
-  # AlertsPageData#firing_events) for the target; the event only
-  # snapshots a label string. Falls back to the bare metrics page if
-  # the rule is somehow gone.
-  def metrics_link
+  # Small inline links under the firing meta. "Open metrics" jumps to
+  # the target's chart; "Open rule" jumps to the rule's edit form.
+  # Both read the live rule (includes-loaded in
+  # AlertsPageData#firing_events) — the event only snapshots labels.
+  def action_links
     rule = @event.alert_rule
-    href = rule ? metrics_path(rule.metrics_link_params) : metrics_path
 
+    div(class: "flex items-center gap-1.5 mt-1.5") do
+      pill_link(
+        rule ? metrics_path(rule.metrics_link_params) : metrics_path,
+        "Open metrics for #{@event.target_label}", :ChartBarOutline, "Open metrics"
+      )
+      if rule
+        pill_link(edit_alert_rule_path(rule), "Edit #{rule.name}", :PencilSquareOutline, "Open rule")
+      end
+    end
+  end
+
+  def pill_link(href, title, icon, label)
     a(
       href:  href,
-      title: "Open metrics for #{@event.target_label}",
-      class: "inline-flex items-center gap-1 mt-1.5 w-fit px-2 h-6 text-[11px] " \
+      title: title,
+      class: "inline-flex items-center gap-1 w-fit px-2 h-6 text-[11px] " \
              "bg-voodu-surface text-voodu-text border border-voodu-border " \
              "hover:bg-voodu-surface-2 transition-colors"
     ) do
-      render Icon::ChartBarOutline.new(class: "w-3 h-3 shrink-0")
-      span { "Open metrics" }
+      render Icon.const_get(icon).new(class: "w-3 h-3 shrink-0")
+      span { label }
     end
   end
 

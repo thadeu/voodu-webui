@@ -94,10 +94,12 @@ class AlertRulesController < ApplicationController
   end
 
   def render_form(status: nil)
+    page = AlertsPageData.new(current_island)
     view = Views::AlertRules::Form.new(
       **dashboard_context,
-      rule:    @rule,
-      targets: AlertsPageData.new(current_island).targets
+      rule:         @rule,
+      targets:      page.targets,
+      destinations: page.destinations
     )
 
     status ? render(view, status: status) : render(view)
@@ -106,9 +108,15 @@ class AlertRulesController < ApplicationController
   def rule_attributes
     permitted = params.require(:alert_rule)
                       .permit(:name, :metric_kind, :target, :comparator,
-                              :threshold, :duration_seconds)
+                              :threshold, :duration_seconds, alert_destination_ids: [])
     attrs  = permitted.to_h
     target = attrs.delete("target").to_s
+
+    # Drop the empty-string sentinel the form sends so an all-unchecked
+    # submit clears the association cleanly (rejecting blank ids).
+    if attrs["alert_destination_ids"].is_a?(Array)
+      attrs["alert_destination_ids"] = attrs["alert_destination_ids"].reject(&:blank?)
+    end
 
     if target.start_with?("pod|")
       _, scope, name = target.split("|", 3)

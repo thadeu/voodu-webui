@@ -12,9 +12,10 @@
 # counts refresh on every fire/resolve broadcast.
 class Components::Alerts::LiveBody < Components::Base
   TABS = [
-    { id: :active,  label: "Active" },
-    { id: :rules,   label: "Rules" },
-    { id: :history, label: "History" }
+    { id: :active,       label: "Active" },
+    { id: :rules,        label: "Rules" },
+    { id: :destinations, label: "Destinations" },
+    { id: :history,      label: "History" }
   ].freeze
 
   def initialize(data:, active_tab: :active)
@@ -23,7 +24,11 @@ class Components::Alerts::LiveBody < Components::Base
   end
 
   def view_template
-    if @data.rules?
+    # Show the tabbed UI once anything exists — rules OR destinations.
+    # Destinations are configured independently of rules, so a fresh
+    # island with a Slack target but no rules yet still reaches the
+    # Destinations tab instead of the rules-onboarding empty state.
+    if @data.rules? || @data.destinations_count.positive?
       tab_bar
       active_panel
     else
@@ -72,18 +77,20 @@ class Components::Alerts::LiveBody < Components::Base
 
   def tab_count(id)
     case id
-    when :active  then @data.firing_count
-    when :rules   then @data.rules_count
-    when :history then @data.history_count
+    when :active       then @data.firing_count
+    when :rules        then @data.rules_count
+    when :destinations then @data.destinations_count
+    when :history      then @data.history_count
     end
   end
 
   def active_panel
     div(class: "pt-4") do
       case @active_tab
-      when :active  then active_tab_panel
-      when :rules   then render Components::Alerts::RulesTable.new(rules: @data.rules)
-      when :history then history_panel
+      when :active       then active_tab_panel
+      when :rules        then render Components::Alerts::RulesTable.new(rules: @data.rules)
+      when :destinations then render Components::Alerts::DestinationsTable.new(destinations: @data.destinations)
+      when :history      then history_panel
       end
     end
   end

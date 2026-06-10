@@ -13,12 +13,26 @@ class Components::Alerts::RulesTable < Components::Base
   end
 
   def view_template
-    div(class: "border border-voodu-border bg-voodu-surface") do
-      @rules.each { |rule| rule_row(rule) }
+    if @rules.empty?
+      empty_row
+    else
+      div(class: "border border-voodu-border bg-voodu-surface") do
+        @rules.each { |rule| rule_row(rule) }
+      end
     end
   end
 
   private
+
+  def empty_row
+    div(class: "flex items-center justify-between gap-3 px-3.5 py-4 border border-voodu-border bg-voodu-surface") do
+      span(class: "text-[12.5px] text-voodu-muted") { "No alert rules yet." }
+      render Components::UI::Button.new(variant: :primary, size: :sm, tag: :a, href: new_alert_rule_path) do
+        render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
+        span(class: "hidden vmd:inline") { "New rule" }
+      end
+    end
+  end
 
   def rule_row(rule)
     div(

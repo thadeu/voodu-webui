@@ -20,6 +20,8 @@
 class AlertRule < ApplicationRecord
   belongs_to :island
   has_many :alert_events, dependent: :destroy
+  has_many :alert_rule_destinations, dependent: :destroy
+  has_many :alert_destinations, through: :alert_rule_destinations
 
   METRIC_KINDS = %w[cpu memory disk req_s].freeze
   TARGET_KINDS = %w[host pod].freeze
@@ -82,6 +84,20 @@ class AlertRule < ApplicationRecord
     alert_events.firing.first
   end
 
+  # Destinations to notify for a fire/resolve `transition`. An empty
+  # explicit selection means "all" — the same convention the logs
+  # PodScopePicker uses (no rows checked = all pods). So a rule with
+  # no join rows fans out to every enabled island destination that
+  # wants this transition; a rule with rows uses exactly that subset
+  # (still filtered by enabled + the destination's firing/resolved
+  # toggle).
+  def destinations_for(transition)
+    chosen = alert_destinations.select(&:enabled?)
+    pool   = chosen.any? ? chosen : island.alert_destinations.enabled.to_a
+
+    pool.select { |d| d.notifies?(transition) }
+  end
+
   # Params to deep-link this rule's target into /metrics so the
   # operator lands straight on the relevant chart grid. Host rules go
   # to the host scope; pod rules resolve a current replica's container
@@ -119,17 +135,25 @@ class AlertRule < ApplicationRecord
     secs >= 60 ? "#{secs / 60}m" : "#{secs}s"
   end
 
+  # "92.3" — the bare rounded number (1 decimal, trailing .0 trimmed),
+  # no unit. Shared by format_metric_value and the webhook template
+  # tokens so a value never renders with 14 decimals of float noise.
+  def self.format_metric_number(value)
+    return "" if value.nil?
+
+    rounded = value.to_f.round(1)
+    rounded % 1 == 0 ? rounded.to_i.to_s : rounded.to_s
+  end
+
   # "92.3%" / "3.2 req/s" — the one value formatter every surface
   # (firing cards, rules table, history rows) shares, so a value
   # never renders with the unit glued differently in two places.
   def self.format_metric_value(value, metric_kind)
     return "—" if value.nil?
 
-    rounded = value.to_f.round(1)
-    rounded = rounded.to_i if rounded % 1 == 0
-    suffix  = PERCENT_KINDS.include?(metric_kind) ? "%" : " req/s"
+    suffix = PERCENT_KINDS.include?(metric_kind) ? "%" : " req/s"
 
-    "#{rounded}#{suffix}"
+    "#{format_metric_number(value)}#{suffix}"
   end
 
   def format_value(value)

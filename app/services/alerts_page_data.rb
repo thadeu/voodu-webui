@@ -66,6 +66,14 @@ class AlertsPageData
     @rules_count ||= island.alert_rules.count
   end
 
+  def destinations
+    @destinations ||= island.alert_destinations.order(:name).to_a
+  end
+
+  def destinations_count
+    @destinations_count ||= island.alert_destinations.count
+  end
+
   def history_count
     @history_count ||= island.alert_events.resolved.count
   end

@@ -14,12 +14,13 @@
 # req/s = deployments-only) and swaps the unit suffix. Server-side
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
-  def initialize(current_path:, rule:, targets: [], islands: [], current_island: nil)
+  def initialize(current_path:, rule:, targets: [], destinations: [], islands: [], current_island: nil)
     @current_path   = current_path
     @islands        = islands
     @current_island = current_island
     @rule           = rule
     @targets        = targets
+    @destinations   = destinations
   end
 
   def view_template
@@ -89,7 +90,53 @@ class Views::AlertRules::Form < Views::Base
         end
       end
 
+      destinations_field
+
       input(type: "submit", class: "hidden", "aria-hidden": "true")
+    end
+  end
+
+  # Which destinations this rule notifies. Empty = all (server-side
+  # default). Rendered as an inline scrollable checkbox list — NOT an
+  # absolute dropdown — because inside the modal an absolute menu gets
+  # clipped by the modal/footer edge. When no destinations exist yet,
+  # point the operator at the Destinations tab instead of an empty box.
+  def destinations_field
+    field(label: "Notify destinations", hint: "Leave empty to notify all destinations.") do
+      if @destinations.empty?
+        div(class: "text-[12px] text-voodu-muted") do
+          plain "No destinations configured. "
+          a(href: alerts_path(tab: "destinations"), class: "text-voodu-accent-2 hover:underline") { "Add one" }
+          plain " to send alerts to Slack, Telegram or a webhook."
+        end
+      else
+        destinations_list
+      end
+    end
+  end
+
+  def destinations_list
+    selected = @rule.alert_destination_ids
+
+    div(class: "border border-voodu-border bg-voodu-surface max-h-[150px] overflow-y-auto") do
+      # Empty sentinel so an all-unchecked submit clears the
+      # association (a checkbox group with nothing checked otherwise
+      # omits the key and would leave it unchanged on update).
+      input(type: "hidden", name: "alert_rule[alert_destination_ids][]", value: "")
+
+      @destinations.each { |dest| destination_row(dest, selected.include?(dest.id)) }
+    end
+  end
+
+  def destination_row(dest, checked)
+    label(class: "flex items-center gap-2.5 w-full px-3 py-2 cursor-pointer hover:bg-voodu-surface-2 " \
+                 "text-[12.5px] text-voodu-text-2 border-b border-voodu-border-2 last:border-b-0") do
+      input(
+        type: "checkbox", name: "alert_rule[alert_destination_ids][]", value: dest.id,
+        checked: checked, class: "w-3.5 h-3.5 accent-voodu-accent"
+      )
+      span(class: "truncate") { dest.name }
+      span(class: "text-[10px] uppercase tracking-[0.05em] text-voodu-muted-2 ml-auto shrink-0") { dest.kind }
     end
   end
 

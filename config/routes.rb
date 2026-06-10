@@ -167,6 +167,13 @@ Rails.application.routes.draw do
       member     { post :toggle }
       collection { post :defaults }
     end
+
+    # Alert destinations — shared notification targets (Slack / generic
+    # webhook). `test` sends a one-off probe payload. `show` omitted:
+    # destinations are viewed on the /alerts Destinations tab.
+    resources :alert_destinations, path: "alerts/destinations", only: [:new, :create, :edit, :update, :destroy] do
+      member { post :test }
+    end
     get "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same tenant scope so the
     # per-server context (current_island) flows through naturally.
