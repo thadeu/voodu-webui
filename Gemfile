@@ -24,17 +24,10 @@ gem "phlex-rails", "~> 2.4"
 gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"
 
-# rubyzip — used by LogExportJob to bundle "group by pod" exports
-# into a single .zip download (one .ndjson per pod inside). MIT
-# license, no native extension, pure Ruby. Loaded only by the job
-# (require "zip" inside #generate_zip!), so the rest of the app
-# pays nothing for it.
-gem "rubyzip", "~> 2.3", require: false
-
 # csv — stdlib in Ruby ≤3.3, bundled gem from Ruby 3.4 onward
-# (must be in the Gemfile to load). Used by LogExportJob's CSV
-# output format. `require: false` because only the export job
-# needs it; loaded on-demand via `require "csv"` inside the job.
+# (must be in the Gemfile to load). Used by LogTail::LineFormatter for
+# the /logs/analytics CSV export. `require: false` — LineFormatter does
+# its own `require "csv"`.
 gem "csv", "~> 3.3", require: false
 
 # poller — Go-based NDJSON poller for voodu islands. Ships a
@@ -48,4 +41,14 @@ group :development, :test do
   gem "brakeman", require: false
   gem "rubocop-rails-omakase", require: false
   gem "dotenv-rails"
+end
+
+group :test do
+  # webmock — block real outbound HTTP in tests. Island health probes
+  # (IslandHealth#probe → Voodu::Client) hit the controller endpoint on
+  # render; against an unreachable fixture host that means a multi-second
+  # connect timeout PER render. With WebMock the connection is refused
+  # instantly, probe's rescue → :offline, and renders stay in-process.
+  # `require: false` — loaded explicitly by test_helper.
+  gem "webmock", require: false
 end
