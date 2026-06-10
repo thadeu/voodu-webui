@@ -1,0 +1,5 @@
+{
+  "rubyLsp.rubyVersionManager": { "identifier": "rbenv" },
+  "rubyLsp.formatter": "rubocop",
+  "rubyLsp.linters": ["rubocop"]
+}

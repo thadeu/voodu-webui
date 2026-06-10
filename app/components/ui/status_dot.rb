@@ -21,7 +21,9 @@ class Components::UI::StatusDot < Components::Base
     error:      "var(--voodu-red)",
     stopped:    "var(--voodu-muted)",
     pending:    "var(--voodu-muted)",
-    unknown:    "var(--voodu-muted)"
+    # unknown reads as an alert (red), same as offline — a missing health
+    # status is a problem, not a neutral state.
+    unknown:    "var(--voodu-red)"
   }.freeze
 
   def initialize(status:, size: 7, pulse: nil)
