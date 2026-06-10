@@ -65,6 +65,17 @@ class StateDigestService
     return unless island
 
     persist(island, pods, system)
+    # Keep last_synced_at honest from the poller/digest path too — the
+    # Ruby StateSyncIslandJob bumps it itself, but this path skipped it,
+    # freezing the column (and anything reading it directly) at the last
+    # Ruby sync even while snapshots stayed fresh.
+    island.update_columns(last_synced_at: Time.current)
+    # A successful digest means the poller just reached the controller —
+    # confirm it online, exactly like StateSyncIslandJob does. Without
+    # this, poller-mode islands have NO health-warm path, so status_for
+    # read :unknown and the pill flickered offline→online between the
+    # sporadic Ruby ticks that did warm it.
+    IslandHealth.warm(island, online: true)
     broadcast_state_tick(island)
     island
   end

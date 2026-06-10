@@ -71,11 +71,14 @@ class IslandState
     @system ||= @island.system&.payload_hash
   end
 
-  # synced_at — Time of the last successful sync for this island.
-  # nil for brand-new islands (the orchestrator + after_create_commit
-  # both fire within seconds, so the nil window is tiny in practice).
+  # synced_at — when the data on screen was actually last written. The
+  # freshest of the System snapshot's updated_at (bumped by BOTH ingest
+  # paths — the Ruby StateSyncIslandJob AND the Go-poller digest) and the
+  # last_synced_at column (only the Ruby path maintains it). Reading the
+  # column alone froze the "updated Ns ago" pill at the last Ruby sync
+  # while the poller kept the snapshot fresh. nil for brand-new islands.
   def synced_at
-    @island.last_synced_at
+    [@island.system&.updated_at, @island.last_synced_at].compact.max
   end
 
   # synced_age_seconds — seconds since the last sync, or nil when
