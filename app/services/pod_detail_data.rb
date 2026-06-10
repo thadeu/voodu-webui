@@ -275,12 +275,11 @@ class PodDetailData
     @raw        = pod_row&.payload_hash
     @updated_at = @island.last_synced_at || Time.current
 
-    # Mark the snapshot stale when the controller is unreachable —
-    # mirrors OverviewData's stale-detection. Drives the yellow
-    # banner + forces status_sym to :offline via PodStatus.
-    # Trust IslandHealth (the single source of truth for "is the
-    # agent up?") instead of recomputing recency thresholds here.
-    @stale = @island.status == :offline && @updated_at.present?
+    # Mark stale when the controller isn't CONFIRMED online — :offline
+    # OR :unknown (cold health cache). Mirrors OverviewData. Drives the
+    # yellow banner + forces status_sym to :offline via PodStatus.
+    # Trust IslandHealth as the single source of truth for agent health.
+    @stale = @island.status != :online && @updated_at.present?
   end
 
   # fetch_from_http! — legacy path: single HTTP fetch + Rails.cache.

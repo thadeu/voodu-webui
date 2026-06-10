@@ -216,13 +216,13 @@ class OverviewData
     @updated_at = state.synced_at || Time.current
     @cache_hit  = true  # always a "hit" — the warehouse IS the cache
 
-    # Mark the snapshot stale when the controller is unreachable.
-    # Drives the banner + forces per-pod status to :offline (see
-    # `stale?` doc above + `prepare_pod` below). We trust
-    # IslandHealth here rather than recomputing recency thresholds
-    # — it's the single source of truth for "is the agent up?"
-    # under both WAREHOUSE modes.
-    @stale = @island.status == :offline && state.synced_at.present?
+    # Mark the snapshot stale whenever the controller isn't CONFIRMED
+    # online — i.e. :offline OR :unknown (cold health cache / sync
+    # pipeline behind). Both mean "we can't vouch these pods are running
+    # right now", so the banner shows + per-pod status is forced to
+    # :offline (see `stale?` doc above + `prepare_pod` below). We trust
+    # IslandHealth as the single source of truth for agent health.
+    @stale = @island.status != :online && state.synced_at.present?
   end
 
   # fetch_from_http! — the legacy path. Direct controller call per

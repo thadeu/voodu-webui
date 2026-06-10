@@ -255,9 +255,15 @@ class Components::Layouts::Topbar < Components::Base
   #   ● updated  25s ago  ⟳
   #   dot       label       icon
   #
-  # The dot still animates (pulse), signaling "this is live data."
-  # The hover state on the whole anchor underlines the affordance.
+  # The dot's color tracks freshness: green + pulse ONLY when the agent
+  # is confirmed online (live data). When it's offline/unknown the data
+  # is last-known/stale — the dot goes amber + static so "updated 12d
+  # ago" doesn't read as fresh. Same `!= :online` signal as the stale
+  # banner + the offline pod rows.
   def updated_pill
+    live = @current_island&.status == :online
+    dot  = live ? "var(--voodu-green)" : "var(--voodu-amber)"
+
     # Chip-sized (px-2 py-[3px], no fixed height) so it lines up with the
     # region / uptime chips it now sits beside in the breadcrumb.
     a(
@@ -271,8 +277,8 @@ class Components::Layouts::Topbar < Components::Base
       class: "inline-flex items-center gap-1.5 px-2 py-[3px] border border-voodu-border bg-voodu-surface text-[11.5px] whitespace-nowrap text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text shrink-0"
     ) do
       span(
-        class: "inline-block rounded-full animate-voodu-pulse",
-        style: "width: 6px; height: 6px; background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
+        class: tokens("inline-block rounded-full", ("animate-voodu-pulse" if live)),
+        style: "width: 6px; height: 6px; background: #{dot}; box-shadow: 0 0 0 3px color-mix(in srgb, #{dot} 18%, transparent);"
       )
       span(class: "text-voodu-muted-2") { "updated" }
       span(class: "font-voodu-mono text-voodu-text-2") do
