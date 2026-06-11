@@ -72,6 +72,30 @@ class PodDetailData
     @stale == true
   end
 
+  # probes — declared health checks for this pod, pulled from the
+  # manifest the warehouse sync already stores (fetched with
+  # `spec: true`). Ordered liveness → readiness → startup, only the
+  # kinds actually declared. Each item is { kind:, spec: } where `spec`
+  # is the raw probe hash (http_get/tcp_socket/exec + the timing/
+  # threshold knobs) so the card renders it bypass — same philosophy as
+  # Spec/Network/Env/Labels.
+  #
+  # Empty array when no probes are declared OR the payload predates the
+  # `spec: true` sync (older warehouse rows) — Views::Pods::Show gates
+  # on #any? so the card is simply hidden, self-healing on the next
+  # sync. Definitions ONLY; live failure/recovery state isn't exposed
+  # over the PAT plane yet.
+  def probes
+    declared = manifest_probes
+    return [] unless declared.is_a?(Hash)
+
+    %w[liveness readiness startup].filter_map do |kind|
+      cfg = declared[kind]
+
+      { kind: kind, spec: cfg } if cfg.is_a?(Hash) && cfg.present?
+    end
+  end
+
   # Stat-card payloads (same shape Components::Overview::StatCard
   # consumes). Four cards in W7+: CPU / MEMORY / NET I/O / BLOCK I/O
   # — all real from the joined `stats` block on /pods/:name.
@@ -221,6 +245,20 @@ class PodDetailData
 
   private
 
+  # manifest_probes — locate the `probes` block inside the pod's
+  # manifest payload. The controller ships the spec as a k8s-style
+  # envelope: `spec` is { name, kind, scope, metadata, spec: <body> }
+  # and the probes live in the INNER body (spec.spec.probes), alongside
+  # resources/ports/env_from. We try that path first, then fall back to
+  # a flat `spec.probes` in case a leaner shape ever ships — returns nil
+  # when neither is a Hash so #probes degrades to [].
+  def manifest_probes
+    spec = @raw&.dig("spec")
+    return nil unless spec.is_a?(Hash)
+
+    spec.dig("spec", "probes") || spec["probes"]
+  end
+
   # pick — String-or-Symbol key lookup that returns nil for blank
   # values (not the literal "" the API sometimes ships back).
   def pick(key)
@@ -295,7 +333,7 @@ class PodDetailData
       return
     end
 
-    @raw        = @client.pod(@name)
+    @raw        = @client.pod(@name, spec: true)
     @updated_at = Time.current
 
     Rails.cache.write(

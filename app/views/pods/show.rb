@@ -179,6 +179,7 @@ class Views::Pods::Show < Views::Base
       # right below it on the same page. Single source of truth for
       # "is this pod's status trustworthy right now?" lives on @data.
       render Components::Pods::SpecCard.new(pod: @data.raw, stale: @data.stale?)
+      render Components::Pods::ProbesCard.new(probes: @data.probes) if @data.probes.any?
       render Components::Pods::NetworkCard.new(pod: @data.raw)
     end
   end
