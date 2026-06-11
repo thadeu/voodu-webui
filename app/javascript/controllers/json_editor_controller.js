@@ -56,6 +56,7 @@ export default class extends Controller {
       this.gutterTarget.innerHTML = lines
         .map((_, i) => `<div class="voodu-code__gnum">${i + 1}</div>`)
         .join("")
+
       this.alignGutter()
     }
   }
