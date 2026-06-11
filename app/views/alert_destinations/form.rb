@@ -11,10 +11,40 @@
 # stays blank-keeps (more sensitive; not pre-filled).
 class Views::AlertDestinations::Form < Views::Base
   # Token list shown under the body field.
-  TOKENS = %w[
-    {{rule}} {{state}} {{target}} {{metric}} {{value}} {{threshold}}
-    {{peak}} {{unit}} {{island}} {{started_at}} {{resolved_at}} {{url}}
-    {{event_action}} {{dedup_key}}
+  # Body-template reference shown in the help popover (the ? next to
+  # the field), so the modal itself stays uncluttered.
+  TOKEN_DOCS = [
+    ["{{rule}}",        "rule name"],
+    ["{{state}}",       "firing / resolved"],
+    ["{{target}}",      "host or pod label"],
+    ["{{metric}}",      "cpu / memory / disk / req_s"],
+    ["{{value}}",       "current value (rounded)"],
+    ["{{threshold}}",   "configured threshold"],
+    ["{{peak}}",        "peak value in the window"],
+    ["{{unit}}",        %(% or "req/s")],
+    ["{{island}}",      "island name"],
+    ["{{started_at}}",  "fired at (your timezone)"],
+    ["{{resolved_at}}", "resolved at (blank while firing)"],
+    ["{{url}}",         "link to /alerts (needs APP_BASE_URL)"],
+    ["{{event_action}}", "PagerDuty: trigger / resolve"],
+    ["{{dedup_key}}",   "stable de-dup hash (PagerDuty)"]
+  ].freeze
+
+  FILTER_DOCS = [
+    ["slice: start, len", "{{dedup_key | slice: 0, 6}} → first 6 chars"],
+    ["truncate: n",       "{{rule | truncate: 40}} → clip + …"],
+    ["upcase / downcase", "{{metric | upcase}}"],
+    ["capitalize",        "{{state | capitalize}} → Firing"],
+    ["strip",             "trim surrounding whitespace"],
+    ["replace: a, b",     %({{target | replace: "/", "-"}})],
+    ["append / prepend",  %({{value | append: "%"}})],
+    ["default: x",        %({{resolved_at | default: "—"}})]
+  ].freeze
+
+  EXAMPLES = [
+    '"text": "🚨 {{rule}} — {{state}}"',
+    '"dedup_key": "{{dedup_key | slice: 0, 8}}"',
+    '"summary": "{{rule | truncate: 60}}"'
   ].freeze
 
   def initialize(current_path:, destination:, islands: [], current_island: nil)
@@ -136,9 +166,12 @@ class Views::AlertDestinations::Form < Views::Base
   # starter templates per provider (fills the textarea).
   def body_template_field
     div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: { controller: "template-picker" }) do
-      div(class: "flex items-center justify-between") do
+      div(class: "flex items-center justify-between gap-2") do
         span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
-        templates_popover
+        div(class: "flex items-center gap-1.5") do
+          help_popover
+          templates_popover
+        end
       end
 
       textarea(
@@ -152,17 +185,66 @@ class Views::AlertDestinations::Form < Views::Base
       if (err = @destination.errors[:body_template].first)
         error_line(err)
       else
-        div(class: "flex flex-col gap-1 text-[11.5px] text-voodu-muted") do
-          div do
-            plain "Valid JSON, sent as-is (blank = default payload). Tokens: "
-            span(class: "font-voodu-mono text-voodu-text-2") { TOKENS.join(" ") }
-          end
-          div do
-            plain "Filters (Liquid-style): "
-            span(class: "font-voodu-mono text-voodu-text-2") { "{{dedup_key | slice: 0, 6}}" }
-            plain " · slice · truncate · upcase · downcase · strip · default"
+        div(class: "text-[11.5px] text-voodu-muted") do
+          plain "Valid JSON, sent as-is — blank uses the default payload. "
+          plain "Tap "
+          render Icon::QuestionMarkCircleOutline.new(class: "inline w-3 h-3 -mt-0.5")
+          plain " for tokens & filters."
+        end
+      end
+    end
+  end
+
+  # Tokens + filters reference. A popover (not a drawer) because the
+  # form is a centred modal — a side drawer would cover the very editor
+  # it documents; this is peek-and-dismiss, in-flow with the Templates
+  # popover beside it.
+  def help_popover
+    div(class: "relative", data: { controller: "popover" }) do
+      button(
+        type: "button",
+        "aria-label": "Body template tokens & filters",
+        data: { action: "click->popover#toggle", popover_target: "trigger", tooltip: "Tokens & filters" },
+        class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
+      ) do
+        render Icon::QuestionMarkCircleOutline.new(class: "w-4 h-4")
+      end
+
+      # The popover controller portals this menu to the modal dialog and
+      # positions it (the body's overflow-auto would otherwise clip it).
+      # Position/max-height are set in JS; only the look stays here.
+      div(
+        hidden: true,
+        data:  { popover_target: "menu" },
+        class: "w-[400px] max-w-[calc(100vw-32px)] overflow-y-auto " \
+               "border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3.5 flex flex-col gap-3.5"
+      ) do
+        help_section("Tokens", TOKEN_DOCS)
+        help_section("Filters (Liquid-style)", FILTER_DOCS)
+        help_examples
+      end
+    end
+  end
+
+  def help_section(title, rows)
+    div(class: "flex flex-col gap-1.5") do
+      span(class: "text-[10px] font-semibold uppercase tracking-[0.07em] text-voodu-muted") { title }
+      div(class: "flex flex-col gap-1") do
+        rows.each do |code, desc|
+          div(class: "flex items-baseline gap-2 text-[11.5px]") do
+            span(class: "font-voodu-mono text-voodu-text-2 shrink-0") { code }
+            span(class: "text-voodu-muted min-w-0") { desc }
           end
         end
+      end
+    end
+  end
+
+  def help_examples
+    div(class: "flex flex-col gap-1.5") do
+      span(class: "text-[10px] font-semibold uppercase tracking-[0.07em] text-voodu-muted") { "Examples" }
+      div(class: "font-voodu-mono text-[11px] text-voodu-text-2 bg-voodu-surface-2 border border-voodu-border-2 p-2 flex flex-col gap-1") do
+        EXAMPLES.each { |line| div(class: "break-all") { line } }
       end
     end
   end
@@ -183,7 +265,7 @@ class Views::AlertDestinations::Form < Views::Base
       div(
         hidden: true,
         data:  { dropdown_target: "menu" },
-        class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl py-1"
+        class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl divide-y divide-voodu-border-2"
       ) do
         PROVIDER_TEMPLATES.each do |label, json|
           button(
