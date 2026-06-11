@@ -78,8 +78,9 @@ class Views::AlertDestinations::Form < Views::Base
     ).with_footer { footer_actions }
   end
 
-  # Two columns at vmd+ (the connection on the left, the payload on the
-  # right where the tall body editor has room); stacks on narrow.
+  # Two columns at vmd+: the connection + delivery settings on the left,
+  # and the tall body editor alone on the right where it gets the height.
+  # The single webhook kind is implicit (hidden field) — no Type picker.
   def form_body
     form(
       action: persisted? ? alert_destination_path(@destination) : alert_destinations_path,
@@ -93,28 +94,19 @@ class Views::AlertDestinations::Form < Views::Base
       input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
 
       div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
-        div(class: "flex flex-col gap-4 vmd:flex-1 min-w-0") do
+        div(class: "flex flex-col gap-4 vmd:w-[320px] vmd:shrink-0") do
           field(label: "Name", error: @destination.errors[:name].first) do
             text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
           end
-          field(label: "Type") { type_static }
           url_field
           auth_header_field
-        end
-
-        div(class: "flex flex-col gap-4 vmd:flex-1 min-w-0") do
-          body_template_field
           triggers_field
         end
-      end
-    end
-  end
 
-  # Single kind — render it as a static, read-only field (matches the
-  # form's other inputs visually) plus the hidden kind above.
-  def type_static
-    div(class: tokens(input_classes, "text-[13px] flex items-center text-voodu-muted cursor-default")) do
-      "Generic webhook"
+        div(class: "flex flex-col vmd:flex-1 min-w-0") do
+          body_template_field
+        end
+      end
     end
   end
 
