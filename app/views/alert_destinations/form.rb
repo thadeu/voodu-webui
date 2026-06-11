@@ -165,22 +165,17 @@ class Views::AlertDestinations::Form < Views::Base
   # Optional JSON body template with {{tokens}}. A popover offers
   # starter templates per provider (fills the textarea).
   def body_template_field
-    div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: { controller: "template-picker" }) do
+    div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: { controller: "template-picker json-editor" }) do
       div(class: "flex items-center justify-between gap-2") do
         span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
         div(class: "flex items-center gap-1.5") do
           help_popover
+          format_button
           templates_popover
         end
       end
 
-      textarea(
-        name: "alert_destination[body_template]",
-        rows: 12, spellcheck: "false", autocapitalize: "off", autocomplete: "off",
-        placeholder: %({\n  "text": "{{rule}} is {{state}} on {{target}} ({{value}}{{unit}})"\n}),
-        data:  { template_picker_target: "textarea" },
-        class: tokens(input_classes, "font-voodu-mono text-[12px] leading-relaxed py-2 h-auto min-h-[220px] resize-y vmd:flex-1")
-      ) { @destination.body_template }
+      code_editor
 
       if (err = @destination.errors[:body_template].first)
         error_line(err)
@@ -192,6 +187,39 @@ class Views::AlertDestinations::Form < Views::Base
           plain " for tokens & filters."
         end
       end
+    end
+  end
+
+  # Real textarea + a syntax-highlighted layer painted behind it (the
+  # json-editor controller keeps them in sync). The textarea keeps the
+  # form field name, so submit/validation are unchanged.
+  def code_editor
+    div(
+      class: "voodu-code relative overflow-hidden resize-y min-h-[220px] vmd:flex-1 " \
+             "border border-voodu-border bg-voodu-surface " \
+             "focus-within:border-voodu-accent focus-within:ring-1 focus-within:ring-voodu-accent-line"
+    ) do
+      pre(class: "voodu-code__hl", "aria-hidden": "true", data: { json_editor_target: "highlight" })
+      div(class: "voodu-code__gutter", "aria-hidden": "true", data: { json_editor_target: "gutter" })
+
+      textarea(
+        name: "alert_destination[body_template]",
+        spellcheck: "false", autocapitalize: "off", autocomplete: "off", autocorrect: "off",
+        placeholder: %({\n  "text": "{{rule}} is {{state}} on {{target}} ({{value}}{{unit}})"\n}),
+        class: "voodu-code__input",
+        data:  { template_picker_target: "textarea", json_editor_target: "input", action: "input->json-editor#render keydown->json-editor#keydown" }
+      ) { @destination.body_template }
+    end
+  end
+
+  def format_button
+    button(
+      type: "button",
+      data: { action: "json-editor#format", tooltip: "Format JSON" },
+      class: "inline-flex items-center gap-1 px-2 h-6 text-[11px] text-voodu-text-2 border border-voodu-border bg-voodu-surface hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      render Icon::CodeBracketOutline.new(class: "w-3 h-3 shrink-0")
+      span { "Format" }
     end
   end
 

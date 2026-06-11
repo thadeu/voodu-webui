@@ -1046,3 +1046,123 @@ html[data-theme="light"] .voodu-dark {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── JSON code editor (textarea + highlighted overlay) ──────────────
+ *
+ * Route B from the body-template editor decision: keep a REAL <textarea>
+ * (native caret, selection, undo, form submission) and paint a
+ * syntax-highlighted layer behind it. The two layers MUST share the same
+ * font metrics, padding and wrapping or the colored text drifts out from
+ * under the typed text — hence the shared rule block below.
+ *
+ * No library: ~1KB of our own highlighter (json_editor_controller.js)
+ * covers JSON + our {{token}} / | filter markers, the only grammar we
+ * need. Prism would drag in N languages we'd never use.
+ */
+.voodu-code {
+  position: relative;
+}
+
+.voodu-code__hl,
+.voodu-code__input,
+.voodu-code__gutter {
+  margin: 0;
+  border: 0;
+  font-family: var(--voodu-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: normal;
+  tab-size: 2;
+}
+
+/* Soft-wrap (long lines wrap instead of scrolling horizontally — far
+ * nicer to edit). Left padding clears the gutter. The highlight's RIGHT
+ * padding is nudged in JS to match the textarea's scrollbar width so the
+ * two layers wrap at the exact same column. */
+.voodu-code__hl,
+.voodu-code__input {
+  padding: 8px 12px 8px 46px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Highlighted layer: behind, fills the box, never interactive. One block
+ * per logical line so each line's wrapped height can be measured to
+ * position the matching gutter number. */
+.voodu-code__hl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--voodu-text-2);
+  background: transparent;
+}
+
+.voodu-code__line {
+  display: block;
+  min-height: 1.6em;
+}
+
+/* Line-number gutter — pinned left, scrolls vertically with the text
+ * (JS-synced), never horizontally. Same metrics as the text layers so
+ * row N lines up. Sits above the highlight, below the textarea. */
+.voodu-code__gutter {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 38px;
+  padding: 8px 6px 8px 0;
+  overflow: hidden;
+  text-align: right;
+  color: var(--voodu-muted-2);
+  background: var(--voodu-surface-2);
+  border-right: 1px solid var(--voodu-border);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* One cell per logical line; its height is set in JS to the wrapped
+ * height of the matching line, so the number sits at the line's top row
+ * and wrapped continuation rows get blank gutter space. */
+.voodu-code__gnum {
+  display: block;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+/* Textarea overlays it: transparent glyphs (colors show through from
+ * below), but a visible caret and native selection. */
+.voodu-code__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  overflow: hidden auto;
+  color: transparent;
+  background: transparent;
+  caret-color: var(--voodu-text);
+  outline: none;
+}
+
+.voodu-code__input::placeholder {
+  color: var(--voodu-muted-2);
+}
+
+.voodu-code__input::selection {
+  background: color-mix(in srgb, var(--voodu-accent) 32%, transparent);
+}
+
+/* Brief red flag when Format hits invalid JSON. */
+.voodu-code--invalid {
+  border-color: var(--voodu-red) !important;
+}
+
+/* Token colors — one signal per token, muted punctuation, our {{vars}}
+ * in accent so operators spot the substitution points at a glance. */
+.voodu-code .tok-key  { color: var(--voodu-blue); }
+.voodu-code .tok-str  { color: var(--voodu-green); }
+.voodu-code .tok-num  { color: var(--voodu-amber); }
+.voodu-code .tok-lit  { color: var(--voodu-orange); }
+.voodu-code .tok-punc { color: var(--voodu-muted); }
+.voodu-code .tok-var  { color: var(--voodu-accent-2); font-weight: 600; }

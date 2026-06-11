@@ -15,6 +15,11 @@ export default class extends Controller {
   fill(event) {
     event.preventDefault()
     const tmpl = event.currentTarget.dataset.template
-    if (tmpl != null) this.textareaTarget.value = tmpl
+    if (tmpl == null) return
+
+    this.textareaTarget.value = tmpl
+    // Let the json-editor re-paint its highlight layer (setting .value
+    // doesn't fire input on its own).
+    this.textareaTarget.dispatchEvent(new Event("input", { bubbles: true }))
   }
 }
