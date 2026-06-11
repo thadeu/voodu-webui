@@ -16,6 +16,14 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     @base         = Time.zone.local(2026, 6, 9, 14, 47, 50)
     @prev_wh      = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
+
+    # Pin "now" to the seeded era so LogSearchData#window's retention-floor
+    # clamp (RETENTION_DAYS.ago, relative to Time.current) stays behind the
+    # fixed @base. Without this the wall clock eventually marches past the
+    # seeded lines and every search returns 0 — the same time-bomb that hit
+    # LogSearchDataTest. Auto-reset at teardown by TimeHelpers.
+    travel_to @base + 1.minute
+
     clear_island_logs
   end
 

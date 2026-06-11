@@ -18,6 +18,17 @@ class LogSearchDataTest < ActiveSupport::TestCase
   setup do
     @island = islands(:alpha)
     @base   = Time.zone.local(2026, 6, 9, 14, 47, 50)
+
+    # Pin "now" to just after the seeded era. LogSearchData#window clamps
+    # `from` to a retention floor relative to Time.current
+    # (RETENTION_DAYS.ago); with a fixed @base and a real wall clock, that
+    # floor eventually marches PAST the seeded lines and the window
+    # collapses to empty (every search returns 0). Traveling time makes
+    # the floor relative to the test's own era, killing the time-bomb so
+    # these assertions hold no matter when they run. Auto-reset at
+    # teardown via ActiveSupport::Testing::TimeHelpers.
+    travel_to @base + 1.minute
+
     clear_island_logs
   end
 
