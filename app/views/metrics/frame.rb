@@ -93,7 +93,8 @@ class Views::Metrics::Frame < Views::Base
             section:         c[:section],
             default_visible: c.fetch(:default_visible, true),
             capacity_label:  c[:capacity_label],
-            capacity_pct:    c[:capacity_pct]
+            capacity_pct:    c[:capacity_pct],
+            chart_type:      c[:chart_type]
           )
         end
       end
@@ -134,7 +135,10 @@ class Views::Metrics::Frame < Views::Base
       scale:      chart[:scale],
       label:      chart[:label],
       color:      chart[:color],
-      unit:       chart[:unit]
+      unit:       chart[:unit],
+      # Carry the panel's chart type so the expand modal renders the same
+      # shape (a gauge stays a gauge). Omitted for the default area.
+      chart_type: (chart[:chart_type].to_s == "area" ? nil : chart[:chart_type])
     }.compact
 
     "#{metrics_chart_path}?#{qp.to_query}"

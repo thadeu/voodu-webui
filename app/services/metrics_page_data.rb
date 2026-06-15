@@ -141,10 +141,10 @@ class MetricsPageData
   # envelope shape `charts` / `http_charts` produce — so the modal
   # body can render via the same Components::Metrics::Chart with
   # zero special-casing.
-  def single_chart(metric:, scale:, label:, color:, unit:)
+  def single_chart(metric:, scale:, label:, color:, unit:, chart_type: :area)
     return nil if @client.nil?
 
-    spec = { metric: metric, scale: scale, label: label, color: color, unit: unit }
+    spec = { metric: metric, scale: scale, label: label, color: color, unit: unit, chart_type: chart_type }
 
     build_chart(spec) do
       if INGRESS_METRICS.include?(metric)
@@ -372,7 +372,7 @@ class MetricsPageData
       [
         { label: "CPU",    metric: "cpu_percent",      color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
         { label: "Memory", metric: "mem_used_bytes",   color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
-        { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
+        { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb, chart_type: :gauge_radial }
       ]
     else
       [
@@ -486,7 +486,10 @@ class MetricsPageData
       # like they do on Overview. nil for CPU (no natural total) and
       # for HTTP/Net metrics (no fixed cap). See `capacity_for`.
       capacity_label:  cap && cap[:label],
-      capacity_pct:    cap && cap[:pct]
+      capacity_pct:    cap && cap[:pct],
+      # chart_type — "area" (default) | "gauge_radial" | "gauge_linear".
+      # Carried from the spec so ChartCard picks the right body.
+      chart_type:      spec.fetch(:chart_type, :area)
     }
   end
 

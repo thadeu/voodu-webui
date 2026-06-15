@@ -64,7 +64,12 @@ class Components::Metrics::ChartCard < Components::Base
   # capacity_pct: NUMBER — integer percentage paired with the label.
   # Always renders alongside capacity_label; nil when the current
   # sample is missing (we omit the "· NN%" trail in that case).
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil)
+  # chart_type: STRING — "area" (default, the time-series line+fill),
+  # "gauge_radial" (semicircle dial), or "gauge_linear" (capacity bar).
+  # Gauges need a ceiling (a percent metric, or a capacity_pct); when
+  # that's missing the card silently falls back to the area chart so a
+  # gauge panel on a limitless metric never renders blank.
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area")
     @label           = label
     @color           = color
     @unit            = unit
@@ -77,6 +82,7 @@ class Components::Metrics::ChartCard < Components::Base
     @default_visible = default_visible
     @capacity_label  = capacity_label
     @capacity_pct    = capacity_pct
+    @chart_type      = chart_type
   end
 
   def view_template
@@ -95,6 +101,33 @@ class Components::Metrics::ChartCard < Components::Base
       data:  root_data
     ) do
       card_header
+      render_body
+      stat_footer
+    end
+  end
+
+  private
+
+  # render_body — the chart_type switch. Gauges fall back to the area
+  # chart when there's no usable ceiling (see gauge_pct).
+  def render_body
+    # Gauges are short; flex-1 lets the body grow to the card height (grid
+    # rows stretch to the tallest area chart) so the min/avg/max footer
+    # sits pinned at the bottom instead of floating mid-card.
+    if gauge?
+      div(class: "flex-1 flex flex-col justify-center") do
+        if gauge_radial?
+          render Components::Metrics::GaugeRadial.new(
+            pct: gauge_pct, color: @color, sub_label: gauge_sub_label
+          )
+        else
+          render Components::Metrics::GaugeLinear.new(
+            pct: gauge_pct, color: @color,
+            value_label: gauge_value_label, capacity_label: @capacity_label
+          )
+        end
+      end
+    else
       render Components::Metrics::Chart.new(
         points:   @points,
         color:    @color,
@@ -103,11 +136,42 @@ class Components::Metrics::ChartCard < Components::Base
         range_ms: @range_ms,
         height:   200
       )
-      stat_footer
     end
   end
 
-  private
+  def gauge?        = gauge_radial? || gauge_linear?
+  def gauge_radial? = @chart_type.to_s == "gauge_radial" && !gauge_pct.nil?
+  def gauge_linear? = @chart_type.to_s == "gauge_linear" && !gauge_pct.nil?
+
+  # gauge_pct — the 0..100 fill. Capacity metrics (memory/disk) use the
+  # computed capacity_pct; percent metrics (CPU%) use the value itself.
+  # nil → no ceiling → ChartCard renders the area chart instead.
+  def gauge_pct
+    return @capacity_pct unless @capacity_pct.nil?
+    return (@current || stats[:current]) if percent_unit?
+
+    nil
+  end
+
+  # gauge_sub_label — radial center sub-line: "13.2 / 42 GB" for a
+  # capacity metric, nil for a percent metric (the % already is it).
+  def gauge_sub_label
+    return nil unless @capacity_label
+
+    v = @current || stats[:current]
+    return @capacity_label if v.nil?
+
+    "#{MetricFormat.number(v)} / #{@capacity_label}"
+  end
+
+  # gauge_value_label — linear "used" figure ("13.2 GB"); nil for a
+  # percent metric.
+  def gauge_value_label
+    return nil if percent_unit? || @capacity_label.nil?
+
+    v = @current || stats[:current]
+    v.nil? ? nil : "#{MetricFormat.number(v)} #{@unit}".strip
+  end
 
   # card_header — colored label + big current value + right-aligned
   # min/avg/max strip + maximize affordance.
@@ -156,16 +220,20 @@ class Components::Metrics::ChartCard < Components::Base
         # span looking like "<0.01 %"). For everything else the
         # number stays plain and the unit hangs in its own muted
         # span.
-        span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
-          if percent_unit?
-            plain format_current(@current || s[:current])
-          else
-            plain format_current(@current || s[:current])
-            span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+        # Gauges render the value + capacity inside the dial/bar, so the
+        # header drops the big number to avoid showing it twice.
+        unless gauge?
+          span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
+            if percent_unit?
+              plain format_current(@current || s[:current])
+            else
+              plain format_current(@current || s[:current])
+              span(class: "text-voodu-muted text-[12px] font-normal ml-0.5") { @unit }
+            end
           end
-        end
 
-        capacity_chip if @capacity_label
+          capacity_chip if @capacity_label
+        end
       end
 
       maximize_link if @expand_url

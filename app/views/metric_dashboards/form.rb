@@ -130,6 +130,7 @@ class Views::MetricDashboards::Form < Views::Base
       div(class: "flex flex-col vmd:flex-row gap-2") do
         source_picker
         metric_picker
+        type_picker
         add_button
       end
     end
@@ -156,6 +157,28 @@ class Views::MetricDashboards::Form < Views::Base
       picker_trigger("Select metric", :metricLabel)
       div(hidden: true, data: { dropdown_target: "menu", dashboard_builder_target: "metricMenu" }, class: menu_classes)
     end
+  end
+
+  # type_picker — chart type for the panel (Area / Gauge radial / Gauge
+  # linear). The gauge options carry data-gauge="true"; the builder
+  # controller hides them (and snaps back to Area) when the selected
+  # metric has no ceiling, so you can only gauge a percent/capacity metric.
+  def type_picker
+    div(class: "vmd:w-[156px] shrink-0 relative", data: { controller: "dropdown" }) do
+      picker_trigger("Area", :typeLabel)
+      div(hidden: true, data: { dropdown_target: "menu", dashboard_builder_target: "typeMenu" }, class: menu_classes) do
+        type_option("area",         "Area")
+        type_option("gauge_radial", "Gauge · radial", gauge: true)
+        type_option("gauge_linear", "Gauge · linear", gauge: true)
+      end
+    end
+  end
+
+  def type_option(value, text, gauge: false)
+    data = { action: "click->dashboard-builder#selectType click->dropdown#close", chart_type: value }
+    data[:gauge] = "true" if gauge
+
+    button(type: "button", data: data, class: option_classes) { text }
   end
 
   def picker_trigger(label_text, target)
@@ -280,7 +303,15 @@ class Views::MetricDashboards::Form < Views::Base
       label:   spec[:label],
       color:   spec[:color],
       unit:    spec[:unit].to_s,
-      section: spec[:section].to_s
+      section: spec[:section].to_s,
+      # gauge — whether this metric has a ceiling a gauge can fill (a
+      # percent metric, or memory/disk capacity). The builder only offers
+      # the gauge types when true. Net/HTTP rates have no max → area only.
+      gauge:   gauge_metric?(spec)
     }
+  end
+
+  def gauge_metric?(spec)
+    spec[:scale].to_s == "percent" || spec[:metric].to_s.start_with?("mem", "disk")
   end
 end

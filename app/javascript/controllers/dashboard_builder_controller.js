@@ -16,7 +16,7 @@ import Sortable from "sortablejs"
 // match the chosen source's workload kind.
 
 export default class extends Controller {
-  static targets = ["sourceLabel", "metricLabel", "metricMenu", "list", "empty", "hidden"]
+  static targets = ["sourceLabel", "metricLabel", "metricMenu", "typeLabel", "typeMenu", "list", "empty", "hidden"]
   static values  = {
     catalog: Object,
     panels:  Array
@@ -26,6 +26,7 @@ export default class extends Controller {
     this.panels = Array.isArray(this.panelsValue) ? this.panelsValue.map((p) => ({ ...p })) : []
     this.currentSource = { scope_kind: "host", label: "host" }
     this.currentMetric = null
+    this.currentChartType = "area"
 
     this.populateMetrics()
     this.render()
@@ -85,6 +86,32 @@ export default class extends Controller {
 
     this.currentMetric = spec
     if (this.hasMetricLabelTarget) this.metricLabelTarget.textContent = spec.label
+
+    this.syncTypeAvailability()
+  }
+
+  selectType(event) {
+    const t = event.currentTarget.dataset.chartType
+    if (!t) return
+
+    this.currentChartType = t
+    if (this.hasTypeLabelTarget) this.typeLabelTarget.textContent = event.currentTarget.textContent.trim()
+  }
+
+  // syncTypeAvailability — gauges need a ceiling, so hide the gauge
+  // options (and snap the selection back to Area) whenever the current
+  // metric has none. Driven by the spec's `gauge` flag from the catalog.
+  syncTypeAvailability() {
+    const eligible = !!(this.currentMetric && this.currentMetric.gauge)
+
+    if (this.hasTypeMenuTarget) {
+      this.typeMenuTarget.querySelectorAll("[data-gauge='true']").forEach((el) => { el.hidden = !eligible })
+    }
+
+    if (!eligible && this.currentChartType !== "area") {
+      this.currentChartType = "area"
+      if (this.hasTypeLabelTarget) this.typeLabelTarget.textContent = "Area"
+    }
   }
 
   // populateMetrics — rebuild the metric dropdown's menu from the
@@ -103,6 +130,8 @@ export default class extends Controller {
     if (this.hasMetricLabelTarget) {
       this.metricLabelTarget.textContent = this.currentMetric ? this.currentMetric.label : "Select metric"
     }
+
+    this.syncTypeAvailability()
   }
 
   metricOption(spec) {
@@ -147,7 +176,9 @@ export default class extends Controller {
       scale:      spec.scale,
       label:      `${srcLabel} · ${spec.label}`,
       color:      spec.color,
-      unit:       spec.unit || ""
+      unit:       spec.unit || "",
+      // Gauge only sticks for a metric with a ceiling; otherwise area.
+      chart_type: spec.gauge ? this.currentChartType : "area"
     }
 
     if (source.scope_kind === "pod") {
@@ -188,6 +219,13 @@ export default class extends Controller {
     label.className = "text-[12.5px] text-voodu-text truncate flex-1 min-w-0"
     label.textContent = panel.label
     row.appendChild(label)
+
+    if (panel.chart_type && panel.chart_type !== "area") {
+      const tag = document.createElement("span")
+      tag.className = "text-[10px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.04em] shrink-0"
+      tag.textContent = panel.chart_type === "gauge_radial" ? "radial" : "linear"
+      row.appendChild(tag)
+    }
 
     const remove = document.createElement("button")
     remove.type = "button"

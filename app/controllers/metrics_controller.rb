@@ -68,11 +68,12 @@ class MetricsController < ApplicationController
         )
 
         chart = data.single_chart(
-          metric: params[:metric].to_s,
-          scale:  params[:scale].presence&.to_sym,
-          label:  params[:label].to_s,
-          color:  params[:color].to_s,
-          unit:   params[:unit].to_s
+          metric:     params[:metric].to_s,
+          scale:      params[:scale].presence&.to_sym,
+          label:      params[:label].to_s,
+          color:      params[:color].to_s,
+          unit:       params[:unit].to_s,
+          chart_type: params[:chart_type].presence || :area
         )
 
         if chart.nil?

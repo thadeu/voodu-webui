@@ -115,11 +115,12 @@ class MetricDashboardData
     )
 
     chart = page.single_chart(
-      metric: panel["metric"].to_s,
-      scale:  panel["scale"].presence&.to_sym,
-      label:  panel["label"].to_s,
-      color:  panel["color"].to_s,
-      unit:   panel["unit"].to_s
+      metric:     panel["metric"].to_s,
+      scale:      panel["scale"].presence&.to_sym,
+      label:      panel["label"].to_s,
+      color:      panel["color"].to_s,
+      unit:       panel["unit"].to_s,
+      chart_type: panel["chart_type"].presence || :area
     )
     return missing_card(panel, key) if chart.nil?
 

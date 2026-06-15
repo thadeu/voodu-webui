@@ -26,6 +26,9 @@ class MetricDashboard < ApplicationRecord
   PANEL_KEYS     = %w[scope_kind metric scale label color].freeze
   POD_PANEL_KEYS = %w[scope name].freeze
 
+  # Optional per-panel chart type. Absent → ChartCard defaults to "area".
+  CHART_TYPES = %w[area gauge_radial gauge_linear].freeze
+
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
 
@@ -104,6 +107,9 @@ class MetricDashboard < ApplicationRecord
 
       missing = PANEL_KEYS.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "panel #{i + 1} is missing #{missing.join(', ')}") if missing.any?
+
+      ct = panel["chart_type"].to_s
+      errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
 
       next unless panel["scope_kind"].to_s == "pod"
 

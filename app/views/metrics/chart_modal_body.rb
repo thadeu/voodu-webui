@@ -197,18 +197,69 @@ class Views::Metrics::ChartModalBody < Views::Base
   # Chart.rb dropped preserveAspectRatio="none" so the viewBox keeps
   # its real aspect ratio — text + dots stay round/legible.
   def chart_block
-    div(class: "bg-voodu-surface border border-voodu-border p-3.5") do
-      render Components::Metrics::Chart.new(
-        points:   @chart[:points],
-        color:    @chart[:color],
-        unit:     @chart[:unit],
-        label:    @chart[:label],
-        range_ms: @range_ms,
-        width:    1100,
-        height:   480,
-        axes:     true
-      )
+    if gauge?
+      div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex items-center justify-center min-h-[360px]") do
+        if @chart[:chart_type].to_s == "gauge_radial"
+          render Components::Metrics::GaugeRadial.new(
+            pct: gauge_pct, color: @chart[:color], sub_label: gauge_sub_label, max_w: 360
+          )
+        else
+          div(class: "w-full max-w-[560px]") do
+            render Components::Metrics::GaugeLinear.new(
+              pct: gauge_pct, color: @chart[:color],
+              value_label: gauge_value_label, capacity_label: @chart[:capacity_label]
+            )
+          end
+        end
+      end
+    else
+      div(class: "bg-voodu-surface border border-voodu-border p-3.5") do
+        render Components::Metrics::Chart.new(
+          points:   @chart[:points],
+          color:    @chart[:color],
+          unit:     @chart[:unit],
+          label:    @chart[:label],
+          range_ms: @range_ms,
+          width:    1100,
+          height:   480,
+          axes:     true
+        )
+      end
     end
+  end
+
+  # Gauge envelope readers — mirror ChartCard's logic (capacity metric →
+  # capacity_pct; percent metric → the value itself); nil → no ceiling,
+  # so chart_block falls back to the area chart.
+  def gauge?
+    %w[gauge_radial gauge_linear].include?(@chart[:chart_type].to_s) && !gauge_pct.nil?
+  end
+
+  def gauge_pct
+    return @chart[:capacity_pct] unless @chart[:capacity_pct].nil?
+    return current_value if percent_unit?
+
+    nil
+  end
+
+  def current_value
+    @chart[:current] || (Array(@chart[:points]).last || {})[:value]
+  end
+
+  def gauge_sub_label
+    return nil unless @chart[:capacity_label]
+
+    v = current_value
+    return @chart[:capacity_label] if v.nil?
+
+    "#{MetricFormat.number(v)} / #{@chart[:capacity_label]}"
+  end
+
+  def gauge_value_label
+    return nil if percent_unit? || @chart[:capacity_label].nil?
+
+    v = current_value
+    v.nil? ? nil : "#{MetricFormat.number(v)} #{@chart[:unit]}".strip
   end
 
   def stat_strip
@@ -221,7 +272,7 @@ class Views::Metrics::ChartModalBody < Views::Base
       # for metrics that HAVE a meaningful total (memory + disk);
       # CPU, HTTP counters, network rates pass through with the
       # min/avg/max strip starting flush-left.
-      capacity_chip if @chart[:capacity_label]
+      capacity_chip if @chart[:capacity_label] && !gauge?
 
       stat_chip("min", s[:min])
       stat_chip("avg", s[:avg])
