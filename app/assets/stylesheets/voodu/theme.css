@@ -773,6 +773,9 @@ body.log-cols-resizing * {
   --voodu-shadow-sm:    0 2px 5px rgba(0, 0, 0, 0.55);
   --voodu-shadow-lg:    0 8px 24px rgba(0, 0, 0, 0.55);
   --voodu-shadow-drawer: -12px 0 32px rgba(0, 0, 0, 0.55);
+  /* Header lift — the (always-dark) topbar casts a soft shadow onto the
+   * content below so it reads as a layer above, not glued to the page. */
+  --voodu-shadow-header: 0 4px 12px rgba(0, 0, 0, 0.45);
 
   /* ── Fonts ── */
   --voodu-font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -867,6 +870,10 @@ html[data-theme="light"] {
   --voodu-shadow-sm:    0 1px 3px rgba(15, 23, 42, 0.12);
   --voodu-shadow-lg:    0 10px 28px rgba(15, 23, 42, 0.14);
   --voodu-shadow-drawer: -10px 0 30px rgba(15, 23, 42, 0.1);
+  /* Slate lift for the dark topbar over the light content. A crisp 1-2px
+   * layer reads as a defined edge; the softer spread gives depth. Needs
+   * more punch than a dark-on-dark shadow to register on the light bg. */
+  --voodu-shadow-header: 0 1px 2px rgba(15, 23, 42, 0.14), 0 8px 22px -2px rgba(15, 23, 42, 0.24);
 }
 
 /* ── Force-dark scope (.voodu-dark) ──
@@ -1003,6 +1010,9 @@ html[data-theme="light"] .voodu-dark {
   --radius-voodu-sm: var(--voodu-r-sm);
   --radius-voodu-md: var(--voodu-r-md);
   --radius-voodu-lg: var(--voodu-r-lg);
+
+  /* Shadow */
+  --shadow-voodu-header: var(--voodu-shadow-header);
 
   /* Fonts */
   --font-voodu-sans: var(--voodu-font-sans);

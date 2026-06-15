@@ -36,7 +36,7 @@ class Components::Layouts::Topbar < Components::Base
       # voodu-dark — AWS-style fixed-dark topbar: force the dark palette
       # on this subtree so the bar stays dark even in light theme (see
       # `html[data-theme="light"] .voodu-dark` in theme.css).
-      class: "voodu-dark flex h-14 items-center gap-2 vmd:gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none min-w-0",
+      class: "voodu-dark relative z-10 flex h-14 items-center gap-2 vmd:gap-2.5 px-3.5 vmd:px-4 border-b border-voodu-border bg-voodu-bg flex-none min-w-0 shadow-voodu-header",
       role: "banner"
     ) do
       hamburger
