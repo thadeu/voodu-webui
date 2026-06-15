@@ -29,7 +29,7 @@ class Components::UI::SectionCard < Components::Base
 
   def view_template(&body)
     section(class: "flex flex-col min-w-0 bg-voodu-surface border border-voodu-border") do
-      header(class: "flex items-center px-3.5 py-2.5 border-b border-voodu-border bg-voodu-bg-2") do
+      header(class: "flex items-center px-3.5 py-2.5 border-b border-voodu-border bg-voodu-surface") do
         h3(class: "text-[12px] font-semibold uppercase tracking-wider text-voodu-text-2 m-0") { @title }
         div(class: "flex-1")
         @action&.call

@@ -803,17 +803,17 @@ html[data-theme="light"] {
    * the bg↔surface contrast, NOT the border — so cards read as
    * distinct without heavy separators. Earlier bg==surface==#fff made
    * a card exist only by its border. Neutral grey, no blue tint. */
-  --voodu-bg:        #f5f6f8;
-  --voodu-bg-2:      #eef0f3;
+  --voodu-bg:        #f7f8fa;
+  --voodu-bg-2:      #f3f4f6;
   --voodu-surface:   #ffffff;
-  --voodu-surface-2: #f4f5f7;
-  --voodu-surface-3: #e9ebef;
+  --voodu-surface-2: #f6f7f9;
+  --voodu-surface-3: #eef0f3;
 
-  /* Borders stay thin/subtle now that bg↔surface carries the
-   * hierarchy (Supabase model) — heavier separators would fight the
-   * white cards instead of framing them. */
-  --voodu-border:    #e2e4e9;
-  --voodu-border-2:  #cdd1d8;
+  /* Borders are soft hairlines — the bg↔surface contrast carries the
+   * hierarchy (Supabase model), so separators only need to whisper.
+   * Heavier lines made tables/cards feel boxed-in and "grey". */
+  --voodu-border:    #e8eaee;
+  --voodu-border-2:  #d9dbe1;
 
   /* Neutral text ramp (de-blued from the previous slate): near-black
    * primary, intentional greys for secondary/muted. */

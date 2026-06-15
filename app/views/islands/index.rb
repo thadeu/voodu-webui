@@ -177,7 +177,7 @@ class Views::Islands::Index < Views::Base
   def desktop_table
     div(class: "hidden vmd:block border border-voodu-border overflow-hidden bg-voodu-surface") do
       table(class: "w-full text-[12.5px] border-collapse") do
-        thead(class: "bg-voodu-bg-2") do
+        thead(class: "bg-voodu-surface") do
           tr do
             %w[server status region infra age].each do |col|
               th(class: "text-left px-3 py-2 text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted border-b border-voodu-border") { col }

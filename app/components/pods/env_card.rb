@@ -61,7 +61,7 @@ class Components::Pods::EnvCard < Components::Base
   end
 
   def filter_bar(any_revealable)
-    div(class: "flex items-center gap-2 px-3.5 h-9 border-b border-voodu-border bg-voodu-bg-2") do
+    div(class: "flex items-center gap-2 px-3.5 h-9 border-b border-voodu-border bg-voodu-surface") do
       render Icon::MagnifyingGlassOutline.new(class: "w-3 h-3 text-voodu-muted shrink-0")
       input(
         type: "search",
