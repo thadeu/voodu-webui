@@ -127,7 +127,7 @@ class Components::Layouts::Topbar < Components::Base
     div(class: "relative", data: { controller: "dropdown" }) do
       button(
         type: "button",
-        class: "inline-flex items-center gap-1 font-voodu-mono text-[13px] font-semibold text-voodu-text hover:text-voodu-accent-2",
+        class: "inline-flex items-center gap-1 font-voodu-mono text-[13px] font-semibold text-voodu-text hover:text-voodu-link",
         data: { action: "click->dropdown#toggle" }
       ) do
         span(class: "truncate") { @current_island.name }

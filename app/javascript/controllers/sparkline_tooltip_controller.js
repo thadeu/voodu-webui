@@ -87,7 +87,7 @@ export default class extends Controller {
     // muted accent so the tooltip dot is visible even if the
     // variable is missing.
     const raw = this.element.style.getPropertyValue("--voodu-spark-color").trim()
-    return raw || "#7c5cff"
+    return raw || "#34d399"
   }
 
   ensureTooltip() {

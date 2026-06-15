@@ -43,7 +43,7 @@ export default class extends Controller {
   static values  = {
     points:     { type: Array,   default: [] },   // { ts, value, formatted, x, x_norm, y }
     segments:   { type: Array,   default: [] },   // [[[xNorm, y], ...], ...]
-    color:      { type: String,  default: "#7c5cff" },
+    color:      { type: String,  default: "#34d399" },
     unit:       { type: String,  default: "" },
     label:      { type: String,  default: "" },
     width:      { type: Number,  default: 600 },  // initial viewBox W, updated on resize

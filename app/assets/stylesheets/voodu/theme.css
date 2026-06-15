@@ -2,10 +2,11 @@
  *
  * Two layers:
  *
- *   1. :root  — CSS custom properties (the source of truth). Tokens
- *      mirror the design inspiration exactly: deep navy bg, layered
- *      surface colors, purple accent (#7c5cff), traffic-light
- *      semantics for status. Dark-first; no light mode shipped in M0.
+ *   1. :root  — CSS custom properties (the source of truth). Tokens:
+ *      deep navy bg, layered surface colors, brand-green accent
+ *      (#34d399 dark / #059669 light, unified with the status green),
+ *      blue links, traffic-light semantics. Dark-first; the light
+ *      theme ships via html[data-theme="light"] below.
  *
  *   2. @theme — Tailwind 4 mapping. Every var also surfaces as a
  *      Tailwind utility (bg-voodu-surface, text-voodu-muted, etc.)
@@ -582,10 +583,10 @@ body.log-cols-resizing * {
   background: color-mix(in srgb, var(--voodu-surface-3) 80%, var(--voodu-mix-fg));
   border-color: var(--voodu-border);
 }
-/* Active state — `accent-dim` (#7c5cff22, 13% opacity) used to let
- * JSON text bleed through the chip when wrap was on. Swap to a
- * SOLID mix of accent into surface-3 so the chip stays a tangible
- * purple square regardless of what payload sits underneath. */
+/* Active state — a translucent accent-dim used to let JSON text
+ * bleed through the chip when wrap was on. Swap to a SOLID mix of
+ * accent into surface-3 so the chip stays a tangible accent-tinted
+ * square regardless of what payload sits underneath. */
 .log-row .log-wrap-single[data-active="true"] {
   color: var(--voodu-accent-2);
   border-color: var(--voodu-accent-line);
@@ -683,11 +684,20 @@ body.log-cols-resizing * {
    * cleanly on white. */
   --voodu-log-payload: var(--voodu-text);
 
-  /* ── Accent: Voodu purple ── */
-  --voodu-accent:      #7c5cff;
-  --voodu-accent-2:    #9a82ff;
-  --voodu-accent-dim:  #7c5cff22;
-  --voodu-accent-line: #7c5cff66;
+  /* ── Accent: Voodu brand green (was purple — see header) ──
+   * Unified with the status green: one green for "action / active /
+   * healthy" (CTA, active tab/nav, selected chips, focus). */
+  --voodu-accent:      #34d399;
+  --voodu-accent-2:    #6ee7b7;
+  --voodu-accent-dim:  #34d39922;
+  --voodu-accent-line: #34d39966;
+
+  /* ── Link: blue ──
+   * Navigational anchors (pod names, breadcrumbs). Deliberately NOT
+   * the accent green, so "navigate here" never reads as "healthy /
+   * action" next to a green status pill. */
+  --voodu-link:   #60a5fa;
+  --voodu-link-2: #93c5fd;
 
   /* ── Semantic / status (traffic-light family) ── */
   --voodu-green:     #34d399;
@@ -716,6 +726,9 @@ body.log-cols-resizing * {
   --voodu-indigo:  #818cf8; /* Net Tx (outbound) */
   --voodu-orange:  #fb923c; /* HTTP Requests */
   --voodu-pink:    #ec4899; /* HTTP Bytes Out */
+  --voodu-purple:  #7c5cff; /* CPU — was the old --voodu-accent hue; decoupled
+                               so chrome can go brand-green while CPU keeps a
+                               distinct chart color (1 metric = 1 color). */
 
   /* HTTP latency tail family — sister tones to amber (p95).
    * Gold reads as "moderate tail" (p90), violet as "rare extreme"
@@ -735,18 +748,19 @@ body.log-cols-resizing * {
 
   /* ── Radius ──
    *
-   * Voodu's brand language is *square corners*. Every rectangle
-   * (cards, buttons, inputs, pills, kbd chips, tabs, bars) renders
-   * with sharp edges — only the geometrically circular pieces
-   * (StatusDot, Avatar, dot indicators) get `rounded-full`, which
-   * is Tailwind's native utility and is unaffected by these tokens.
+   * Voodu leans square — but not razor-sharp. A subtle 2px softens
+   * every rectangle (cards, buttons, inputs, pills, kbd chips, tabs,
+   * bars) without going "consumer-app" round; large surfaces get 4px.
+   * Only the geometrically circular pieces (StatusDot, Avatar, dot
+   * indicators) get `rounded-full`, Tailwind's native utility,
+   * unaffected by these tokens.
    *
-   * If a future design pass wants soft corners somewhere, raise the
-   * specific token below — don't override at the call site.
+   * Applies to both themes. Bump a token here for softer corners —
+   * never override at the call site.
    */
-  --voodu-r-sm: 0;
-  --voodu-r-md: 0;
-  --voodu-r-lg: 0;
+  --voodu-r-sm: 2px;
+  --voodu-r-md: 2px;
+  --voodu-r-lg: 4px;
 
   /* ── Interaction (theme-flippable: dark mixes toward white, light toward black) ── */
   --voodu-hover:     #ffffff08; /* subtle row / menu hover overlay */
@@ -784,37 +798,45 @@ body.log-cols-resizing * {
  * darken instead of lighten; shadows go soft slate.
  */
 html[data-theme="light"] {
-  /* --voodu-bg:        #f5f6f9; */
-  /* --voodu-bg-2:      #eceef3; */
-  --voodu-bg:        #fff;
-  --voodu-bg-2:      #f6f7f9;
+  /* Supabase-style surface hierarchy: neutral near-white CHROME
+   * (bg/bg-2) under WHITE panels (surface). The lift now comes from
+   * the bg↔surface contrast, NOT the border — so cards read as
+   * distinct without heavy separators. Earlier bg==surface==#fff made
+   * a card exist only by its border. Neutral grey, no blue tint. */
+  --voodu-bg:        #f5f6f8;
+  --voodu-bg-2:      #eef0f3;
   --voodu-surface:   #ffffff;
-  --voodu-surface-2: #eaedf2;
-  --voodu-surface-3: #dde2ea;
+  --voodu-surface-2: #f4f5f7;
+  --voodu-surface-3: #e9ebef;
 
-  /* Borders carry most of the "crisp vs pastel" weight on white —
-   * the earlier #e3e7ee/#d2d8e2 pair was nearly invisible against
-   * surfaces, so rows/cards blurred together (vs CloudWatch's clear
-   * separators). Darkened a notch for definition without going slate. */
-  --voodu-border:    #d0d6e0;
-  --voodu-border-2:  #b6bfcd;
+  /* Borders stay thin/subtle now that bg↔surface carries the
+   * hierarchy (Supabase model) — heavier separators would fight the
+   * white cards instead of framing them. */
+  --voodu-border:    #e2e4e9;
+  --voodu-border-2:  #cdd1d8;
 
-  /* Text ramp pulled darker so secondary/muted copy reads as
-   * intentional grey, not washed-out. text stays near-black. */
-  --voodu-text:    #1b212b;
-  --voodu-text-2:  #353c49;
-  --voodu-muted:   #555e6d;
-  --voodu-muted-2: #7b8497;
+  /* Neutral text ramp (de-blued from the previous slate): near-black
+   * primary, intentional greys for secondary/muted. */
+  --voodu-text:    #16191f;
+  --voodu-text-2:  #3d434d;
+  --voodu-muted:   #5c636e;
+  --voodu-muted-2: #868d99;
   /* Log body text — near-black on white, matching CloudWatch's crisp
    * black @message column (a slate-grey here read as washed-out next to
    * it). Scoped to log payload only; app chrome (--voodu-text) stays
    * the softer #1b212b so headings/labels don't turn harsh. */
   --voodu-log-payload: #0e1116;
 
-  --voodu-accent:      #7c5cff;
-  --voodu-accent-2:    #6438f0;
-  --voodu-accent-dim:  #7c5cff1a;
-  --voodu-accent-line: #7c5cff55;
+  /* Accent green for light — same hue as --voodu-green below (the
+   * unified brand/status green); accent-2 darker for hover + text. */
+  --voodu-accent:      #059669;
+  --voodu-accent-2:    #047857;
+  --voodu-accent-dim:  #05966918;
+  --voodu-accent-line: #05966955;
+
+  /* Link blue — darker for legibility on the near-white chrome. */
+  --voodu-link:   #0b6bcb;
+  --voodu-link-2: #084d96;
 
   --voodu-green:     #059669;
   --voodu-green-dim: #05966918;
@@ -834,6 +856,7 @@ html[data-theme="light"] {
   --voodu-violet: #9333ea;
   --voodu-sky:    #0284c7;
   --voodu-rose:   #e11d48;
+  --voodu-purple: #7c5cff; /* CPU — kept identical to dark (reads fine on white) */
 
   /* Interaction + shadows for light. */
   --voodu-hover:        #00000008;
@@ -874,10 +897,13 @@ html[data-theme="light"] .voodu-dark {
   --voodu-muted-2: #5a5a66;
   --voodu-log-payload: #e8e8ee;
 
-  --voodu-accent:      #7c5cff;
-  --voodu-accent-2:    #9a82ff;
-  --voodu-accent-dim:  #7c5cff22;
-  --voodu-accent-line: #7c5cff66;
+  --voodu-accent:      #34d399;
+  --voodu-accent-2:    #6ee7b7;
+  --voodu-accent-dim:  #34d39922;
+  --voodu-accent-line: #34d39966;
+
+  --voodu-link:   #60a5fa;
+  --voodu-link-2: #93c5fd;
 
   --voodu-green:     #34d399;
   --voodu-green-dim: #34d39922;
@@ -913,6 +939,8 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-accent-2:    var(--voodu-accent-2);
   --color-voodu-accent-dim:  var(--voodu-accent-dim);
   --color-voodu-accent-line: var(--voodu-accent-line);
+  --color-voodu-link:        var(--voodu-link);
+  --color-voodu-link-2:      var(--voodu-link-2);
   --color-voodu-hover:     var(--voodu-hover);
   --color-voodu-green:     var(--voodu-green);
   --color-voodu-green-dim: var(--voodu-green-dim);
@@ -953,6 +981,10 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-accent-2:    var(--voodu-accent-2);
   --color-voodu-accent-dim:  var(--voodu-accent-dim);
   --color-voodu-accent-line: var(--voodu-accent-line);
+
+  /* Link */
+  --color-voodu-link:   var(--voodu-link);
+  --color-voodu-link-2: var(--voodu-link-2);
 
   /* Interaction */
   --color-voodu-hover:     var(--voodu-hover);

@@ -153,7 +153,7 @@ class Views::Pods::Show < Views::Base
     div(class: "mx-auto max-w-md py-16 flex flex-col items-center gap-3 text-center") do
       h2(class: "text-lg font-semibold text-voodu-text") { "Pod not found" }
       p(class: "text-voodu-text-2 text-sm") { "The container isn't reporting from this server right now." }
-      a(href: pods_path, class: "text-voodu-accent-2 hover:underline text-sm") { "← back to pods" }
+      a(href: pods_path, class: "text-voodu-link hover:underline text-sm") { "← back to pods" }
     end
   end
 

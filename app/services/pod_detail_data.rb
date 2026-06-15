@@ -136,7 +136,7 @@ class PodDetailData
     # ERROR/FAILURE metrics ALWAYS use --voodu-red (no other metric
     # may use red — reserved for incidents).
     base = [
-      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-accent)", cpu_series),
+      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-purple)", cpu_series),
       stat_card("MEMORY", :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  mem_series)
     ]
 

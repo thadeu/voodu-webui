@@ -228,9 +228,9 @@ class Components::Overview::PodsTable < Components::Base
     td(class: "px-3 py-2.5") do
       a(
         href: pod_path(name: pod[:name]),
-        class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-accent-2 transition-colors"
+        class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-link-2 transition-colors"
       ) do
-        span(class: "font-voodu-mono text-[13px] font-semibold text-voodu-text whitespace-nowrap") do
+        span(class: "font-voodu-mono text-[13px] font-semibold text-voodu-link whitespace-nowrap") do
           if pod[:scope]
             span(class: "text-voodu-muted font-medium") { pod[:scope] }
             span(class: "text-voodu-muted font-medium") { "/" }
@@ -253,7 +253,7 @@ class Components::Overview::PodsTable < Components::Base
 
   def cpu_cell(pod)
     td(class: "px-3 py-2.5") do
-      bar_cell(value: pod[:cpu_pct], unit: "%", color: "var(--voodu-accent)", max: 100)
+      bar_cell(value: pod[:cpu_pct], unit: "%", color: "var(--voodu-purple)", max: 100)
     end
   end
 

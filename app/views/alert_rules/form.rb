@@ -106,7 +106,7 @@ class Views::AlertRules::Form < Views::Base
       if @destinations.empty?
         div(class: "text-[12px] text-voodu-muted") do
           plain "No destinations configured. "
-          a(href: alerts_path(tab: "destinations"), class: "text-voodu-accent-2 hover:underline") { "Add one" }
+          a(href: alerts_path(tab: "destinations"), class: "text-voodu-link hover:underline") { "Add one" }
           plain " to send alerts to Slack, Telegram or a webhook."
         end
       else

@@ -238,13 +238,13 @@ class MetricsPageData
     base =
       if scope_kind == "host"
         [
-          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
+          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
           { label: "Memory", metric: "mem_used_bytes",  color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
           { label: "Disk",   metric: "disk_used_bytes", color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
         ]
       else
         [
-          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-accent)", unit: "%",  scale: :percent    },
+          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-purple)", unit: "%",  scale: :percent    },
           { label: "Memory", metric: "mem_usage_bytes",    color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
           { label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto },
           { label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto }
@@ -370,13 +370,13 @@ class MetricsPageData
   def chart_specs
     if @scope_kind == "host"
       [
-        { label: "CPU",    metric: "cpu_percent",      color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
+        { label: "CPU",    metric: "cpu_percent",      color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
         { label: "Memory", metric: "mem_used_bytes",   color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
         { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
       ]
     else
       [
-        { label: "CPU",    metric: "cpu_percent",            color: "var(--voodu-accent)", unit: "%",  scale: :percent     },
+        { label: "CPU",    metric: "cpu_percent",            color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
         { label: "Memory", metric: "mem_usage_bytes",        color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
         { label: "Net Rx", metric: "net_rx_delta_bytes",     color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto  },
         { label: "Net Tx", metric: "net_tx_delta_bytes",     color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto  }

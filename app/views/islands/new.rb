@@ -187,7 +187,7 @@ class Views::Islands::New < Views::Base
   def footer_actions
     span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") do
       plain "Need help? See "
-      a(href: "#", class: "text-voodu-accent-2 hover:underline") { "docs" }
+      a(href: "#", class: "text-voodu-link hover:underline") { "docs" }
       plain "."
     end
 

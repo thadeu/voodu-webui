@@ -16,7 +16,7 @@
 #
 #   <div data-controller="metrics-chart"
 #        data-metrics-chart-points-value="[{ts, value, formatted}]"
-#        data-metrics-chart-color-value="#7c5cff"
+#        data-metrics-chart-color-value="#34d399"
 #        data-metrics-chart-unit-value="%"
 #        data-metrics-chart-label-value="CPU">
 #     <svg ...>            <!-- axes + path + (JS-injected hover overlay) -->

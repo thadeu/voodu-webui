@@ -34,7 +34,7 @@
 class Components::UI::Sparkline < Components::Base
   PAD = 4
 
-  def initialize(points:, color: "#7c5cff", width: 220, height: 56, show_fill: true, stroke: 1.5)
+  def initialize(points:, color: "#34d399", width: 220, height: 56, show_fill: true, stroke: 1.5)
     @points    = Array(points).map { |p| normalize(p) }
     @color     = color
     @width     = width

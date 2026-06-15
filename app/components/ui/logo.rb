@@ -2,8 +2,8 @@
 
 # Components::UI::Logo — the voodu mark. Two-stroke "V":
 #
-#   - Outer V: gradient from accent-2 (#9a82ff) to a deeper purple
-#     (#5b3df0). Sits at full opacity.
+#   - Outer V: gradient from a light brand green (#6ee7b7) to a
+#     deeper green (#059669). Sits at full opacity.
 #   - Inner v: smaller, dimmer (60% opacity), pure light grey. Adds
 #     the subtle depth the brand has in the inspiration.
 #
@@ -25,8 +25,8 @@ class Components::UI::Logo < Components::Base
     ) do |s|
       s.defs do
         s.linearGradient(id: gid, x1: 0, x2: 24, y1: 0, y2: 24) do
-          s.stop(offset: "0", "stop-color": "#9a82ff")
-          s.stop(offset: "1", "stop-color": "#5b3df0")
+          s.stop(offset: "0", "stop-color": "#6ee7b7")
+          s.stop(offset: "1", "stop-color": "#059669")
         end
       end
 

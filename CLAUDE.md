@@ -93,7 +93,10 @@ db/
   `var(--voodu-text-2)`, `var(--voodu-muted)`, `var(--voodu-muted-2)`,
   `var(--voodu-border)`, `var(--voodu-border-2)`, `var(--voodu-surface)`,
   `var(--voodu-surface-2)`, `var(--voodu-blue)`, `var(--voodu-red)`,
-  `var(--voodu-amber)`, `var(--voodu-green)`. Mirror them via Tailwind
+  `var(--voodu-amber)`, `var(--voodu-green)`, `var(--voodu-link)`
+  (blue — navigational links). `var(--voodu-accent)` is the **brand-green**
+  chrome accent (CTAs, active tab/nav, selected chips, focus) — unified
+  with the status green, NOT a chart color. Mirror them via Tailwind
   classes (`text-voodu-muted`, `bg-voodu-surface`, etc.)
 
 ### Chart palette (1 metric = 1 color, RED = errors only)
@@ -108,7 +111,7 @@ Canonical mapping (assignments live in `MetricsPageData#chart_specs`,
 
 | Metric            | Token              |
 |-------------------|--------------------|
-| CPU               | `--voodu-accent`   |
+| CPU               | `--voodu-purple`   |
 | Memory            | `--voodu-blue`     |
 | Disk              | `--voodu-teal`     |
 | Net Rx            | `--voodu-green`    |
@@ -118,6 +121,9 @@ Canonical mapping (assignments live in `MetricsPageData#chart_specs`,
 | HTTP p95 Latency  | `--voodu-amber`    |
 | HTTP 5xx Errors   | `--voodu-red`      |
 | HTTP Bytes Out    | `--voodu-pink`     |
+
+CPU uses `--voodu-purple` (the old accent hue), kept distinct from the
+green chrome accent so charts stay one-color-per-metric.
 
 Adding a new metric? Pick an unused color OR add a new token in
 `app/assets/stylesheets/voodu/theme.css` AND register it here.

@@ -221,9 +221,9 @@ class Views::Islands::Index < Views::Base
   def server_cell(island)
     a(
       href: tenant_root_path(tenant_key: island.key),
-      class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-accent-2 transition-colors"
+      class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-link-2 transition-colors"
     ) do
-      span(class: "text-[13px] font-semibold text-voodu-text whitespace-nowrap") { island.name }
+      span(class: "text-[13px] font-semibold text-voodu-link whitespace-nowrap") { island.name }
       span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0") { island.endpoint }
     end
   end
@@ -270,9 +270,9 @@ class Views::Islands::Index < Views::Base
       div(class: "flex items-start gap-3") do
         a(
           href: tenant_root_path(tenant_key: island.key),
-          class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-accent-2 transition-colors"
+          class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-link-2 transition-colors"
         ) do
-          span(class: "text-[14px] font-semibold text-voodu-text truncate") { island.name }
+          span(class: "text-[14px] font-semibold text-voodu-link truncate") { island.name }
           span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate") { island.endpoint }
         end
         render Components::UI::StatusPill.new(status: island.status || :stopped)

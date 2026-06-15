@@ -188,7 +188,7 @@ class Components::Layouts::Sidebar < Components::Base
       title: "See all servers",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
-        "hover:bg-voodu-hover hover:text-voodu-accent-2 transition-colors",
+        "hover:bg-voodu-hover hover:text-voodu-text transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1.5 vmd:group-data-[collapsed]:min-h-0"
       )
     ) do
@@ -204,7 +204,7 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 vmd:group-data-[collapsed]:hidden") do
       plain "no servers yet."
       br
-      a(href: new_island_path, class: "text-voodu-accent-2 hover:underline") { "add one →" }
+      a(href: new_island_path, class: "text-voodu-link hover:underline") { "add one →" }
     end
   end
 

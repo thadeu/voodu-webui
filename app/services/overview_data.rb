@@ -306,7 +306,7 @@ class OverviewData
       label: "CPU", icon: :CpuChipOutline,
       value: format("%.1f", current), unit: "%",
       sub: cores.positive? ? "#{cores} cores · load #{load_1}" : "—",
-      color: "var(--voodu-accent)",
+      color: "var(--voodu-purple)",
       series: series,
       delta: nil
     }
