@@ -18,7 +18,8 @@ class Views::Metrics::Index < Views::Base
     render Components::Layouts::Dashboard.new(
       current_path: @current_path,
       islands: @islands,
-      current_island: @current_island
+      current_island: @current_island,
+      breadcrumb: overview_crumbs({ label: "Metrics" })
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new

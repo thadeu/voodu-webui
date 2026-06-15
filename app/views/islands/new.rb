@@ -20,7 +20,7 @@ class Views::Islands::New < Views::Base
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{ label: "Servers" }]) do
       render(modal) { form_body }
     end
   end

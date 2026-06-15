@@ -30,7 +30,7 @@ class Views::Islands::Index < Views::Base
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, islands: @islands) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, islands: @islands, breadcrumb: [{ label: "Servers" }]) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
 

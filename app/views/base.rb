@@ -9,4 +9,18 @@ class Views::Base < Components::Base
 
   # More caching options at https://www.phlex.fun/components/caching
   def cache_store = Rails.cache
+
+  # overview_crumbs — standard breadcrumb trail rooted at the current
+  # island's Overview, for the Dashboard `breadcrumb:` kwarg. Pass the
+  # trail AFTER Overview as { label:, href: } hashes (last = current,
+  # rendered as plain text). Returns [] when there's no island so the
+  # NoIslandState pages render no crumb. Management pages (no tenant)
+  # build their crumbs inline instead.
+  def overview_crumbs(*trail)
+    return [] if @current_island.nil?
+
+    key = @current_island.key
+
+    [{ label: "Overview", href: tenant_root_path(tenant_key: key) }, *trail]
+  end
 end

@@ -31,7 +31,11 @@ class Views::Pods::Show < Views::Base
     else
       render Components::Layouts::Dashboard.new(
         current_path: @current_path, islands: @islands,
-        current_island: @current_island, updated_at: @updated_at
+        current_island: @current_island, updated_at: @updated_at,
+        breadcrumb: (@current_island && overview_crumbs(
+          { label: "Pods", href: pods_path(tenant_key: @current_island.key) },
+          { label: @data&.name }
+        ))
       ) do
         if @current_island.nil?
           render Components::UI::NoIslandState.new

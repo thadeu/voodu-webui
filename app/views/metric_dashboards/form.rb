@@ -31,7 +31,8 @@ class Views::MetricDashboards::Form < Views::Base
       builder_panel
     else
       render Components::Layouts::Dashboard.new(
-        current_path: @current_path, islands: @islands, current_island: @current_island
+        current_path: @current_path, islands: @islands, current_island: @current_island,
+        breadcrumb: overview_crumbs({ label: "Metrics" })
       ) do
         div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 max-w-[720px]") { builder_panel }
       end

@@ -20,7 +20,8 @@ class Views::Pods::Index < Views::Base
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands,
-      current_island: @current_island, updated_at: @updated_at
+      current_island: @current_island, updated_at: @updated_at,
+      breadcrumb: overview_crumbs({ label: "Pods" })
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new

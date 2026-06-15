@@ -56,7 +56,8 @@ class Views::AlertDestinations::Form < Views::Base
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island
+      current_path: @current_path, islands: @islands, current_island: @current_island,
+      breadcrumb: overview_crumbs({ label: "Alerts" })
     ) do
       render(modal) { form_body }
     end

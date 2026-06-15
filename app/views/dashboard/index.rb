@@ -22,7 +22,8 @@ class Views::Dashboard::Index < Views::Base
       islands: @islands,
       current_island: @current_island,
       updated_at: @updated_at,
-      uptime: @data&.uptime_label
+      uptime: @data&.uptime_label,
+      breadcrumb: overview_crumbs
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new
