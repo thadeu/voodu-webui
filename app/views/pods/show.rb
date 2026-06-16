@@ -6,6 +6,7 @@
 #   - back link → header (title + meta chips + actions)
 #   - 4 stat cards (CPU / Memory / NetRx / NetTx)
 #   - Spec card | Network card (2-col grid on vmd+)
+#   - Probes card (full width) — health-check definitions, when declared
 #   - Environment card (full width, with inline filter)
 #   - Labels card (full width)
 #
@@ -121,6 +122,7 @@ class Views::Pods::Show < Views::Base
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
       render Components::Pods::Header.new(data: @data, drawer: true)
       spec_network_grid
+      probes_section
       render Components::Pods::EnvCard.new(pod: @data.raw)
       render Components::Pods::LabelsCard.new(pod: @data.raw)
     end
@@ -132,6 +134,7 @@ class Views::Pods::Show < Views::Base
       render Components::Pods::Header.new(data: @data)
       stat_cards
       spec_network_grid
+      probes_section
       render Components::Pods::EnvCard.new(pod: @data.raw)
       render Components::Pods::LabelsCard.new(pod: @data.raw)
     end
@@ -183,8 +186,17 @@ class Views::Pods::Show < Views::Base
       # right below it on the same page. Single source of truth for
       # "is this pod's status trustworthy right now?" lives on @data.
       render Components::Pods::SpecCard.new(pod: @data.raw, stale: @data.stale?)
-      render Components::Pods::ProbesCard.new(probes: @data.probes) if @data.probes.any?
       render Components::Pods::NetworkCard.new(pod: @data.raw)
     end
+  end
+
+  # probes_section — health-check definitions get their OWN full-width
+  # card (was cramped sharing the Spec | Network grid). Sits right above
+  # Environment. Skipped entirely when the manifest declares no probes,
+  # so a pod without health checks doesn't render an empty card.
+  def probes_section
+    return unless @data.probes.any?
+
+    render Components::Pods::ProbesCard.new(probes: @data.probes)
   end
 end

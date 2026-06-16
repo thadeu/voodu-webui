@@ -33,24 +33,35 @@ class Components::Pods::ProbesCard < Components::Base
 
   def view_template
     render Components::UI::SectionCard.new(title: "Probes") do
-      @probes.each { |probe| probe_block(probe[:kind], probe[:spec]) }
+      # Full-width card: lay the probe blocks side by side so a wide
+      # screen reads "liveness | startup" instead of one sparse column
+      # (the card moved out of the cramped Spec | Network grid). auto-fit
+      # keeps a single probe spanning the whole width.
+      div(
+        class: "grid",
+        style: "grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));"
+      ) do
+        @probes.each { |probe| probe_block(probe[:kind], probe[:spec]) }
+      end
     end
   end
 
   private
 
   def probe_block(kind, spec)
-    div(class: "px-3.5 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-voodu-muted") { kind }
+    div(class: "min-w-0") do
+      div(class: "px-3.5 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-voodu-muted") { kind }
 
-    row("type") { plain action_summary(spec) }
+      row("type") { plain action_summary(spec) }
 
-    CONFIG_FIELDS.each do |key|
-      val = spec[key]
+      CONFIG_FIELDS.each do |key|
+        val = spec[key]
 
-      if val.present?
-        row(key) { plain val.to_s }
-      else
-        row(key, dim: true) { plain "default" }
+        if val.present?
+          row(key) { plain val.to_s }
+        else
+          row(key, dim: true) { plain "default" }
+        end
       end
     end
   end
