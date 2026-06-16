@@ -40,6 +40,8 @@ class Views::Metrics::Index < Views::Base
   private
 
   def body
+    return empty_state if @data.nil?
+
     # auto-refresh controller owns the WHOLE page body so both the
     # cable source (the wrapped <turbo-cable-stream-source>) and the
     # subtitle button (data-action="click->auto-refresh#toggle")
@@ -80,6 +82,72 @@ class Views::Metrics::Index < Views::Base
       # (the bug operators saw as "two HTTP blocks" for a 1-replica
       # web pod).
       chart_grid
+    end
+  end
+
+  # empty_state — shown when the island has zero dashboards (and no
+  # scope drill-down). Metrics are dashboard-driven: prompt the operator
+  # to build their first one. Host lives as a panel SOURCE inside the
+  # builder, so there's no separate "host scope" landing anymore.
+  # empty_state — nothing is being shown: no dashboard pinned/picked, or
+  # the island has none. Dashboards EXIST → prompt to PICK one (the menu
+  # does it); NONE → prompt to CREATE. Host is a panel source inside the
+  # builder, so there's no standalone host landing anymore.
+  def empty_state
+    all_dashboards.any? ? empty_select_state : empty_create_state
+  end
+
+  def empty_select_state
+    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-6") do
+      render(Components::UI::PageHeader.new(title: "Metrics").with_actions { dashboard_switcher_group })
+      empty_panel(
+        title: "Select a dashboard",
+        copy:  "Pick a dashboard from the menu above to view its panels — or create a new one there."
+      )
+    end
+  end
+
+  def empty_create_state
+    div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-6") do
+      render Components::UI::PageHeader.new(title: "Metrics")
+
+      render(Components::UI::Drawer.new(
+        title:               "Dashboards",
+        src:                 "#{new_metric_dashboard_path}?embed=1",
+        open_url:            new_metric_dashboard_path,
+        width:               "30vw",
+        min_width:           "300px",
+        max_width:           "min(100vw, 560px)",
+        show_full_page_link: false,
+        permanent:           false,
+        custom_trigger:      true,
+        storage_key:         "voodu:drawer-width:dashboards"
+      )) do
+        empty_panel(
+          title: "No dashboards yet",
+          copy:  "Metrics are dashboard-driven. Build one to watch host or pod metrics — pick a source, a metric, and a chart type.",
+          cta:   true
+        )
+      end
+    end
+  end
+
+  def empty_panel(title:, copy:, cta: false)
+    div(class: "flex flex-col items-center justify-center text-center gap-3 border border-voodu-border bg-voodu-surface py-16 px-6") do
+      render Icon::ChartBarOutline.new(class: "w-8 h-8 text-voodu-muted-2")
+      h2(class: "text-[15px] font-semibold text-voodu-text m-0") { title }
+      p(class: "text-[12.5px] text-voodu-muted max-w-[380px] m-0 leading-relaxed") { copy }
+
+      if cta
+        button(
+          type:  "button",
+          data:  { action: "click->drawer#open" },
+          class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 mt-1 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
+        ) do
+          render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
+          span { "Create dashboard" }
+        end
+      end
     end
   end
 
@@ -161,19 +229,10 @@ class Views::Metrics::Index < Views::Base
 
             div(class: "h-px bg-voodu-border")
 
-            # Host row — exclusive: navigates immediately and clears any
-            # dashboard selection (host is a single scope, not stackable).
-            switch_menu_item(
-              label:  "Host (default)",
-              href:   metrics_path(scope_kind: "host"),
-              active: !dashboard_mode?,
-              icon:   :ChartBarOutline
-            )
-
             # Dashboard rows — checkbox toggles (no nav per click). Pick
             # several, then "View selected" stacks them in pick order.
             all_dashboards.each do |d|
-              multiselect_row(d, selected: current_pids.include?(d.uuid))
+              multiselect_row(uuid: d.uuid, label: d.name, selected: current_pids.include?(d.uuid), pinned: d.pinned)
             end
 
             if all_dashboards.any?
@@ -203,24 +262,6 @@ class Views::Metrics::Index < Views::Base
     @all_dashboards ||= @current_island ? @current_island.metric_dashboards.order(:name).to_a : []
   end
 
-  # switch_menu_item — a dropdown row that navigates to a view. Plain
-  # full-page nav (toolbar isn't in a turbo_frame); the active row is
-  # highlighted + checked.
-  def switch_menu_item(label:, href:, active:, icon:, accent: false)
-    a(
-      href: href,
-      data: { turbo: false },
-      class: tokens(
-        "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left text-[12.5px]",
-        active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
-      )
-    ) do
-      render Icon.const_get(icon).new(class: tokens("w-3.5 h-3.5 shrink-0", accent ? "text-voodu-accent-2" : nil))
-      span(class: "flex-1 truncate") { label }
-      render Icon::CheckOutline.new(class: "w-3 h-3 text-voodu-accent-2 shrink-0") if active
-    end
-  end
-
   # current_pids — the uuids currently in ?pid=, in order. Drives which
   # rows start checked + the JS initial selection order.
   def current_pids
@@ -230,14 +271,14 @@ class Views::Metrics::Index < Views::Base
   # multiselect_row — a checkbox dashboard row. Toggled client-side by
   # metric_multiselect_controller (no nav); the shared "View selected"
   # button navigates to the stacked view in selection order.
-  def multiselect_row(dash, selected:)
+  def multiselect_row(uuid:, label:, selected:, pinned: false, icon: :Squares2x2Outline)
     button(
       type: "button",
       data: {
-        action:                  "click->metric-multiselect#toggle",
+        action:                    "click->metric-multiselect#toggle",
         metric_multiselect_target: "row",
-        uuid:                    dash.uuid,
-        checked:                 selected.to_s
+        uuid:                      uuid,
+        checked:                   selected.to_s
       },
       class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
              "text-[12.5px] text-voodu-text hover:bg-voodu-hover"
@@ -255,11 +296,13 @@ class Views::Metrics::Index < Views::Base
       end
 
       render(
-        dash.pinned ?
-          Icon::BookmarkSolid.new(class: "w-3.5 h-3.5 text-voodu-accent-2 shrink-0") :
-          Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+        if pinned
+          Icon::BookmarkSolid.new(class: "w-3.5 h-3.5 text-voodu-accent-2 shrink-0")
+        else
+          Icon.const_get(icon).new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+        end
       )
-      span(class: "flex-1 truncate") { dash.name }
+      span(class: "flex-1 truncate") { label }
     end
   end
 
@@ -273,52 +316,42 @@ class Views::Metrics::Index < Views::Base
 
     return @data.dashboard&.name.presence || "Dashboard" if dashboard_mode?
 
-    "Host (default)"
+    "Dashboards"
   end
 
   # The pin always renders, so the trigger always drops its right
   # border → one shared divider, the two read as one grouped control.
   def switcher_trigger_classes
-    "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border border-r-0 bg-voodu-surface " \
-      "text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+    tokens(
+      "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface",
+      "text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text",
+      # Drop the right border only when the pin segment follows, so the
+      # two read as one grouped control; otherwise the trigger is whole.
+      pin_segment? ? "border-r-0" : nil
+    )
   end
 
-  # pinned_dashboard — the island's single pinned dashboard (the
-  # default /metrics opens to), or nil when host is the default.
-  def pinned_dashboard
-    return @pinned_dashboard if defined?(@pinned_dashboard)
-
-    @pinned_dashboard = @current_island&.metric_dashboards&.pinned&.first
-  end
-
-  # pin_segment — right half of the switcher group. ALWAYS shown, as a
-  # toggle for "is THIS view the default /metrics opens to":
-  #   - dashboard mode → pin/unpin THIS dashboard (filled when pinned)
-  #   - host mode      → host-as-default. Filled when nothing is pinned
-  #     (host IS the default); when a dashboard is pinned it's an
-  #     outline button that unpins it (→ host becomes the default).
-  # Native POST (toolbar lives outside any turbo_frame).
+  # pin_segment — right half of the switcher group. Native POST
+  # (toolbar lives outside any turbo_frame).
+  # Only a SINGLE saved dashboard can be pinned (pinned = the default
+  # /metrics opens to). Multi-stacks and pod-scope drill-downs have
+  # nothing to pin, so the segment renders nothing there (pin_segment?).
   def pin_segment
-    if dashboard_mode? && !multi_mode?
-      dash = @data.dashboard
-      return pin_indicator(active: false, title: "No dashboard") if dash.nil?
+    return unless pin_segment?
 
-      if dash.pinned
-        pin_form(action: unpin_metric_dashboard_path(dash), active: true,
-                 title: "Unpin — /metrics stops opening to this dashboard")
-      else
-        pin_form(action: pin_metric_dashboard_path(dash), active: false,
-                 title: "Pin — open /metrics to this dashboard")
-      end
-    elsif (pinned = pinned_dashboard)
-      # On host while a dashboard is pinned: clicking makes host the
-      # default again (unpins it).
-      pin_form(action: unpin_metric_dashboard_path(pinned), active: false,
-               title: "Make host the default — unpins #{pinned.name}")
+    dash = @data.dashboard
+
+    if dash.pinned
+      pin_form(action: unpin_metric_dashboard_path(dash), active: true,
+               title: "Unpin — /metrics stops opening to this dashboard")
     else
-      # Host is already the default (nothing pinned).
-      pin_indicator(active: true, title: "Host is the default /metrics view")
+      pin_form(action: pin_metric_dashboard_path(dash), active: false,
+               title: "Pin — open /metrics to this dashboard")
     end
+  end
+
+  def pin_segment?
+    dashboard_mode? && !multi_mode? && @data.respond_to?(:dashboard) && @data.dashboard
   end
 
   def pin_form(action:, active:, title:)
@@ -328,12 +361,6 @@ class Views::Metrics::Index < Views::Base
         pin_icon(active)
       end
     end
-  end
-
-  # pin_indicator — non-submitting state (current view is already the
-  # default; nothing to toggle).
-  def pin_indicator(active:, title:)
-    span(title: title, class: "#{pin_btn_classes(active)} cursor-default") { pin_icon(active) }
   end
 
   def pin_icon(active)

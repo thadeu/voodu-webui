@@ -38,7 +38,7 @@ export default class extends Controller {
 
     const url = this.selected.length
       ? `${this.baseValue}?pid=${this.selected.join(",")}`
-      : `${this.baseValue}?scope_kind=host`
+      : this.baseValue
 
     if (window.Turbo) {
       window.Turbo.visit(url)

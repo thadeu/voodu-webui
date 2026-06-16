@@ -48,7 +48,7 @@ class MetricDashboardsController < ApplicationController
       redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
                   notice: "Dashboard #{@dashboard.name} created.")
     else
-      render_form_full_page(status: :unprocessable_entity)
+      render_form_errors
     end
   end
 
@@ -73,7 +73,7 @@ class MetricDashboardsController < ApplicationController
       redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
                   notice: "Dashboard #{@dashboard.name} updated.")
     else
-      render_form_full_page(status: :unprocessable_entity)
+      render_form_errors
     end
   end
 
@@ -102,6 +102,32 @@ class MetricDashboardsController < ApplicationController
     @dashboard = current_island.metric_dashboards.find_by!(uuid: params[:id])
   rescue ActiveRecord::RecordNotFound
     redirect_to metrics_path, alert: "Dashboard was not found."
+  end
+
+  # render_form_errors — on a validation error, re-render the builder
+  # IN PLACE (the "dashboards-panel" turbo-frame, wherever it lives —
+  # the switcher drawer or a full-page builder) so the error stays put
+  # instead of blowing the form out to the page content. The form
+  # submits with turbo_frame "_top" (success → full-page redirect to the
+  # new dashboard), but a turbo_stream response targets the frame by id
+  # regardless, so the errored form swaps back into the drawer.
+  # HTML fallback (no-JS) keeps the old full-page render.
+  def render_form_errors
+    respond_to do |format|
+      format.turbo_stream do
+        render turbo_stream: turbo_stream.replace(
+          Views::MetricDashboards::Form::FRAME_ID,
+          Views::MetricDashboards::Form.new(
+            island:    current_island,
+            dashboard: @dashboard,
+            pods:      compact_pods,
+            embed:     true,
+            return_to: return_to_path
+          )
+        ), status: :unprocessable_entity
+      end
+      format.html { render_form_full_page(status: :unprocessable_entity) }
+    end
   end
 
   # render_form_full_page — re-render the builder as a standalone page

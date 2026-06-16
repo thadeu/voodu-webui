@@ -9,6 +9,16 @@
 # work naturally, and refresh keeps the same scope+range.
 class MetricsController < ApplicationController
   def index
+    # Restore the operator's last dashboard view on a bare landing
+    # (session-scoped, 1h TTL) so leaving and returning to /metrics
+    # reopens where they were. Explicit ?pid / scope skip this; the
+    # polling frame always carries params so it never redirects.
+    if restore_last_view? && (last = last_metrics_view).present?
+      redirect_to(metrics_path(pid: last)) and return
+    end
+
+    remember_metrics_view if params[:pid].present? && full_page_request?
+
     @data = voodu_client.nil? ? nil : build_metrics_data
 
     # Turbo-Frame request → polling tick. Render JUST the chart_grid
@@ -161,12 +171,13 @@ class MetricsController < ApplicationController
 
   # build_metrics_data — picks the /metrics data object:
   #
-  #   1. ?pid=a,b,c with ≥2 valid dashboards → MultiDashboardData
-  #      (stacked, selection order).
-  #   2. ?pid=<uuid> (one) → MetricDashboardData (single dashboard).
-  #   3. no pid + no scope params + a pinned dashboard exists →
-  #      the pinned dashboard (the "open /metrics → my pinned" default).
-  #   4. else → MetricsPageData (host/pod scope).
+  #   1. ?pid=a,b,c (≥2) → MultiDashboardData (stacked, selection order).
+  #   2. ?pid=<uuid>     → MetricDashboardData (single dashboard).
+  #   3. ?scope_kind/scope_id → MetricsPageData (pod/host scope drill-
+  #      down, e.g. a pod's "View metrics" button).
+  #   4. no pid + no scope → the pinned dashboard, if any.
+  #   5. nothing pinned (or zero dashboards) → nil → the page renders the
+  #      empty state until the operator picks a dashboard.
   def build_metrics_data
     dashboards = explicit_dashboards
 
@@ -178,15 +189,22 @@ class MetricsController < ApplicationController
                                      range: params[:range], interval: params[:interval])
     end
 
-    if params[:pid].blank? && params[:scope_kind].blank? && params[:scope_id].blank? &&
-       (pinned = current_island.metric_dashboards.pinned.first)
-      return MetricDashboardData.new(voodu_client, current_island, pinned,
-                                     range: params[:range], interval: params[:interval])
+    if params[:scope_kind].present? || params[:scope_id].present?
+      return MetricsPageData.new(voodu_client, current_island,
+                                 scope_kind: params[:scope_kind], scope_id: params[:scope_id],
+                                 range: params[:range], interval: params[:interval])
     end
 
-    MetricsPageData.new(voodu_client, current_island,
-                        scope_kind: params[:scope_kind], scope_id: params[:scope_id],
-                        range: params[:range], interval: params[:interval])
+    pinned = current_island.metric_dashboards.pinned.first
+    return nil if pinned.nil?
+
+    MetricDashboardData.new(
+      voodu_client,
+      current_island,
+      pinned,
+      range: params[:range],
+      interval: params[:interval]
+    )
   end
 
   # explicit_dashboards — ordered, deduped dashboards from ?pid=a,b,c
@@ -196,6 +214,51 @@ class MetricsController < ApplicationController
     return [] if ids.empty?
 
     ids.filter_map { |id| current_island.metric_dashboards.find_by(uuid: id) }
+  end
+
+  # ── Last-view memory ──────────────────────────────────────────────
+  # Remember the operator's last ?pid selection per session + island so
+  # a bare /metrics reopens it. Cached (not stored in the URL) with a 1h
+  # TTL — leave for a while and the landing falls back to pinned/empty.
+
+  def full_page_request?
+    request.headers["Turbo-Frame"].blank?
+  end
+
+  def restore_last_view?
+    full_page_request? &&
+      params[:pid].blank? && params[:scope_kind].blank? && params[:scope_id].blank?
+  end
+
+  # last_metrics_view — the cached ?pid, filtered to dashboards that
+  # still exist (a since-deleted one shouldn't strand the landing).
+  def last_metrics_view
+    key = metrics_last_view_key
+    return nil if key.nil?
+
+    raw = Rails.cache.read(key)
+    return nil if raw.blank?
+
+    uuids = raw.to_s.split(",").map(&:strip).select { |u| current_island.metric_dashboards.exists?(uuid: u) }
+    uuids.join(",").presence
+  end
+
+  def remember_metrics_view
+    key = metrics_last_view_key
+    return if key.nil?
+
+    Rails.cache.write(key, params[:pid].to_s, expires_in: 1.hour)
+  end
+
+  # Stable per-session token (kept in the session cookie) + island id.
+  # No `current_user` here — the WebUI is tenant-by-URL — so the session
+  # IS the "user" scope.
+  def metrics_last_view_key
+    return nil if current_island.nil?
+
+    sid = (session[:metrics_sid] ||= SecureRandom.hex(8))
+
+    "metrics:last_view:#{sid}:#{current_island.id}"
   end
 
   # dashboard_display_items — one Settings/Order card per dashboard

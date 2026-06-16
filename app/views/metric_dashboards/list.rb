@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # Views::MetricDashboards::List — the switcher drawer body. Lists the
-# island's saved dashboards plus a "Host (default)" entry, with pin /
-# edit / delete affordances and a "New dashboard" button.
+# island's saved dashboards with pin / edit / delete affordances and a
+# "New dashboard" button. (Host is a panel SOURCE inside the builder,
+# not a standalone entry — metrics are dashboard-driven.)
 #
 # Wrapped in a turbo_frame ("dashboards-panel") so the New / Edit links
 # swap the builder into THIS frame (in-drawer navigation), while the
@@ -21,7 +22,6 @@ class Views::MetricDashboards::List < Views::Base
     turbo_frame_tag(FRAME_ID) do
       div(class: "flex flex-col") do
         header_row
-        host_row
         if @dashboards.empty?
           empty_state
         else
@@ -46,27 +46,6 @@ class Views::MetricDashboards::List < Views::Base
       ) do
         render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
         span { "New" }
-      end
-    end
-  end
-
-  # host_row — the always-present "go back to the plain host view"
-  # entry. `scope_kind=host` FORCES the host scope even when a dashboard
-  # is pinned (bare /metrics would otherwise resolve to the pinned
-  # dashboard) — pinning sets the default, it doesn't lock you in.
-  # `turbo_frame: "_top"` breaks out of the drawer's "dashboards-panel"
-  # frame (data-turbo:false isn't honored for links inside a frame →
-  # "Content missing").
-  def host_row
-    a(
-      href: metrics_path(scope_kind: "host"),
-      data: { turbo_frame: "_top" },
-      class: "flex items-center gap-2.5 px-4 py-3 border-b border-voodu-border-2 hover:bg-voodu-surface-2 group"
-    ) do
-      render Icon::ChartBarOutline.new(class: "w-4 h-4 text-voodu-muted shrink-0")
-      div(class: "min-w-0 flex-1") do
-        div(class: "text-[12.5px] font-medium text-voodu-text") { "Host (default)" }
-        div(class: "text-[11px] text-voodu-muted") { "CPU · Memory · Disk for #{@island.name}" }
       end
     end
   end
