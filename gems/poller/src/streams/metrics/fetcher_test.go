@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -71,8 +70,34 @@ func newFetcherForTest(t *testing.T, vooduSrv, railsSrv *httptest.Server, root s
 	return f, m
 }
 
+func iso(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// metricLine builds a realistic dump line (ts + source + identity + a
+// metric value), the shape the controller actually emits.
+func metricLine(source, scope, name, container string, t time.Time) string {
+	b := &strings.Builder{}
+	b.WriteString(`{"ts":"`)
+	b.WriteString(iso(t))
+	b.WriteString(`","source":"`)
+	b.WriteString(source)
+	b.WriteString(`"`)
+	if scope != "" {
+		b.WriteString(`,"scope":"` + scope + `"`)
+	}
+	if name != "" {
+		b.WriteString(`,"name":"` + name + `"`)
+	}
+	if container != "" {
+		b.WriteString(`,"container":"` + container + `"`)
+	}
+	b.WriteString(`,"cpu_percent":1.5}`)
+
+	return b.String()
+}
+
 func TestFetcher_HappyPath_WritesFolderAndNotifies(t *testing.T) {
 	root := t.TempDir()
+	now := time.Now()
 
 	var fetchedSince atomic.Value
 	voodu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +108,10 @@ func TestFetcher_HappyPath_WritesFolderAndNotifies(t *testing.T) {
 			t.Errorf("missing bearer auth: %q", r.Header.Get("Authorization"))
 		}
 		fetchedSince.Store(r.URL.Query().Get("since"))
-		_, _ = w.Write([]byte(`{"name":"cpu","val":1}` + "\n" + `{"name":"mem","val":2}` + "\n"))
+		_, _ = w.Write([]byte(
+			metricLine("system", "", "", "", now) + "\n" +
+				metricLine("pod", "fsw", "freeswitch", "fsw-freeswitch.0", now) + "\n",
+		))
 	}))
 	defer voodu.Close()
 
@@ -142,17 +170,18 @@ func TestFetcher_HappyPath_WritesFolderAndNotifies(t *testing.T) {
 		t.Errorf("meta.json missing: %v", err)
 	}
 
-	// Watermark should have advanced after the successful notify.
-	if f.watermark.IsZero() {
-		t.Error("watermark not advanced")
+	// Watermarks committed after the successful notify — one per source.
+	if f.sourceTS["system"] == 0 || f.sourceTS["pod"] == 0 {
+		t.Errorf("per-source watermarks not advanced: %#v", f.sourceTS)
 	}
 }
 
 func TestFetcher_RailsFailure_KeepsFolderAndDoesNotAdvanceWatermark(t *testing.T) {
 	root := t.TempDir()
+	now := time.Now()
 
 	voodu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte("payload\n"))
+		_, _ = w.Write([]byte(metricLine("system", "", "", "", now) + "\n"))
 	}))
 	defer voodu.Close()
 
@@ -163,10 +192,8 @@ func TestFetcher_RailsFailure_KeepsFolderAndDoesNotAdvanceWatermark(t *testing.T
 	defer rails.Close()
 
 	f, m := newFetcherForTest(t, voodu, rails, root)
-	before := f.watermark
 
-	ctx := context.Background()
-	f.tick(ctx)
+	f.tick(context.Background())
 
 	if m.errors != 1 {
 		t.Errorf("errors = %d, want 1", m.errors)
@@ -177,8 +204,10 @@ func TestFetcher_RailsFailure_KeepsFolderAndDoesNotAdvanceWatermark(t *testing.T
 	if m.notifyOk != 0 {
 		t.Errorf("notifyOk = %d, want 0", m.notifyOk)
 	}
-	if !f.watermark.Equal(before) {
-		t.Errorf("watermark advanced despite notify failure")
+	// Watermarks must NOT be committed on notify failure, so the next
+	// tick re-fetches the same window.
+	if len(f.sourceTS) != 0 {
+		t.Errorf("watermarks advanced despite notify failure: %#v", f.sourceTS)
 	}
 
 	// Folder should still be on disk so cleanup GC handles it later.
@@ -217,24 +246,140 @@ func TestFetcher_VooduFailure_NoFolderWritten(t *testing.T) {
 	}
 }
 
-func TestFetcher_SinceParam_ColdStart(t *testing.T) {
-	f := &Fetcher{}
-	got := f.sinceParam()
+// ── since selection ─────────────────────────────────────────────────
 
-	if got == "" {
-		t.Fatal("empty since on cold start")
+func newBareFetcher() *Fetcher {
+	return &Fetcher{
+		seriesTS: make(map[string]int64),
+		sourceTS: make(map[string]int64),
 	}
+}
 
-	// Format is unix seconds (integer-as-string) — matches Ruby's
-	// `MetricsSyncIslandJob` wire shape (`since: since.to_i`) and the
-	// controller's `/metrics/dump` parser.
-	secs, err := strconv.ParseInt(got, 10, 64)
+// A fast source must not drag `since` past a slower one: the boundary is
+// the OLDEST live source's watermark, so the laggard catches up. This is
+// the exact bug — system racing ahead and freezing pod.
+func TestComputeSince_UsesOldestLiveSource(t *testing.T) {
+	now := time.Now()
+	f := newBareFetcher()
+	f.sourceTS["system"] = now.Add(-1 * time.Minute).Unix()
+	f.sourceTS["pod"] = now.Add(-5 * time.Minute).Unix()
+
+	got := f.computeSince(now)
+	want := now.Add(-5 * time.Minute).Unix()
+	if got != want {
+		t.Fatalf("since = %d, want oldest (pod) = %d", got, want)
+	}
+}
+
+func TestComputeSince_ColdStart(t *testing.T) {
+	now := time.Now()
+	got := newBareFetcher().computeSince(now)
+	want := now.Add(-ColdStartLookback).Unix()
+	if got != want {
+		t.Fatalf("cold since = %d, want %d", got, want)
+	}
+}
+
+// A source idle beyond BackfillCap is excluded so it can't drag `since`
+// into an ever-widening re-stream; the live source sets the boundary.
+func TestComputeSince_ExcludesStaleSource(t *testing.T) {
+	now := time.Now()
+	f := newBareFetcher()
+	f.sourceTS["system"] = now.Add(-30 * time.Second).Unix()
+	f.sourceTS["ingress"] = now.Add(-2 * time.Hour).Unix() // dead
+
+	got := f.computeSince(now)
+	want := now.Add(-30 * time.Second).Unix()
+	if got != want {
+		t.Fatalf("since = %d, want live system = %d (stale ingress must be ignored)", got, want)
+	}
+}
+
+func TestComputeSince_AllStaleFallsBackToCap(t *testing.T) {
+	now := time.Now()
+	f := newBareFetcher()
+	f.sourceTS["system"] = now.Add(-3 * time.Hour).Unix()
+
+	got := f.computeSince(now)
+	want := now.Add(-BackfillCap).Unix()
+	if got != want {
+		t.Fatalf("since = %d, want floor = %d", got, want)
+	}
+}
+
+// ── dedup ────────────────────────────────────────────────────────────
+
+// The overlap a laggard-driven `since` re-delivers must be dropped, while
+// genuinely new rows pass — keyed per time-series so distinct pods
+// sampled in the same second both survive.
+func TestDedup_DropsOverlapKeepsNewAndDistinct(t *testing.T) {
+	base := time.Date(2026, 6, 16, 19, 44, 0, 0, time.UTC)
+	f := newBareFetcher()
+	// Already stored: system @ base, freeswitch @ base.
+	f.seriesTS["system\x1f\x1f\x1f"] = base.Unix()
+	f.seriesTS["pod\x1ffsw\x1ffreeswitch\x1ffsw-freeswitch.0"] = base.Unix()
+	f.sourceTS["system"] = base.Unix()
+	f.sourceTS["pod"] = base.Unix()
+
+	body := strings.Join([]string{
+		metricLine("system", "", "", "", base),                                               // re-delivered → drop
+		metricLine("pod", "fsw", "freeswitch", "fsw-freeswitch.0", base.Add(60*time.Second)), // new → keep
+		metricLine("system", "", "", "", base.Add(15*time.Second)),                           // new → keep
+		metricLine("pod", "fsw", "api", "fsw-api.0", base.Add(30*time.Second)),               // same-second distinct
+		metricLine("pod", "fsw", "web", "fsw-web.0", base.Add(30*time.Second)),               // same-second distinct
+	}, "\n") + "\n"
+
+	kept, count, seriesTS, _, err := f.dedup(strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("parse unix seconds: %v", err)
+		t.Fatal(err)
 	}
-	ts := time.Unix(secs, 0)
-	age := time.Since(ts)
-	if age < ColdStartLookback-time.Second || age > ColdStartLookback+time.Second {
-		t.Errorf("cold-start watermark age = %v, want ~%v", age, ColdStartLookback)
+	if count != 4 {
+		t.Fatalf("kept %d rows, want 4 (1 overlap dropped)", count)
+	}
+
+	got := string(kept)
+	if strings.Count(got, `"container":"fsw-api.0"`) != 1 || strings.Count(got, `"container":"fsw-web.0"`) != 1 {
+		t.Fatalf("same-second distinct pods must both survive:\n%s", got)
+	}
+	if seriesTS["pod\x1ffsw\x1ffreeswitch\x1ffsw-freeswitch.0"] != base.Add(60*time.Second).Unix() {
+		t.Fatalf("freeswitch series watermark did not advance in the returned map")
+	}
+	// dedup must NOT mutate the committed state (caller commits on success).
+	if f.seriesTS["pod\x1ffsw\x1ffreeswitch\x1ffsw-freeswitch.0"] != base.Unix() {
+		t.Fatalf("dedup mutated f.seriesTS before commit")
+	}
+}
+
+// Re-running the same batch after committing the advances keeps nothing.
+func TestDedup_IdempotentOnceCommitted(t *testing.T) {
+	base := time.Date(2026, 6, 16, 19, 44, 0, 0, time.UTC)
+	f := newBareFetcher()
+	body := metricLine("pod", "fsw", "freeswitch", "fsw-freeswitch.0", base) + "\n"
+
+	_, c1, seriesTS, sourceTS, _ := f.dedup(strings.NewReader(body))
+	if c1 != 1 {
+		t.Fatalf("first pass kept %d, want 1", c1)
+	}
+	// Commit, as tick does after a successful notify.
+	f.seriesTS, f.sourceTS = seriesTS, sourceTS
+
+	_, c2, _, _, _ := f.dedup(strings.NewReader(body))
+	if c2 != 0 {
+		t.Fatalf("second pass kept %d, want 0 (already persisted)", c2)
+	}
+}
+
+// Malformed / ts-less lines pass through (Rails drops them at insert);
+// dropping them here could lose a valid sample on a transient hiccup.
+func TestDedup_PassesThroughUnparseable(t *testing.T) {
+	f := newBareFetcher()
+	body := "not-json\n" + `{"source":"pod","scope":"x","name":"y","container":"z"}` + "\n"
+
+	_, count, _, _, err := f.dedup(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("kept %d, want 2 (both pass through)", count)
 	}
 }
