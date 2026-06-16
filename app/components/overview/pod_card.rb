@@ -42,7 +42,10 @@ class Components::Overview::PodCard < Components::Base
         class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-link-2 transition-colors"
       ) do
         span(class: "text-[14px] font-semibold text-voodu-link truncate") { @pod[:name] }
-        span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate") { @pod[:image] || "—" }
+        span(
+          class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate",
+          title: @pod[:image]
+        ) { @pod[:image_tag] || "—" }
       end
       render Components::UI::StatusPill.new(status: @pod[:status])
     end

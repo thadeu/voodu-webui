@@ -436,6 +436,7 @@ class OverviewData
       replica_id:    p["replica_id"],
       kind:          p["kind"],
       image:         p["image"],
+      image_tag:     extract_image_tag(p["image"]),
       status:        status,
       cpu_pct:       extract_cpu_pct(p),
       mem_used_mb:   extract_mem_mb(p, "memory_usage_bytes"),
@@ -443,6 +444,26 @@ class OverviewData
       age:           format_age(p["created_at"]),
       ports:         extract_ports(p)
     }
+  end
+
+  # extract_image_tag — the version/tag of a docker image reference, with
+  # a leading ":" so it reads as a tag in the list (":latest", ":bookworm",
+  # ":3-management", ":8"). The pod list shows ONLY this; the full
+  # reference stays on the pod show page (and in each list row's title
+  # tooltip + search blob). nil for an untagged image (digest-only or bare
+  # name) so the renderer falls back to "—".
+  #
+  # Drops a "@sha256:…" digest and any registry "host:port/" prefix (so a
+  # registry-port colon isn't mistaken for the tag), then takes the
+  # segment after the last ":".
+  def extract_image_tag(image)
+    ref  = image.to_s.split("@", 2).first.to_s
+    name = ref.rpartition("/").last
+    return nil unless name.include?(":")
+
+    tag = name.rpartition(":").last
+
+    tag.empty? ? nil : ":#{tag}"
   end
 
   # extract_cpu_pct — real per-container CPU% from the stats block

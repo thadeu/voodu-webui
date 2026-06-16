@@ -221,9 +221,12 @@ class Components::Overview::PodsTable < Components::Base
   # pod_cell — compound identity column. Two-tier display:
   #
   #   scope/resource_name.replica_id      ← clickable, scope muted
-  #   image (mono muted, truncated)
+  #   image tag (mono muted; full image on hover via title)
   #
-  # Clicking either line opens the pod detail page.
+  # Clicking either line opens the pod detail page. The list shows only
+  # the tag (":latest", ":bookworm") — the full reference would push the
+  # name + status off-screen for long ECR URLs; it lives on the pod show
+  # page and the hover tooltip.
   def pod_cell(pod)
     td(class: "px-3 py-2.5") do
       a(
@@ -240,7 +243,10 @@ class Components::Overview::PodsTable < Components::Base
             span(class: "text-voodu-muted font-normal") { ".#{pod[:replica_id]}" }
           end
         end
-        span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0") { pod[:image] || "—" }
+        span(
+          class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0",
+          title: pod[:image]
+        ) { pod[:image_tag] || "—" }
       end
     end
   end
