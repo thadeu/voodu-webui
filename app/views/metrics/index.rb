@@ -316,7 +316,12 @@ class Views::Metrics::Index < Views::Base
 
     return @data.dashboard&.name.presence || "Dashboard" if dashboard_mode?
 
-    "Dashboards"
+    # Scope view (no saved dashboard active) — the host/pod resource view.
+    # "Host (default)" labels the trigger so it's clear you're on the
+    # built-in view, not a dashboard. Don't return the generic "Dashboards"
+    # here: that's the drawer/switcher's own title, not the active view's
+    # name (and the host view must stay reachable + labelled past a pin).
+    "Host (default)"
   end
 
   # The pin always renders, so the trigger always drops its right
