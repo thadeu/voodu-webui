@@ -17,11 +17,15 @@
 #     display_settings_url: metrics_display_settings_path
 #   )
 class Components::Metrics::DisplaySettingsButton < Components::Base
-  def initialize(kind:, scope_kind:, display_settings_url:, dashboard_id: nil)
+  # compact: true → a smaller, borderless trigger for the multi-view
+  # section dividers (per-dashboard settings), vs the full bordered
+  # toolbar button on a single dashboard/scope.
+  def initialize(kind:, scope_kind:, display_settings_url:, dashboard_id: nil, compact: false)
     @kind                 = kind
     @scope_kind           = scope_kind
     @display_settings_url = display_settings_url
     @dashboard_id         = dashboard_id
+    @compact              = compact
   end
 
   def view_template
@@ -56,9 +60,14 @@ class Components::Metrics::DisplaySettingsButton < Components::Base
   private
 
   def btn_class
-    "inline-flex items-center justify-center w-9 h-9 " \
-      "border border-voodu-border bg-voodu-surface " \
-      "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 " \
-      "transition-colors"
+    if @compact
+      "inline-flex items-center justify-center w-7 h-7 shrink-0 " \
+        "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
+    else
+      "inline-flex items-center justify-center w-9 h-9 " \
+        "border border-voodu-border bg-voodu-surface " \
+        "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 " \
+        "transition-colors"
+    end
   end
 end

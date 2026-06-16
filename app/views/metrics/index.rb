@@ -407,14 +407,11 @@ class Views::Metrics::Index < Views::Base
         span(class: "font-voodu-mono text-voodu-text-2") { @data.dashboards.map(&:name).join(" + ") }
       end
     elsif dashboard_mode?
-      dash = @data.dashboard
+      # Panel count now lives in the section divider, so the subtitle
+      # just names the dashboard (mirrors the multi subtitle).
       span do
         plain "dashboard "
-        span(class: "font-voodu-mono text-voodu-text-2") { dash&.name }
-        if dash
-          plain " · "
-          plain "#{dash.panels_count} #{dash.panels_count == 1 ? 'panel' : 'panels'}"
-        end
+        span(class: "font-voodu-mono text-voodu-text-2") { @data.dashboard&.name }
       end
     elsif @data&.scope_kind == "pod" && (pod = @data.pod_record)
       span do
@@ -503,19 +500,10 @@ class Views::Metrics::Index < Views::Base
           )
         end
 
-        # Multi mode shows no shared Settings/Order — each stacked section
-        # keeps its own saved hide/reorder layout (display_kind per
-        # dashboard), edited from its single-dashboard view.
-        if multi_mode?
-          nil
-        elsif dashboard_mode?
-          render Components::Metrics::DisplaySettingsButton.new(
-            kind:                 @data.display_kind,
-            scope_kind:           "host",
-            display_settings_url: metrics_display_settings_path,
-            dashboard_id:         @data.dashboard&.uuid
-          )
-        elsif @data
+        # Dashboard views (single or stacked) carry their Settings button
+        # in each section's divider now; the toolbar only shows it for a
+        # plain scope (host/pod) view.
+        if @data && !multi_mode? && !dashboard_mode?
           render Components::Metrics::DisplaySettingsButton.new(
             kind:                @data.display_kind,
             scope_kind:          @data.scope_kind,
@@ -614,6 +602,10 @@ class Views::Metrics::Index < Views::Base
             div(class: "flex flex-col gap-5 vmd:gap-6") do
               @data.sections.each { |sec| dashboard_section(sec) }
             end
+          elsif dashboard_mode?
+            # A single dashboard renders as one section too (divider +
+            # per-section settings), so it matches the stacked view.
+            dashboard_section(@data)
           else
             grid_for(@data)
           end
@@ -676,13 +668,24 @@ class Views::Metrics::Index < Views::Base
     dash = sec.dashboard
 
     div(class: "flex flex-col gap-3") do
-      div(class: "flex items-baseline gap-2.5") do
-        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0 self-center")
+      div(class: "flex items-center gap-2.5") do
+        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
         span(class: "text-[11.5px] text-voodu-muted") do
           plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
         end
-        span(class: "flex-1 h-px bg-voodu-border-2 self-center ml-1")
+        span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
+
+        # Per-section settings (columns + visibility/order), scoped to
+        # THIS dashboard's display_kind — the multi-view equivalent of
+        # the toolbar button a single dashboard gets.
+        render Components::Metrics::DisplaySettingsButton.new(
+          kind:                 sec.display_kind,
+          scope_kind:           "host",
+          display_settings_url: metrics_display_settings_path,
+          dashboard_id:         dash&.uuid,
+          compact:              true
+        )
       end
 
       grid_for(sec)

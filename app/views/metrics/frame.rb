@@ -30,6 +30,8 @@ class Views::Metrics::Frame < Views::Base
         div(class: "flex flex-col gap-5 vmd:gap-6") do
           @data.sections.each { |sec| dashboard_section(sec) }
         end
+      elsif dashboard_mode?
+        dashboard_section(@data)
       else
         grid_for(@data)
       end
@@ -42,17 +44,32 @@ class Views::Metrics::Frame < Views::Base
     @data.respond_to?(:multi?) && @data.multi?
   end
 
+  def dashboard_mode?
+    @data.respond_to?(:dashboard?) && @data.dashboard?
+  end
+
   def dashboard_section(sec)
     dash = sec.dashboard
 
     div(class: "flex flex-col gap-3") do
-      div(class: "flex items-baseline gap-2.5") do
-        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0 self-center")
+      div(class: "flex items-center gap-2.5") do
+        render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
         span(class: "text-[11.5px] text-voodu-muted") do
           plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
         end
-        span(class: "flex-1 h-px bg-voodu-border-2 self-center ml-1")
+        span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
+
+        # Mirror Index#dashboard_section — the per-dashboard settings
+        # button must survive the broadcast-tick frame swap (else it
+        # flashes in on pageload then vanishes on the first reload).
+        render Components::Metrics::DisplaySettingsButton.new(
+          kind:                 sec.display_kind,
+          scope_kind:           "host",
+          display_settings_url: metrics_display_settings_path,
+          dashboard_id:         dash&.uuid,
+          compact:              true
+        )
       end
 
       grid_for(sec)
