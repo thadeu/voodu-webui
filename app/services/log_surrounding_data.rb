@@ -63,7 +63,8 @@ class LogSurroundingData
     @expand + 1
   end
 
-  # rows — the sliced window, chronological (oldest → newest).
+  # rows — the sliced window, newest → oldest (matches the analytics
+  # result list, which sorts ts desc).
   def rows
     load!
     @rows
@@ -132,6 +133,13 @@ class LogSurroundingData
       @rows = scanned[lo..hi] || []
       @anchor_index = idx - lo
     end
+
+    # Present newest-first to match the /logs/analytics result list (which
+    # sorts ts desc). The scan + anchor slice above stay chronological —
+    # the before/after radius math reads cleanest that way — so we flip the
+    # kept window here and remap the anchor into reversed-index space.
+    @rows.reverse!
+    @anchor_index = (@rows.size - 1) - @anchor_index unless @anchor_index.nil?
 
     # More to reveal if the slice didn't cover everything scanned, or the
     # scan itself was capped — and we can still grow.

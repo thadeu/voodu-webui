@@ -8,9 +8,9 @@
 # host, tearing the overlay down without a navigation.
 #
 # Body: a context strip (count + scope toggle + export this batch), then
-# the window of Row components in chronological order (anchor highlighted
-# + tagged for scroll-into-view), ending in a "Load more" trigger when a
-# wider window would reveal more lines.
+# the window of Row components newest-first (matching the result list;
+# anchor highlighted + tagged for scroll-into-view), ending in a "Load
+# more" trigger when a wider window would reveal more lines.
 #
 # Export stays IN the modal: the Copy button fetches the export endpoint;
 # the Download links carry data-turbo=false so the browser handles the

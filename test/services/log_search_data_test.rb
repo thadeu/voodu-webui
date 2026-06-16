@@ -180,7 +180,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
     assert sur.found?
     assert_equal 5, sur.rows.size
     assert_equal "line-5", sur.rows[sur.anchor_index][:msg]
-    assert_equal %w[line-3 line-4 line-5 line-6 line-7], sur.rows.map { |r| r[:msg] }
+    assert_equal %w[line-7 line-6 line-5 line-4 line-3], sur.rows.map { |r| r[:msg] },
+                 "newest-first, matching the analytics result list"
   end
 
   test "surrounding clamps context at the window edges" do
@@ -192,7 +193,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
     )
 
     assert sur.found?
-    assert_equal 0, sur.anchor_index, "anchor is the first line; nothing before it"
+    assert_equal "line-0", sur.rows[sur.anchor_index][:msg]
+    assert_equal 4, sur.anchor_index, "anchor is the oldest line; newest-first puts it at the bottom"
     assert_equal 5, sur.rows.size
   end
 
