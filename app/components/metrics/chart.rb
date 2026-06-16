@@ -605,12 +605,20 @@ class Components::Metrics::Chart < Components::Base
     "voodu-metric-#{Digest::MD5.hexdigest(@color)[0, 8]}"
   end
 
-  # clip_id — per-(color, dimensions) so multiple charts on the
-  # same page don't share a clip rect (a stale one would clip to
-  # the wrong area). Color alone wouldn't be enough — Overview
-  # CPU + Metrics CPU both purple but have different sizes.
+  # clip_id — UNIQUE PER CHART INSTANCE. The clipRect holds this chart's
+  # own (resized) geometry, so its id must not collide with any other
+  # chart on the page. Color + dimensions ISN'T unique enough: two panels
+  # of the same metric on one page (e.g. Host CPU + FreeSwitch CPU, both
+  # purple, same size — common when stacking dashboards) produced the
+  # SAME id, so the browser resolved every `url(#id)` to the FIRST
+  # clipPath in the DOM and clipped the later chart's curve to the wrong
+  # rect — truncating it visually while its data stayed intact. `object_id`
+  # makes each rendered chart's clip id distinct. Memoised so the def and
+  # the `url(#…)` reference within one render agree.
   def clip_id
-    seed = "#{@color}-#{@width}-#{@height}-#{pad_left}-#{pad_top}-#{pad_right}-#{pad_bottom}"
-    "voodu-metric-clip-#{Digest::MD5.hexdigest(seed)[0, 8]}"
+    @clip_id ||= begin
+      seed = "#{@color}-#{@width}-#{@height}-#{pad_left}-#{pad_top}-#{pad_right}-#{pad_bottom}-#{object_id}"
+      "voodu-metric-clip-#{Digest::MD5.hexdigest(seed)[0, 8]}"
+    end
   end
 end
