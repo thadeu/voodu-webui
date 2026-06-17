@@ -132,8 +132,8 @@ class Components::Layouts::Sidebar < Components::Base
         aria:  { hidden: "true" }
       )
 
-      div(class: "flex flex-col leading-tight flex-1 vmd:group-data-[collapsed]:hidden") do
-        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight") { "Clowk Voodu" }
+      div(class: "flex flex-col leading-tight flex-1 min-w-0 overflow-hidden vmd:group-data-[collapsed]:hidden") do
+        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight whitespace-nowrap") { "Clowk Voodu" }
       end
     end
   end
@@ -193,7 +193,7 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       render Icon::ServerStackOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
-      span(class: "flex-1 vmd:group-data-[collapsed]:hidden") { "See all servers" }
+      span(class: "flex-1 min-w-0 truncate vmd:group-data-[collapsed]:hidden") { "See all servers" }
       span(class: "vmd:group-data-[collapsed]:hidden") do
         render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted shrink-0")
       end
@@ -372,7 +372,7 @@ class Components::Layouts::Sidebar < Components::Base
         end
       end
 
-      span(class: "flex-1 text-left vmd:group-data-[collapsed]:hidden") { item[:label] }
+      span(class: "flex-1 min-w-0 truncate text-left vmd:group-data-[collapsed]:hidden") { item[:label] }
 
       # Expanded-state badge — inline right-aligned pill. Hidden when
       # collapsed (the icon badge takes over). Same always-rendered
