@@ -131,6 +131,16 @@ class LogSearchData
     truthy?(@params[:regex])
   end
 
+  # query_limit — the `| limit N` cap parsed off the DSL (nil when absent).
+  # Caps the result set to the newest N (applied in load!). The legacy regex
+  # flag bypasses the DSL, so it carries no limit. Compiled once, memoised;
+  # the Reader compiles the matcher independently (one extra microsecond).
+  def query_limit
+    return @query_limit if defined?(@query_limit)
+
+    @query_limit = regex? ? nil : LogQuery.compile(search).limit
+  end
+
   # ── Results ───────────────────────────────────────────────────────
 
   # rows — the current PAGE_SIZE slice of the newest-first result set.
@@ -217,6 +227,11 @@ class LogSearchData
     @truncated  = scanned >= MATCH_SCAN_CAP
     collected.sort_by! { |r| r[:ts] }
     @all        = collected.reverse
+    # `| limit N` caps the result set to the newest N (sorted desc above, so
+    # that's the first N). `matched` stays the true filter-match count — the
+    # summary shows the limit separately, so "1,772 matched · limit 1,000"
+    # reads honestly rather than hiding that more lines matched.
+    @all        = @all.first(query_limit) if query_limit
     @elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     @loaded     = true
   end

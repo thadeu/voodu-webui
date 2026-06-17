@@ -132,7 +132,7 @@ class LogsAnalyticsController < ApplicationController
   end
 
   def each_export_record(data, &block)
-    LogTail::Reader.each_line(
+    reader = LogTail::Reader.each_line(
       island_id:      data.island.id,
       pods:           data.pods.presence,
       from:           data.from,
@@ -140,7 +140,19 @@ class LogsAnalyticsController < ApplicationController
       content_search: data.search.presence,
       regex:          data.regex?,
       limit:          EXPORT_LINE_CAP
-    ) { |_pod, hash| block.call(hash) }
+    )
+
+    # No `| limit N` → stream straight through (chronological, Reader order).
+    return reader.each { |_pod, hash| block.call(hash) } unless data.query_limit
+
+    # `limit N` → export the SAME newest-N the screen shows. Reader yields
+    # per-pod chronological, so buffer, sort, keep the newest N, then emit in
+    # chronological order (matching the unlimited export's ordering). Bounded
+    # by EXPORT_LINE_CAP, so the buffer can't run away.
+    buffer = []
+    reader.each { |_pod, hash| buffer << hash }
+    buffer.sort_by! { |hash| (hash[:ts] || hash["ts"]).to_s }
+    buffer.last(data.query_limit).each(&block)
   end
 
   # search_params — the operator's filter choices. `pods` is an array so

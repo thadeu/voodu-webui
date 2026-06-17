@@ -115,40 +115,51 @@ module LogTail
       nil
     end
 
-    # build_matcher — returns a Proc that takes a String and returns
-    # true/false. Nil/empty search = always-true matcher (cheap pass).
+    # build_matcher — returns a Proc(record)->bool, where record is
+    # { msg:, raw:, level:, stream: }. Empty search = always-true (cheap pass).
+    #
+    #   - regex flag set  → the LEGACY single-regex path (whole needle as one
+    #     regexp over msg/raw), kept so old `?regex=1&q=…` URLs still resolve.
+    #     The analytics UI no longer sets it — the DSL carries `/regex/` inline.
+    #   - otherwise        → LogQuery compiles the needle (plain substring OR the
+    #     boolean DSL). Plain text stays a literal substring, so `?q=callid`
+    #     bookmarks are unchanged.
     def build_matcher(search, use_regex)
-      return ->(_str) { true } if search.empty?
+      return ->(_rec) { true } if search.empty?
 
       if use_regex
         re = build_regex(search)
-        return ->(_str) { false } if re.nil?  # invalid regex → match nothing
+        return ->(_rec) { false } if re.nil?  # invalid regex → match nothing
 
-        ->(str) { re.match?(str) }
+        ->(rec) { re.match?(rec[:msg]) || re.match?(rec[:raw]) }
       else
-        # Case-insensitive substring — operator's "find this ID"
-        # usage doesn't need case sensitivity by default.
-        needle = search.downcase
-        ->(str) { str.downcase.include?(needle) }
+        LogQuery.compile(search).predicate
       end
     end
 
     def build_regex(source)
-      Regexp.new(source, Regexp::IGNORECASE)
+      Regexp.new(source, Regexp::IGNORECASE, timeout: LogQuery::REGEX_TIMEOUT)
     rescue RegexpError
       nil
     end
 
-    # content_match? — check the search needle against msg + raw.
-    # Both fields covered so the operator can find content whether
-    # the log was structured (msg field) or plain (raw field).
+    # content_match? — run the compiled matcher against this line's record.
+    # @message terms cover msg + raw (structured + plain); @level / @stream
+    # read their own fields. A pathological regex tripping its per-match
+    # timeout (ReDoS backstop) is treated as a non-match so the scan survives.
     def content_match?(hash)
       return true if @matcher.nil?
 
-      msg = (hash[:msg] || hash["msg"]).to_s
-      raw = (hash[:raw] || hash["raw"]).to_s
+      record = {
+        msg:    (hash[:msg]    || hash["msg"]).to_s,
+        raw:    (hash[:raw]    || hash["raw"]).to_s,
+        level:  (hash[:level]  || hash["level"]).to_s,
+        stream: (hash[:stream] || hash["stream"]).to_s
+      }
 
-      @matcher.call(msg) || @matcher.call(raw)
+      @matcher.call(record)
+    rescue Regexp::TimeoutError
+      false
     end
   end
 end

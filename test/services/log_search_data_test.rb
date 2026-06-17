@@ -63,6 +63,23 @@ class LogSearchDataTest < ActiveSupport::TestCase
     assert_equal "callid=8342416038 finished", data.rows.first[:msg]
   end
 
+  test "| limit caps the result set to the newest N (matched stays honest)" do
+    seed("web", [
+      [@base,             "line one"],
+      [@base + 1.second,  "line two"],
+      [@base + 2.seconds, "line three"],
+      [@base + 3.seconds, "line four"]
+    ])
+
+    data = search(from: iso(@base - 1.second), until: iso(@base + 10.seconds),
+                  q: "@message like /line/ | limit 2")
+
+    assert_equal 2, data.query_limit
+    assert_equal 4, data.matched, "all four matched the filter"
+    assert_equal ["line four", "line three"], data.rows.map { |r| r[:msg] }, "newest 2, newest-first"
+    assert_not data.has_more?, "the limit is the ceiling — no Load more past it"
+  end
+
   test "regex search matches against the message body" do
     seed("web", [
       [@base,             "status=200"],
