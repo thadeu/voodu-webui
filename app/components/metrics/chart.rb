@@ -599,10 +599,16 @@ class Components::Metrics::Chart < Components::Base
     d
   end
 
-  # gradient_id — stable per color. Same MD5 trick as Sparkline to
-  # avoid the `var(--…)` parens-in-id browser crash.
+  # gradient_id — UNIQUE PER CHART INSTANCE (same reason as clip_id below).
+  # It used to be stable per color, but a per-color id collides when several
+  # same-color charts share the page: every `fill="url(#id)"` resolved to the
+  # FIRST gradient in the DOM. Harmless while that first one is visible — but
+  # collapsing its dashboard group (display:none) leaves the survivors pointing
+  # at a paint server inside a hidden subtree, which Chromium won't apply, so
+  # their area fill vanishes. `object_id` makes each chart reference its own
+  # gradient. Memoised so the def and the `url(#…)` reference agree.
   def gradient_id
-    "voodu-metric-#{Digest::MD5.hexdigest(@color)[0, 8]}"
+    @gradient_id ||= "voodu-metric-#{Digest::MD5.hexdigest("#{@color}-#{object_id}")[0, 8]}"
   end
 
   # clip_id — UNIQUE PER CHART INSTANCE. The clipRect holds this chart's
