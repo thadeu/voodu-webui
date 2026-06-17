@@ -45,17 +45,23 @@ export default class extends Controller {
   toggleOne(event) {
     event.preventDefault()
     event.stopPropagation()  // don't bubble to onDocClick
+
     const row  = event.currentTarget.closest('[data-secret-reveal-target="row"]')
+    
     if (!row) return
+    
     const mask = row.querySelector('[data-secret-mask]')
     const val  = row.querySelector('[data-secret-value]')
     const eye  = row.querySelector('[data-secret-eye]')
     const slash = row.querySelector('[data-secret-eye-slash]')
+    
     if (!mask || !val) return
 
     const reveal = !mask.hidden  // currently masked → reveal
+    
     mask.hidden = reveal
     val.hidden  = !reveal
+    
     if (eye)   eye.hidden   = reveal
     if (slash) slash.hidden = !reveal
   }
@@ -86,7 +92,9 @@ export default class extends Controller {
   confirmReveal(event) {
     event.preventDefault()
     event.stopPropagation()
+
     this.confirmedValue = true
+    
     this.applyAll(true)
     this.closeConfirm()
   }
@@ -94,6 +102,7 @@ export default class extends Controller {
   cancelReveal(event) {
     event?.preventDefault()
     event?.stopPropagation()
+
     this.closeConfirm()
   }
 
@@ -105,21 +114,26 @@ export default class extends Controller {
       const val   = row.querySelector('[data-secret-value]')
       const eye   = row.querySelector('[data-secret-eye]')
       const slash = row.querySelector('[data-secret-eye-slash]')
+
       if (mask) mask.hidden = reveal
       if (val)  val.hidden  = !reveal
       if (eye)   eye.hidden   = reveal
       if (slash) slash.hidden = !reveal
     })
+
     this.allShown = reveal
     this.swapGlobalIcon(reveal)
   }
 
   swapGlobalIcon(reveal) {
     if (!this.hasGlobalBtnTarget) return
+
     const eye   = this.globalBtnTarget.querySelector('[data-secret-eye]')
     const slash = this.globalBtnTarget.querySelector('[data-secret-eye-slash]')
+    
     if (eye)   eye.hidden   = reveal
     if (slash) slash.hidden = !reveal
+    
     this.globalBtnTarget.setAttribute("title", reveal ? "Hide all values" : "Show all values")
     this.globalBtnTarget.setAttribute("aria-label", reveal ? "Hide all values" : "Show all values")
   }
@@ -131,13 +145,16 @@ export default class extends Controller {
       this.applyAll(true)
       return
     }
+
     this.confirmTarget.hidden = false
+    
     // Bind document click to dismiss when clicking outside the popover.
     setTimeout(() => document.addEventListener("click", this.onDocClick), 0)
   }
 
   closeConfirm() {
     if (!this.hasConfirmTarget) return
+
     this.confirmTarget.hidden = true
     document.removeEventListener("click", this.onDocClick)
   }
@@ -146,6 +163,7 @@ export default class extends Controller {
     if (!this.hasConfirmTarget) return
     if (this.confirmTarget.contains(event.target)) return
     if (this.hasGlobalBtnTarget && this.globalBtnTarget.contains(event.target)) return
+    
     this.closeConfirm()
   }
 }
