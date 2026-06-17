@@ -213,6 +213,13 @@ export default class extends Controller {
     this.formTarget.requestSubmit()
   }
 
+  // refresh — re-run the current query. For a preset, normalizeDates clears
+  // the hidden from/until so the server re-resolves the window to "now" →
+  // fresh data; a custom window re-runs as-is.
+  refresh() {
+    if (this.hasFormTarget) this.formTarget.requestSubmit()
+  }
+
   // refreshPodScope — mirror metric-multiselect#refresh: paint each row's
   // checkbox box + check from its native checkbox, then sync the trigger
   // label and the header select-all/clear toggle.

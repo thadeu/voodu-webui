@@ -24,11 +24,10 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
       summary_bar
       truncation_note if @data.truncated?
 
-      if @data.empty?
-        empty_state
-      else
-        results_table
-      end
+      # Always render the table chrome (column header carries the toolbar —
+      # Refresh / filter / export). The empty state shows BELOW the header so
+      # the operator can still refresh / widen the window when 0 rows match.
+      results_table
     end
   end
 
@@ -104,8 +103,10 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     end
   end
 
+  # empty_state — centered message rendered BELOW the always-present column
+  # header (inside the table), so the toolbar stays reachable on 0 matches.
   def empty_state
-    div(class: "flex-1 min-h-[240px] flex flex-col items-center justify-center gap-2 border border-voodu-border bg-voodu-bg-2 text-center px-6") do
+    div(class: "flex flex-col items-center justify-center gap-2 text-center px-6 py-20") do
       render Icon::MagnifyingGlassOutline.new(class: "w-6 h-6 text-voodu-muted-2")
       div(class: "text-[13px] text-voodu-text-2") { "No log lines match this query." }
       div(class: "text-[11.5px] text-voodu-muted") { "Widen the time window, clear the search, or check the pod scope." }
@@ -129,9 +130,14 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
         # theme.css) so appended pages flow into the same tracks.
         div(class: "log-list la-list") do
           column_header
-          render_rows(@data)
-          render_load_more(@data)
+
+          unless @data.empty?
+            render_rows(@data)
+            render_load_more(@data)
+          end
         end
+
+        empty_state if @data.empty?
       end
       column_visibility_popover
     end
@@ -142,6 +148,8 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # query's filters). Pinned in the table header, reachable while scrolling.
   def header_actions
     div(class: "flex items-center gap-1 shrink-0") do
+      header_icon("Refresh", :ArrowPathOutline, "refresh")
+
       filter_button
       # Column-shaping actions grouped: wrap toggles the lines (truncate ↔
       # full); the gear opens the visibility popover. Copying lives in the
@@ -151,11 +159,14 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
         wrap_toggle
         column_settings_button
       end
+
       header_icon("Clear results", :BackspaceOutline, "clear")
+
       div(class: "flex items-center gap-0.5") do
         header_icon("Jump to top",    :ArrowUpOutline,   "jumpTop")
         header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
       end
+
       export_menu
     end
   end
