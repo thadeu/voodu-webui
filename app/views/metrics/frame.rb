@@ -48,10 +48,16 @@ class Views::Metrics::Frame < Views::Base
     @data.respond_to?(:dashboard?) && @data.dashboard?
   end
 
+  # Mirrors Index#dashboard_section EXACTLY — the collapse toggle + settings
+  # button + the metrics-section wrapper must survive the broadcast-tick frame
+  # swap (else they flash in on pageload then vanish on the first reload).
   def dashboard_section(sec)
     dash = sec.dashboard
 
-    div(class: "flex flex-col gap-3") do
+    div(
+      class: "flex flex-col gap-3",
+      data:  { controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s }
+    ) do
       div(class: "flex items-center gap-2.5") do
         render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
@@ -60,9 +66,8 @@ class Views::Metrics::Frame < Views::Base
         end
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
 
-        # Mirror Index#dashboard_section — the per-dashboard settings
-        # button must survive the broadcast-tick frame swap (else it
-        # flashes in on pageload then vanishes on the first reload).
+        collapse_toggle
+
         render Components::Metrics::DisplaySettingsButton.new(
           kind:                 sec.display_kind,
           scope_kind:           "host",
@@ -72,7 +77,21 @@ class Views::Metrics::Frame < Views::Base
         )
       end
 
-      grid_for(sec)
+      div(data: { metrics_section_target: "body" }) do
+        grid_for(sec)
+      end
+    end
+  end
+
+  def collapse_toggle
+    button(
+      type:         "button",
+      "aria-label": "Collapse or expand this group",
+      data:         { action: "click->metrics-section#toggle", tooltip: "Collapse group" },
+      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+    ) do
+      span(data: { role: "eye-open" }) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
+      span(data: { role: "eye-closed" }, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
   end
 

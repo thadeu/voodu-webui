@@ -9,7 +9,7 @@ import { Controller } from "@hotwired/stimulus"
 // Initial selection comes from the server (selectedValue = current
 // ?pid order) so reopening the dropdown reflects what's on screen.
 export default class extends Controller {
-  static targets = ["row", "apply", "summary"]
+  static targets = ["row", "apply", "summary", "selectAllLabel"]
   static values = { base: String, selected: String }
 
   connect() {
@@ -30,6 +30,16 @@ export default class extends Controller {
       this.selected.push(uuid)
     }
 
+    this.refresh()
+  }
+
+  // toggleAll — select every dashboard (in list order), or clear them all if
+  // they're already all selected. No navigation until "View selected".
+  toggleAll() {
+    const all = this.rowTargets.map((row) => row.dataset.uuid)
+    const everySelected = all.length > 0 && all.every((uuid) => this.selected.includes(uuid))
+
+    this.selected = everySelected ? [] : all.slice()
     this.refresh()
   }
 
@@ -71,6 +81,13 @@ export default class extends Controller {
 
       this.summaryTarget.textContent =
         n === 0 ? "View selected" : n === 1 ? "View 1 dashboard" : `View ${n} dashboards`
+    }
+
+    if (this.hasSelectAllLabelTarget) {
+      const all = this.rowTargets.map((row) => row.dataset.uuid)
+      const everySelected = all.length > 0 && all.every((uuid) => set.has(uuid))
+
+      this.selectAllLabelTarget.textContent = everySelected ? "Clear" : "Select all"
     }
   }
 }

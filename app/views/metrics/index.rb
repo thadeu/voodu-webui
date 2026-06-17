@@ -235,6 +235,22 @@ class Views::Metrics::Index < Views::Base
 
             div(class: "h-px bg-voodu-border")
 
+            # Section header with a select-all / clear toggle for the rows below.
+            if all_dashboards.any?
+              div(class: "flex items-center justify-between gap-2 px-3 py-1.5 bg-voodu-bg-2 border-b border-voodu-border") do
+                span(class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted") { "Dashboards" }
+                button(
+                  type:         "button",
+                  "aria-label": "Select all dashboards or clear the selection",
+                  data:         { action: "click->metric-multiselect#toggleAll" },
+                  class:        "inline-flex items-center gap-1 px-1.5 h-5 text-[10.5px] font-medium text-voodu-accent-2 hover:text-voodu-accent transition-colors"
+                ) do
+                  render Icon::CheckCircleOutline.new(class: "w-3.5 h-3.5")
+                  span(data: { metric_multiselect_target: "selectAllLabel" }) { "Select all" }
+                end
+              end
+            end
+
             # Dashboard rows — checkbox toggles (no nav per click). Pick
             # several, then "View selected" stacks them in pick order.
             all_dashboards.each do |d|
@@ -678,14 +694,22 @@ class Views::Metrics::Index < Views::Base
   def dashboard_section(sec)
     dash = sec.dashboard
 
-    div(class: "flex flex-col gap-3") do
+    div(
+      class: "flex flex-col gap-3",
+      data:  { controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s }
+    ) do
       div(class: "flex items-center gap-2.5") do
         render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
+
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
+
         span(class: "text-[11.5px] text-voodu-muted") do
           plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
         end
+
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
+
+        collapse_toggle
 
         # Per-section settings (columns + visibility/order), scoped to
         # THIS dashboard's display_kind — the multi-view equivalent of
@@ -699,7 +723,26 @@ class Views::Metrics::Index < Views::Base
         )
       end
 
-      grid_for(sec)
+      # Body wrapper is the collapse target — metrics-section toggles `hidden`
+      # on it (CSS only), keeping the grid in the DOM so the polling tick keeps
+      # it fresh while collapsed.
+      div(data: { metrics_section_target: "body" }) do
+        grid_for(sec)
+      end
+    end
+  end
+
+  # collapse_toggle — eye / eye-slash button (next to the section settings)
+  # that hides this group's charts while leaving the header + label.
+  def collapse_toggle
+    button(
+      type:         "button",
+      "aria-label": "Collapse or expand this group",
+      data:         { action: "click->metrics-section#toggle", tooltip: "Collapse group" },
+      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+    ) do
+      span(data: { role: "eye-open" }) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
+      span(data: { role: "eye-closed" }, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
   end
 
