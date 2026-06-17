@@ -188,6 +188,24 @@ export default class extends Controller {
 
     this.selectedCols = cols
     this.applyColsPicker(cols)
+    // Choosing a column count is an explicit "lay these out N per row" — drop
+    // this kind's per-card drag-resize widths so the preset takes cleanly
+    // (otherwise stale spans win and e.g. "2" still renders 4-up). Applied on
+    // Update; metrics-display re-reads the cleared sizes then. Same key as
+    // metrics_display_controller's SIZES_KEY ("voodu:metrics:sizes:v2").
+    this.clearCardWidths()
+  }
+
+  // clearCardWidths — wipe the resize-drag widths for this kind so the column
+  // preset lays out a uniform N-up. Resize is a fine-tune ON TOP afterwards.
+  clearCardWidths() {
+    try {
+      const sizes = JSON.parse(sessionStorage.getItem("voodu:metrics:sizes:v2") || "{}")
+      delete sizes[this.kindValue]
+      sessionStorage.setItem("voodu:metrics:sizes:v2", JSON.stringify(sizes))
+    } catch (_) {
+      // sessionStorage disabled — nothing persisted to clear.
+    }
   }
 
   // toggle — entry point for clicking a card. Routes by type and

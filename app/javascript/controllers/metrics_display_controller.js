@@ -35,6 +35,15 @@ import { Controller } from "@hotwired/stimulus"
 //
 // Default-visible principle: hidden is an EXPLICIT list. New metrics
 // added in a future release land visible at the end of the order.
+
+// BASE_COLS — the resize canvas is a fine 12-track grid. The operator's
+// "columns" preference (2|3|4) just picks the DEFAULT span (12/cols → 6|4|3),
+// so a 2-up layout looks identical to before — but cards resize in 1/12 steps.
+// An integer N-col grid had no room to resize: two span-1 cards filled a 2-col
+// row with nothing to trade. Per-card spans persist in twelfths under v2.
+const BASE_COLS = 12
+const SIZES_KEY = "voodu:metrics:sizes:v2"
+
 export default class extends Controller {
   static targets = ["card", "grid"]
   static values  = { kind: String }
@@ -42,6 +51,8 @@ export default class extends Controller {
   connect() {
     this.handleChanged = this.applyState.bind(this)
     this.handleResize  = this.applyLayout.bind(this)
+    this.onResizeMove  = this.onResizeMove.bind(this)
+    this.onResizeEnd   = this.onResizeEnd.bind(this)
 
     this.mediaQuery = window.matchMedia("(min-width: 1100px)")
     this.mediaQuery.addEventListener("change", this.handleResize)
@@ -54,6 +65,7 @@ export default class extends Controller {
   disconnect() {
     window.removeEventListener("metrics-display:changed", this.handleChanged)
     this.mediaQuery?.removeEventListener("change", this.handleResize)
+    this.onResizeEnd()
   }
 
   applyState() {
@@ -111,15 +123,216 @@ export default class extends Controller {
 
     const visibleCount = this.cardTargets.filter(c => !c.hidden).length
 
-    let effective
-    if (visibleCount <= 1)      effective = 1
-    else if (visibleCount === 2) effective = 2
-    else                         effective = cols || 2
+    // perRow → the DEFAULT cards-per-row; the default span is BASE_COLS/perRow.
+    let perRow
+    if (visibleCount <= 1)       perRow = 1
+    else if (visibleCount === 2) perRow = 2
+    else                         perRow = cols || 2
 
     if (this.mediaQuery.matches) {
-      this.gridTarget.style.gridTemplateColumns = `repeat(${effective}, minmax(0, 1fr))`
+      this.gridTarget.style.gridTemplateColumns = `repeat(${BASE_COLS}, minmax(0, 1fr))`
+      this.baseCols    = BASE_COLS
+      this.defaultSpan = Math.max(1, Math.round(BASE_COLS / perRow))
     } else {
       this.gridTarget.style.gridTemplateColumns = ""
+      this.baseCols    = 1
+      this.defaultSpan = 1
+    }
+
+    // Per-card spans ride on top — re-applied whenever the layout changes.
+    this.applySizes()
+  }
+
+  // ── per-card width (column span) ───────────────────────────────────────────
+  // A card's width = how many of the N grid columns it spans (1..N). Stored
+  // per metric key in its own sessionStorage slice so it never clobbers the
+  // Settings drawer's {hidden, order, cols} blob.
+
+  applySizes(sizes) {
+    if (!this.hasGridTarget) return
+
+    const map  = sizes || this.readSizes()
+    const base = this.baseCols || 1
+    const def  = this.defaultSpan || 1
+
+    this.cardTargets.forEach(card => {
+      // Mobile (single track) — let the Tailwind grid-cols-1 win.
+      if (base <= 1) {
+        card.style.gridColumn = ""
+
+        return
+      }
+
+      // Custom width (twelfths) if the operator resized this card, else the
+      // default span derived from the columns preference.
+      const span = Math.min(base, Math.max(1, map[card.dataset.metricKey] || def))
+      card.style.gridColumn = `span ${span}`
+    })
+
+    // Non-card grid items (the "no running replica" placeholders) aren't
+    // resizable, but still need the default span or they collapse to 1/12.
+    const cards = new Set(this.cardTargets)
+    Array.from(this.gridTarget.children).forEach(child => {
+      if (cards.has(child)) return
+
+      child.style.gridColumn = base <= 1 ? "" : `span ${def}`
+    })
+
+    this.fillRows()
+  }
+
+  // fillRows — stretch the LAST item of every row to the row end so a row is
+  // always full (flex-1 last). Rows are derived by walking the items in DOM
+  // order and summing spans against the 12-track base — the same order CSS
+  // grid auto-flow packs them, so the math matches the layout. A no-op once
+  // spans already fill (a resized row stays full because pairs preserve their
+  // total); it's what closes the default gap (e.g. 3 cards × span 3 = 9/12).
+  fillRows() {
+    if (!this.hasGridTarget) return
+
+    const base = this.baseCols || 1
+    if (base <= 1) return
+
+    const items = Array.from(this.gridTarget.children).filter(el => !el.hidden)
+    let rowSpan = 0 // span already placed on the current row, before this item
+
+    items.forEach((item, i) => {
+      const span = this.spanOf(item)
+      if (rowSpan + span > base) rowSpan = 0 // this item wraps to a fresh row
+
+      const next     = items[i + 1]
+      const nextSpan = next ? this.spanOf(next) : Infinity
+      const lastOfRow = !next || (rowSpan + span + nextSpan > base)
+
+      if (lastOfRow) {
+        item.style.gridColumn = `span ${base - rowSpan}` // fill to the row end
+        rowSpan = 0
+      } else {
+        rowSpan += span
+      }
+    })
+  }
+
+  // startResize — pointer-down on a card edge handle. SPLIT-PANE model: the
+  // handle moves the BOUNDARY between this card and its same-row neighbour on
+  // that side. The pair's total span is held constant, so this card grows by
+  // exactly what the neighbour gives up (and vice versa) — nothing else on the
+  // page reflows. No same-row neighbour on that side → no-op (a card at the
+  // row edge has nothing to trade with). No-op on mobile (single column).
+  startResize(event) {
+    if (!this.mediaQuery.matches || !this.hasGridTarget) return
+
+    const handle = event.currentTarget
+    const card   = handle.closest("[data-metrics-display-target='card']")
+    if (!card) return
+
+    // Move the boundary with the same-row neighbour on this edge: their
+    // combined span is held constant, so only the boundary slides — nothing
+    // else reflows. No neighbour on that side (row edge) → no-op; the last
+    // card of a row is the flex filler (fillRows), so its outer edge has
+    // nothing to trade with.
+    const neighbor = this.rowNeighbor(card, handle.dataset.resizeEdge)
+    if (!neighbor) return
+
+    event.preventDefault()
+    this.resizeCard      = card
+    this.resizeNeighbor  = neighbor
+    this.resizeEdge      = handle.dataset.resizeEdge
+    this.resizeStartX    = event.clientX
+    this.resizeStartSelf = this.spanOf(card)
+    this.resizePairTotal = this.resizeStartSelf + this.spanOf(neighbor)
+
+    const gridWidth = this.gridTarget.clientWidth
+    const gap       = parseFloat(getComputedStyle(this.gridTarget).columnGap) || 0
+    this.resizeStep = (gridWidth + gap) / (this.baseCols || 1)
+
+    document.addEventListener("pointermove", this.onResizeMove)
+    document.addEventListener("pointerup", this.onResizeEnd)
+    document.addEventListener("pointercancel", this.onResizeEnd)
+    document.body.style.cursor     = "col-resize"
+    document.body.style.userSelect = "none"
+  }
+
+  onResizeMove(event) {
+    if (!this.resizeCard || !this.resizeStep) return
+
+    // Pulling the LEFT edge left, or the RIGHT edge right, grows this card.
+    const moved = (event.clientX - this.resizeStartX) / this.resizeStep
+    const grow  = Math.round(this.resizeEdge === "left" ? -moved : moved)
+
+    const self = Math.max(1, Math.min(this.resizePairTotal - 1, this.resizeStartSelf + grow))
+    this.setSpan(this.resizeCard, self)
+    this.setSpan(this.resizeNeighbor, this.resizePairTotal - self)
+  }
+
+  onResizeEnd() {
+    if (!this.resizeCard) return
+
+    this.persistSize(this.resizeCard.dataset.metricKey, this.spanOf(this.resizeCard))
+    this.persistSize(this.resizeNeighbor.dataset.metricKey, this.spanOf(this.resizeNeighbor))
+
+    this.resizeCard = null
+    this.resizeNeighbor = null
+
+    document.removeEventListener("pointermove", this.onResizeMove)
+    document.removeEventListener("pointerup", this.onResizeEnd)
+    document.removeEventListener("pointercancel", this.onResizeEnd)
+
+    document.body.style.cursor     = ""
+    document.body.style.userSelect = ""
+
+    // Re-stretch the last card of each row to swallow any gap the change left.
+    this.fillRows()
+  }
+
+  // rowNeighbor — the visible card immediately before (left) / after (right)
+  // this one in DOM order that shares its row (same rect top). Null at a row
+  // edge.
+  rowNeighbor(card, edge) {
+    const cards = this.cardTargets.filter(c => !c.hidden)
+    const idx   = cards.indexOf(card)
+
+    if (idx < 0) return null
+
+    const top      = Math.round(card.getBoundingClientRect().top)
+    const neighbor = edge === "left" ? cards[idx - 1] : cards[idx + 1]
+
+    return neighbor && Math.round(neighbor.getBoundingClientRect().top) === top ? neighbor : null
+  }
+
+  setSpan(card, span) {
+    card.style.gridColumn = `span ${span}`
+  }
+
+  spanOf(card) {
+    const m = (card.style.gridColumn || "").match(/span\s+(\d+)/)
+    return m ? parseInt(m[1], 10) : (this.defaultSpan || 1)
+  }
+
+  persistSize(metricKey, span) {
+    if (!metricKey) return
+
+    const store = this.readSizesStore()
+    store[this.kindValue] ||= {}
+    store[this.kindValue][metricKey] = span // twelfths — explicit once resized
+
+    try {
+      sessionStorage.setItem(SIZES_KEY, JSON.stringify(store))
+    } catch (_) {
+      // sessionStorage disabled — the resize holds for this view, just won't
+      // survive the next frame swap.
+    }
+  }
+
+  readSizes() {
+    return this.readSizesStore()[this.kindValue] || {}
+  }
+
+  readSizesStore() {
+    try {
+      return JSON.parse(sessionStorage.getItem(SIZES_KEY) || "{}")
+    } catch (_) {
+      return {}
     }
   }
 

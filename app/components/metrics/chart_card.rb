@@ -97,16 +97,38 @@ class Components::Metrics::ChartCard < Components::Base
     root_data[:default_visible] = "false"  unless @default_visible
 
     div(
-      class: "bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",
+      class: "relative bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",
       data:  root_data
     ) do
       card_header
       render_body
       stat_footer
+      if @metric
+        resize_handle("left")
+        resize_handle("right")
+      end
     end
   end
 
   private
+
+  # resize_handle — grab strip on the card's LEFT or RIGHT edge. Dragging it
+  # changes how many grid columns the card spans (metrics-display#startResize
+  # snaps to columns + persists); the left edge just inverts the drag direction.
+  # Only on cards with a metric key (the resizable ones); a no-op on mobile
+  # (single-column grid). The SVG chart reflows on the width change via the
+  # metrics-chart ResizeObserver.
+  def resize_handle(edge)
+    div(
+      data:  { action: "pointerdown->metrics-display#startResize", resize_edge: edge },
+      aria:  { hidden: "true" },
+      title: "Drag to resize",
+      class: tokens(
+        "absolute top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-voodu-accent/30 active:bg-voodu-accent/60 z-10 touch-none",
+        edge == "left" ? "left-0" : "right-0"
+      )
+    )
+  end
 
   # render_body — the chart_type switch. Gauges fall back to the area
   # chart when there's no usable ceiling (see gauge_pct).
