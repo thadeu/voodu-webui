@@ -17,6 +17,8 @@
 # attachment with no navigation — neither closes the dialog (they live
 # inside it, not on the backdrop).
 class Components::LogAnalytics::SurroundingModal < Components::Base
+  include Components::LogAnalytics::ColumnChrome
+
   def initialize(data:)
     @data = data
   end
@@ -43,8 +45,12 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
     parts.join(" · ")
   end
 
+  # context_strip — fixed band above the scroller (shrink-0, NOT sticky):
+  # the rows now scroll inside their own `.la-cols-host` scroller below, so
+  # the count + export + scope stay put without competing with the column
+  # header for `top: 0` (that overlap was what hid the sticky header before).
   def context_strip
-    div(class: "sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-voodu-border bg-voodu-bg-2") do
+    div(class: "shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-voodu-border bg-voodu-bg-2") do
       div(class: "text-[11px] text-voodu-muted") do
         if @data.found?
           plain "#{@data.rows.size} lines around the selected line"
@@ -134,16 +140,35 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
       return
     end
 
-    div(class: "bg-voodu-bg-2") do
-      @data.rows.each_with_index do |row, idx|
-        render Components::LogAnalytics::Row.new(
-          row:          row,
-          surroundable: false,
-          anchor:       idx == @data.anchor_index
-        )
-      end
+    # Same column grid as the results table (ColumnChrome): wiring the SAME
+    # logs-columns config (one storage key) means the operator's hidden +
+    # resized columns apply here too, the header is shown, and the columns
+    # are resizable. `.la-cols-host` + the overlay give the identical
+    # hide-until-ready "Rendering…" treatment.
+    #
+    # The rows live in their OWN `flex-1 overflow-auto` scroller (same as the
+    # results table) so the `position: sticky` column header pins to the top
+    # of THIS region, below the fixed context strip — not to the modal body,
+    # where it landed behind the strip and vanished on scroll. NOT a
+    # logs-columns/log-analytics scroller target: the controller assumes a
+    # single results scroller (wrap/jump), and openSurrounding's scrollIntoView
+    # finds this scroller as the anchor cell's nearest ancestor on its own.
+    div(class: "la-cols-host relative flex-1 min-h-0 flex flex-col bg-voodu-bg-2", data: column_grid_attrs) do
+      loading_overlay
+      div(class: "flex-1 overflow-auto min-h-0") do
+        div(class: "log-list la-list") do
+          column_header
+          @data.rows.each_with_index do |row, idx|
+            render Components::LogAnalytics::Row.new(
+              row:          row,
+              surroundable: false,
+              anchor:       idx == @data.anchor_index
+            )
+          end
+        end
 
-      load_more
+        load_more
+      end
     end
   end
 

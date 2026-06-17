@@ -41,7 +41,19 @@ const MAX_COL_WIDTH = 800      // px — sanity cap, prevents an accidental drag
 const HIDE_CLASS_PREFIX = "cols-hide-"
 
 export default class extends Controller {
-  static values = { storageKey: { type: String, default: "voodu:logs-columns:v1" } }
+  static values = {
+    storageKey: { type: String, default: "voodu:logs-columns:v1" },
+    // Which columns this surface has, in order. Default = the live tail's
+    // full set; /logs/analytics passes a subset (no LVL). `body` must stay
+    // last (it's the 1fr payload). Backward-compatible: callers that don't
+    // set it get the live-tail columns unchanged.
+    columns: { type: Array, default: COLUMNS },
+    // Per-column starting width (px) before the operator drags. Analytics
+    // sets fixed widths so the grid skips the (expensive over thousands of
+    // rows) `auto` content-measure pass. Unset → `auto` (live-tail default).
+    defaultWidths: { type: Object, default: {} }
+  }
+
   static targets = ["popover", "settingsButton", "visibilityToggle"]
 
   connect() {
@@ -62,6 +74,12 @@ export default class extends Controller {
 
     this.applyState()
     this.syncCheckboxes()
+
+    // Mark the layout as applied so a surface can reveal itself only now —
+    // before this, a saved resize would visibly snap from the CSS default
+    // width. The CSS that reacts is analytics-scoped (`.la-list`); the live
+    // tail has no pre-paint default to hide, so it's unaffected.
+    this.listEl.classList.add("cols-ready")
   }
 
   disconnect() {
@@ -228,7 +246,7 @@ export default class extends Controller {
       if (!raw) return empty
       const parsed = JSON.parse(raw)
       return {
-        hidden: Array.isArray(parsed.hidden) ? parsed.hidden.filter((k) => COLUMNS.includes(k) && k !== "body") : [],
+        hidden: Array.isArray(parsed.hidden) ? parsed.hidden.filter((k) => this.columnsValue.includes(k) && k !== "body") : [],
         widths: (parsed.widths && typeof parsed.widths === "object") ? parsed.widths : {}
       }
     } catch (e) {
@@ -251,7 +269,7 @@ export default class extends Controller {
   }
 
   applyHidden() {
-    for (const col of COLUMNS) {
+    for (const col of this.columnsValue) {
       if (col === "body") continue
       const cls = `${HIDE_CLASS_PREFIX}${col}`
       this.listEl.classList.toggle(cls, this.state.hidden.includes(col))
@@ -265,13 +283,14 @@ export default class extends Controller {
   applyTemplate() {
     const tracks = []
 
-    for (const col of COLUMNS) {
+    for (const col of this.columnsValue) {
       if (col === "body") {
         tracks.push("minmax(0, 1fr)")
         continue
       }
+
       if (this.state.hidden.includes(col)) continue
-      const w = this.state.widths[col]
+      const w = this.state.widths[col] || this.defaultWidthsValue[col]
       tracks.push(w ? `${w}px` : "auto")
     }
 
@@ -280,13 +299,17 @@ export default class extends Controller {
 
   syncCheckboxes() {
     if (!this.hasVisibilityToggleTarget) return
+
     for (const input of this.visibilityToggleTargets) {
       const key = input.dataset.columnKey
+      
       if (!key) continue
+
       if (input.dataset.required === "true") {
         input.checked = true
         continue
       }
+      
       input.checked = !this.state.hidden.includes(key)
     }
   }

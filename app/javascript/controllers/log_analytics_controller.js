@@ -55,8 +55,12 @@ export default class extends Controller {
     "allPods",
     "scroller",
     "summary",
-    "surroundingHost"
+    "surroundingHost",
+    "wrapToggle",
+    "loadMore"
   ]
+
+  static WRAP_KEY = "voodu:logs-analytics-wrap:v1"
 
   static values = {
     surroundingUrl: String,
@@ -274,6 +278,108 @@ export default class extends Controller {
     if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = this.scrollerTarget.scrollHeight
   }
 
+  // toggleRowWrap — flip `.log-row-wrap` on ONE line (per-row wrap), so
+  // its body switches to pre-wrap/break-all and the whole message is
+  // readable inline — no expand panel. Two triggers, same handler (mirrors
+  // the live tail): the per-row wrap chip (click) and a double-click on
+  // the line. Double-clicks that land on a chip are skipped (the chip has
+  // its own click action); a dblclick also leaves a stray word-selection,
+  // so we clear it for a clean toggle.
+  toggleRowWrap(event) {
+    if (event.type === "dblclick" && event.target.closest(".log-copy, .log-wrap-single, .log-surrounding")) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    const node = event.currentTarget
+    const row  = node.classList.contains("log-row") ? node : node.closest(".log-row")
+    if (!row) return
+
+    const wrapped = row.classList.toggle("log-row-wrap")
+    const chip    = row.querySelector(".log-wrap-single")
+    if (chip) chip.dataset.active = wrapped ? "true" : "false"
+
+    if (event.type === "dblclick") {
+      const sel = window.getSelection()
+      if (sel && sel.removeAllRanges) sel.removeAllRanges()
+    }
+  }
+
+  // toggleWrap — flip wrap on every line. The `.log-wrap` class on the
+  // grid `.log-list` drives the CSS (truncate ↔ pre-wrap), shared with the
+  // live tail. Persisted so a re-query (which swaps the results frame +
+  // scroller) keeps the choice; scrollerTargetConnected re-applies it.
+  toggleWrap() {
+    const on = !this.wrapEnabled()
+    this.setWrapPref(on)
+    this.applyWrap(on)
+  }
+
+  // scrollerTargetConnected — fires on first render AND after each
+  // re-query frame swap (Turbo replaces the scroller). Re-apply the saved
+  // wrap state so it survives the swap.
+  scrollerTargetConnected() {
+    this.applyWrap(this.wrapEnabled())
+  }
+
+  // loadMoreTargetConnected — auto-fire the Load more trigger as it nears
+  // the viewport, so the operator scrolls continuously instead of clicking.
+  // Only ONE trigger exists at a time (the next page's), so this paginates
+  // ON DEMAND — the table never renders everything up front. Clicking swaps
+  // the trigger out; the next page's trigger re-observes when it connects.
+  loadMoreTargetConnected(el) {
+    this.loadMoreObserver?.disconnect()
+    this.loadMoreObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+
+      this.loadMoreObserver.disconnect()
+      el.click()
+    }, {
+      root:       this.hasScrollerTarget ? this.scrollerTarget : null,
+      rootMargin: "600px 0px"
+    })
+    this.loadMoreObserver.observe(el)
+  }
+
+  loadMoreTargetDisconnected() {
+    this.loadMoreObserver?.disconnect()
+  }
+
+  disconnect() {
+    this.loadMoreObserver?.disconnect()
+  }
+
+  applyWrap(on) {
+    // Wrap rides the same `.log-wrap` class + `.log-body` rules as the
+    // live tail (theme.css), toggled on the grid `.log-list`.
+    const list = this.hasScrollerTarget ? this.scrollerTarget.querySelector(".log-list") : null
+    if (list) list.classList.toggle("log-wrap", on)
+
+    if (this.hasWrapToggleTarget) {
+      this.wrapToggleTarget.dataset.active = on ? "true" : "false"
+      this.wrapToggleTarget.setAttribute("aria-pressed", on ? "true" : "false")
+    }
+  }
+
+  wrapEnabled() {
+    try {
+      return localStorage.getItem(this.constructor.WRAP_KEY) === "1"
+    } catch (_e) {
+      return false
+    }
+  }
+
+  setWrapPref(on) {
+    try {
+      localStorage.setItem(this.constructor.WRAP_KEY, on ? "1" : "0")
+    } catch (_e) {
+      // private mode / quota — wrap still toggles for this view, just
+      // won't survive the next frame swap.
+    }
+  }
+
   // copyExport — fetch the export endpoint for the current query (same
   // URL the Download items link to) and put the body on the clipboard.
   // So "Copy" and "Download" return identical content for a given format.
@@ -333,8 +439,17 @@ export default class extends Controller {
       const html = await resp.text()
       this.surroundingHostTarget.innerHTML = html
 
-      const anchor = this.surroundingHostTarget.querySelector("[data-surrounding-anchor]")
-      if (anchor) anchor.scrollIntoView({ block: "center" })
+      // Centre the clicked line. The anchor row is `.log-row` (display:
+      // contents → no box), so scrollIntoView on it is a no-op; scroll one
+      // of its cells (a real grid item) instead. rAF lets the grid lay out
+      // first so the centring lands on the right offset.
+      requestAnimationFrame(() => {
+        const anchor = this.surroundingHostTarget.querySelector("[data-surrounding-anchor]")
+        if (!anchor) return
+
+        const box = anchor.querySelector(".log-ts") || anchor.firstElementChild || anchor
+        box.scrollIntoView({ block: "center" })
+      })
     } catch (_e) {
       // Network/teardown — leave the host untouched; the operator can retry.
     }

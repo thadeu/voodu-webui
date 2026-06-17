@@ -200,19 +200,147 @@ html[data-theme="light"] .log-row .log-msg { color: var(--voodu-log-payload); }
  * the initial inline render (no fetch) shows no overlay. */
 .la-results-loading { display: none; }
 turbo-frame[busy] .la-results-loading,
-turbo-frame[aria-busy="true"] .la-results-loading { display: flex; }
+turbo-frame[aria-busy="true"] .la-results-loading,
+/* …and during the brief window after the rows render but before
+ * logs-columns has applied the column layout (the grid is hidden until
+ * `.cols-ready`). Reusing this overlay means the operator sees the
+ * "Searching…" spinner there instead of a blank gap. */
+turbo-frame:has(.log-list.la-list:not(.cols-ready)) .la-results-loading,
+/* …and the Surrounding modal, whose overlay sits inside its own
+ * `.la-cols-host` (it's not in a turbo-frame). */
+.la-cols-host:has(.log-list.la-list:not(.cols-ready)) .la-results-loading {
+  display: flex;
+}
 
-/* Each analytics result row is a <details> whose detail panel is in the
- * DOM even while collapsed. With "Load more" the list can reach ~20k
- * rows in one scroll container, so off-screen rows would otherwise pay
- * full layout + style-recalc on every scroll. content-visibility:auto
- * lets the browser skip rendering work for rows outside the viewport
- * (the big win for a long log list); contain-intrinsic-size keeps the
- * scrollbar stable, with `auto` remembering each row's real height once
- * it's been on screen (so expanded rows don't misjump). */
-.la-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 34px;
+/* Pick the overlay label by state: "Searching…" while the query is in
+ * flight, "Rendering…" during the post-render column-layout window. They
+ * never overlap — a busy frame still shows the previous (cols-ready)
+ * results underneath, so `:has(:not(.cols-ready))` is false then. */
+.la-search-label,
+.la-render-label { display: none; }
+turbo-frame[busy] .la-search-label,
+turbo-frame[aria-busy="true"] .la-search-label { display: inline; }
+turbo-frame:has(.log-list.la-list:not(.cols-ready)) .la-render-label { display: inline; }
+
+/* Analytics result rows reuse `.log-row { display: contents }` so their
+ * cells flow into the shared `.log-list` grid (alignment + resize/hide).
+ * A grid-participating cell can't also be size-contained, so these rows
+ * can't carry `content-visibility:auto` (it broke the column tracks — the
+ * cells collapsed into a stack). Correctness over the long-list paint
+ * optimisation; revisit with row virtualisation if 20k lists ever jank. */
+
+/* /logs/analytics results table — reuses the live-tail `.log-list` grid so
+ * the column header + every row share ONE set of column tracks (perfect
+ * alignment) and the `logs-columns` controller's resize/hide drive both
+ * surfaces. Data rows are `.log-row.la-grid-row`: a SUBGRID spanning every
+ * parent track (cells line up with the header + each other) while staying a
+ * real box, so `content-visibility:auto` keeps a 20k-row scroll cheap.
+ * Plain `.log-row` (the Follow live tail) stays `display:contents` — the
+ * higher-specificity `.log-row.la-grid-row` only re-targets analytics rows. */
+/* Data rows ARE `.log-row` (display:contents from the base rule), so the
+ * cells below flow straight into the `.log-list` grid — same proven layout
+ * as the live tail. la-grid-row only adds analytics behaviour. */
+.log-row.la-grid-row { cursor: default; }
+
+/* display:contents rows generate no box, so a row-level background can't
+ * paint — tint the cells instead. Anchor = the surrounding-modal target;
+ * hover = pointer feedback across the line. */
+.la-grid-row.is-anchor > .log-ts,
+.la-grid-row.is-anchor > .log-pod,
+.la-grid-row.is-anchor > .log-body { background: var(--voodu-accent-dim); }
+
+.la-grid-row:not(.is-anchor):hover > .log-ts,
+.la-grid-row:not(.is-anchor):hover > .log-pod,
+.la-grid-row:not(.is-anchor):hover > .log-body {
+  background: color-mix(in srgb, var(--voodu-surface) 55%, transparent);
+}
+
+/* Per-row surrounding-logs chip — mirrors `.log-copy`, sits left of the
+ * wrap chip (right: 52px). Analytics-only (the live tail has no
+ * surrounding drill-in). The wrap + copy chips reuse the shared rules. */
+.log-row .log-surrounding {
+  position: absolute;
+  top: 0px;
+  right: 52px;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--voodu-surface-3);
+  border: 1px solid var(--voodu-border-2);
+  box-shadow: var(--voodu-shadow-sm);
+  color: var(--voodu-text-2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.log-row:hover .log-surrounding {
+  opacity: 1;
+  pointer-events: auto;
+}
+.log-row .log-surrounding:hover {
+  color: var(--voodu-text);
+  background: color-mix(in srgb, var(--voodu-surface-3) 80%, var(--voodu-mix-fg));
+  border-color: var(--voodu-border);
+}
+.log-row .log-surrounding svg {
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+/* Load more pagination lives INSIDE `.log-list`. The turbo-frame is
+ * display:contents so the rows it swaps in flow into the grid tracks; the
+ * trigger row spans every column. */
+.log-list .la-page-frame { display: contents; }
+.log-list .la-loadmore { grid-column: 1 / -1; }
+
+/* First-paint grid template for the analytics table. The shared `.log-list`
+ * default is 4 tracks (the live tail's TS/LVL/POD/BODY); analytics has only
+ * 3 columns, so until the logs-columns controller connects and rewrites the
+ * template, the browser lays the 3 columns into the 4-track default — a
+ * visible "starts scrambled, snaps straight" flash. Pinning the fixed
+ * 3-track template here means the very first paint is already aligned; the
+ * controller then sets the same values (or the operator's saved widths).
+ * Keep in sync with `defaultWidths` in Components::LogAnalytics::Results. */
+.log-list.la-list {
+  grid-template-columns: 256px 160px minmax(0, 1fr);
+}
+
+/* Hide the analytics grid until logs-columns has applied the real template
+ * (the operator's saved widths, or the defaults). Without this a saved
+ * resize visibly snaps from the CSS default on load. `visibility` (not
+ * `display`) keeps the row area reserved so revealing doesn't reflow; the
+ * controller adds `.cols-ready` synchronously on connect, so the first
+ * VISIBLE paint is already at the right widths. A re-query's loading
+ * overlay covers the gap; on first load the connect is ~1 frame away. */
+.log-list.la-list:not(.cols-ready) {
+  visibility: hidden;
+}
+
+/* The analytics MESSAGE header cell carries the action buttons (taller
+ * than the plain text labels), so baseline-aligned cells would leave their
+ * per-cell border-bottoms on a staircase. Stretch every header cell to the
+ * row height and vertically centre its label — the bottom borders land on
+ * one continuous line. Scoped to `.la-list` so the live tail (absolute
+ * header buttons, already level) is untouched. */
+.la-list .log-header > .log-hcell {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+/* TIME and POD run on fixed-width tracks (no `auto` measure across
+ * thousands of rows), so their content must clip with an ellipsis instead
+ * of overflowing into the next column. TIME's track is sized to fit the
+ * full ISO-nano timestamp, so the ellipsis there is just a guard against
+ * bleed — it shouldn't normally truncate. */
+.la-list .log-ts,
+.la-list .log-pod {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Column header —
@@ -471,17 +599,22 @@ body.log-cols-resizing * {
  *
  * Doing only (1) without (2) would leave an empty trailing column
  * still taking 1fr — body would render in the wrong slot and the
- * layout would visibly split. Always change both. */
-.log-list.cols-hide-ts > .log-row > .log-ts,
-.log-list.cols-hide-ts > .log-row > .log-h-ts {
+ * layout would visibly split. Always change both.
+ *
+ * Descendant (not direct-child) so the analytics Load-more rows — which
+ * nest one level deeper under the `display:contents` `.la-page-frame` —
+ * are hidden too. The live tail's rows are direct grandchildren, so this
+ * matches them identically. */
+.log-list.cols-hide-ts .log-ts,
+.log-list.cols-hide-ts .log-h-ts {
   display: none;
 }
-.log-list.cols-hide-level > .log-row > .log-level,
-.log-list.cols-hide-level > .log-row > .log-h-level {
+.log-list.cols-hide-level .log-level,
+.log-list.cols-hide-level .log-h-level {
   display: none;
 }
-.log-list.cols-hide-pod > .log-row > .log-pod,
-.log-list.cols-hide-pod > .log-row > .log-h-pod {
+.log-list.cols-hide-pod .log-pod,
+.log-list.cols-hide-pod .log-h-pod {
   display: none;
 }
 

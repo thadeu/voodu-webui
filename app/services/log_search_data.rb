@@ -31,7 +31,12 @@
 # results" is "narrow the window" — documented so it isn't read as a
 # bug.
 class LogSearchData
-  PAGE_SIZE      = 5_000
+  # Rows rendered per page. Kept modest so the results frame doesn't lay
+  # out thousands of grid rows at once (the analytics table dropped
+  # content-visibility when it adopted the shared `.log-list` grid, so
+  # every rendered row pays full layout). Load more — auto-fired on scroll
+  # — pages back through the rest.
+  PAGE_SIZE      = 2_500
   MATCH_SCAN_CAP = 20_000
 
   # Selectable quick windows. Capped at the warehouse retention so a

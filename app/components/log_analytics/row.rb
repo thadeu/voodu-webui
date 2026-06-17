@@ -1,22 +1,26 @@
 # frozen_string_literal: true
 
-# Components::LogAnalytics::Row — one line in the analytics results
-# table (and reused inside the Surrounding Logs modal). Native
-# <details>/<summary> drives expand/collapse with zero JS: the summary
-# is the collapsed line (chevron + timestamp + message), the panel below
-# carries the structured fields + raw payload + the "Surrounding logs"
-# drill-in.
+# Components::LogAnalytics::Row — one line in the analytics results table
+# (and reused inside the Surrounding Logs modal).
 #
-# Per-level left-border tint follows the project's chart palette rule:
-# --voodu-red is reserved for errors/failures, amber for warnings, blue
-# for info, muted for debug/trace + unparsed lines.
+# Mirrors the live-tail row exactly: a `.log-row.la-grid-row` whose cells
+# (time / pod / message) flow into the shared `.log-list` grid, with the
+# payload kept as plain selectable text. There is NO expand panel — the
+# "see the whole line" need is met by WRAP (per-row, via the hover chip or
+# a double-click on the line), and the per-row hover chips cover the rest:
+#
+#   wrap (this line) · copy (raw) · surrounding logs
+#
+# Per-level left tint follows the chart palette rule (--voodu-red reserved
+# for errors); the message text is tinted only for error/warn so the bulk
+# of lines stay full-strength readable.
 #
 #   row:          { ts:, pod:, stream:, level:, msg:, raw:, parsed: }
-#   surroundable: render the "Surrounding logs" drill-in (true in the
-#                 results table; false inside the surrounding modal so
-#                 it doesn't recurse).
-#   anchor:       highlight this row as the surrounding-modal anchor +
-#                 mark it so the controller scrolls it into view.
+#   surroundable: render the surrounding-logs chip (true in the results
+#                 table; false inside the surrounding modal so it doesn't
+#                 recurse).
+#   anchor:       mark this row as the surrounding-modal anchor (highlight
+#                 + scroll-into-view).
 class Components::LogAnalytics::Row < Components::Base
   def initialize(row:, surroundable: true, anchor: false)
     @row          = row
@@ -25,135 +29,119 @@ class Components::LogAnalytics::Row < Components::Base
   end
 
   def view_template
-    details(
-      class: tokens(
-        "group la-row block border-b border-voodu-border/60",
-        @anchor ? "bg-voodu-accent-dim" : "hover:bg-voodu-surface/60"
-      ),
-      style: "border-left: 2px solid #{level_color};",
-      data: (@anchor ? { surrounding_anchor: "true" } : {})
+    div(
+      class: tokens("log-row la-grid-row la-row group", @anchor ? "is-anchor" : nil),
+      style: row_style,
+      data:  row_data
     ) do
-      summary_row
-      detail_panel
+      ts_cell
+      pod_cell
+      body_cell
     end
   end
 
   private
 
-  def summary_row
-    summary(
-      class: tokens(
-        "flex flex-col vmd:flex-row vmd:items-baseline gap-1 vmd:gap-3",
-        "px-2.5 py-1.5 cursor-pointer list-none select-none",
-        "font-voodu-mono text-[11.5px] leading-relaxed"
-      )
-    ) do
-      div(class: "flex items-baseline gap-2 shrink-0") do
-        render Icon::ChevronRightOutline.new(
-          class: "w-3 h-3 mt-0.5 text-voodu-muted-2 shrink-0 transition-transform group-open:rotate-90"
-        )
-        level_chip
-        time(class: "text-voodu-muted whitespace-nowrap") { @row[:ts] }
-      end
+  # row_data — double-click anywhere on the line toggles its wrap (the chip
+  # handler skips dblclicks that land on a chip). surrounding_anchor marks
+  # the modal anchor for scroll-into-view.
+  def row_data
+    data = { action: "dblclick->log-analytics#toggleRowWrap" }
+    data[:surrounding_anchor] = "true" if @anchor
 
-      span(class: "text-voodu-log-payload truncate min-w-0") do
-        @row[:msg].presence || @row[:raw]
-      end
+    data
+  end
+
+  # row_style — the left stripe (--row-accent) always reflects the level
+  # (neutral when there's none). The message text (--log-tone) is tinted
+  # ONLY for error/warn; everything else falls back to --voodu-text via
+  # theme.css (a no-level line tinted with the neutral border tone washed
+  # the message into the dark background — unreadable).
+  def row_style
+    style = "--row-accent: #{level_color};"
+    tone  = message_tone
+    style += " --log-tone: #{tone};" if tone
+
+    style
+  end
+
+  def message_tone
+    case @row[:level].to_s.upcase
+    when "ERROR", "FATAL"  then "var(--voodu-red)"
+    when "WARN", "WARNING" then "var(--voodu-amber)"
     end
   end
 
-  def detail_panel
-    div(class: "px-2.5 pb-3 pt-1 vmd:pl-[26px] flex flex-col gap-2.5") do
-      div(class: "flex items-start justify-between gap-3") do
-        field_grid
-        row_actions
-      end
-      raw_block
+  def ts_cell
+    time(class: "log-ts") { @row[:ts] }
+  end
+
+  def pod_cell
+    span(class: "log-pod") { @row[:pod] }
+  end
+
+  # body_cell — the payload + the floating hover chips. `.log-body` is the
+  # positioning context (position: relative in theme.css) for the absolute
+  # chips, which reveal on row hover. `.log-msg` is the selectable text.
+  def body_cell
+    span(class: "log-body") do
+      span(class: "log-msg") { @row[:msg].presence || @row[:raw] }
+      surrounding_chip if @surroundable
+      wrap_chip
+      copy_chip
     end
   end
 
-  # field_grid — the parsed envelope (time / pod / stream / level) as a
-  # compact key/value strip. Mirrors CloudWatch's expanded-row fields.
-  def field_grid
-    div(class: "flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] font-voodu-mono flex-1 min-w-0") do
-      field("@timestamp", @row[:ts])
-      field("@pod",       @row[:pod])
-      field("@stream",    @row[:stream].presence || "stdout")
-      field("@level",     @row[:level].presence || "—")
-    end
-  end
-
-  def field(key, value)
-    div(class: "flex flex-col gap-0.5 min-w-0") do
-      span(class: "text-voodu-muted-2 uppercase tracking-wide text-[9.5px]") { key }
-      span(class: "text-voodu-text-2 break-all") { value.to_s }
-    end
-  end
-
-  def raw_block
-    pre(
-      class: tokens(
-        "m-0 px-2.5 py-2 bg-voodu-bg border border-voodu-border",
-        "font-voodu-mono text-[11px] leading-relaxed text-voodu-log-payload",
-        "whitespace-pre-wrap break-words overflow-x-auto"
-      )
-    ) { @row[:raw].presence || @row[:msg] }
-  end
-
-  def row_actions
-    div(class: "flex items-center gap-1.5 shrink-0") do
-      copy_button
-      surrounding_button if @surroundable
-    end
-  end
-
-  def copy_button
+  # copy_chip — copies the raw line. Rightmost (right: 4px).
+  def copy_chip
     button(
-      type:  "button",
-      title: "Copy raw line",
-      data:  { action: "click->log-analytics#copyLine", raw: @row[:raw].presence || @row[:msg] },
-      class: action_btn_classes
+      type:         "button",
+      class:        "log-copy",
+      title:        "Copy line",
+      "aria-label": "Copy log line to clipboard",
+      data:         { action: "click->log-analytics#copyLine", raw: @row[:raw].presence || @row[:msg] }
     ) do
-      render Icon::ClipboardOutline.new(class: "w-3 h-3")
-      span(class: "hidden vmd:inline") { "Copy" }
+      render Icon::ClipboardOutline.new
     end
   end
 
-  # surrounding_button — opens the Surrounding Logs modal anchored on
-  # this exact line. Carries the raw ts + pod so the server can locate
-  # the anchor; the log-analytics controller fetches + injects the modal.
-  def surrounding_button
+  # wrap_chip — toggles wrap for THIS line only (right: 28px). Stays lit
+  # (data-active) while the line is wrapped so the operator can un-wrap
+  # without re-hunting it.
+  def wrap_chip
     button(
-      type:  "button",
-      title: "Show surrounding logs",
-      data:  {
-        action: "click->log-analytics#openSurrounding",
-        ts:     @row[:ts],
-        pod:    @row[:pod]
-      },
-      class: action_btn_classes
+      type:         "button",
+      class:        "log-wrap-single",
+      title:        "Toggle wrap for this line",
+      "aria-label": "Toggle wrap for this log line",
+      data:         { action: "click->log-analytics#toggleRowWrap", active: "false" }
     ) do
-      render Icon::ArrowsPointingOutOutline.new(class: "w-3 h-3")
-      span(class: "hidden vmd:inline") { "Surrounding logs" }
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
+        "aria-hidden": "true"
+      ) do |s|
+        s.line(x1: "2", y1: "4", x2: "14", y2: "4")
+        s.path(d: "M2 8h10a2 2 0 0 1 0 4H7")
+        s.polyline(points: "9,10 7,12 9,14")
+        s.line(x1: "2", y1: "12", x2: "4", y2: "12")
+      end
     end
   end
 
-  def action_btn_classes
-    tokens(
-      "inline-flex items-center gap-1.5 px-2 h-6 border border-voodu-border bg-voodu-surface",
-      "text-[10.5px] font-medium text-voodu-text-2",
-      "hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
-    )
-  end
-
-  def level_chip
-    lvl = @row[:level].to_s
-    return if lvl.blank?
-
-    span(
-      class: "inline-flex items-center px-1.5 h-4 text-[9.5px] font-bold tracking-wider shrink-0",
-      style: "color: #{level_color}; background: color-mix(in srgb, #{level_color} 14%, transparent);"
-    ) { lvl }
+  # surrounding_chip — opens the Surrounding Logs modal anchored on this
+  # line (left of the others, right: 52px). Carries ts + pod so the server
+  # can locate the anchor.
+  def surrounding_chip
+    button(
+      type:         "button",
+      class:        "log-surrounding",
+      title:        "Show surrounding logs",
+      "aria-label": "Show logs surrounding this line",
+      data:         { action: "click->log-analytics#openSurrounding", ts: @row[:ts], pod: @row[:pod] }
+    ) do
+      render Icon::ArrowsPointingOutOutline.new
+    end
   end
 
   # level_color — the chart-palette tint for this row's level.

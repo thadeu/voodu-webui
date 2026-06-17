@@ -13,9 +13,18 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
     @key    = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
+    # Freeze to midday so the history timeline's relative event times
+    # (2.hours.ago / 1.hour.ago) and their "Today" / "Yesterday" day labels
+    # never straddle midnight. Without this the suite flaked when run in the
+    # first hour after 00:00 (an event "1 hour ago" lands on the previous
+    # calendar day → "Yesterday", failing the "Today" assertion).
+    travel_to Time.utc(2026, 6, 16, 12, 0, 0)
   end
 
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
+  teardown do
+    travel_back
+    ENV["WAREHOUSE"] = @prev_wh
+  end
 
   test "index renders the empty state when no rules exist" do
     get alerts_path(tenant_key: @key)
@@ -27,6 +36,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
 
   test "default tab is active and renders firing cards" do
     rule = create_rule(firing: true)
+
     rule.alert_events.create!(
       island: @island, state: "firing", started_at: 5.minutes.ago,
       threshold: 90, rule_name: rule.name, metric_kind: "cpu",

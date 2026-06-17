@@ -33,11 +33,14 @@ class Components::LogAnalytics::ResultsBase < Components::Base
 
     frame_id = "la-page-#{data.next_page}"
 
-    turbo_frame_tag(frame_id, class: "block border-t border-voodu-border") do
-      div(class: "p-2") do
+    # la-page-frame is display:contents (theme.css) so the rows a Load more
+    # appends flow into the `.log-list` grid instead of nesting off-grid;
+    # la-loadmore spans every column for the trigger row.
+    turbo_frame_tag(frame_id, class: "la-page-frame") do
+      div(class: "la-loadmore p-2 border-t border-voodu-border") do
         a(
           href: load_more_path(data, data.next_page),
-          data: { turbo_frame: frame_id },
+          data: { turbo_frame: frame_id, log_analytics_target: "loadMore" },
           class: "flex items-center justify-center gap-1.5 w-full px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
         ) do
           render Icon::ArrowDownOutline.new(class: "w-3.5 h-3.5")

@@ -10,6 +10,8 @@
 # header, line-by-line table of Row components ending in a "Load more"
 # trigger (ResultsBase) when older matched lines remain.
 class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
+  include Components::LogAnalytics::ColumnChrome
+
   FRAME_ID = "logs-analytics-results"
 
   def initialize(data:)
@@ -32,16 +34,11 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   private
 
-  # loading_overlay — shown only while the frame is mid-query. Turbo sets
-  # `busy` / `aria-busy` on the <turbo-frame> during the fetch and keeps
-  # the previous results visible underneath; CSS (.la-results-loading in
-  # theme.css) flips this overlay on for that window. Hidden on the
-  # initial inline render (no fetch → no busy state).
-  def loading_overlay
-    div(class: "la-results-loading absolute inset-0 z-20 flex items-center justify-center gap-2 bg-voodu-bg-2/70 backdrop-blur-[1px]") do
-      render Components::UI::Spinner.new(color: "var(--voodu-accent)", size: 16, stroke: 3)
-      span(class: "text-[12px] font-medium text-voodu-text-2") { "Searching…" }
-    end
+  # body_header_actions — the results-table toolbar lives in the MESSAGE
+  # header cell (ColumnChrome calls this hook there). The modal leaves it
+  # empty.
+  def body_header_actions
+    header_actions
   end
 
   def summary_bar
@@ -87,28 +84,27 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   end
 
   def results_table
-    div(class: "flex-1 min-h-0 border border-voodu-border bg-voodu-bg-2 flex flex-col overflow-hidden") do
-      table_header
+    # `relative` anchors the column-visibility popover; the logs-columns
+    # controller (shared with the live tail) owns the resize drag + the hide
+    # popover over the `.log-list` inside. column_grid_attrs (ColumnChrome)
+    # carries the shared storage key / column set / default widths — the
+    # SAME the Surrounding modal uses, so the layout stays in lockstep.
+    div(
+      class: "relative flex-1 min-h-0 border border-voodu-border bg-voodu-bg-2 flex flex-col overflow-hidden",
+      data:  column_grid_attrs
+    ) do
       div(class: "flex-1 overflow-auto min-w-0", data: { log_analytics_target: "scroller" }) do
-        render_rows(@data)
-        render_load_more(@data)
+        # ONE `.log-list` grid for the whole result set: the column header
+        # (ColumnChrome) + every row share column tracks (alignment). The
+        # Load more frames live INSIDE the grid (display:contents, see
+        # theme.css) so appended pages flow into the same tracks.
+        div(class: "log-list la-list") do
+          column_header
+          render_rows(@data)
+          render_load_more(@data)
+        end
       end
-    end
-  end
-
-  # table_header — CloudWatch-style two-column label strip (@timestamp /
-  # @message), pinned above the scroll, with the row actions (jump + copy)
-  # right-aligned like the live-tail column header. Labels are decorative
-  # (aria-hidden); the buttons carry their own aria-labels.
-  def table_header
-    div(class: "flex items-center gap-3 px-2.5 py-1.5 border-b border-voodu-border bg-voodu-surface shrink-0") do
-      span(class: "flex items-center gap-3 min-w-0 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted", "aria-hidden": "true") do
-        span(class: "w-3 shrink-0")
-        span(class: "shrink-0") { "@timestamp" }
-        span { "@message" }
-      end
-      div(class: "flex-1")
-      header_actions
+      column_visibility_popover
     end
   end
 
@@ -117,12 +113,106 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # query's filters). Pinned in the table header, reachable while scrolling.
   def header_actions
     div(class: "flex items-center gap-1 shrink-0") do
+      # Column-shaping actions grouped: wrap toggles the lines (truncate ↔
+      # full); the gear opens the visibility popover. Copying lives in the
+      # Export popover — its "Copy to clipboard" covers the whole query, so
+      # a separate "copy visible" icon would just be redundant.
+      div(class: "flex items-center gap-0.5") do
+        wrap_toggle
+        column_settings_button
+      end
       header_icon("Clear results", :BackspaceOutline, "clear")
       div(class: "flex items-center gap-0.5") do
         header_icon("Jump to top",    :ArrowUpOutline,   "jumpTop")
         header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
       end
       export_menu
+    end
+  end
+
+  # wrap_toggle — flips wrap on every collapsed line (truncate ↔ full,
+  # wrapping). `data-active` lights it accent-green when on; the
+  # log-analytics controller toggles the `.log-wrap` class on the grid
+  # `.log-list` (same rule the live tail uses) and persists the choice so
+  # it survives a re-query frame swap.
+  def wrap_toggle
+    button(
+      type:         "button",
+      "aria-label": "Toggle wrap on all lines",
+      "aria-pressed": "false",
+      data:         {
+        action:              "click->log-analytics#toggleWrap",
+        log_analytics_target: "wrapToggle",
+        tooltip:             "Toggle wrap",
+        active:              "false"
+      },
+      class: "la-wrap-toggle inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors data-[active=true]:text-voodu-accent-2 data-[active=true]:bg-voodu-accent-dim"
+    ) do
+      svg(
+        viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
+        "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round",
+        class: "w-3.5 h-3.5", "aria-hidden": "true"
+      ) do |s|
+        s.line(x1: "2", y1: "4", x2: "14", y2: "4")
+        s.path(d: "M2 8h10a2 2 0 0 1 0 4H7")
+        s.polyline(points: "9,10 7,12 9,14")
+        s.line(x1: "2", y1: "12", x2: "4", y2: "12")
+      end
+    end
+  end
+
+  # column_settings_button — opens the visibility popover (logs-columns
+  # controller). aria-expanded drives the active tint via theme.css.
+  def column_settings_button
+    button(
+      type:          "button",
+      "aria-label":  "Choose visible columns",
+      "aria-expanded": "false",
+      data:          {
+        action:              "click->logs-columns#togglePopover",
+        logs_columns_target: "settingsButton",
+        tooltip:             "Columns"
+      },
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors aria-expanded:text-voodu-accent-2 aria-expanded:bg-voodu-accent-dim"
+    ) do
+      render Icon::ViewColumnsOutline.new(class: "w-3.5 h-3.5")
+    end
+  end
+
+  # column_visibility_popover — modal-less popover (logs-columns target),
+  # a sibling of the scroller so it escapes the overflow clip. MESSAGE is
+  # required (permanently checked + disabled): it's the only column that
+  # carries the actual log line.
+  def column_visibility_popover
+    div(
+      class:        "log-cols-popover",
+      hidden:       true,
+      role:         "menu",
+      "aria-label": "Visible columns",
+      data:         { logs_columns_target: "popover" }
+    ) do
+      div(class: "log-cols-popover-title") { "Visible columns" }
+      column_visibility_row("ts",   "Time")
+      column_visibility_row("pod",  "Pod")
+      column_visibility_row("body", "Message", required: true)
+    end
+  end
+
+  def column_visibility_row(key, label, required: false)
+    label(class: required ? "log-cols-popover-row is-required" : "log-cols-popover-row") do
+      input(
+        type:     "checkbox",
+        checked:  true,
+        disabled: required,
+        data: {
+          action:              "change->logs-columns#toggleVisibility",
+          column_key:          key,
+          required:            required ? "true" : "false",
+          logs_columns_target: "visibilityToggle"
+        }
+      )
+      span(class: "log-cols-popover-label") { label }
+      span(class: "log-cols-popover-hint") { "required" } if required
     end
   end
 
