@@ -72,8 +72,32 @@ class Components::LogAnalytics::Row < Components::Base
     end
   end
 
+  # ts_cell — the timestamp in the operator's configured timezone (Settings →
+  # Display preferences, via WebTime), so the wall clock matches the rest of
+  # the dashboard. Converting here (lazy, per RENDERED row) keeps it off the
+  # full scan: only the PAGE_SIZE slice pays the per-row parse, never the
+  # MATCH_SCAN_CAP collection. `datetime`/`title` carry the canonical UTC ISO —
+  # the raw value stays in the DOM (copy/hover/debug), and the surrounding
+  # anchor key (chip `data-ts`, still `@row[:ts]`) is untouched.
   def ts_cell
-    time(class: "log-ts") { @row[:ts] }
+    time(class: "log-ts", datetime: @row[:ts], title: @row[:ts]) { local_ts }
+  end
+
+  # local_ts — UTC warehouse timestamp → configured zone, re-appending the
+  # source's OWN fractional digits. The offset only shifts whole minutes, so
+  # the sub-second part is timezone-invariant: reusing the raw fraction keeps
+  # the exact nano/milli precision (useful for debug) without padding a
+  # millisecond stamp out to phantom nanoseconds. Falls back to the raw string
+  # for an unparseable ts so a malformed line renders as-is, never blank.
+  def local_ts
+    raw   = @row[:ts].to_s
+    zoned = WebTime.in_zone(raw)
+    return raw if zoned.nil?
+
+    frac = raw[/\.(\d+)/, 1]
+    base = zoned.strftime("%Y-%m-%dT%H:%M:%S")
+
+    frac ? "#{base}.#{frac}" : base
   end
 
   def pod_cell
