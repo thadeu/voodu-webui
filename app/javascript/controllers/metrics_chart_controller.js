@@ -194,27 +194,35 @@ export default class extends Controller {
 
     const overlay = event.currentTarget
     const rect    = overlay.getBoundingClientRect()
-    const mouseX  = event.clientX - rect.left
+    if (rect.width <= 0) return
 
-    // Map mouseX (CSS px relative to overlay) → viewBox X.
-    // overlay starts at padLeft in viewBox space; its rendered
-    // width is rect.width and represents innerW viewBox units.
-    const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
-    const vbMouseX = this.padLeftValue + (mouseX / rect.width) * innerVbW
+    // Cursor position within the inner chart area, 0..1. We match on `x_norm`
+    // (width-independent) instead of the cached per-point pixel `x`: a resize
+    // (card drag, column flip) can leave `p.x` lagging behind the new width
+    // while x_norm is always right — that lag made wide cards' hover snap to
+    // the wrong point and never reach the rightmost peak.
+    const t = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
 
     let nearest = this.points[0]
-    let bestDx  = Infinity
+    let best    = Infinity
 
     for (const p of this.points) {
-      const dx = Math.abs(p.x - vbMouseX)
-      if (dx < bestDx) {
-        bestDx  = dx
+      const xn = Number.isFinite(p.x_norm) ? p.x_norm : 0
+      const d  = Math.abs(xn - t)
+      
+      if (d < best) {
+        best    = d
         nearest = p
       }
     }
 
-    this.drawCrosshair(nearest.x, nearest.y)
-    this.positionTooltip(nearest, rect)
+    // Crosshair x in CURRENT viewBox units — recomputed from x_norm + the live
+    // inner width, never the stale cached p.x.
+    const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
+    const x = this.padLeftValue + (Number.isFinite(nearest.x_norm) ? nearest.x_norm : 0) * innerVbW
+
+    this.drawCrosshair(x, nearest.y)
+    this.positionTooltip({ ...nearest, x }, rect)
   }
 
   leave() {
