@@ -67,7 +67,13 @@ class Views::Metrics::Index < Views::Base
       # Detaching fires its disconnectedCallback → unsubscribes;
       # re-attaching fires connectedCallback → resubscribes. Same
       # signed-stream-name node is reused (no re-signing roundtrip).
-      span(data: { auto_refresh_target: "source" }) do
+      # `hidden` keeps this invisible source OUT of the flex flow — as a
+      # leading flex child it otherwise eats one `gap-5` above page_head,
+      # pushing the title ~20px lower than the Logs page (whose first child
+      # IS the header). The custom element still connects (connectedCallback
+      # fires for display:none nodes) and the auto-refresh detach/re-attach
+      # works the same — it targets the span, not its box.
+      span(class: "hidden", data: { auto_refresh_target: "source" }) do
         turbo_stream_from "metrics-#{@current_island.id}"
       end
 

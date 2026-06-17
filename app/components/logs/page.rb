@@ -159,21 +159,20 @@ class Components::Logs::Page < Components::Base
     end
   end
 
-  # page_header — H1 "Logs" + live counters subline + actions
-  # cluster on the right (pod picker, "Open pod" drawer trigger
-  # when scoped). Uses the shared Components::UI::PageHeader so the
-  # visual rhythm matches the Metrics page exactly.
+  # page_header — the shared Components::Logs::Header: "Logs" + the
+  # Analytics/Follow switcher on ONE row, the live counters as its
+  # subline, and the actions cluster (pod picker, "Open pod" drawer
+  # trigger when scoped) on the right. The tabs are suppressed in
+  # drawer mode (no room to flip surfaces there).
   #
-  # The "back to pod" link stays OUTSIDE the PageHeader (rendered
-  # above) because PageHeader's job is "title + actions" — adding
-  # an above-title slot just for this one case would bloat the
-  # primitive.
+  # The "back to pod" link stays OUTSIDE the header (rendered above)
+  # because the header's job is "title + tabs + actions" — an
+  # above-title slot just for this one case would bloat the primitive.
   def page_header
-    div(class: "flex flex-col gap-3") do
-      render Components::Logs::ModeTabs.new(active: :follow) unless @drawer
+    div(class: "flex flex-col gap-2") do
       back_link if show_back_link?
       render(
-        Components::UI::PageHeader.new(title: "Logs")
+        Components::Logs::Header.new(active: :follow, tabs: !@drawer)
           .with_subtitle { sub_line }
           .with_actions do
             # Single-pod /logs/:name view keeps the old dropdown so

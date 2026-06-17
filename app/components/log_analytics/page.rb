@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 # Components::LogAnalytics::Page — the /logs/analytics surface chrome.
-# Sibling to Components::Logs::Page (live tail); the ModeTabs strip at
-# the top lets the operator flip between Follow (live) and Analytics
-# (historical search) without hunting in the sidebar.
+# Sibling to Components::Logs::Page (live tail); the shared Logs::Header at
+# the top (label + Analytics/Follow switcher on one row) lets the operator
+# flip between Follow (live) and Analytics (historical search) without
+# hunting in the sidebar.
 #
-# Structure: mode tabs → page header → filter bar → results frame. The
+# Structure: header (label + tabs) → filter bar → results frame. The
 # root carries `data-controller="log-analytics"`, which owns the preset
 # chips, custom-range toggle, date normalisation, row copy, and the
 # Surrounding Logs overlay (fetched into #surroundingHost on demand).
@@ -30,26 +31,15 @@ class Components::LogAnalytics::Page < Components::Base
         log_analytics_until_value: @data.until_iso
       }
     ) do
-      render Components::Logs::ModeTabs.new(active: :analytics)
-      page_header
+      render Components::Logs::Header.new(active: :analytics)
       render Components::LogAnalytics::FilterBar.new(data: @data, pods: @pods)
       render Components::LogAnalytics::Results.new(data: @data)
+
       surrounding_host
     end
   end
 
   private
-
-  def page_header
-    render(
-      Components::UI::PageHeader.new(title: "Log search")
-        .with_subtitle do
-          div(class: "text-[12px] text-voodu-muted mt-1") do
-            plain "Search the last #{LogTail::FilePath::RETENTION_DAYS} days of stored logs — filter by time, text, or regex, then drill into surrounding lines or export."
-          end
-        end
-    )
-  end
 
   # surrounding_host — empty mount point the controller injects the
   # Surrounding Logs modal into. Lives at page root so the fixed-position

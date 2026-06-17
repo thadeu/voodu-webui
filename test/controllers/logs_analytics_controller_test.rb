@@ -36,7 +36,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     get logs_analytics_path(tenant_key: @key)
 
     assert_response :success
-    assert_match "Log search", @response.body
+    assert_match 'aria-label="Logs view"', @response.body, "the Analytics/Follow switcher renders in the header"
     assert_match 'data-controller="log-analytics"', @response.body
     assert_match "logs-analytics-results", @response.body
   end

@@ -34,7 +34,12 @@ class Views::Alerts::Index < Views::Base
 
   def body
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
-      turbo_stream_from "alerts-#{@current_island.id}"
+      # `class: "hidden"` keeps this invisible source OUT of the flex flow.
+      # As the leading flex child it otherwise eats one `gap-5` above
+      # page_head, pushing the title ~20px lower than the Logs page. The
+      # custom element still connects (connectedCallback fires for
+      # display:none nodes), so the alerts_tick live reload is unaffected.
+      turbo_stream_from "alerts-#{@current_island.id}", class: "hidden"
 
       page_head
 
