@@ -51,7 +51,36 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
         end
         dot
         span(class: "font-voodu-mono") { "#{delimited(@data.elapsed_ms)} ms" }
+        if @data.query_limit
+          dot
+          span(class: "font-voodu-mono text-voodu-accent-2") { "limit #{delimited(@data.query_limit)}" }
+        end
       end
+
+      active_query_chip if @data.search.present?
+    end
+  end
+
+  # active_query_chip — the live query made visible while the drawer is shut:
+  # a mono pill showing the DSL, click-to-edit (reopens the drawer) and a ✕ to
+  # clear + re-run. Without it the operator couldn't tell a filter was applied
+  # once the editor slid away.
+  def active_query_chip
+    div(class: "inline-flex items-center gap-1.5 max-w-[55%] vmd:max-w-[420px] pl-2 pr-1 h-6 border border-voodu-border bg-voodu-surface shrink-0") do
+      render Icon::FunnelOutline.new(class: "w-3 h-3 text-voodu-accent-2 shrink-0")
+      button(
+        type:  "button",
+        title: "Edit query",
+        data:  { action: "click->log-analytics#openFilter" },
+        class: "min-w-0 font-voodu-mono text-[11px] text-voodu-text-2 truncate hover:text-voodu-text"
+      ) { @data.search }
+      button(
+        type:         "button",
+        title:        "Clear query",
+        "aria-label": "Clear query",
+        data:         { action: "click->log-analytics#clearQuery" },
+        class:        "inline-flex items-center justify-center w-4 h-4 text-voodu-muted hover:text-voodu-text shrink-0"
+      ) { render Icon::XMarkOutline.new(class: "w-3 h-3") }
     end
   end
 
@@ -113,6 +142,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # query's filters). Pinned in the table header, reachable while scrolling.
   def header_actions
     div(class: "flex items-center gap-1 shrink-0") do
+      filter_button
       # Column-shaping actions grouped: wrap toggles the lines (truncate ↔
       # full); the gear opens the visibility popover. Copying lives in the
       # Export popover — its "Copy to clipboard" covers the whole query, so
@@ -127,6 +157,26 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
         header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
       end
       export_menu
+    end
+  end
+
+  # filter_button — opens the query drawer (FilterBar#filter_panel). Lights
+  # accent when a query is active so the toolbar shows a filter is on even
+  # before the operator reads the chip in the summary bar.
+  def filter_button
+    active = @data.search.present?
+
+    button(
+      type:          "button",
+      "aria-label":  "Edit filter query",
+      "aria-expanded": "false",
+      data:          { action: "click->log-analytics#toggleFilter", tooltip: "Filter" },
+      class: tokens(
+        "inline-flex items-center justify-center w-6 h-6 transition-colors",
+        active ? "text-voodu-accent-2 bg-voodu-accent-dim" : "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
+      )
+    ) do
+      render Icon::FunnelOutline.new(class: "w-3.5 h-3.5")
     end
   end
 

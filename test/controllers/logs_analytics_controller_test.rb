@@ -39,6 +39,9 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_match 'aria-label="Logs view"', @response.body, "the Analytics/Follow switcher renders in the header"
     assert_match 'data-controller="log-analytics"', @response.body
     assert_match "logs-analytics-results", @response.body
+    assert_match 'data-controller="query-editor"', @response.body, "the DSL query editor renders"
+    assert_match "filterPanel", @response.body, "the filter drawer panel renders inside the form"
+    assert_no_match 'name="regex"', @response.body, "the legacy regex checkbox is retired (the DSL carries /regex/ inline)"
   end
 
   test "frame request renders only the results table and applies the search" do

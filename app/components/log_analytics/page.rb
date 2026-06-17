@@ -6,7 +6,8 @@
 # flip between Follow (live) and Analytics (historical search) without
 # hunting in the sidebar.
 #
-# Structure: header (label + tabs) → filter bar → results frame. The
+# Structure: filter bar (which renders the shared Logs::Header — label +
+# tabs + time-range presets — on one row) → results frame. The
 # root carries `data-controller="log-analytics"`, which owns the preset
 # chips, custom-range toggle, date normalisation, row copy, and the
 # Surrounding Logs overlay (fetched into #surroundingHost on demand).
@@ -31,7 +32,6 @@ class Components::LogAnalytics::Page < Components::Base
         log_analytics_until_value: @data.until_iso
       }
     ) do
-      render Components::Logs::Header.new(active: :analytics)
       render Components::LogAnalytics::FilterBar.new(data: @data, pods: @pods)
       render Components::LogAnalytics::Results.new(data: @data)
 

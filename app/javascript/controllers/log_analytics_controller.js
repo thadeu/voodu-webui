@@ -39,6 +39,12 @@ const RANGE_MS = {
   "24h": 24 * 60 * 60 * 1000
 }
 
+// Persisted width of the filter drawer (its own key — a query editor wants a
+// different width than the logs/pod content drawers). Min width + the
+// viewport breathing room mirror drawer_controller.
+const FILTER_WIDTH_KEY = "voodu:logs-filter-drawer-width"
+const FILTER_MIN_WIDTH = 360
+
 export default class extends Controller {
   static targets = [
     "form",
@@ -52,12 +58,13 @@ export default class extends Controller {
     "customLabel",
     "podCheckbox",
     "podLabel",
-    "allPods",
+    "selectAllLabel",
     "scroller",
     "summary",
     "surroundingHost",
     "wrapToggle",
-    "loadMore"
+    "loadMore",
+    "filterPanel"
   ]
 
   static WRAP_KEY = "voodu:logs-analytics-wrap:v1"
@@ -77,6 +84,26 @@ export default class extends Controller {
     }
     this.updateCustomLabel()
     this.refreshPodScope()
+
+    // Filter drawer dismiss + resize. Document-level listeners (so ESC +
+    // outside-click work no matter where focus is), guarded by filterOpen()
+    // while closed — same lifecycle as drawer_controller. The resize move/end
+    // handlers attach only during a drag.
+    this.onFilterKey        = this.onFilterKey.bind(this)
+    this.onFilterDocPointer = this.onFilterDocPointer.bind(this)
+    this.onFilterResizeMove = this.onFilterResizeMove.bind(this)
+    this.onFilterResizeEnd  = this.onFilterResizeEnd.bind(this)
+    document.addEventListener("keydown", this.onFilterKey)
+    document.addEventListener("pointerdown", this.onFilterDocPointer)
+
+    if (this.hasFilterPanelTarget) {
+      try {
+        const saved = localStorage.getItem(FILTER_WIDTH_KEY)
+        if (saved) this.filterPanelTarget.style.width = saved
+      } catch (_e) {
+        // localStorage disabled — fall back to the CSS default width.
+      }
+    }
   }
 
   // fillCustomInputsFromWindow — populate the datetime-local inputs from
@@ -171,12 +198,13 @@ export default class extends Controller {
     this.refreshPodScope()
   }
 
-  // selectAllPods — "All pods" row: clear the selection and re-run now
-  // (exclusive, like the metrics Host row).
-  selectAllPods() {
-    this.podCheckboxTargets.forEach((cb) => { cb.checked = false })
+  // toggleAllPods — the header toggle: check every pod, or clear them all if
+  // they're already all checked. No submit until Apply (mirrors togglePod).
+  toggleAllPods() {
+    const boxes = this.hasPodCheckboxTarget ? this.podCheckboxTargets : []
+    const allOn = boxes.length > 0 && boxes.every((cb) => cb.checked)
+    boxes.forEach((cb) => { cb.checked = !allOn })
     this.refreshPodScope()
-    this.formTarget.requestSubmit()
   }
 
   // applyPods — Apply the chosen pod scope (the checked pods[] checkboxes
@@ -187,7 +215,7 @@ export default class extends Controller {
 
   // refreshPodScope — mirror metric-multiselect#refresh: paint each row's
   // checkbox box + check from its native checkbox, then sync the trigger
-  // label and the "All pods" active state.
+  // label and the header select-all/clear toggle.
   refreshPodScope() {
     const boxes = this.hasPodCheckboxTarget ? this.podCheckboxTargets : []
     let count = 0
@@ -217,12 +245,10 @@ export default class extends Controller {
       this.podLabelTarget.textContent = count === 0 ? "All pods" : count === 1 ? single : `${count} pods`
     }
 
-    if (this.hasAllPodsTarget) {
-      const none = count === 0
-      this.allPodsTarget.classList.toggle("bg-voodu-accent-dim", none)
-      this.allPodsTarget.classList.toggle("text-voodu-accent-2", none)
-      const check = this.allPodsTarget.querySelector("[data-role='check']")
-      if (check) check.classList.toggle("hidden", !none)
+    // Header toggle reads "Clear" once everything is selected, "Select all"
+    // otherwise — so one button covers both directions.
+    if (this.hasSelectAllLabelTarget) {
+      this.selectAllLabelTarget.textContent = boxes.length > 0 && count === boxes.length ? "Clear" : "Select all"
     }
   }
 
@@ -276,6 +302,113 @@ export default class extends Controller {
 
   jumpBottom() {
     if (this.hasScrollerTarget) this.scrollerTarget.scrollTop = this.scrollerTarget.scrollHeight
+  }
+
+  // ── filter drawer ────────────────────────────────────────────────────────
+  // The query editor + pod scope live in a right-side slide-in panel. The
+  // trigger sits in the results-frame toolbar (re-rendered each query); this
+  // controller is the page root that spans BOTH the trigger and the panel
+  // (which lives in the filter <form>, outside the frame), so it owns open
+  // state. No backdrop — the results stay visible/usable behind the panel,
+  // so the operator iterates on the query and watches the table update live.
+
+  toggleFilter() {
+    if (this.filterOpen()) this.closeFilter()
+    else this.openFilter()
+  }
+
+  openFilter() {
+    if (!this.hasFilterPanelTarget) return
+
+    this.filterPanelTarget.removeAttribute("inert")
+    this.filterPanelTarget.dataset.open = "true"
+    // Focus the editor once the slide settles so the caret lands ready.
+    const editor = this.filterPanelTarget.querySelector(".voodu-code__input")
+    if (editor) requestAnimationFrame(() => editor.focus())
+  }
+
+  closeFilter() {
+    if (!this.hasFilterPanelTarget) return
+
+    delete this.filterPanelTarget.dataset.open
+    this.filterPanelTarget.setAttribute("inert", "")
+  }
+
+  filterOpen() {
+    return this.hasFilterPanelTarget && this.filterPanelTarget.dataset.open != null
+  }
+
+  // clearQuery — wipe the editor and re-run (the active-query chip's ✕). The
+  // editor lives in the panel; repaint via an `input` event, then submit.
+  clearQuery() {
+    const editor = this.hasFilterPanelTarget ? this.filterPanelTarget.querySelector(".voodu-code__input") : null
+
+    if (editor) {
+      editor.value = ""
+      editor.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+
+    if (this.hasFormTarget) this.formTarget.requestSubmit()
+  }
+
+  // onFilterKey — ESC closes the drawer from anywhere (document-level, so it
+  // works even after focus left the panel, e.g. the operator clicked a result).
+  onFilterKey(event) {
+    if (!this.filterOpen()) return
+    if (event.key === "Escape") this.closeFilter()
+  }
+
+  // onFilterDocPointer — click-outside dismiss. Can't use `element.contains`
+  // (this controller wraps the whole page), so we keep it open only for clicks
+  // INSIDE the panel or on the openers (the toolbar funnel / the summary chip),
+  // which toggle/open themselves. A drag past the panel edge is ignored.
+  onFilterDocPointer(event) {
+    if (!this.filterOpen() || this.filterResizing) return
+    if (this.filterPanelTarget.contains(event.target)) return
+    if (event.target.closest("[data-action*='log-analytics#toggleFilter'], [data-action*='log-analytics#openFilter']")) return
+
+    this.closeFilter()
+  }
+
+  // startFilterResize — left-edge handle drag. Mirrors drawer_controller:
+  // pin the cursor + kill text selection page-wide for the drag, compute
+  // width from the pointer, persist on release.
+  startFilterResize(event) {
+    event.preventDefault()
+    this.filterResizing = true
+    this.savedCursor     = document.body.style.cursor
+    this.savedUserSelect = document.body.style.userSelect
+    document.body.style.cursor     = "col-resize"
+    document.body.style.userSelect = "none"
+
+    document.addEventListener("pointermove", this.onFilterResizeMove)
+    document.addEventListener("pointerup", this.onFilterResizeEnd)
+    document.addEventListener("pointercancel", this.onFilterResizeEnd)
+  }
+
+  onFilterResizeMove(event) {
+    if (!this.filterResizing || !this.hasFilterPanelTarget) return
+
+    const max = window.innerWidth - 80
+    const width = Math.max(FILTER_MIN_WIDTH, Math.min(max, window.innerWidth - event.clientX))
+    this.filterPanelTarget.style.width = `${width}px`
+  }
+
+  onFilterResizeEnd() {
+    if (!this.filterResizing) return
+
+    this.filterResizing = false
+    document.body.style.cursor     = this.savedCursor ?? ""
+    document.body.style.userSelect = this.savedUserSelect ?? ""
+    document.removeEventListener("pointermove", this.onFilterResizeMove)
+    document.removeEventListener("pointerup", this.onFilterResizeEnd)
+    document.removeEventListener("pointercancel", this.onFilterResizeEnd)
+
+    try {
+      localStorage.setItem(FILTER_WIDTH_KEY, this.filterPanelTarget.style.width)
+    } catch (_e) {
+      // localStorage disabled — width just won't persist across visits.
+    }
   }
 
   // toggleRowWrap — flip `.log-row-wrap` on ONE line (per-row wrap), so
@@ -349,6 +482,9 @@ export default class extends Controller {
 
   disconnect() {
     this.loadMoreObserver?.disconnect()
+    document.removeEventListener("keydown", this.onFilterKey)
+    document.removeEventListener("pointerdown", this.onFilterDocPointer)
+    this.onFilterResizeEnd?.()
   }
 
   applyWrap(on) {

@@ -1341,3 +1341,16 @@ html[data-theme="light"] .voodu-dark {
 .voodu-code .tok-lit  { color: var(--voodu-orange); }
 .voodu-code .tok-punc { color: var(--voodu-muted); }
 .voodu-code .tok-var  { color: var(--voodu-accent-2); font-weight: 600; }
+/* Regex literals in the log-query DSL — distinct hue from quoted strings
+ * so `/re/` and "text" read apart at a glance. */
+.voodu-code .tok-re   { color: var(--voodu-pink); }
+/* Pipeline structure (the `filter` command + the `|` pipe) — purple, bold,
+ * so the CloudWatch-style stage boundaries pop above the clause keywords. */
+.voodu-code .tok-cmd  { color: var(--voodu-purple); font-weight: 600; }
+
+/* Query-editor variant (analytics filter): no line-number gutter, so the
+ * text layers start at the normal left padding instead of clearing 46px. */
+.voodu-code--query .voodu-code__hl,
+.voodu-code--query .voodu-code__input {
+  padding-left: 12px;
+}

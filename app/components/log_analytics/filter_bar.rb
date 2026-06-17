@@ -3,12 +3,17 @@
 # Components::LogAnalytics::FilterBar — the query form. A GET form that
 # targets the results Turbo Frame with `turbo_action: advance`, so each
 # query swaps just the table AND pushes a bookmarkable URL
-# (/logs/analytics?range=1h&q=callid). The log-analytics Stimulus
-# controller wires the preset chips, the custom-range toggle, and the
-# local→UTC date normalisation on submit.
+# (/logs/analytics?range=1h&q=…). The log-analytics Stimulus controller
+# wires the preset chips, the custom-range toggle, the local→UTC date
+# normalisation on submit, and the filter drawer open/close.
 #
-# Layout stacks on mobile (presets on their own wrapping row; search +
-# regex + scope + Run below), side-by-side from vmd: up.
+# Layout: only the time-range presets stay inline. The QUERY editor (the
+# LogQuery DSL, syntax-highlighted) + the pod scope + Run live in a
+# right-side slide-in drawer, opened by the funnel icon in the results
+# toolbar (Components::LogAnalytics::Results#header_actions). The drawer
+# panel is rendered HERE, inside the <form>, so the editor (name=q) and
+# the pod checkboxes serialise with it — but OUTSIDE the results frame, so
+# it survives the frame swap on every Run.
 class Components::LogAnalytics::FilterBar < Components::Base
   # Pre-paint class sets for the preset chips. Both listed here (not
   # built in JS) so Tailwind's source scanner keeps both variants in the
@@ -31,44 +36,26 @@ class Components::LogAnalytics::FilterBar < Components::Base
         turbo_action: "advance",
         action:       "submit->log-analytics#normalizeDates"
       },
-      class: "flex flex-col gap-2.5"
+      class: "contents"
     ) do
       input(type: "hidden", name: "range", value: @data.range, data: { log_analytics_target: "range" })
 
-      main_row
+      # The page header row doubles as the filter's top bar: "Logs" + the
+      # Analytics/Follow tabs on the left, the time-range presets pushed right
+      # via the Header's actions slot (justify-between). Rendering it INSIDE the
+      # form is what keeps the custom-range hidden from/until fields submitting.
+      render Components::Logs::Header.new(active: :analytics).with_actions { preset_group }
+      filter_panel
     end
   end
 
   private
 
-  # main_row — the header: query controls + Run on the left, the
-  # time-range presets pushed to the far right. Stacks on mobile (search
-  # full width, then regex / pods / Run, then the presets wrap below).
-  def main_row
-    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2.5") do
-      query_group
-      div(class: "hidden vmd:block vmd:flex-1")
-      preset_group
-    end
-  end
-
-  # query_group — search + regex + pod scope + Run, left-aligned.
-  def query_group
-    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 min-w-0") do
-      search_input
-      div(class: "flex items-center gap-2") do
-        regex_toggle
-        pod_scope
-        run_button
-      end
-    end
-  end
-
-  # preset_group — time-range chips, right-aligned in the header row.
-  # The fixed presets submit on click; Custom is a dropdown whose
-  # popover holds the From/Until pickers (see custom_chip).
+  # preset_group — time-range presets + the custom-range chip. Sits in the
+  # header's actions slot (right side); wraps below the title on a narrow
+  # viewport (the Header row is flex-wrap).
   def preset_group
-    div(class: "flex flex-wrap items-center gap-1.5 vmd:justify-end shrink-0") do
+    div(class: "flex flex-wrap items-center gap-1.5 vmd:justify-end") do
       LogSearchData::RANGES.each_key { |key| preset_chip(key, key) }
       custom_chip
     end
@@ -128,7 +115,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
     div(
       hidden: true,
       data:  { dropdown_target: "menu" },
-      class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[280px] max-w-[calc(100vw-24px)] border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3 flex flex-col gap-3 text-left"
+      class: "absolute left-0 top-[calc(100%+4px)] z-40 w-[280px] max-w-[calc(100vw-24px)] border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3 flex flex-col gap-3 text-left"
     ) do
       span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted") { "Custom range" }
       labeled_datetime("From",  "from")
@@ -167,46 +154,166 @@ class Components::LogAnalytics::FilterBar < Components::Base
     end
   end
 
-  def search_input
-    div(class: "flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-full vmd:w-[300px] text-voodu-muted") do
-      render Icon::MagnifyingGlassOutline.new(class: "w-3.5 h-3.5 shrink-0")
-      input(
-        type: "search",
-        name: "q",
-        value: @data.search,
-        placeholder: "filter by callid, path, status, message…",
-        class: "flex-1 min-w-0 bg-transparent border-0 outline-none text-[12px] text-voodu-text placeholder:text-voodu-muted-2 h-full"
+  # ── filter drawer ──────────────────────────────────────────────────────────
+
+  # filter_panel — right-side slide-in (reuses the Drawer slide CSS), holding
+  # the query editor + pod scope + Run. `inert` + off-screen by default; the
+  # log-analytics controller drops `inert` and sets `data-open` to slide it in.
+  # No backdrop on purpose — the results stay visible/usable behind it so the
+  # operator iterates on the query and watches the table update.
+  def filter_panel
+    aside(
+      inert: true,
+      role:  "dialog",
+      "aria-label": "Log filter",
+      data: { log_analytics_target: "filterPanel" },
+      class: tokens(
+        "fixed top-0 right-0 h-screen z-[60] w-[min(560px,calc(100vw-24px))]",
+        "flex flex-col bg-voodu-bg-2 border-l border-voodu-border",
+        "shadow-[var(--voodu-shadow-drawer)]",
+        "translate-x-full transition-transform duration-200 ease-out",
+        "data-[open]:translate-x-0"
       )
+    ) do
+      resize_handle
+      panel_header
+      panel_body
+      panel_footer
     end
   end
 
-  def regex_toggle
-    label(class: "inline-flex items-center gap-1.5 px-2 h-8 border border-voodu-border bg-voodu-surface text-[11.5px] text-voodu-text-2 cursor-pointer select-none whitespace-nowrap") do
-      input(
-        type: "checkbox",
-        name: "regex",
-        value: "1",
-        checked: @data.regex?,
-        class: "w-3.5 h-3.5 accent-voodu-accent"
-      )
-      span(class: "font-voodu-mono") { ".*" }
-      span(class: "hidden vmd:inline") { "regex" }
+  # resize_handle — 6px grab strip on the LEFT edge (mirrors the DS Drawer).
+  # pointerdown enters drag mode in the log-analytics controller; the width is
+  # clamped + persisted there. Wider hit area than the visible 1px border.
+  def resize_handle
+    div(
+      data:  { action: "pointerdown->log-analytics#startFilterResize" },
+      aria:  { hidden: "true" },
+      title: "Drag to resize",
+      class: "absolute top-0 left-0 bottom-0 w-1.5 -ml-1 cursor-col-resize hover:bg-voodu-accent/30 active:bg-voodu-accent/60 z-[5] touch-none"
+    )
+  end
+
+  def panel_header
+    header(class: "flex items-center gap-2 px-4 h-14 border-b border-voodu-border bg-voodu-surface shrink-0") do
+      render Icon::FunnelOutline.new(class: "w-4 h-4 text-voodu-accent-2 shrink-0")
+      h2(class: "m-0 text-[13px] font-semibold text-voodu-text flex-1 min-w-0") { "Filter" }
+      button(
+        type: "button",
+        title: "Close",
+        "aria-label": "Close filter",
+        data: { action: "click->log-analytics#closeFilter" },
+        class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
+      ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
     end
   end
 
-  # pod_scope — multi-select pod scope via the design-system dropdown.
-  def pod_scope
-    render Components::LogAnalytics::PodScopePicker.new(pods: @pods, selected: @data.pods)
+  # panel_body — natural order: choose the pod(s) first, THEN write the query.
+  def panel_body
+    div(class: "flex-1 overflow-y-auto p-4 flex flex-col gap-4") do
+      pod_section
+      query_section
+    end
+  end
+
+  # query_section — the query-editor controller wraps the editor + the
+  # validation hint + the cheatsheet (all its targets must live under the
+  # controller element).
+  def query_section
+    div(class: "flex flex-col gap-2", data: { controller: "query-editor" }) do
+      field_label("Query")
+      query_editor
+      query_error
+      syntax_help
+    end
+  end
+
+  # query_editor — the .voodu-code shell. `--query` variant drops the gutter
+  # padding. The textarea is the real form field (name=q), pre-filled with the
+  # active query so the highlight paints on connect.
+  def query_editor
+    div(class: "voodu-code voodu-code--query relative overflow-hidden resize-y min-h-[120px] border border-voodu-border bg-voodu-surface") do
+      pre(class: "voodu-code__hl", "aria-hidden": "true", data: { query_editor_target: "highlight" })
+      textarea(
+        name:           "q",
+        rows:           "4",
+        spellcheck:     "false",
+        autocapitalize: "off",
+        autocomplete:   "off",
+        placeholder:    "filter @message like /timeout/",
+        class:          "voodu-code__input",
+        data: {
+          query_editor_target: "input",
+          action:              "input->query-editor#render keydown->query-editor#keydown"
+        }
+      ) { @data.search }
+    end
+  end
+
+  # query_error — hidden until the query names no field; the query-editor
+  # controller reveals it (and blocks Run) so every filter is field-scoped.
+  def query_error
+    p(class: "hidden text-[11px] text-voodu-red", data: { query_editor_target: "error" }) do
+      plain "Every filter needs a field — e.g. "
+      code(class: "font-voodu-mono") { "@message like /…/" }
+    end
+  end
+
+  # syntax_help — collapsed cheatsheet. CloudWatch-style: a `filter` command
+  # over field clauses; `|` chains filters (AND). Every clause names a field;
+  # @message is the catch-all (matches the whole line).
+  def syntax_help
+    details(class: "group text-[11.5px] text-voodu-muted") do
+      summary(class: "cursor-pointer select-none text-voodu-text-2 hover:text-voodu-text") { "Syntax" }
+      div(class: "mt-2 flex flex-col gap-2 leading-relaxed") do
+        help_line("filter @message like /re/", "regex on the whole line (msg + raw)")
+        help_line('@level = "ERROR"', "exact match — @level · @stream")
+        help_line("and · or · not · ( )", "combine clauses in one filter")
+        help_line("filter … | filter …", "chain filters — each pipe ANDs")
+        help_line("| limit 1000", "cap to the newest N matches")
+        div(class: "pt-1 border-t border-voodu-border text-voodu-muted-2") do
+          plain "Example: "
+          code(class: "font-voodu-mono text-voodu-text-2") { "filter @message like /call-id/ | limit 1000" }
+        end
+      end
+    end
+  end
+
+  def help_line(syntax, note)
+    div(class: "flex items-baseline gap-2 min-w-0") do
+      code(class: "font-voodu-mono text-voodu-text-2 shrink-0") { syntax }
+      span(class: "truncate") { note }
+    end
+  end
+
+  def pod_section
+    div(class: "flex flex-col gap-2") do
+      field_label("Pod scope")
+      render Components::LogAnalytics::PodScopePicker.new(pods: @pods, selected: @data.pods)
+    end
+  end
+
+  def panel_footer
+    footer(class: "flex items-center justify-between gap-2 px-4 py-3 border-t border-voodu-border bg-voodu-surface shrink-0") do
+      span(class: "text-[11px] text-voodu-muted") do
+        plain "⌘/Ctrl + Enter to run"
+      end
+      run_button
+    end
   end
 
   def run_button
     button(
       type: "submit",
-      class: "inline-flex items-center justify-center gap-1.5 px-4 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent/20 transition-colors"
+      data: { role: "run-query" },
+      class: "inline-flex items-center justify-center gap-1.5 px-4 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     ) do
       render Icon::PlayOutline.new(class: "w-3.5 h-3.5")
       span { "Run" }
     end
   end
 
+  def field_label(text)
+    span(class: "text-[10px] font-semibold uppercase tracking-[0.06em] text-voodu-muted-2") { text }
+  end
 end
