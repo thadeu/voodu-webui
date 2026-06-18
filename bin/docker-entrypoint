@@ -30,6 +30,26 @@ if [ -z "${RAILS_MASTER_KEY:-}" ] && [ ! -f /rails/config/master.key ]; then
   fi
 fi
 
+# Auto-generate the internal poller token when the poller is on (POLLER_SPAWN=1,
+# the image default) and none was supplied, so `docker run` stays near-zero-config.
+# Rails (the InternalEndpointAuth check) and the poller binary the Puma plugin
+# spawns both read POLLER_TOKEN from the env, so exporting one value here makes
+# them agree. Persisted to the storage volume (like SECRET_KEY_BASE) so it's
+# stable across restarts. An operator-supplied POLLER_TOKEN always wins.
+if [ "${POLLER_SPAWN:-}" = "1" ] && [ -z "${POLLER_TOKEN:-}" ]; then
+  mkdir -p /rails/storage
+  PT_FILE="/rails/storage/.poller_token"
+
+  if [ -f "$PT_FILE" ]; then
+    POLLER_TOKEN="$(cat "$PT_FILE")"
+  else
+    POLLER_TOKEN="$(openssl rand -hex 32)"
+    umask 077 && printf '%s' "$POLLER_TOKEN" > "$PT_FILE"
+  fi
+  
+  export POLLER_TOKEN
+fi
+
 # If running the rails server (directly or wrapped by Thruster), create/migrate/seed the DB.
 # db:prepare is idempotent: first boot = create + schema load + seed; subsequent boots = pending migrations only.
 if [ "${@: -2:1}" = "./bin/rails" ] && [ "${@: -1:1}" = "server" ]; then

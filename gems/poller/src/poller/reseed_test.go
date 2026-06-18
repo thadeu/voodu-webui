@@ -14,12 +14,12 @@ import (
 // dedup/write path without an observability backend.
 type nopMetrics struct{}
 
-func (nopMetrics) LinesIncr(string, int)            {}
-func (nopMetrics) PollIncr(string)                  {}
-func (nopMetrics) ErrorIncr(string)                 {}
+func (nopMetrics) LinesIncr(string, int)              {}
+func (nopMetrics) PollIncr(string)                    {}
+func (nopMetrics) ErrorIncr(string)                   {}
 func (nopMetrics) WatermarkAge(string, time.Duration) {}
-func (nopMetrics) CapHitIncr(string, string)        {}
-func (nopMetrics) SetLastPoll(time.Time)            {}
+func (nopMetrics) CapHitIncr(string, string)          {}
+func (nopMetrics) SetLastPoll(time.Time)              {}
 
 // applyLines mirrors the per-line core of IslandPoller.tick (parse →
 // hash → ring dedup → append). It deliberately omits the HTTP fetch and
@@ -104,7 +104,7 @@ func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 	}
 
 	// Process A: cold ring, everything is new and gets written.
-	pA := NewIslandPoller(island, root, time.Minute, w, nopMetrics{})
+	pA := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pA, lines); got != len(lines) {
 		t.Fatalf("first pass wrote %d lines, want %d", got, len(lines))
 	}
@@ -112,7 +112,7 @@ func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 	// Process B: fresh poller (restart) re-fetches the SAME lines (the
 	// since=oldestWatermark overlap). With disk-seeding, none are
 	// re-written.
-	pB := NewIslandPoller(island, root, time.Minute, w, nopMetrics{})
+	pB := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pB, lines); got != 0 {
 		t.Fatalf("re-tail after restart wrote %d duplicate lines, want 0", got)
 	}
@@ -147,12 +147,12 @@ func TestSeedRing_DedupesAcrossDayFiles(t *testing.T) {
 		}
 	}
 
-	pA := NewIslandPoller(island, root, time.Minute, w, nopMetrics{})
+	pA := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pA, lines); got != len(lines) {
 		t.Fatalf("first pass wrote %d, want %d", got, len(lines))
 	}
 
-	pB := NewIslandPoller(island, root, time.Minute, w, nopMetrics{})
+	pB := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pB, lines); got != 0 {
 		t.Fatalf("multi-day re-tail wrote %d duplicates, want 0", got)
 	}
@@ -183,7 +183,7 @@ func TestSeedRing_HashRoundTripsThroughNDJSON(t *testing.T) {
 		t.Fatalf("append: %v", err)
 	}
 
-	p := NewIslandPoller(island, root, time.Minute, w, nopMetrics{})
+	p := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
 	ring := p.ringFor(pod) // lazily created → seeded from disk
 
 	if !ring.Seen(wantHash) {

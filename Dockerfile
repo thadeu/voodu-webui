@@ -41,6 +41,11 @@ RUN apt-get update -qq && \
 # Thruster listens on HTTP_PORT (public) and proxies to Rails on TARGET_PORT — they must differ.
 # Container's external contract: bind 3000. Rails runs internally on 3001 behind Thruster.
 # Thruster overrides $PORT to $TARGET_PORT when spawning Rails, so TARGET_PORT is the knob.
+#
+# Poller ON by default (the binary copied above owns log/metric/state sync; the
+# Ruby orchestrators step aside when POLLER_SPAWN=1). The operator must still
+# supply POLLER_TOKEN (a secret — never baked into the image) and configure
+# islands; set POLLER_SPAWN=0 to opt out and let the Ruby jobs poll instead.
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
@@ -48,7 +53,10 @@ ENV RAILS_ENV="production" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so" \
     HTTP_PORT="3000" \
     TARGET_PORT="3001" \
-    SOLID_QUEUE_IN_PUMA="true"
+    SOLID_QUEUE_IN_PUMA="true" \
+    POLLER_SPAWN="1" \
+    POLLER_INTERVAL_SECONDS="15" \
+    POLLER_LOG_BACKFILL_SECONDS="86400"
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build

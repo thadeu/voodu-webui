@@ -105,6 +105,95 @@ func (p *IslandPoller) seedRing(pod string, ring *DedupRing) {
 	}
 }
 
+// latestPersistedTS returns the timestamp of the newest line already on
+// disk for `pod` — the per-pod dedup FLOOR and resume point. Any incoming
+// line at/older than this is overlap we already hold; deduping by this
+// timestamp is UNBOUNDED (a plain compare), so no re-fetch — however large —
+// can slip a duplicate past it. The ring then only disambiguates the single
+// boundary instant. Zero when nothing is on disk (brand-new pod). Reads only
+// the tail of the newest day file.
+func (p *IslandPoller) latestPersistedTS(pod string) time.Time {
+	dir := filepath.Join(p.Root, p.Island.ID, safePodName(pod))
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return time.Time{}
+	}
+
+	files := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".ndjson") {
+			continue
+		}
+
+		files = append(files, e.Name())
+	}
+
+	// Newest day file first; the newest line lives at its tail.
+	sort.Sort(sort.Reverse(sort.StringSlice(files)))
+
+	for _, name := range files {
+		if ts := tailMaxTS(filepath.Join(dir, name)); !ts.IsZero() {
+			return ts
+		}
+	}
+
+	return time.Time{}
+}
+
+// tailMaxTS returns the max Record.TS in the tail (seedReadMaxBytes) of an
+// NDJSON file, or zero if nothing parses. Records are appended in
+// chronological order, so the max is effectively the last line.
+func tailMaxTS(path string) time.Time {
+	f, err := os.Open(path)
+	if err != nil {
+		return time.Time{}
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return time.Time{}
+	}
+
+	start := int64(0)
+	if info.Size() > seedReadMaxBytes {
+		start = info.Size() - seedReadMaxBytes
+	}
+
+	if _, err := f.Seek(start, io.SeekStart); err != nil {
+		return time.Time{}
+	}
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return time.Time{}
+	}
+
+	if start > 0 {
+		if nl := bytes.IndexByte(data, '\n'); nl >= 0 {
+			data = data[nl+1:]
+		}
+	}
+
+	var max time.Time
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for sc.Scan() {
+		var rec Record
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			continue
+		}
+
+		if rec.TS.After(max) {
+			max = rec.TS
+		}
+	}
+
+	return max
+}
+
 // tailHashes reads up to `max` of the most recent NDJSON records from
 // `path` and returns their dedup hashes in chronological (oldest-first)
 // order. It reads at most seedReadMaxBytes from the END of the file, so

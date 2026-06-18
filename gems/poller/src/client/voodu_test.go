@@ -1,6 +1,11 @@
 package client
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,6 +104,99 @@ func TestParseLine_TrimsTrailingCRLF(t *testing.T) {
 	}
 	if body != "body line" {
 		t.Errorf("body=%q", body)
+	}
+}
+
+func TestParsePodNames(t *testing.T) {
+	body := `{"status":"ok","data":{"degraded":false,"pods":[
+		{"name":"fsw-freeswitch.0","kind":"statefulset","scope":"fsw"},
+		{"name":"fsw-controller.0793","kind":"deployment"},
+		{"name":""},
+		{"name":"fsw-redis.0"}
+	]}}`
+
+	names, err := ParsePodNames(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"fsw-freeswitch.0", "fsw-controller.0793", "fsw-redis.0"}
+	if len(names) != len(want) {
+		t.Fatalf("names=%v, want %v (blank dropped)", names, want)
+	}
+
+	for i := range want {
+		if names[i] != want[i] {
+			t.Errorf("names[%d]=%q, want %q", i, names[i], want[i])
+		}
+	}
+}
+
+// FetchPodLogs must hit the per-pod endpoint with NO tail cap (so docker
+// returns the whole since-window), the pod name path-escaped, and since as
+// RFC3339Nano.
+func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		if r.Header.Get("Authorization") != "Bearer pat-1" {
+			t.Errorf("missing bearer auth: %q", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte("2026-06-18T02:45:00Z hello\n"))
+	}))
+	defer srv.Close()
+
+	c := NewVooduClient(srv.URL, "pat-1")
+	since := time.Date(2026, 6, 18, 2, 45, 0, 0, time.UTC)
+
+	body, err := c.FetchPodLogs(context.Background(), "fsw-freeswitch.0", since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	if gotPath != "/api/pat/v1/pods/fsw-freeswitch.0/logs" {
+		t.Errorf("path=%q", gotPath)
+	}
+
+	q, _ := url.ParseQuery(gotQuery)
+	if q.Has("tail") {
+		t.Errorf("must NOT send tail (would cap the window): %q", gotQuery)
+	}
+	if q.Get("follow") != "false" {
+		t.Errorf("follow=%q, want false", q.Get("follow"))
+	}
+	if q.Get("timestamps") != "true" {
+		t.Errorf("timestamps=%q, want true", q.Get("timestamps"))
+	}
+	if q.Get("since") != "2026-06-18T02:45:00Z" {
+		t.Errorf("since=%q, want 2026-06-18T02:45:00Z", q.Get("since"))
+	}
+}
+
+// A zero since omits the param entirely (controller default), still no tail.
+func TestFetchPodLogs_ZeroSinceOmitsParam(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+	}))
+	defer srv.Close()
+
+	c := NewVooduClient(srv.URL, "pat-1")
+
+	body, err := c.FetchPodLogs(context.Background(), "p", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	q, _ := url.ParseQuery(gotQuery)
+	if q.Has("since") {
+		t.Errorf("zero since must be omitted: %q", gotQuery)
+	}
+	if q.Has("tail") {
+		t.Errorf("must NOT send tail: %q", gotQuery)
 	}
 }
 

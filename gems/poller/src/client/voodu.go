@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,9 +12,10 @@ import (
 )
 
 // VooduClient hits a single voodu controller's PAT plane. One instance
-// per island. The HTTP client has no overall timeout — the request can
-// block for up to `tail=500` worth of log fetch, and the per-tick
-// context (set by the poller) cancels it on shutdown.
+// per island. The HTTP client has a 60s round-trip timeout. Per-pod log
+// backfill that can't drain its whole window inside 60s is RESUMABLE: the
+// stream is oldest-first, the poller persists what it read and advances the
+// watermark, so the next tick continues where it left off.
 type VooduClient struct {
 	Endpoint string
 	PAT      string
@@ -68,6 +70,33 @@ func (c *VooduClient) FetchLogs(ctx context.Context, since time.Time) (io.ReadCl
 	return resp.Body, nil
 }
 
+// FetchPodLogs GETs `/api/pat/v1/pods/<pod>/logs?since=...&timestamps=true&follow=false`
+// for ONE pod and returns the body for line-by-line streaming. Caller MUST
+// Close() it.
+//
+// Unlike FetchLogs (the legacy multiplexed call), this sends NO `tail` cap.
+// The controller omits `--tail` when the param is absent, so docker returns
+// the FULL window since `since` instead of just the most-recent 500 lines —
+// that's what lets a restart backfill an offline gap. Because the window is
+// per-pod (each pod resumes from its OWN watermark), a quiet pod can't drag a
+// chatty pod's `since` backwards, so steady-state stays a ~poll-interval
+// window. A zero `since` omits the param (controller default).
+//
+// Lines come back as `<ts> <body>` with no `[pod]` prefix (single-pod
+// stream) — the caller already knows the pod and attaches it.
+func (c *VooduClient) FetchPodLogs(ctx context.Context, pod string, since time.Time) (io.ReadCloser, error) {
+	q := url.Values{}
+	q.Set("follow", "false")
+	q.Set("timestamps", "true")
+	if !since.IsZero() {
+		q.Set("since", since.UTC().Format(time.RFC3339Nano))
+	}
+
+	endpoint := c.Endpoint + "/api/pat/v1/pods/" + url.PathEscape(pod) + "/logs?" + q.Encode()
+
+	return c.doGet(ctx, endpoint, "text/plain")
+}
+
 // FetchMetrics GETs `/api/pat/v1/metrics/dump?since=<unix_seconds>` and
 // returns the NDJSON response body for streaming line-by-line by the
 // caller. The caller MUST Close() the returned ReadCloser.
@@ -106,6 +135,48 @@ func (c *VooduClient) FetchPods(ctx context.Context) (io.ReadCloser, error) {
 	q.Set("spec", "true")
 
 	return c.doGet(ctx, c.Endpoint+"/api/pat/v1/pods?"+q.Encode(), "application/json")
+}
+
+// FetchPodList GETs `/api/pat/v1/pods` with NO detail/spec — the lightweight
+// roster the per-pod log tail needs (names only). FetchPods, by contrast,
+// sends detail+spec for the state stream's full snapshot; fetching that every
+// log tick just to read names would be wasteful. Caller MUST Close().
+func (c *VooduClient) FetchPodList(ctx context.Context) (io.ReadCloser, error) {
+	return c.doGet(ctx, c.Endpoint+"/api/pat/v1/pods", "application/json")
+}
+
+// podsEnvelope mirrors the controller's GET /pods response. The PAT plane
+// wraps every JSON body in {"status","data"}; the roster lives at
+// data.pods[].name — the container identity (e.g. "fsw-web.a3f9") that tags
+// each log line and keys the on-disk log tree. (Logs + metrics are
+// text/NDJSON and skip this envelope.)
+type podsEnvelope struct {
+	Data struct {
+		Pods []struct {
+			Name string `json:"name"`
+		} `json:"pods"`
+	} `json:"data"`
+}
+
+// ParsePodNames extracts the current pod roster (container names) from a
+// FetchPodList response body. This is the discovery source for the per-pod
+// log fetch — it's how we learn which pods exist (the legacy multiplexed log
+// stream discovered them implicitly; per-pod fetches need the list up front).
+// Blank names are skipped.
+func ParsePodNames(r io.Reader) ([]string, error) {
+	var env podsEnvelope
+	if err := json.NewDecoder(r).Decode(&env); err != nil {
+		return nil, fmt.Errorf("decode pods: %w", err)
+	}
+
+	names := make([]string, 0, len(env.Data.Pods))
+	for _, p := range env.Data.Pods {
+		if p.Name != "" {
+			names = append(names, p.Name)
+		}
+	}
+
+	return names, nil
 }
 
 // FetchSystem GETs `/api/pat/v1/system` and returns the response body.

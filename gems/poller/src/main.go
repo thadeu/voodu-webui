@@ -53,6 +53,13 @@ type Config struct {
 	MetricsIntervalSeconds int
 	StateIntervalSeconds   int
 
+	// LogBackfillSeconds bounds how far back a per-pod log fetch reaches
+	// on resume (default 24h — covers any overnight poller downtime). A pod
+	// offline longer recovers only the last window; the rest is past
+	// docker's retention anyway. Caps the one-time catch-up payload —
+	// steady-state windows stay ~Interval.
+	LogBackfillSeconds int
+
 	// DigestRoot is the parent of storage/poller/<streamType>/. Defaults
 	// to the same directory tree the logs poller uses so all on-disk
 	// artefacts sit under one storage root.
@@ -101,6 +108,7 @@ func loadConfig() (*Config, error) {
 
 	metricsInterval := envIntSeconds("POLLER_METRICS_INTERVAL_SECONDS", 14, 5)
 	stateInterval := envIntSeconds("POLLER_STATE_INTERVAL_SECONDS", 15, 5)
+	logBackfill := envIntSeconds("POLLER_LOG_BACKFILL_SECONDS", 24*60*60, 60)
 
 	// All three lanes default ON. `POLLER_SPAWN=1` alone is meant to
 	// be the single switch operators flip — the binary owns logs,
@@ -136,6 +144,7 @@ func loadConfig() (*Config, error) {
 		StateEnabled:           stateEnabled,
 		MetricsIntervalSeconds: metricsInterval,
 		StateIntervalSeconds:   stateInterval,
+		LogBackfillSeconds:     logBackfill,
 		DigestRoot:             digestRoot,
 	}, nil
 }
@@ -220,6 +229,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	logsInterval := time.Duration(cfg.IntervalSeconds) * time.Second
+	logBackfill := time.Duration(cfg.LogBackfillSeconds) * time.Second
 	metricsInterval := time.Duration(cfg.MetricsIntervalSeconds) * time.Second
 	stateInterval := time.Duration(cfg.StateIntervalSeconds) * time.Second
 
@@ -261,7 +271,7 @@ func main() {
 
 			if cfg.LogsEnabled {
 				seen["logs|"+isl.ID] = true
-				p := poller.NewIslandPoller(isl, cfg.StorageDir, logsInterval, writer, state)
+				p := poller.NewIslandPoller(isl, cfg.StorageDir, logsInterval, logBackfill, writer, state)
 				p.Verbose = cfg.Verbose
 				spawn("logs", isl.ID, p.Run)
 			}
