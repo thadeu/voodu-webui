@@ -1,29 +1,33 @@
-# Omakase Ruby styling for Rails
-inherit_gem: { rubocop-rails-omakase: rubocop.yml }
+# Standard Ruby is the source of truth for style in this project.
+# This file only exists so RuboCop-based tooling (editors, bin/rubocop, CI)
+# applies Standard's ruleset instead of stock RuboCop's many opinions. The
+# canonical runner is `bundle exec standardrb`; `bin/rubocop` picks up the
+# same rules through this inherit.
+require:
+  - standard
+  - standard-custom
+  - standard-performance
+
+inherit_gem:
+  standard: config/base.yml
+  standard-custom: config/base.yml
+  standard-performance: config/base.yml
 
 AllCops:
-  TargetRubyVersion: 3.3
+  SuggestExtensions: false
+  Exclude:
+    - "bin/**/*"
+    - "db/schema.rb"
+    - "db/**/migrate/**/*"
+    - "node_modules/**/*"
+    - "tmp/**/*"
+    - "vendor/**/*"
+    - "gems/**/*"
+    - "storage/**/*"
 
-# Overwrite or add rules to create your own house style
-#
-# # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
-Layout/SpaceInsideArrayLiteralBrackets:
+Layout/ArgumentAlignment:
   Enabled: false
 
-Layout/EndAlignment:
+Layout/SpaceInsideHashLiteralBraces:
   Enabled: false
-
-Layout/CaseIndentation:
-  Enabled: false
-
-Layout/SpaceAfterComma:
-  Enabled: false
-
-Layout/EmptyLinesAroundClassBody:
-  Enabled: false
-
-Layout/SpaceInsideBlockBraces:
-  Enabled: false
-
-Layout/ElseAlignment:
-  Enabled: false
+  

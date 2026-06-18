@@ -42,8 +42,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def summary_bar
     div(class: "flex items-center justify-between gap-3") do
-      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0",
-          data: { log_analytics_target: "summary" }) do
+      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0", data: { log_analytics_target: "summary" }) do
         span do
           span(class: "font-voodu-mono text-voodu-text-2") { @data.truncated? ? "#{delimited(@data.matched)}+" : delimited(@data.matched) }
           plain " matched"
@@ -68,17 +67,17 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     div(class: "inline-flex items-center gap-1.5 max-w-[55%] vmd:max-w-[420px] pl-2 pr-1 h-6 border border-voodu-border bg-voodu-surface shrink-0") do
       render Icon::FunnelOutline.new(class: "w-3 h-3 text-voodu-accent-2 shrink-0")
       button(
-        type:  "button",
+        type: "button",
         title: "Edit query",
-        data:  { action: "click->log-analytics#openFilter" },
+        data: {action: "click->log-analytics#openFilter"},
         class: "min-w-0 font-voodu-mono text-[11px] text-voodu-text-2 truncate hover:text-voodu-text"
       ) { @data.search }
       button(
-        type:         "button",
-        title:        "Clear query",
+        type: "button",
+        title: "Clear query",
         "aria-label": "Clear query",
-        data:         { action: "click->log-analytics#clearQuery" },
-        class:        "inline-flex items-center justify-center w-4 h-4 text-voodu-muted hover:text-voodu-text shrink-0"
+        data: {action: "click->log-analytics#clearQuery"},
+        class: "inline-flex items-center justify-center w-4 h-4 text-voodu-muted hover:text-voodu-text shrink-0"
       ) { render Icon::XMarkOutline.new(class: "w-3 h-3") }
     end
   end
@@ -121,9 +120,9 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     # SAME the Surrounding modal uses, so the layout stays in lockstep.
     div(
       class: "relative flex-1 min-h-0 border border-voodu-border bg-voodu-bg-2 flex flex-col overflow-hidden",
-      data:  column_grid_attrs
+      data: column_grid_attrs
     ) do
-      div(class: "flex-1 overflow-auto min-w-0", data: { log_analytics_target: "scroller" }) do
+      div(class: "flex-1 overflow-auto min-w-0", data: {log_analytics_target: "scroller"}) do
         # ONE `.log-list` grid for the whole result set: the column header
         # (ColumnChrome) + every row share column tracks (alignment). The
         # Load more frames live INSIDE the grid (display:contents, see
@@ -163,7 +162,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
       header_icon("Clear results", :BackspaceOutline, "clear")
 
       div(class: "flex items-center gap-0.5") do
-        header_icon("Jump to top",    :ArrowUpOutline,   "jumpTop")
+        header_icon("Jump to top", :ArrowUpOutline, "jumpTop")
         header_icon("Jump to bottom", :ArrowDownOutline, "jumpBottom")
       end
 
@@ -178,10 +177,10 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     active = @data.search.present?
 
     button(
-      type:          "button",
-      "aria-label":  "Edit filter query",
+      type: "button",
+      "aria-label": "Edit filter query",
       "aria-expanded": "false",
-      data:          { action: "click->log-analytics#toggleFilter", tooltip: "Filter" },
+      data: {action: "click->log-analytics#toggleFilter", tooltip: "Filter"},
       class: tokens(
         "inline-flex items-center justify-center w-6 h-6 transition-colors",
         active ? "text-voodu-accent-2 bg-voodu-accent-dim" : "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
@@ -198,14 +197,14 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # it survives a re-query frame swap.
   def wrap_toggle
     button(
-      type:         "button",
+      type: "button",
       "aria-label": "Toggle wrap on all lines",
       "aria-pressed": "false",
-      data:         {
-        action:              "click->log-analytics#toggleWrap",
+      data: {
+        action: "click->log-analytics#toggleWrap",
         log_analytics_target: "wrapToggle",
-        tooltip:             "Toggle wrap",
-        active:              "false"
+        tooltip: "Toggle wrap",
+        active: "false"
       },
       class: "la-wrap-toggle inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors data-[active=true]:text-voodu-accent-2 data-[active=true]:bg-voodu-accent-dim"
     ) do
@@ -226,13 +225,13 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # controller). aria-expanded drives the active tint via theme.css.
   def column_settings_button
     button(
-      type:          "button",
-      "aria-label":  "Choose visible columns",
+      type: "button",
+      "aria-label": "Choose visible columns",
       "aria-expanded": "false",
-      data:          {
-        action:              "click->logs-columns#togglePopover",
+      data: {
+        action: "click->logs-columns#togglePopover",
         logs_columns_target: "settingsButton",
-        tooltip:             "Columns"
+        tooltip: "Columns"
       },
       class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors aria-expanded:text-voodu-accent-2 aria-expanded:bg-voodu-accent-dim"
     ) do
@@ -246,15 +245,15 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # carries the actual log line.
   def column_visibility_popover
     div(
-      class:        "log-cols-popover",
-      hidden:       true,
-      role:         "menu",
+      class: "log-cols-popover",
+      hidden: true,
+      role: "menu",
       "aria-label": "Visible columns",
-      data:         { logs_columns_target: "popover" }
+      data: {logs_columns_target: "popover"}
     ) do
       div(class: "log-cols-popover-title") { "Visible columns" }
-      column_visibility_row("ts",   "Time")
-      column_visibility_row("pod",  "Pod")
+      column_visibility_row("ts", "Time")
+      column_visibility_row("pod", "Pod")
       column_visibility_row("body", "Message", required: true)
     end
   end
@@ -262,13 +261,13 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   def column_visibility_row(key, label, required: false)
     label(class: required ? "log-cols-popover-row is-required" : "log-cols-popover-row") do
       input(
-        type:     "checkbox",
-        checked:  true,
+        type: "checkbox",
+        checked: true,
         disabled: required,
         data: {
-          action:              "change->logs-columns#toggleVisibility",
-          column_key:          key,
-          required:            required ? "true" : "false",
+          action: "change->logs-columns#toggleVisibility",
+          column_key: key,
+          required: required ? "true" : "false",
           logs_columns_target: "visibilityToggle"
         }
       )
@@ -279,10 +278,10 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def header_icon(label, icon, action)
     button(
-      type:         "button",
+      type: "button",
       "aria-label": label,
-      data:         { action: "click->log-analytics##{action}", tooltip: label },
-      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
+      data: {action: "click->log-analytics##{action}", tooltip: label},
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
     ) do
       render Icon.const_get(icon).new(class: "w-3.5 h-3.5")
     end
@@ -294,11 +293,11 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # the current query's frozen window + filters, so the file matches the
   # results on screen.
   def export_menu
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       button(
-        type:  "button",
+        type: "button",
         title: "Export results",
-        data:  { action: "click->dropdown#toggle" },
+        data: {action: "click->dropdown#toggle"},
         class: "inline-flex items-center gap-1.5 px-2 h-6 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
       ) do
         render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5")
@@ -308,18 +307,18 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
       div(
         hidden: true,
-        data:  { dropdown_target: "menu" },
+        data: {dropdown_target: "menu"},
         class: "absolute right-0 top-[calc(100%+4px)] z-40 min-w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl"
       ) do
         export_section("Copy to clipboard")
-        copy_item("CSV",  "csv")
+        copy_item("CSV", "csv")
         copy_item("JSON", "json")
         copy_item("Text", "txt")
         div(class: "h-px bg-voodu-border")
         export_section("Download")
         download_item("NDJSON", "ndjson")
-        download_item("CSV",    "csv")
-        download_item("Text",   "txt")
+        download_item("CSV", "csv")
+        download_item("Text", "txt")
       end
     end
   end
@@ -330,8 +329,8 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def copy_item(label, fmt)
     button(
-      type:  "button",
-      data:  { action: "click->log-analytics#copyExport click->dropdown#close", export_url: export_url(fmt) },
+      type: "button",
+      data: {action: "click->log-analytics#copyExport click->dropdown#close", export_url: export_url(fmt)},
       class: export_item_classes
     ) do
       render Icon::ClipboardDocumentOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
@@ -341,10 +340,10 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def download_item(label, fmt)
     a(
-      href:     export_url(fmt),
+      href: export_url(fmt),
       download: "",
-      data:     { turbo: false, action: "click->dropdown#close" },
-      class:    export_item_classes
+      data: {turbo: false, action: "click->dropdown#close"},
+      class: export_item_classes
     ) do
       render Icon::ArrowDownTrayOutline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
       span(class: "flex-1") { label }
@@ -357,12 +356,12 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def export_url(fmt)
     logs_analytics_export_path(
-      fmt:   fmt,
-      q:     @data.search.presence,
+      fmt: fmt,
+      q: @data.search.presence,
       regex: (@data.regex? ? "1" : nil),
-      from:  @data.from_iso,
+      from: @data.from_iso,
       until: @data.until_iso,
-      pods:  @data.pods.presence
+      pods: @data.pods.presence
     )
   end
 
