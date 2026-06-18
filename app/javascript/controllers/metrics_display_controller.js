@@ -36,13 +36,16 @@ import { Controller } from "@hotwired/stimulus"
 // Default-visible principle: hidden is an EXPLICIT list. New metrics
 // added in a future release land visible at the end of the order.
 
-// BASE_COLS — the resize canvas is a fine 12-track grid. The operator's
-// "columns" preference (2|3|4) just picks the DEFAULT span (12/cols → 6|4|3),
-// so a 2-up layout looks identical to before — but cards resize in 1/12 steps.
-// An integer N-col grid had no room to resize: two span-1 cards filled a 2-col
-// row with nothing to trade. Per-card spans persist in twelfths under v2.
-const BASE_COLS = 12
-const SIZES_KEY = "voodu:metrics:sizes:v2"
+// BASE_COLS — the resize canvas is a fine 60-track grid. The operator's
+// "columns" preference (2|3|4) picks the DEFAULT span (60/cols → 30|20|15), so
+// a 2-up layout looks identical (the inter-track gaps absorb into each card),
+// but the boundary resizes in 1/60 steps — fine enough to follow the cursor
+// smoothly instead of snapping in coarse column chunks. 60 is the safe ceiling
+// for gap-3 (59 gaps must still fit the narrowest vmd+ grid). Per-card spans
+// persist in sixtieths under v3 (v2 was twelfths — bumped so old values don't
+// render tiny on the finer grid).
+const BASE_COLS = 60
+const SIZES_KEY = "voodu:metrics:sizes:v3"
 
 export default class extends Controller {
   static targets = ["card", "grid"]
@@ -163,7 +166,7 @@ export default class extends Controller {
         return
       }
 
-      // Custom width (twelfths) if the operator resized this card, else the
+      // Custom width (sixtieths) if the operator resized this card, else the
       // default span derived from the columns preference.
       const span = Math.min(base, Math.max(1, map[card.dataset.metricKey] || def))
       card.style.gridColumn = `span ${span}`
@@ -314,7 +317,7 @@ export default class extends Controller {
 
     const store = this.readSizesStore()
     store[this.kindValue] ||= {}
-    store[this.kindValue][metricKey] = span // twelfths — explicit once resized
+    store[this.kindValue][metricKey] = span // sixtieths — explicit once resized
 
     try {
       sessionStorage.setItem(SIZES_KEY, JSON.stringify(store))

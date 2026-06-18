@@ -192,7 +192,7 @@ export default class extends Controller {
     // this kind's per-card drag-resize widths so the preset takes cleanly
     // (otherwise stale spans win and e.g. "2" still renders 4-up). Applied on
     // Update; metrics-display re-reads the cleared sizes then. Same key as
-    // metrics_display_controller's SIZES_KEY ("voodu:metrics:sizes:v2").
+    // metrics_display_controller's SIZES_KEY ("voodu:metrics:sizes:v3").
     this.clearCardWidths()
   }
 
@@ -200,9 +200,9 @@ export default class extends Controller {
   // preset lays out a uniform N-up. Resize is a fine-tune ON TOP afterwards.
   clearCardWidths() {
     try {
-      const sizes = JSON.parse(sessionStorage.getItem("voodu:metrics:sizes:v2") || "{}")
+      const sizes = JSON.parse(sessionStorage.getItem("voodu:metrics:sizes:v3") || "{}")
       delete sizes[this.kindValue]
-      sessionStorage.setItem("voodu:metrics:sizes:v2", JSON.stringify(sizes))
+      sessionStorage.setItem("voodu:metrics:sizes:v3", JSON.stringify(sizes))
     } catch (_) {
       // sessionStorage disabled — nothing persisted to clear.
     }
