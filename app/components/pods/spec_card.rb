@@ -17,21 +17,21 @@ class Components::Pods::SpecCard < Components::Base
   # the controller is down. Defaults to false so any legacy caller
   # not yet stale-aware still gets the literal state.status mapping.
   def initialize(pod:, stale: false)
-    @pod   = pod
+    @pod = pod
     @stale = stale
   end
 
   def view_template
     render Components::UI::SectionCard.new(title: "Spec") do
-      row("image")          { plain @pod["image"].to_s.presence || "—" }
+      row("image") { plain @pod["image"].to_s.presence || "—" }
       row("id", copy: id, copy_value: id) { id_value }
       row("restart_policy") { plain @pod["restart_policy"].to_s.presence || "—" }
-      row("working_dir")    { plain @pod["working_dir"].to_s.presence || "—" }
-      row("entrypoint")     { plain join_str(@pod["entrypoint"]) }
-      row("command")        { plain join_str(@pod["command"]) }
-      row("state.status")   { render Components::UI::StatusPill.new(status: state_status_sym) }
-      row("created_at")     { datetime_with_rel(@pod["created_at"]) }
-      row("state.started_at",  dim: !started?)  { started?  ? datetime_with_rel(state_dig("started_at"))  : plain("never") }
+      row("working_dir") { plain @pod["working_dir"].to_s.presence || "—" }
+      row("entrypoint") { plain join_str(@pod["entrypoint"]) }
+      row("command") { plain join_str(@pod["command"]) }
+      row("state.status") { render Components::UI::StatusPill.new(status: state_status_sym) }
+      row("created_at") { datetime_with_rel(@pod["created_at"]) }
+      row("state.started_at", dim: !started?) { started? ? datetime_with_rel(state_dig("started_at")) : plain("never") }
       row("state.finished_at", dim: !finished?) { finished? ? datetime_with_rel(state_dig("finished_at")) : plain("never") }
     end
   end
@@ -96,10 +96,10 @@ class Components::Pods::SpecCard < Components::Base
     t = Time.zone.parse(iso)
     secs = (Time.current - t).to_i.abs
     case secs
-    when 0..59         then "#{secs}s ago"
-    when 60..3599      then "#{secs / 60}m ago"
-    when 3600..86_399  then "#{secs / 3600}h ago"
-    else                    "#{secs / 86_400}d ago"
+    when 0..59 then "#{secs}s ago"
+    when 60..3599 then "#{secs / 60}m ago"
+    when 3600..86_399 then "#{secs / 3600}h ago"
+    else "#{secs / 86_400}d ago"
     end
   rescue ArgumentError, TypeError
     "—"
@@ -107,9 +107,9 @@ class Components::Pods::SpecCard < Components::Base
 
   def join_str(val)
     case val
-    when Array  then val.join(" ").presence || "—"
+    when Array then val.join(" ").presence || "—"
     when String then val.presence || "—"
-    else             "—"
+    else "—"
     end
   end
 end

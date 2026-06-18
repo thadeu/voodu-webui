@@ -52,15 +52,15 @@ class OverviewData
   CACHE_TTL = 10.seconds
 
   def initialize(client, island, force_refresh: false)
-    @client     = client
-    @island     = island
-    @force      = force_refresh
-    @system     = nil
-    @pods_raw   = []
+    @client = client
+    @island = island
+    @force = force_refresh
+    @system = nil
+    @pods_raw = []
     @updated_at = Time.current
-    @error      = nil
-    @cache_hit  = false
-    @metrics    = MetricsData.new(client, island)
+    @error = nil
+    @cache_hit = false
+    @metrics = MetricsData.new(client, island)
     fetch!
   end
 
@@ -157,8 +157,8 @@ class OverviewData
     @system&.dig("cpu", "cores").to_i
   end
 
-  def load_1  = round_load(@system&.dig("cpu", "load_1"))
-  def load_5  = round_load(@system&.dig("cpu", "load_5"))
+  def load_1 = round_load(@system&.dig("cpu", "load_1"))
+  def load_5 = round_load(@system&.dig("cpu", "load_5"))
   def load_15 = round_load(@system&.dig("cpu", "load_15"))
 
   private
@@ -211,10 +211,10 @@ class OverviewData
   def fetch_from_warehouse!
     state = IslandState.for(@island)
 
-    @system     = state.system || {}
-    @pods_raw   = state.pods
+    @system = state.system || {}
+    @pods_raw = state.pods
     @updated_at = state.synced_at || Time.current
-    @cache_hit  = true  # always a "hit" — the warehouse IS the cache
+    @cache_hit = true  # always a "hit" — the warehouse IS the cache
 
     # Mark the snapshot stale whenever the controller isn't CONFIRMED
     # online — i.e. :offline OR :unknown (cold health cache / sync
@@ -234,9 +234,9 @@ class OverviewData
 
     cached = Rails.cache.read(cache_key)
     if cached
-      @cache_hit  = true
-      @system     = cached[:system]
-      @pods_raw   = cached[:pods]
+      @cache_hit = true
+      @system = cached[:system]
+      @pods_raw = cached[:pods]
       @updated_at = cached[:fetched_at]
       return
     end
@@ -246,12 +246,12 @@ class OverviewData
     # env, networks, restart_policy …). Same payload `vd describe pod`
     # consumes. The CLI/WebUI parity work guarantees the response is
     # byte-identical across the two planes.
-    @pods_raw   = @client.pods(detail: true)["pods"] || []
+    @pods_raw = @client.pods(detail: true)["pods"] || []
     @updated_at = Time.current
 
     Rails.cache.write(
       cache_key,
-      { system: @system, pods: @pods_raw, fetched_at: @updated_at },
+      {system: @system, pods: @pods_raw, fetched_at: @updated_at},
       expires_in: CACHE_TTL
     )
 
@@ -296,7 +296,7 @@ class OverviewData
   # ── Stat cards ──────────────────────────────────────────────────
 
   def stat_cpu
-    series  = @metrics.points_for(source: :system, metric: "cpu_percent", range: "1h")
+    series = @metrics.points_for(source: :system, metric: "cpu_percent", range: "1h")
     # Use latest_for (server's unaggregated current) — the bucketed
     # series's last point would shift values when the operator
     # switches range pills. Fallback to /system "now" on cold boot.
@@ -313,17 +313,17 @@ class OverviewData
   end
 
   def stat_memory
-    series        = @metrics.points_for(source: :system, metric: "mem_used_bytes", range: "1h")
+    series = @metrics.points_for(source: :system, metric: "mem_used_bytes", range: "1h")
     current_bytes = @metrics.latest_for(source: :system, metric: "mem_used_bytes", range: "1h") ||
-                    @system&.dig("mem", "used_bytes").to_f
-    used          = current_bytes / 1024**3
-    total         = host_mem_total_gb
-    pct           = total.zero? ? 0 : (used / total * 100).round
+      @system&.dig("mem", "used_bytes").to_f
+    used = current_bytes / 1024**3
+    total = host_mem_total_gb
+    pct = total.zero? ? 0 : (used / total * 100).round
 
     {
       label: "MEMORY", icon: :CircleStackOutline,
       value: format("%.1f", used), unit: "GB",
-      sub: total.positive? ? "of #{format('%.0f', total)} GB · #{pct}%" : "—",
+      sub: total.positive? ? "of #{format("%.0f", total)} GB · #{pct}%" : "—",
       color: "var(--voodu-blue)",
       series: series,
       delta: nil
@@ -336,12 +336,12 @@ class OverviewData
   # entry, which is `/` (the root mount, the universally-meaningful
   # one). Future multi-mount expansion adds a picker; shape stays.
   def stat_disk
-    series        = @metrics.points_for(source: :system, metric: "disk_used_bytes", range: "1h")
+    series = @metrics.points_for(source: :system, metric: "disk_used_bytes", range: "1h")
     current_bytes = @metrics.latest_for(source: :system, metric: "disk_used_bytes", range: "1h") ||
-                    @system&.dig("disk", 0, "used_bytes").to_f
-    used          = (current_bytes / 1024**3).round
-    total         = disk_total_gb
-    pct           = total.zero? ? 0 : (used.to_f / total * 100).round
+      @system&.dig("disk", 0, "used_bytes").to_f
+    used = (current_bytes / 1024**3).round
+    total = disk_total_gb
+    pct = total.zero? ? 0 : (used.to_f / total * 100).round
 
     {
       label: "DISK", icon: :ServerStackOutline,
@@ -430,19 +430,19 @@ class OverviewData
     status = PodStatus.from_payload(p, stale: stale?)
 
     {
-      name:          p["name"],
-      scope:         p["scope"],
+      name: p["name"],
+      scope: p["scope"],
       resource_name: p["resource_name"],
-      replica_id:    p["replica_id"],
-      kind:          p["kind"],
-      image:         p["image"],
-      image_tag:     extract_image_tag(p["image"]),
-      status:        status,
-      cpu_pct:       extract_cpu_pct(p),
-      mem_used_mb:   extract_mem_mb(p, "memory_usage_bytes"),
-      mem_total_mb:  extract_mem_mb(p, "memory_limit_bytes"),
-      age:           format_age(p["created_at"]),
-      ports:         extract_ports(p)
+      replica_id: p["replica_id"],
+      kind: p["kind"],
+      image: p["image"],
+      image_tag: extract_image_tag(p["image"]),
+      status: status,
+      cpu_pct: extract_cpu_pct(p),
+      mem_used_mb: extract_mem_mb(p, "memory_usage_bytes"),
+      mem_total_mb: extract_mem_mb(p, "memory_limit_bytes"),
+      age: format_age(p["created_at"]),
+      ports: extract_ports(p)
     }
   end
 
@@ -457,7 +457,7 @@ class OverviewData
   # registry-port colon isn't mistaken for the tag), then takes the
   # segment after the last ":".
   def extract_image_tag(image)
-    ref  = image.to_s.split("@", 2).first.to_s
+    ref = image.to_s.split("@", 2).first.to_s
     name = ref.rpartition("/").last
     return nil unless name.include?(":")
 
@@ -535,11 +535,11 @@ class OverviewData
     t = Time.zone.parse(created_at.to_s)
     distance = Time.current - t
     case distance
-    when 0..59            then "#{distance.to_i}s"
-    when 60..3599         then "#{(distance / 60).to_i}m"
-    when 3600..86_399     then "#{(distance / 3600).to_i}h"
+    when 0..59 then "#{distance.to_i}s"
+    when 60..3599 then "#{(distance / 60).to_i}m"
+    when 3600..86_399 then "#{(distance / 3600).to_i}h"
     when 86_400..2_591_999 then "#{(distance / 86_400).to_i}d #{((distance % 86_400) / 3600).to_i}h"
-    else                       "#{(distance / 86_400).to_i}d"
+    else "#{(distance / 86_400).to_i}d"
     end
   rescue ArgumentError, TypeError
     "—"

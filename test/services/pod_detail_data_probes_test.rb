@@ -12,8 +12,8 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
   fixtures :islands
 
   setup do
-    @island          = islands(:alpha)
-    @prev_wh         = ENV["WAREHOUSE"]
+    @island = islands(:alpha)
+    @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
 
@@ -21,21 +21,21 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
 
   test "parses declared probes from the k8s-style envelope (spec.spec.probes)" do
     seed_pod(spec: enveloped({
-      "readiness" => { "http_get" => { "path" => "/ready", "port" => 8080 }, "period" => "5s" },
-      "startup"   => { "http_get" => { "path" => "/healthz", "port" => 8080 }, "failure_threshold" => 30 },
-      "liveness"  => { "http_get" => { "path" => "/healthz", "port" => 8080 } }
+      "readiness" => {"http_get" => {"path" => "/ready", "port" => 8080}, "period" => "5s"},
+      "startup" => {"http_get" => {"path" => "/healthz", "port" => 8080}, "failure_threshold" => 30},
+      "liveness" => {"http_get" => {"path" => "/healthz", "port" => 8080}}
     }))
 
     probes = build.probes
 
     assert_equal %w[liveness readiness startup], probes.map { |p| p[:kind] }
-    assert_equal({ "http_get" => { "path" => "/ready", "port" => 8080 }, "period" => "5s" }, probes[1][:spec])
+    assert_equal({"http_get" => {"path" => "/ready", "port" => 8080}, "period" => "5s"}, probes[1][:spec])
   end
 
   test "tolerates a flat spec.probes shape as a fallback" do
-    seed_pod(spec: { "probes" => {
-      "liveness" => { "tcp_socket" => { "port" => 5432 } }
-    } })
+    seed_pod(spec: {"probes" => {
+      "liveness" => {"tcp_socket" => {"port" => 5432}}
+    }})
 
     probes = build.probes
 
@@ -52,7 +52,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
     assert_empty build.probes
 
     @island.pods.delete_all
-    seed_pod(spec: enveloped({ "liveness" => {}, "readiness" => "nope" }))
+    seed_pod(spec: enveloped({"liveness" => {}, "readiness" => "nope"}))
     assert_empty build.probes
   end
 
@@ -69,7 +69,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
     {
       "name" => "api", "kind" => "deployment", "scope" => "fsw",
       "metadata" => {},
-      "spec" => { "probes" => probes }
+      "spec" => {"probes" => probes}
     }
   end
 
@@ -87,12 +87,12 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
 
     @island.pods.create!(
       container_name: "web.aaaa",
-      kind:           "deployment",
-      scope:          "web",
-      resource_name:  "web",
-      replica_id:     "aaaa",
-      synced_at:      Time.current,
-      payload:        payload.to_json
+      kind: "deployment",
+      scope: "web",
+      resource_name: "web",
+      replica_id: "aaaa",
+      synced_at: Time.current,
+      payload: payload.to_json
     )
   end
 end

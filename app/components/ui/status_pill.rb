@@ -12,23 +12,23 @@
 # alive rather than just colored.
 class Components::UI::StatusPill < Components::Base
   STATES = {
-    running:    { label: "Running",    color: "var(--voodu-green)", bg: "var(--voodu-green-dim)" },
-    online:     { label: "Online",     color: "var(--voodu-green)", bg: "var(--voodu-green-dim)" },
-    restarting: { label: "Restarting", color: "var(--voodu-amber)", bg: "var(--voodu-amber-dim)" },
-    offline:    { label: "Offline",    color: "var(--voodu-red)",   bg: "var(--voodu-red-dim)" },
-    error:      { label: "Error",      color: "var(--voodu-red)",   bg: "var(--voodu-red-dim)" },
-    stopped:    { label: "Stopped",    color: "var(--voodu-muted)", bg: "#7a7a8818" },
-    pending:    { label: "Pending",    color: "var(--voodu-muted)", bg: "#7a7a8818" },
+    running: {label: "Running", color: "var(--voodu-green)", bg: "var(--voodu-green-dim)"},
+    online: {label: "Online", color: "var(--voodu-green)", bg: "var(--voodu-green-dim)"},
+    restarting: {label: "Restarting", color: "var(--voodu-amber)", bg: "var(--voodu-amber-dim)"},
+    offline: {label: "Offline", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"},
+    error: {label: "Error", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"},
+    stopped: {label: "Stopped", color: "var(--voodu-muted)", bg: "#7a7a8818"},
+    pending: {label: "Pending", color: "var(--voodu-muted)", bg: "#7a7a8818"},
     # unknown — we couldn't determine health (cold cache / sync pipeline
     # down). Treated as a RED alert like offline, not neutral: a missing
     # status IS a problem worth surfacing. Label stays "Unknown" to keep
     # it honest (not confirmed-down).
-    unknown:    { label: "Unknown",    color: "var(--voodu-red)",   bg: "var(--voodu-red-dim)" }
+    unknown: {label: "Unknown", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"}
   }.freeze
 
   def initialize(status:, label: nil)
     @status = status.to_sym
-    @label  = label
+    @label = label
   end
 
   def view_template

@@ -32,8 +32,8 @@ class IslandState
   # Thresholds match IslandHealth's TTL (30s) so when we flip the
   # toggle the operator's notion of "this island feels live" is
   # preserved.
-  ONLINE_THRESHOLD   = 30.seconds
-  OFFLINE_THRESHOLD  = 120.seconds
+  ONLINE_THRESHOLD = 30.seconds
+  OFFLINE_THRESHOLD = 120.seconds
 
   # warehouse? — single switch every page service consults to
   # decide between local-DB and HTTP-per-request. Reads fresh from
@@ -105,7 +105,7 @@ class IslandState
   def health_status
     age = synced_age_seconds
     return :offline if age.nil? || age > OFFLINE_THRESHOLD
-    return :online  if age <= ONLINE_THRESHOLD
+    return :online if age <= ONLINE_THRESHOLD
 
     :degraded
   end

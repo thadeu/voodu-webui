@@ -11,8 +11,8 @@ class CreateSystems < ActiveRecord::Migration[8.1]
       # has_one :system from Island side — unique island_id keeps the
       # ratio enforced at the DB layer too.
       t.references :island, null: false,
-                            foreign_key: { on_delete: :cascade },
-                            index: { unique: true }
+        foreign_key: {on_delete: :cascade},
+        index: {unique: true}
 
       # The entire /system response as a JSON blob. Hot fields are NOT
       # extracted into separate columns yet — the topbar reads a single

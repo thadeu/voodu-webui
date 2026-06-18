@@ -55,15 +55,15 @@ class MetricsWarehouse
   # Friendly range aliases (mirror rangeAliases in handlers_metrics.go).
   # Falls back to integer seconds for tests / unusual calls.
   RANGE_ALIASES = {
-    "15m" =>      15 * 60,
-    "30m" =>      30 * 60,
-    "1h"  =>      60 * 60,
-    "3h"  =>  3 * 60 * 60,
-    "6h"  =>  6 * 60 * 60,
+    "15m" => 15 * 60,
+    "30m" => 30 * 60,
+    "1h" => 60 * 60,
+    "3h" => 3 * 60 * 60,
+    "6h" => 6 * 60 * 60,
     "12h" => 12 * 60 * 60,
     "24h" => 24 * 60 * 60,
-    "3d"  =>  3 * 24 * 60 * 60,
-    "7d"  =>  7 * 24 * 60 * 60
+    "3d" => 3 * 24 * 60 * 60,
+    "7d" => 7 * 24 * 60 * 60
   }.freeze
 
   # Bucket-size steps. Operator-selectable via the /metrics interval
@@ -72,15 +72,15 @@ class MetricsWarehouse
   # busy ingress at 1s buckets surfaces per-second spikes hidden by
   # the default 15s sampling cadence).
   INTERVAL_ALIASES = {
-    "1s"  =>      1,
-    "10s" =>     10,
-    "15s" =>     15,
-    "30s" =>     30,
-    "1m"  =>     60,
-    "5m"  =>    300,
-    "15m" =>    900,
-    "30m" =>   1800,
-    "1h"  =>   3600
+    "1s" => 1,
+    "10s" => 10,
+    "15s" => 15,
+    "30s" => 30,
+    "1m" => 60,
+    "5m" => 300,
+    "15m" => 900,
+    "30m" => 1800,
+    "1h" => 3600
   }.freeze
 
   # autopick steps — what `interval=auto` resolves to. INTENTIONALLY
@@ -113,10 +113,10 @@ class MetricsWarehouse
   # Matches what Grafana / Datadog default to for the equivalent
   # metric families.
   METRIC_AGGREGATIONS = {
-    "cpu_percent"             => "MAX",
-    "net_rx_delta_bytes"      => "MAX",
-    "net_tx_delta_bytes"      => "MAX",
-    "block_read_delta_bytes"  => "MAX",
+    "cpu_percent" => "MAX",
+    "net_rx_delta_bytes" => "MAX",
+    "net_tx_delta_bytes" => "MAX",
+    "block_read_delta_bytes" => "MAX",
     "block_write_delta_bytes" => "MAX",
 
     # Ingress counters — SUM across buckets so a "last 1h" chart
@@ -124,10 +124,10 @@ class MetricsWarehouse
     # 15s window. Operator math: total req over visible range =
     # sum of every chart point.
     "req_count" => "SUM",
-    "req_2xx"   => "SUM",
-    "req_3xx"   => "SUM",
-    "req_4xx"   => "SUM",
-    "req_5xx"   => "SUM",
+    "req_2xx" => "SUM",
+    "req_3xx" => "SUM",
+    "req_4xx" => "SUM",
+    "req_5xx" => "SUM",
     "bytes_out" => "SUM",
 
     # Ingress latency percentiles — MAX preserves the worst spike
@@ -160,20 +160,20 @@ class MetricsWarehouse
   def query(source:, metric:, range:, interval:, scope:, name:, pod:)
     raise ArgumentError, "unknown metric #{metric.inspect}" unless ALLOWED_METRICS.include?(metric)
 
-    range_s    = resolve_range(range)
+    range_s = resolve_range(range)
     interval_s = resolve_interval(interval, range_s)
-    end_t      = Time.current
-    start_t    = end_t - range_s
+    end_t = Time.current
+    start_t = end_t - range_s
 
     base = scoped_relation(source, scope, name, pod, metric, start_t.to_i, end_t.to_i)
 
     {
-      "metric"           => metric,
+      "metric" => metric,
       "interval_seconds" => interval_s,
-      "available_from"   => available_from_iso(source),
-      "truncated"        => truncated?(source, start_t),
-      "series"           => build_series(base, metric, interval_s),
-      "latest"           => build_latest(base, metric)
+      "available_from" => available_from_iso(source),
+      "truncated" => truncated?(source, start_t),
+      "series" => build_series(base, metric, interval_s),
+      "latest" => build_latest(base, metric)
     }
   end
 
@@ -196,13 +196,13 @@ class MetricsWarehouse
   # the entry of query(), so the interpolation is safe.
   def scoped_relation(source, scope, name, pod, metric, start_ts, end_ts)
     rel = MetricSample
-            .where(tenant_id: @island.id, source: source.to_s)
-            .where(ts_epoch: start_ts...end_ts)
-            .where(metric_present_sql(metric))
+      .where(tenant_id: @island.id, source: source.to_s)
+      .where(ts_epoch: start_ts...end_ts)
+      .where(metric_present_sql(metric))
 
     rel = rel.where(scope: scope) if scope.present?
-    rel = rel.where(name: name)   if name.present?
-    rel = rel.where(pod: pod)     if pod.present?
+    rel = rel.where(name: name) if name.present?
+    rel = rel.where(pod: pod) if pod.present?
     rel
   end
 
@@ -212,14 +212,14 @@ class MetricsWarehouse
   # this is safe SQL, not user input"). N comes from interval_s
   # which is allow-listed via INTERVAL_STEPS — never operator input.
   def build_series(rel, metric, interval_s)
-    bucket   = Arel.sql("(ts_epoch / #{interval_s}) * #{interval_s}")
-    agg_fn   = METRIC_AGGREGATIONS.fetch(metric, DEFAULT_AGGREGATION)
+    bucket = Arel.sql("(ts_epoch / #{interval_s}) * #{interval_s}")
+    agg_fn = METRIC_AGGREGATIONS.fetch(metric, DEFAULT_AGGREGATION)
     agg_expr = Arel.sql("#{agg_fn}(CAST(json_extract(payload, '$.#{metric}') AS REAL))")
 
     rows = rel.group(bucket).order(bucket).pluck(bucket, agg_expr)
 
     rows.map do |bucket_epoch, val|
-      { "ts" => Time.at(bucket_epoch.to_i).utc.iso8601, "value" => val.to_f }
+      {"ts" => Time.at(bucket_epoch.to_i).utc.iso8601, "value" => val.to_f}
     end
   end
 
@@ -228,12 +228,12 @@ class MetricsWarehouse
   # pills). nil when the filtered window has no rows.
   def build_latest(rel, metric)
     row = rel.order(ts_epoch: :desc)
-             .limit(1)
-             .pluck(:ts_iso, Arel.sql(metric_real_sql(metric)))
-             .first
+      .limit(1)
+      .pluck(:ts_iso, Arel.sql(metric_real_sql(metric)))
+      .first
     return nil unless row
 
-    { "ts" => row[0], "value" => row[1].to_f }
+    {"ts" => row[0], "value" => row[1].to_f}
   end
 
   # truncated? — true when the warehouse's oldest sample for this
@@ -243,7 +243,7 @@ class MetricsWarehouse
   # that looks complete but only goes back N days.
   def truncated?(source, start_t)
     earliest = MetricSample.where(tenant_id: @island.id, source: source.to_s)
-                           .minimum(:ts_epoch)
+      .minimum(:ts_epoch)
     earliest.present? && earliest > start_t.to_i
   end
 
@@ -252,7 +252,7 @@ class MetricsWarehouse
   # (well, the source-scoped equivalent). Cheap.
   def available_from_iso(source)
     earliest = MetricSample.where(tenant_id: @island.id, source: source.to_s)
-                           .minimum(:ts_epoch)
+      .minimum(:ts_epoch)
     earliest && Time.at(earliest).utc.iso8601
   end
 
@@ -283,8 +283,8 @@ class MetricsWarehouse
   # producing empty series. Fix: parse Go-style duration suffixes
   # explicitly before falling back to the (still useful) pure-int
   # path for tests that pass raw seconds.
-  GO_DURATION = /\A(\d+)([smhd])\z/.freeze
-  UNIT_SECONDS = { "s" => 1, "m" => 60, "h" => 3600, "d" => 86_400 }.freeze
+  GO_DURATION = /\A(\d+)([smhd])\z/
+  UNIT_SECONDS = {"s" => 1, "m" => 60, "h" => 3600, "d" => 86_400}.freeze
 
   def resolve_range(raw)
     s = raw.to_s.strip

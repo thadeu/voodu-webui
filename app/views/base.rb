@@ -21,6 +21,6 @@ class Views::Base < Components::Base
 
     key = @current_island.key
 
-    [{ label: "Overview", href: tenant_root_path(tenant_key: key) }, *trail]
+    [{label: "Overview", href: tenant_root_path(tenant_key: key)}, *trail]
   end
 end

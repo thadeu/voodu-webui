@@ -69,7 +69,7 @@ class PollerDigestJob < ApplicationJob
     # rescue here, the generic StandardError rescue below would
     # mark the (already-processed) row as failed.
     raise
-  rescue StandardError => e
+  rescue => e
     # Marker the receipt as failed so the dashboard / debug tooling
     # surfaces the dead row + reason. Then re-raise so ActiveJob's
     # retry policy kicks in (the retry will find the row and either

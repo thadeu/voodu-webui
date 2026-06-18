@@ -17,8 +17,8 @@
 # by EnvCard for the inline "filter keys or values" search input).
 class Components::UI::SectionCard < Components::Base
   def initialize(title:, pad: false)
-    @title  = title
-    @pad    = pad
+    @title = title
+    @pad = pad
     @action = nil
   end
 

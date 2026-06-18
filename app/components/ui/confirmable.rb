@@ -66,23 +66,23 @@ class Components::UI::Confirmable < Components::Base
   # Default nil keeps the native (data-turbo:false) submit used by
   # top-level confirmables (e.g. the Islands delete).
   def initialize(title:, message:, form:, trigger: {},
-                 id: nil,
-                 confirm_label: "Confirm", cancel_label: "Cancel",
-                 danger: false, icon: nil, turbo_frame: nil)
-    @title         = title
-    @message       = message
+    id: nil,
+    confirm_label: "Confirm", cancel_label: "Cancel",
+    danger: false, icon: nil, turbo_frame: nil)
+    @title = title
+    @message = message
     @confirm_label = confirm_label
-    @cancel_label  = cancel_label
-    @danger        = danger
-    @turbo_frame   = turbo_frame
-    @icon          = icon || (danger ? :ExclamationTriangleOutline : :CheckOutline)
+    @cancel_label = cancel_label
+    @danger = danger
+    @turbo_frame = turbo_frame
+    @icon = icon || (danger ? :ExclamationTriangleOutline : :CheckOutline)
 
-    @form_action  = form.fetch(:action)
-    @form_method  = form.fetch(:method, :post).to_s.downcase
-    @form_attrs   = form.except(:action, :method)
+    @form_action = form.fetch(:action)
+    @form_method = form.fetch(:method, :post).to_s.downcase
+    @form_attrs = form.except(:action, :method)
 
     @trigger_attrs = trigger
-    @id            = id || "confirmable-#{Digest::SHA1.hexdigest("#{@form_action}-#{@form_method}")[0, 12]}"
+    @id = id || "confirmable-#{Digest::SHA1.hexdigest("#{@form_action}-#{@form_method}")[0, 12]}"
   end
 
   def view_template(&trigger_body)
@@ -90,7 +90,7 @@ class Components::UI::Confirmable < Components::Base
       # `data-turbo-permanent` + stable id → Turbo preserves THIS
       # node across frame reloads, so a state_tick mid-confirmation
       # doesn't close the modal under the operator's finger.
-      id:    @id,
+      id: @id,
       class: "inline-flex",
       data: {
         controller: "confirmable",
@@ -106,15 +106,15 @@ class Components::UI::Confirmable < Components::Base
 
   def render_form(&trigger_body)
     method_override = @form_method != "get" && @form_method != "post"
-    html_method     = method_override ? "post" : @form_method
+    html_method = method_override ? "post" : @form_method
 
     form(
       action: @form_action,
       method: html_method,
       data: {
         confirmable_target: "form",
-        action:             "submit->confirmable#prompt"
-      }.merge(@turbo_frame ? { turbo_frame: @turbo_frame } : { turbo: false }),
+        action: "submit->confirmable#prompt"
+      }.merge(@turbo_frame ? {turbo_frame: @turbo_frame} : {turbo: false}),
       **@form_attrs
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
@@ -131,7 +131,7 @@ class Components::UI::Confirmable < Components::Base
   # tokens as Components::UI::Modal so the look stays in lock-step
   # if either gets restyled.
   def render_modal
-    div(hidden: true, data: { confirmable_target: "modal" }) do
+    div(hidden: true, data: {confirmable_target: "modal"}) do
       backdrop
       dialog
     end
@@ -140,7 +140,7 @@ class Components::UI::Confirmable < Components::Base
   def backdrop
     div(
       "aria-hidden": "true",
-      data: { action: "click->confirmable#cancel" },
+      data: {action: "click->confirmable#cancel"},
       class: "fixed inset-0 z-[65] bg-black/55 backdrop-blur-[3px]"
     )
   end
@@ -150,7 +150,7 @@ class Components::UI::Confirmable < Components::Base
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "voodu-confirmable-title",
-      data: { confirmable_target: "dialog" },
+      data: {confirmable_target: "dialog"},
       class: tokens(
         "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70]",
         "w-[min(420px,calc(100vw-24px))] max-h-[calc(100vh-48px)]",
@@ -187,7 +187,7 @@ class Components::UI::Confirmable < Components::Base
       button(
         type: "button",
         "aria-label": "Close",
-        data: { action: "click->confirmable#cancel" },
+        data: {action: "click->confirmable#cancel"},
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
       ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
     end
@@ -207,13 +207,13 @@ class Components::UI::Confirmable < Components::Base
 
       button(
         type: "button",
-        data: { action: "click->confirmable#cancel" },
+        data: {action: "click->confirmable#cancel"},
         class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
       ) { @cancel_label }
 
       button(
         type: "button",
-        data: { action: "click->confirmable#confirm" },
+        data: {action: "click->confirmable#confirm"},
         class: tokens(
           "inline-flex items-center gap-1.5 px-3 h-9 border text-voodu-on-accent text-[12.5px] font-medium",
           @danger ? "border-voodu-red/60 bg-voodu-red hover:bg-voodu-red/90"

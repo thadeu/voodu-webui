@@ -12,14 +12,14 @@
 # counts refresh on every fire/resolve broadcast.
 class Components::Alerts::LiveBody < Components::Base
   TABS = [
-    { id: :active,       label: "Active" },
-    { id: :rules,        label: "Rules" },
-    { id: :destinations, label: "Destinations" },
-    { id: :history,      label: "History" }
+    {id: :active, label: "Active"},
+    {id: :rules, label: "Rules"},
+    {id: :destinations, label: "Destinations"},
+    {id: :history, label: "History"}
   ].freeze
 
   def initialize(data:, active_tab: :active)
-    @data       = data
+    @data = data
     @active_tab = active_tab
   end
 
@@ -42,7 +42,7 @@ class Components::Alerts::LiveBody < Components::Base
     nav(
       class: "flex items-center gap-1 overflow-x-auto -mx-3.5 px-3.5 vmd:mx-0 vmd:px-0 " \
              "vmd:overflow-visible border-b border-voodu-border-2",
-      aria:  { label: "Alerts view" }
+      aria: {label: "Alerts view"}
     ) do
       TABS.each { |tab| tab_link(tab) }
     end
@@ -50,7 +50,7 @@ class Components::Alerts::LiveBody < Components::Base
 
   def tab_link(tab)
     active = tab[:id] == @active_tab
-    count  = tab_count(tab[:id])
+    count = tab_count(tab[:id])
     danger = tab[:id] == :active && count.positive?
 
     a(
@@ -77,20 +77,20 @@ class Components::Alerts::LiveBody < Components::Base
 
   def tab_count(id)
     case id
-    when :active       then @data.firing_count
-    when :rules        then @data.rules_count
+    when :active then @data.firing_count
+    when :rules then @data.rules_count
     when :destinations then @data.destinations_count
-    when :history      then @data.history_count
+    when :history then @data.history_count
     end
   end
 
   def active_panel
     div(class: "pt-4") do
       case @active_tab
-      when :active       then active_tab_panel
-      when :rules        then render Components::Alerts::RulesTable.new(rules: @data.rules)
+      when :active then active_tab_panel
+      when :rules then render Components::Alerts::RulesTable.new(rules: @data.rules)
       when :destinations then render Components::Alerts::DestinationsTable.new(destinations: @data.destinations)
-      when :history      then history_panel
+      when :history then history_panel
       end
     end
   end
@@ -102,19 +102,19 @@ class Components::Alerts::LiveBody < Components::Base
     div(class: "flex flex-col gap-3.5") do
       div(class: "flex justify-end") do
         render Components::UI::TimeRangeFilter.new(
-          form_action:  alerts_path,
-          frame:        "alerts-live",
+          form_action: alerts_path,
+          frame: "alerts-live",
           active_range: @data.history_filter.range,
-          ranges:       AlertHistoryFilter::RANGES.keys,
-          from_iso:     @data.history_filter.from_iso,
-          until_iso:    @data.history_filter.until_iso,
-          extra_params: { tab: "history" }
+          ranges: AlertHistoryFilter::RANGES.keys,
+          from_iso: @data.history_filter.from_iso,
+          until_iso: @data.history_filter.until_iso,
+          extra_params: {tab: "history"}
         )
       end
 
       render Components::Alerts::HistoryList.new(
-        events:    @data.history,
-        total:     @data.history_window_count,
+        events: @data.history,
+        total: @data.history_window_count,
         truncated: @data.history_truncated?
       )
     end
@@ -163,7 +163,7 @@ class Components::Alerts::LiveBody < Components::Base
   # (disk 85% / cpu 90% / mem 90%). Idempotent server-side, so a
   # double-click can't duplicate anything.
   def defaults_button
-    form(action: defaults_alert_rules_path, method: "post", data: { turbo: false }) do
+    form(action: defaults_alert_rules_path, method: "post", data: {turbo: false}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       render Components::UI::Button.new(variant: :secondary, size: :md, type: :submit, class: "w-full vmd:w-auto") do
         render Icon::SparklesOutline.new(class: "w-3.5 h-3.5")

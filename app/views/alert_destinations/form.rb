@@ -14,31 +14,31 @@ class Views::AlertDestinations::Form < Views::Base
   # Body-template reference shown in the help popover (the ? next to
   # the field), so the modal itself stays uncluttered.
   TOKEN_DOCS = [
-    ["{{rule}}",        "rule name"],
-    ["{{state}}",       "firing / resolved"],
-    ["{{target}}",      "host or pod label"],
-    ["{{metric}}",      "cpu / memory / disk / req_s"],
-    ["{{value}}",       "current value (rounded)"],
-    ["{{threshold}}",   "configured threshold"],
-    ["{{peak}}",        "peak value in the window"],
-    ["{{unit}}",        %(% or "req/s")],
-    ["{{island}}",      "island name"],
-    ["{{started_at}}",  "fired at (your timezone)"],
+    ["{{rule}}", "rule name"],
+    ["{{state}}", "firing / resolved"],
+    ["{{target}}", "host or pod label"],
+    ["{{metric}}", "cpu / memory / disk / req_s"],
+    ["{{value}}", "current value (rounded)"],
+    ["{{threshold}}", "configured threshold"],
+    ["{{peak}}", "peak value in the window"],
+    ["{{unit}}", %(% or "req/s")],
+    ["{{island}}", "island name"],
+    ["{{started_at}}", "fired at (your timezone)"],
     ["{{resolved_at}}", "resolved at (blank while firing)"],
-    ["{{url}}",         "link to /alerts (needs APP_BASE_URL)"],
+    ["{{url}}", "link to /alerts (needs APP_BASE_URL)"],
     ["{{event_action}}", "PagerDuty: trigger / resolve"],
-    ["{{dedup_key}}",   "stable de-dup hash (PagerDuty)"]
+    ["{{dedup_key}}", "stable de-dup hash (PagerDuty)"]
   ].freeze
 
   FILTER_DOCS = [
     ["slice: start, len", "{{dedup_key | slice: 0, 6}} → first 6 chars"],
-    ["truncate: n",       "{{rule | truncate: 40}} → clip + …"],
+    ["truncate: n", "{{rule | truncate: 40}} → clip + …"],
     ["upcase / downcase", "{{metric | upcase}}"],
-    ["capitalize",        "{{state | capitalize}} → Firing"],
-    ["strip",             "trim surrounding whitespace"],
-    ["replace: a, b",     %({{target | replace: "/", "-"}})],
-    ["append / prepend",  %({{value | append: "%"}})],
-    ["default: x",        %({{resolved_at | default: "—"}})]
+    ["capitalize", "{{state | capitalize}} → Firing"],
+    ["strip", "trim surrounding whitespace"],
+    ["replace: a, b", %({{target | replace: "/", "-"}})],
+    ["append / prepend", %({{value | append: "%"}})],
+    ["default: x", %({{resolved_at | default: "—"}})]
   ].freeze
 
   EXAMPLES = [
@@ -48,16 +48,16 @@ class Views::AlertDestinations::Form < Views::Base
   ].freeze
 
   def initialize(current_path:, destination:, islands: [], current_island: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @destination    = destination
+    @destination = destination
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands, current_island: @current_island,
-      breadcrumb: overview_crumbs({ label: "Alerts" })
+      breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
       render(modal) { form_body }
     end
@@ -71,10 +71,10 @@ class Views::AlertDestinations::Form < Views::Base
 
   def modal
     Components::UI::Modal.new(
-      title:    persisted? ? "Edit destination" : "New destination",
+      title: persisted? ? "Edit destination" : "New destination",
       subtitle: "POST a request to this target when an alert fires or resolves",
-      icon:     :PaperAirplaneOutline,
-      size:     :lg,
+      icon: :PaperAirplaneOutline,
+      size: :lg,
       close_to: alerts_path(tab: "destinations")
     ).with_footer { footer_actions }
   end
@@ -86,9 +86,9 @@ class Views::AlertDestinations::Form < Views::Base
     form(
       action: persisted? ? alert_destination_path(@destination) : alert_destinations_path,
       method: "post",
-      data:   { turbo: false },
-      id:     "destination-form",
-      class:  "px-5 py-4"
+      data: {turbo: false},
+      id: "destination-form",
+      class: "px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if persisted?
@@ -113,21 +113,21 @@ class Views::AlertDestinations::Form < Views::Base
 
   def url_field
     field(label: "Webhook URL", hint: url_hint, error: @destination.errors[:endpoint].first) do
-      div(class: "relative", data: { controller: "reveal" }) do
+      div(class: "relative", data: {controller: "reveal"}) do
         input(
           # New: visible while pasting. Edit: pre-filled + masked, eye reveals.
-          type:  persisted? ? "password" : "text",
-          name:  "alert_destination[endpoint]",
+          type: persisted? ? "password" : "text",
+          name: "alert_destination[endpoint]",
           value: persisted? ? @destination.endpoint : nil,
           placeholder: "https://hooks.slack.com/… · https://api.telegram.org/bot…/sendMessage",
           autocomplete: "off", spellcheck: "false",
-          data: { reveal_target: "input" },
+          data: {reveal_target: "input"},
           class: tokens(input_classes, "pr-10 font-voodu-mono text-[12.5px]")
         )
         button(
           type: "button",
           title: "Show / hide URL",
-          data: { action: "click->reveal#toggle" },
+          data: {action: "click->reveal#toggle"},
           class: "absolute right-[1px] top-[1px] bottom-[1px] px-2.5 text-voodu-muted hover:text-voodu-text border-l border-voodu-border bg-voodu-surface inline-flex items-center"
         ) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
       end
@@ -146,9 +146,9 @@ class Views::AlertDestinations::Form < Views::Base
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-2") do
         text_input(name: "alert_destination[secret_header]", value: @destination.secret_header,
-                   placeholder: "Authorization / x-api-key", mono: true)
+          placeholder: "Authorization / x-api-key", mono: true)
         text_input(name: "alert_destination[secret]", value: nil,
-                   placeholder: persisted? ? "•••••• (unchanged)" : "Bearer … / your-key", mono: true)
+          placeholder: persisted? ? "•••••• (unchanged)" : "Bearer … / your-key", mono: true)
       end
 
       hint_or_error(:secret, "Header name + value. Blank = no auth; value blank on edit keeps it.")
@@ -158,7 +158,7 @@ class Views::AlertDestinations::Form < Views::Base
   # Optional JSON body template with {{tokens}}. A popover offers
   # starter templates per provider (fills the textarea).
   def body_template_field
-    div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: { controller: "template-picker json-editor" }) do
+    div(class: "flex flex-col gap-1.5 vmd:flex-1 vmd:min-h-0", data: {controller: "template-picker json-editor"}) do
       div(class: "flex items-center justify-between gap-2") do
         span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { "Body template (optional)" }
         div(class: "flex items-center gap-1.5") do
@@ -192,15 +192,15 @@ class Views::AlertDestinations::Form < Views::Base
              "border border-voodu-border bg-voodu-surface " \
              "focus-within:border-voodu-accent focus-within:ring-1 focus-within:ring-voodu-accent-line"
     ) do
-      pre(class: "voodu-code__hl", "aria-hidden": "true", data: { json_editor_target: "highlight" })
-      div(class: "voodu-code__gutter", "aria-hidden": "true", data: { json_editor_target: "gutter" })
+      pre(class: "voodu-code__hl", "aria-hidden": "true", data: {json_editor_target: "highlight"})
+      div(class: "voodu-code__gutter", "aria-hidden": "true", data: {json_editor_target: "gutter"})
 
       textarea(
         name: "alert_destination[body_template]",
         spellcheck: "false", autocapitalize: "off", autocomplete: "off", autocorrect: "off",
         placeholder: %({\n  "text": "{{rule}} is {{state}} on {{target}} ({{value}}{{unit}})"\n}),
         class: "voodu-code__input",
-        data:  { template_picker_target: "textarea", json_editor_target: "input", action: "input->json-editor#render keydown->json-editor#keydown" }
+        data: {template_picker_target: "textarea", json_editor_target: "input", action: "input->json-editor#render keydown->json-editor#keydown"}
       ) { @destination.body_template }
     end
   end
@@ -208,7 +208,7 @@ class Views::AlertDestinations::Form < Views::Base
   def format_button
     button(
       type: "button",
-      data: { action: "json-editor#format", tooltip: "Format JSON" },
+      data: {action: "json-editor#format", tooltip: "Format JSON"},
       class: "inline-flex items-center gap-1 px-2 h-6 text-[11px] text-voodu-text-2 border border-voodu-border bg-voodu-surface hover:bg-voodu-surface-2 transition-colors"
     ) do
       render Icon::CodeBracketOutline.new(class: "w-3 h-3 shrink-0")
@@ -221,11 +221,11 @@ class Views::AlertDestinations::Form < Views::Base
   # it documents; this is peek-and-dismiss, in-flow with the Templates
   # popover beside it.
   def help_popover
-    div(class: "relative", data: { controller: "popover" }) do
+    div(class: "relative", data: {controller: "popover"}) do
       button(
         type: "button",
         "aria-label": "Body template tokens & filters",
-        data: { action: "click->popover#toggle", popover_target: "trigger", tooltip: "Tokens & filters" },
+        data: {action: "click->popover#toggle", popover_target: "trigger", tooltip: "Tokens & filters"},
         class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
       ) do
         render Icon::QuestionMarkCircleOutline.new(class: "w-4 h-4")
@@ -236,7 +236,7 @@ class Views::AlertDestinations::Form < Views::Base
       # Position/max-height are set in JS; only the look stays here.
       div(
         hidden: true,
-        data:  { popover_target: "menu" },
+        data: {popover_target: "menu"},
         class: "w-[400px] max-w-[calc(100vw-32px)] overflow-y-auto " \
                "border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3.5 flex flex-col gap-3.5"
       ) do
@@ -271,11 +271,11 @@ class Views::AlertDestinations::Form < Views::Base
   end
 
   def templates_popover
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       button(
         type: "button",
         title: "Insert a starter template",
-        data: { action: "click->dropdown#toggle" },
+        data: {action: "click->dropdown#toggle"},
         class: "inline-flex items-center gap-1 px-2 h-6 text-[11px] text-voodu-text-2 border border-voodu-border bg-voodu-surface hover:bg-voodu-surface-2 transition-colors"
       ) do
         render Icon::DocumentDuplicateOutline.new(class: "w-3 h-3 shrink-0")
@@ -285,13 +285,13 @@ class Views::AlertDestinations::Form < Views::Base
 
       div(
         hidden: true,
-        data:  { dropdown_target: "menu" },
+        data: {dropdown_target: "menu"},
         class: "absolute right-0 top-[calc(100%+4px)] z-40 w-[200px] border border-voodu-border-2 bg-voodu-surface shadow-2xl divide-y divide-voodu-border-2"
       ) do
         PROVIDER_TEMPLATES.each do |label, json|
           button(
             type: "button",
-            data: { template: json, action: "click->template-picker#fill click->dropdown#close" },
+            data: {template: json, action: "click->template-picker#fill click->dropdown#close"},
             class: "flex items-center gap-2 w-full px-3 py-2 text-left text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
           ) do
             render Icon::DocumentDuplicateOutline.new(class: "w-3 h-3 shrink-0 text-voodu-muted")
@@ -324,7 +324,7 @@ class Views::AlertDestinations::Form < Views::Base
     label(class: "inline-flex items-center gap-2 text-[12.5px] text-voodu-text-2 cursor-pointer select-none mt-1 pt-2 border-t border-voodu-border-2") do
       input(type: "hidden", name: "alert_destination[enabled]", value: "0")
       input(type: "checkbox", name: "alert_destination[enabled]", value: "1",
-            checked: @destination.enabled != false, class: "w-3.5 h-3.5 accent-voodu-accent")
+        checked: @destination.enabled != false, class: "w-3.5 h-3.5 accent-voodu-accent")
       span { "Enabled" }
     end
   end

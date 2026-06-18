@@ -14,7 +14,7 @@
 #     /logs/analytics?range=1h&q=callid is bookmarkable + shareable.
 class LogsAnalyticsController < ApplicationController
   def index
-    data  = current_island && LogSearchData.new(island: current_island, params: search_params)
+    data = current_island && LogSearchData.new(island: current_island, params: search_params)
     frame = request.headers["Turbo-Frame"]
 
     if data && frame&.start_with?("la-page-")
@@ -27,8 +27,8 @@ class LogsAnalyticsController < ApplicationController
       render Views::LogsAnalytics::Index.new(
         **dashboard_context.merge(
           updated_at: Time.current,
-          pods:       data ? pods_for_picker : [],
-          data:       data
+          pods: data ? pods_for_picker : [],
+          data: data
         )
       )
     end
@@ -41,11 +41,11 @@ class LogsAnalyticsController < ApplicationController
     return head(:not_found) if current_island.nil?
 
     data = LogSurroundingData.new(
-      island:   current_island,
-      pod:      params[:pod].to_s,
-      ts:       params[:ts].to_s,
+      island: current_island,
+      pod: params[:pod].to_s,
+      ts: params[:ts].to_s,
       all_pods: params[:all_pods] == "1",
-      expand:   params[:expand].to_i
+      expand: params[:expand].to_i
     )
 
     # `fmt` present → export the EXACT batch on screen (the same window /
@@ -54,8 +54,8 @@ class LogsAnalyticsController < ApplicationController
       fmt = params[:fmt].to_s
       send_data(
         format_rows(data.rows, fmt),
-        filename:    "surrounding-#{current_island.key}-#{Time.current.utc.strftime('%Y%m%d-%H%M%S')}.#{EXPORT_TYPES[fmt][:ext]}",
-        type:        EXPORT_TYPES[fmt][:mime],
+        filename: "surrounding-#{current_island.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
+        type: EXPORT_TYPES[fmt][:mime],
         disposition: "attachment"
       )
 
@@ -73,24 +73,24 @@ class LogsAnalyticsController < ApplicationController
   EXPORT_LINE_CAP = 50_000
 
   EXPORT_TYPES = {
-    "ndjson" => { ext: "ndjson", mime: "application/x-ndjson" },
-    "csv"    => { ext: "csv",    mime: "text/csv; charset=utf-8" },
-    "txt"    => { ext: "txt",    mime: "text/plain; charset=utf-8" },
-    "json"   => { ext: "json",   mime: "application/json; charset=utf-8" }
+    "ndjson" => {ext: "ndjson", mime: "application/x-ndjson"},
+    "csv" => {ext: "csv", mime: "text/csv; charset=utf-8"},
+    "txt" => {ext: "txt", mime: "text/plain; charset=utf-8"},
+    "json" => {ext: "json", mime: "application/json; charset=utf-8"}
   }.freeze
 
   def export
     return head(:not_found) if current_island.nil?
 
     data = LogSearchData.new(island: current_island, params: search_params)
-    fmt  = EXPORT_TYPES.key?(params[:fmt].to_s) ? params[:fmt].to_s : "ndjson"
+    fmt = EXPORT_TYPES.key?(params[:fmt].to_s) ? params[:fmt].to_s : "ndjson"
 
-    body = fmt == "json" ? export_json(data) : export_lines(data, fmt)
+    body = (fmt == "json") ? export_json(data) : export_lines(data, fmt)
 
     send_data(
       body,
-      filename:    "logs-#{current_island.key}-#{Time.current.utc.strftime('%Y%m%d-%H%M%S')}.#{EXPORT_TYPES[fmt][:ext]}",
-      type:        EXPORT_TYPES[fmt][:mime],
+      filename: "logs-#{current_island.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
+      type: EXPORT_TYPES[fmt][:mime],
       disposition: "attachment"
     )
   end
@@ -133,13 +133,13 @@ class LogsAnalyticsController < ApplicationController
 
   def each_export_record(data, &block)
     reader = LogTail::Reader.each_line(
-      island_id:      data.island.id,
-      pods:           data.pods.presence,
-      from:           data.from,
-      until_:         data.until_,
+      island_id: data.island.id,
+      pods: data.pods.presence,
+      from: data.from,
+      until_: data.until_,
       content_search: data.search.presence,
-      regex:          data.regex?,
-      limit:          EXPORT_LINE_CAP
+      regex: data.regex?,
+      limit: EXPORT_LINE_CAP
     )
 
     # No `| limit N` → stream straight through (chronological, Reader order).

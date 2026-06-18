@@ -9,17 +9,17 @@
 class CreateAlertEvents < ActiveRecord::Migration[8.1]
   def change
     create_table :alert_events do |t|
-      t.references :alert_rule, null: false, foreign_key: { on_delete: :cascade }
-      t.references :island,     null: false, foreign_key: { on_delete: :cascade }
-      t.string   :state,        null: false, default: "firing"
-      t.datetime :started_at,   null: false
+      t.references :alert_rule, null: false, foreign_key: {on_delete: :cascade}
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.string :state, null: false, default: "firing"
+      t.datetime :started_at, null: false
       t.datetime :resolved_at
-      t.float    :threshold,    null: false
-      t.string   :rule_name,    null: false
-      t.string   :metric_kind,  null: false
-      t.string   :target_label, null: false
-      t.float    :peak_value
-      t.float    :last_value
+      t.float :threshold, null: false
+      t.string :rule_name, null: false
+      t.string :metric_kind, null: false
+      t.string :target_label, null: false
+      t.float :peak_value
+      t.float :last_value
 
       t.timestamps
     end
@@ -31,7 +31,7 @@ class CreateAlertEvents < ActiveRecord::Migration[8.1]
     # rule.firing first, but if two evaluation jobs ever overlap the
     # second insert raises RecordNotUnique instead of double-firing.
     add_index :alert_events, :alert_rule_id, unique: true,
-              where: "state = 'firing'",
-              name: "index_alert_events_one_firing_per_rule"
+      where: "state = 'firing'",
+      name: "index_alert_events_one_firing_per_rule"
   end
 end

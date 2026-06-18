@@ -20,28 +20,28 @@
 class Components::UI::Card < Components::Base
   VARIANTS = {
     default: {
-      bg:           "bg-voodu-surface",
-      border:       "border-voodu-border",
+      bg: "bg-voodu-surface",
+      border: "border-voodu-border",
       border_inner: "border-voodu-border"
     },
     flat: {
-      bg:           "bg-transparent",
-      border:       "border-voodu-border",
+      bg: "bg-transparent",
+      border: "border-voodu-border",
       border_inner: "border-voodu-border"
     },
     accent: {
-      bg:           "bg-voodu-surface",
-      border:       "border-voodu-accent-line",
+      bg: "bg-voodu-surface",
+      border: "border-voodu-accent-line",
       border_inner: "border-voodu-accent-line"
     }
   }.freeze
 
   def initialize(**attrs)
-    @variant       = attrs.fetch(:variant, :default)
-    @border        = attrs.fetch(:border, true)
-    @bg            = attrs.fetch(:bg, true)
+    @variant = attrs.fetch(:variant, :default)
+    @border = attrs.fetch(:border, true)
+    @bg = attrs.fetch(:bg, true)
     @content_class = attrs.fetch(:content_class, "px-4 py-3")
-    @attrs         = attrs.except(:variant, :border, :bg, :content_class)
+    @attrs = attrs.except(:variant, :border, :bg, :content_class)
 
     @header_block = nil
     @footer_block = nil

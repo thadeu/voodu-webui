@@ -22,11 +22,11 @@ class MetricDashboardData
   attr_reader :dashboard, :range, :interval
 
   def initialize(client, island, dashboard, range:, interval: nil)
-    @client    = client
-    @island    = island
+    @client = client
+    @island = island
     @dashboard = dashboard
-    @range     = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
-    @interval  = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
+    @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
+    @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
   end
 
   # dashboard? — lets the Index/Frame views branch their toolbar
@@ -105,7 +105,7 @@ class MetricDashboardData
       scope_kind = "pod"
     else
       scope_kind = "host"
-      scope_id   = nil
+      scope_id = nil
     end
 
     page = MetricsPageData.new(
@@ -115,11 +115,11 @@ class MetricDashboardData
     )
 
     chart = page.single_chart(
-      metric:     panel["metric"].to_s,
-      scale:      panel["scale"].presence&.to_sym,
-      label:      panel["label"].to_s,
-      color:      panel["color"].to_s,
-      unit:       panel["unit"].to_s,
+      metric: panel["metric"].to_s,
+      scale: panel["scale"].presence&.to_sym,
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      unit: panel["unit"].to_s,
       chart_type: panel["chart_type"].presence || :area
     )
     return missing_card(panel, key) if chart.nil?
@@ -132,7 +132,7 @@ class MetricDashboardData
     # from its spec). panel_key → the unique data-metric-key the
     # Settings/Order drawer toggles + reorders this panel by.
     chart.merge(scope_kind: scope_kind, scope_id: scope_id,
-                default_visible: true, panel_key: key)
+      default_visible: true, panel_key: key)
   end
 
   # resolve_container — workload (scope + resource_name) → the current
@@ -141,7 +141,7 @@ class MetricDashboardData
   # right now (scaled to zero, deleted, mid-redeploy gap).
   def resolve_container(panel)
     scope = panel["scope"].to_s
-    name  = panel["name"].to_s
+    name = panel["name"].to_s
 
     matches = pods.select do |p|
       field(p, "scope") == scope && field(p, "resource_name") == name
@@ -156,12 +156,12 @@ class MetricDashboardData
   # The Frame renders a muted "no running replica" tile from `missing`.
   def missing_card(panel, key)
     {
-      label:        panel["label"].to_s,
-      color:        panel["color"].to_s,
-      missing:      true,
-      source_label: panel["scope_kind"].to_s == "host" ? "host" : panel["scope"].to_s,
-      metric:       panel["metric"].to_s,
-      panel_key:    key
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      missing: true,
+      source_label: (panel["scope_kind"].to_s == "host") ? "host" : panel["scope"].to_s,
+      metric: panel["metric"].to_s,
+      panel_key: key
     }
   end
 

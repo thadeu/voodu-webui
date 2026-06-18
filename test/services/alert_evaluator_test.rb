@@ -57,7 +57,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "does not fire when one mid-window bucket dips under" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
     seed_system_range(cpu_percent: 95.0) do |epoch|
-      epoch == NOW.to_i - 60 ? 50.0 : 95.0
+      (epoch == NOW.to_i - 60) ? 50.0 : 95.0
     end
 
     assert_equal 0, AlertEvaluator.run(@island)
@@ -174,7 +174,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     [840, 630, 420, 130].each_with_index do |age, i|
       insert_sample(
         NOW.to_i - age, source: "pod",
-        payload: { cpu_percent: 90.0 + i, scope: "fsw", name: "controller", container: "fsw-controller.e1e1" }
+        payload: {cpu_percent: 90.0 + i, scope: "fsw", name: "controller", container: "fsw-controller.e1e1"}
       )
     end
 
@@ -193,7 +193,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     [840, 630, 420, 130].each do |age|
       insert_sample(
         NOW.to_i - age, source: "pod",
-        payload: { cpu_percent: 0.07, scope: "fsw", name: "controller", container: "fsw-controller.e1e1" }
+        payload: {cpu_percent: 0.07, scope: "fsw", name: "controller", container: "fsw-controller.e1e1"}
       )
     end
 
@@ -208,8 +208,8 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "genuinely stale data (older than the cadence allowance) still holds" do
     rule = make_rule(name: "cpu", metric_kind: "cpu", threshold: 90, duration: 60, comparator: "gte")
     # Two samples 210s apart, newest 700s old — beyond 3× cadence (630s).
-    insert_sample(NOW.to_i - 910, source: "system", payload: { cpu_percent: 95.0 })
-    insert_sample(NOW.to_i - 700, source: "system", payload: { cpu_percent: 95.0 })
+    insert_sample(NOW.to_i - 910, source: "system", payload: {cpu_percent: 95.0})
+    insert_sample(NOW.to_i - 700, source: "system", payload: {cpu_percent: 95.0})
 
     AlertEvaluator.run(@island)
 
@@ -344,11 +344,11 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
 
   def host_cpu_rule(threshold:, duration:, comparator: "gte", name: "cpu")
     make_rule(name: name, metric_kind: "cpu", threshold: threshold,
-              duration: duration, comparator: comparator)
+      duration: duration, comparator: comparator)
   end
 
   def make_rule(name:, metric_kind:, threshold:, duration:, comparator: "gte",
-                target_kind: "host", target_scope: nil, target_name: nil)
+    target_kind: "host", target_scope: nil, target_name: nil)
     @island.alert_rules.create!(
       name: name, metric_kind: metric_kind, target_kind: target_kind,
       target_scope: target_scope, target_name: target_name,
@@ -390,9 +390,9 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     MetricSample.insert!(
       {
         tenant_id: @island.id,
-        source:    source,
-        ts_iso:    ts,
-        payload:   payload.merge(ts: ts, source: source).to_json
+        source: source,
+        ts_iso: ts,
+        payload: payload.merge(ts: ts, source: source).to_json
       }
     )
   end

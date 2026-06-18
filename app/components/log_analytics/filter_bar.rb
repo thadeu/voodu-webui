@@ -18,7 +18,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # Pre-paint class sets for the preset chips. Both listed here (not
   # built in JS) so Tailwind's source scanner keeps both variants in the
   # bundle — the controller swaps between them on click.
-  CHIP_ACTIVE   = "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
+  CHIP_ACTIVE = "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
   CHIP_INACTIVE = "border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
 
   def initialize(data:, pods: [])
@@ -32,13 +32,13 @@ class Components::LogAnalytics::FilterBar < Components::Base
       action: logs_analytics_path,
       data: {
         log_analytics_target: "form",
-        turbo_frame:  Components::LogAnalytics::Results::FRAME_ID,
+        turbo_frame: Components::LogAnalytics::Results::FRAME_ID,
         turbo_action: "advance",
-        action:       "submit->log-analytics#normalizeDates"
+        action: "submit->log-analytics#normalizeDates"
       },
       class: "contents"
     ) do
-      input(type: "hidden", name: "range", value: @data.range, data: { log_analytics_target: "range" })
+      input(type: "hidden", name: "range", value: @data.range, data: {log_analytics_target: "range"})
 
       # The page header row doubles as the filter's top bar: "Logs" + the
       # Analytics/Follow tabs on the left, the time-range presets pushed right
@@ -68,7 +68,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
       type: "button",
       data: {
         log_analytics_target: "preset",
-        range:  value,
+        range: value,
         action: "click->log-analytics#selectRange"
       },
       class: tokens(
@@ -86,12 +86,12 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # "custom") so it highlights when the active selection is a manual
   # range. "Custom" is only the pre-JS placeholder.
   def custom_chip
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       button(
         type: "button",
         data: {
           log_analytics_target: "preset",
-          range:  "custom",
+          range: "custom",
           action: "click->dropdown#toggle click->log-analytics#openCustom"
         },
         class: tokens(
@@ -100,7 +100,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
         )
       ) do
         render Icon::CalendarDaysOutline.new(class: "w-3 h-3 shrink-0")
-        span(data: { log_analytics_target: "customLabel" }) { "Custom" }
+        span(data: {log_analytics_target: "customLabel"}) { "Custom" }
         render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 opacity-70")
       end
 
@@ -114,15 +114,15 @@ class Components::LogAnalytics::FilterBar < Components::Base
   def custom_popover
     div(
       hidden: true,
-      data:  { dropdown_target: "menu" },
+      data: {dropdown_target: "menu"},
       class: "absolute left-0 top-[calc(100%+4px)] z-40 w-[280px] max-w-[calc(100vw-24px)] border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3 flex flex-col gap-3 text-left"
     ) do
       span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted") { "Custom range" }
-      labeled_datetime("From",  "from")
+      labeled_datetime("From", "from")
       labeled_datetime("Until", "until")
       button(
         type: "button",
-        data: { action: "click->log-analytics#applyCustom click->dropdown#close" },
+        data: {action: "click->log-analytics#applyCustom click->dropdown#close"},
         class: "inline-flex items-center justify-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent/20 transition-colors"
       ) do
         render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
@@ -147,10 +147,10 @@ class Components::LogAnalytics::FilterBar < Components::Base
       span(class: "text-[10px] uppercase tracking-wide text-voodu-muted") { label }
       input(
         type: "datetime-local",
-        data: { log_analytics_target: "#{field}Input" },
+        data: {log_analytics_target: "#{field}Input"},
         class: "h-8 px-2 border border-voodu-border bg-voodu-surface text-[12px] text-voodu-text font-voodu-mono outline-none focus:border-voodu-accent-line"
       )
-      input(type: "hidden", name: field, data: { log_analytics_target: "#{field}Hidden" })
+      input(type: "hidden", name: field, data: {log_analytics_target: "#{field}Hidden"})
     end
   end
 
@@ -164,9 +164,9 @@ class Components::LogAnalytics::FilterBar < Components::Base
   def filter_panel
     aside(
       inert: true,
-      role:  "dialog",
+      role: "dialog",
       "aria-label": "Log filter",
-      data: { log_analytics_target: "filterPanel" },
+      data: {log_analytics_target: "filterPanel"},
       class: tokens(
         "fixed top-0 right-0 h-screen z-[60] w-[min(560px,calc(100vw-24px))]",
         "flex flex-col bg-voodu-bg-2 border-l border-voodu-border",
@@ -187,8 +187,8 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # clamped + persisted there. Wider hit area than the visible 1px border.
   def resize_handle
     div(
-      data:  { action: "pointerdown->log-analytics#startFilterResize" },
-      aria:  { hidden: "true" },
+      data: {action: "pointerdown->log-analytics#startFilterResize"},
+      aria: {hidden: "true"},
       title: "Drag to resize",
       class: "absolute top-0 left-0 bottom-0 w-1.5 -ml-1 cursor-col-resize hover:bg-voodu-accent/30 active:bg-voodu-accent/60 z-[5] touch-none"
     )
@@ -202,7 +202,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
         type: "button",
         title: "Close",
         "aria-label": "Close filter",
-        data: { action: "click->log-analytics#closeFilter" },
+        data: {action: "click->log-analytics#closeFilter"},
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
       ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
     end
@@ -220,7 +220,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # validation hint + the cheatsheet (all its targets must live under the
   # controller element).
   def query_section
-    div(class: "flex flex-col gap-2", data: { controller: "query-editor" }) do
+    div(class: "flex flex-col gap-2", data: {controller: "query-editor"}) do
       field_label("Query")
       query_editor
       query_error
@@ -233,18 +233,18 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # active query so the highlight paints on connect.
   def query_editor
     div(class: "voodu-code voodu-code--query relative overflow-hidden resize-y min-h-[120px] border border-voodu-border bg-voodu-surface") do
-      pre(class: "voodu-code__hl", "aria-hidden": "true", data: { query_editor_target: "highlight" })
+      pre(class: "voodu-code__hl", "aria-hidden": "true", data: {query_editor_target: "highlight"})
       textarea(
-        name:           "q",
-        rows:           "4",
-        spellcheck:     "false",
+        name: "q",
+        rows: "4",
+        spellcheck: "false",
         autocapitalize: "off",
-        autocomplete:   "off",
-        placeholder:    "filter @message like /timeout/",
-        class:          "voodu-code__input",
+        autocomplete: "off",
+        placeholder: "filter @message like /timeout/",
+        class: "voodu-code__input",
         data: {
           query_editor_target: "input",
-          action:              "input->query-editor#render keydown->query-editor#keydown"
+          action: "input->query-editor#render keydown->query-editor#keydown"
         }
       ) { @data.search }
     end
@@ -253,7 +253,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
   # query_error — hidden until the query names no field; the query-editor
   # controller reveals it (and blocks Run) so every filter is field-scoped.
   def query_error
-    p(class: "hidden text-[11px] text-voodu-red", data: { query_editor_target: "error" }) do
+    p(class: "hidden text-[11px] text-voodu-red", data: {query_editor_target: "error"}) do
       plain "Every filter needs a field — e.g. "
       code(class: "font-voodu-mono") { "@message like /…/" }
     end
@@ -305,7 +305,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
   def run_button
     button(
       type: "submit",
-      data: { role: "run-query" },
+      data: {role: "run-query"},
       class: "inline-flex items-center justify-center gap-1.5 px-4 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     ) do
       render Icon::PlayOutline.new(class: "w-3.5 h-3.5")

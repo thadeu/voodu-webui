@@ -17,10 +17,10 @@
 #   render Components::Logs::Header.new(active: :analytics)
 class Components::Logs::Header < Components::Base
   def initialize(active:, tabs: true)
-    @active         = active
-    @tabs           = tabs
+    @active = active
+    @tabs = tabs
     @subtitle_block = nil
-    @actions_block  = nil
+    @actions_block = nil
   end
 
   def with_subtitle(&block)

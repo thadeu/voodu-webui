@@ -49,7 +49,7 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   private
 
   def line_for(msg, ts:)
-    { ts: ts, pod: "web", stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false }
+    {ts: ts, pod: "web", stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
   end
 
   def daily_path(pod)

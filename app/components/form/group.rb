@@ -9,7 +9,7 @@
 class Components::Form::Group < Components::Base
   def initialize(label: nil, hint: nil)
     @label = label
-    @hint  = hint
+    @hint = hint
   end
 
   def view_template(&)

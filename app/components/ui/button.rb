@@ -15,17 +15,17 @@
 # buttons).
 class Components::UI::Button < Components::Base
   VARIANTS = {
-    primary:   "bg-voodu-accent text-voodu-on-accent hover:bg-voodu-accent-2",
+    primary: "bg-voodu-accent text-voodu-on-accent hover:bg-voodu-accent-2",
     secondary: "bg-voodu-surface text-voodu-text border border-voodu-border hover:bg-voodu-surface-2",
-    ghost:     "bg-transparent text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text",
-    danger:    "bg-transparent text-voodu-red border border-voodu-red/40 hover:bg-voodu-red-dim",
-    inversed:  "bg-voodu-text text-voodu-bg hover:opacity-90"
+    ghost: "bg-transparent text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text",
+    danger: "bg-transparent text-voodu-red border border-voodu-red/40 hover:bg-voodu-red-dim",
+    inversed: "bg-voodu-text text-voodu-bg hover:opacity-90"
   }.freeze
 
   SHAPES = {
-    default:  "",
-    squared:  "aspect-square !px-0 justify-center",
-    rounded:  "!rounded-full",
+    default: "",
+    squared: "aspect-square !px-0 justify-center",
+    rounded: "!rounded-full",
     circular: "!rounded-full aspect-square !px-0 justify-center"
   }.freeze
 
@@ -36,19 +36,19 @@ class Components::UI::Button < Components::Base
   }.freeze
 
   def initialize(variant: :primary, size: :sm, shape: :default, tag: :button, type: nil, **attrs)
-    @variant  = variant
-    @size     = size
-    @shape    = shape
-    @tag      = tag
+    @variant = variant
+    @size = size
+    @shape = shape
+    @tag = tag
     # type:
     #   nil (default) on a <button> → "button" (safe — won't auto-submit
     #                                  a wrapping form, matching most
     #                                  call sites that use it for UI actions)
     #   :submit  → emits type="submit" for form CTAs (Add island, Save, …)
     #   on an <a> tag → omitted (links have no `type`).
-    @type     = type
+    @type = type
     @disabled = attrs.delete(:disabled) || false
-    @attrs    = attrs
+    @attrs = attrs
   end
 
   def view_template(&)

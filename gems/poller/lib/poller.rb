@@ -16,7 +16,7 @@ require "poller/version"
 # The Puma plugin lives at `lib/puma/plugin/poller.rb` so Puma can
 # discover it via its standard `plugin :poller` convention.
 module Poller
-  autoload :Runner,  "poller/runner"
+  autoload :Runner, "poller/runner"
   autoload :Railtie, "poller/railtie"
 
   GEM_ROOT = File.expand_path("..", __dir__)

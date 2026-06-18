@@ -35,13 +35,13 @@
 class CreatePollerDigests < ActiveRecord::Migration[8.1]
   def change
     create_table :poller_digests, id: false do |t|
-      t.string   :sync_hash,     primary_key: true
-      t.string   :type,          null: false
-      t.integer  :island_id,     null: false
-      t.string   :status,        null: false, default: "queued"
-      t.text     :error_message
+      t.string :sync_hash, primary_key: true
+      t.string :type, null: false
+      t.integer :island_id, null: false
+      t.string :status, null: false, default: "queued"
+      t.text :error_message
       t.datetime :processed_at
-      t.datetime :created_at,    null: false
+      t.datetime :created_at, null: false
     end
 
     # Per-tenant recent-digest browsing (operator dashboard, debug

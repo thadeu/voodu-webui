@@ -25,7 +25,7 @@ class StateDigestService
   # Filenames the Go binary writes. Constants so both the Go
   # contract test and this service share one source of truth — if
   # the wire shape changes, this list changes here.
-  PODS_FILE   = "pods.json"
+  PODS_FILE = "pods.json"
   SYSTEM_FILE = "system.json"
 
   def self.from_folder(folder_path:, tenant_id:)
@@ -44,10 +44,10 @@ class StateDigestService
     # (which pulls `data.pods` out). The digest path bypasses both layers,
     # so we replicate the same unwrap here so the two ingest paths feed
     # PodSnapshot the same shape.
-    pods_envelope   = read_json(folder.join(PODS_FILE),   default: {})
+    pods_envelope = read_json(folder.join(PODS_FILE), default: {})
     system_envelope = read_json(folder.join(SYSTEM_FILE), default: {})
 
-    pods   = unwrap_pods(pods_envelope)
+    pods = unwrap_pods(pods_envelope)
     system = unwrap_system(system_envelope)
 
     from_parsed(pods: pods, system: system, tenant_id: tenant_id)
@@ -99,21 +99,21 @@ class StateDigestService
   # shouldn't fail the digest; the next tick will refresh the UI.
   def self.broadcast_state_tick(island)
     pill_html = Components::UI::StatusPill.new(status: :online).call
-    dot_html  = Components::UI::StatusDot.new(status: :online).call
-    stream    = "island-state-#{island.id}"
+    dot_html = Components::UI::StatusDot.new(status: :online).call
+    stream = "island-state-#{island.id}"
 
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
       target: "island-status-pill-#{island.id}",
-      html:   pill_html
+      html: pill_html
     )
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
       target: "island-status-dot-#{island.id}",
-      html:   dot_html
+      html: dot_html
     )
     Turbo::StreamsChannel.broadcast_action_to(stream, action: :state_tick)
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn(
       "state-digest broadcast island=#{island.key} failed: #{e.class}: #{e.message}"
     )

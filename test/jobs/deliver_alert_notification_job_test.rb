@@ -38,8 +38,8 @@ class DeliverAlertNotificationJobTest < ActiveJob::TestCase
   test "sends the destination's custom auth header" do
     @dest.update!(secret_header: "x-api-key", secret: "k-123")
     stub = stub_request(:post, "https://#{PUBLIC}/h")
-           .with(headers: { "x-api-key" => "k-123" })
-           .to_return(status: 200)
+      .with(headers: {"x-api-key" => "k-123"})
+      .to_return(status: 200)
 
     DeliverAlertNotificationJob.perform_now(@event.id, @dest.id, "firing")
 
@@ -71,8 +71,8 @@ class DeliverAlertNotificationJobTest < ActiveJob::TestCase
   test "webhook with a body template POSTs the rendered JSON verbatim" do
     @dest.update!(body_template: '{"msg":"{{rule}} {{state}}"}')
     stub = stub_request(:post, "https://#{PUBLIC}/h")
-           .with(body: '{"msg":"cpu firing"}')
-           .to_return(status: 200)
+      .with(body: '{"msg":"cpu firing"}')
+      .to_return(status: 200)
 
     DeliverAlertNotificationJob.perform_now(@event.id, @dest.id, "firing")
 

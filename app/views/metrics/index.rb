@@ -8,10 +8,10 @@
 # pills), optional replica chips, 2x2 grid of chart cards.
 class Views::Metrics::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, data: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @data           = data
+    @data = data
   end
 
   def view_template
@@ -19,7 +19,7 @@ class Views::Metrics::Index < Views::Base
       current_path: @current_path,
       islands: @islands,
       current_island: @current_island,
-      breadcrumb: overview_crumbs({ label: "Metrics" })
+      breadcrumb: overview_crumbs({label: "Metrics"})
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new
@@ -73,7 +73,7 @@ class Views::Metrics::Index < Views::Base
       # IS the header). The custom element still connects (connectedCallback
       # fires for display:none nodes) and the auto-refresh detach/re-attach
       # works the same — it targets the span, not its box.
-      span(class: "hidden", data: { auto_refresh_target: "source" }) do
+      span(class: "hidden", data: {auto_refresh_target: "source"}) do
         turbo_stream_from "metrics-#{@current_island.id}"
       end
 
@@ -108,7 +108,7 @@ class Views::Metrics::Index < Views::Base
       render(Components::UI::PageHeader.new(title: "Metrics").with_actions { dashboard_switcher_group })
       empty_panel(
         title: "Select a dashboard",
-        copy:  "Pick a dashboard from the menu above to view its panels — or create a new one there."
+        copy: "Pick a dashboard from the menu above to view its panels — or create a new one there."
       )
     end
   end
@@ -118,21 +118,21 @@ class Views::Metrics::Index < Views::Base
       render Components::UI::PageHeader.new(title: "Metrics")
 
       render(Components::UI::Drawer.new(
-        title:               "Dashboards",
-        src:                 "#{new_metric_dashboard_path}?embed=1",
-        open_url:            new_metric_dashboard_path,
-        width:               "30vw",
-        min_width:           "300px",
-        max_width:           "min(100vw, 560px)",
+        title: "Dashboards",
+        src: "#{new_metric_dashboard_path}?embed=1",
+        open_url: new_metric_dashboard_path,
+        width: "30vw",
+        min_width: "300px",
+        max_width: "min(100vw, 560px)",
         show_full_page_link: false,
-        permanent:           false,
-        custom_trigger:      true,
-        storage_key:         "voodu:drawer-width:dashboards"
+        permanent: false,
+        custom_trigger: true,
+        storage_key: "voodu:drawer-width:dashboards"
       )) do
         empty_panel(
           title: "No dashboards yet",
-          copy:  "Metrics are dashboard-driven. Build one to watch host or pod metrics — pick a source, a metric, and a chart type.",
-          cta:   true
+          copy: "Metrics are dashboard-driven. Build one to watch host or pod metrics — pick a source, a metric, and a chart type.",
+          cta: true
         )
       end
     end
@@ -146,8 +146,8 @@ class Views::Metrics::Index < Views::Base
 
       if cta
         button(
-          type:  "button",
-          data:  { action: "click->drawer#open" },
+          type: "button",
+          data: {action: "click->drawer#open"},
           class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 mt-1 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
         ) do
           render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -186,28 +186,28 @@ class Views::Metrics::Index < Views::Base
       # the drawer PANEL renders as a sibling of the menu — not hidden
       # or clipped to 0-width when the dropdown menu toggles.
       render(Components::UI::Drawer.new(
-        title:               "Dashboards",
-        src:                 "#{metric_dashboards_path}?embed=1",
-        open_url:            metric_dashboards_path,
-        width:               "30vw",
-        min_width:           "300px",
-        max_width:           "min(100vw, 560px)",
+        title: "Dashboards",
+        src: "#{metric_dashboards_path}?embed=1",
+        open_url: metric_dashboards_path,
+        width: "30vw",
+        min_width: "300px",
+        max_width: "min(100vw, 560px)",
         show_full_page_link: false,
-        permanent:           false,
-        custom_trigger:      true,
-        storage_key:         "voodu:drawer-width:dashboards"
+        permanent: false,
+        custom_trigger: true,
+        storage_key: "voodu:drawer-width:dashboards"
       )) do
         div(
           class: "relative",
           data: {
-            controller:                     "dropdown metric-multiselect",
-            metric_multiselect_base_value:     metrics_path,
+            controller: "dropdown metric-multiselect",
+            metric_multiselect_base_value: metrics_path,
             metric_multiselect_selected_value: current_pids.join(",")
           }
         ) do
           button(
             type: "button",
-            data: { action: "click->dropdown#toggle" },
+            data: {action: "click->dropdown#toggle"},
             class: switcher_trigger_classes
           ) do
             render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
@@ -217,14 +217,14 @@ class Views::Metrics::Index < Views::Base
 
           div(
             hidden: true,
-            data:  { dropdown_target: "menu" },
+            data: {dropdown_target: "menu"},
             class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[260px] max-h-[420px] " \
                    "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
           ) do
             # Manage row — opens the wrapping drawer + closes the dropdown.
             button(
               type: "button",
-              data: { action: "click->drawer#open click->dropdown#close" },
+              data: {action: "click->drawer#open click->dropdown#close"},
               class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
                      "text-[12px] font-medium text-voodu-text-2 hover:bg-voodu-hover"
             ) do
@@ -240,13 +240,13 @@ class Views::Metrics::Index < Views::Base
               div(class: "flex items-center justify-between gap-2 px-3 py-1.5 bg-voodu-bg-2 border-b border-voodu-border") do
                 span(class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted") { "Dashboards" }
                 button(
-                  type:         "button",
+                  type: "button",
                   "aria-label": "Select all dashboards or clear the selection",
-                  data:         { action: "click->metric-multiselect#toggleAll" },
-                  class:        "inline-flex items-center gap-1 px-1.5 h-5 text-[10.5px] font-medium text-voodu-accent-2 hover:text-voodu-accent transition-colors"
+                  data: {action: "click->metric-multiselect#toggleAll"},
+                  class: "inline-flex items-center gap-1 px-1.5 h-5 text-[10.5px] font-medium text-voodu-accent-2 hover:text-voodu-accent transition-colors"
                 ) do
                   render Icon::CheckCircleOutline.new(class: "w-3.5 h-3.5")
-                  span(data: { metric_multiselect_target: "selectAllLabel" }) { "Select all" }
+                  span(data: {metric_multiselect_target: "selectAllLabel"}) { "Select all" }
                 end
               end
             end
@@ -262,12 +262,12 @@ class Views::Metrics::Index < Views::Base
 
               button(
                 type: "button",
-                data: { action: "click->metric-multiselect#apply", metric_multiselect_target: "apply" },
+                data: {action: "click->metric-multiselect#apply", metric_multiselect_target: "apply"},
                 class: "flex items-center justify-center gap-1.5 w-full px-3 py-2 min-h-[38px] " \
                        "text-[12px] font-semibold text-voodu-accent-2 hover:bg-voodu-accent-dim"
               ) do
                 render Icon::ArrowRightOutline.new(class: "w-3 h-3 shrink-0")
-                span(data: { metric_multiselect_target: "summary" }) { "View selected" }
+                span(data: {metric_multiselect_target: "summary"}) { "View selected" }
               end
             end
           end
@@ -297,22 +297,22 @@ class Views::Metrics::Index < Views::Base
     button(
       type: "button",
       data: {
-        action:                    "click->metric-multiselect#toggle",
+        action: "click->metric-multiselect#toggle",
         metric_multiselect_target: "row",
-        uuid:                      uuid,
-        checked:                   selected.to_s
+        uuid: uuid,
+        checked: selected.to_s
       },
       class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
              "text-[12.5px] text-voodu-text hover:bg-voodu-hover"
     ) do
       span(
-        data:  { role: "checkbox" },
+        data: {role: "checkbox"},
         class: tokens(
           "inline-flex items-center justify-center w-3.5 h-3.5 border shrink-0",
           selected ? "border-voodu-accent-line bg-voodu-accent-dim" : "border-voodu-border"
         )
       ) do
-        span(data: { role: "check" }, class: tokens("text-voodu-accent-2", selected ? nil : "hidden")) do
+        span(data: {role: "check"}, class: tokens("text-voodu-accent-2", selected ? nil : "hidden")) do
           render Icon::CheckOutline.new(class: "w-2.5 h-2.5")
         end
       end
@@ -370,10 +370,10 @@ class Views::Metrics::Index < Views::Base
 
     if dash.pinned
       pin_form(action: unpin_metric_dashboard_path(dash), active: true,
-               title: "Unpin — /metrics stops opening to this dashboard")
+        title: "Unpin — /metrics stops opening to this dashboard")
     else
       pin_form(action: pin_metric_dashboard_path(dash), active: false,
-               title: "Pin — open /metrics to this dashboard")
+        title: "Pin — open /metrics to this dashboard")
     end
   end
 
@@ -382,7 +382,7 @@ class Views::Metrics::Index < Views::Base
   end
 
   def pin_form(action:, active:, title:)
-    form(action: action, method: "post", data: { turbo: false }, class: "inline-flex") do
+    form(action: action, method: "post", data: {turbo: false}, class: "inline-flex") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       button(type: "submit", title: title, "aria-label": title, class: pin_btn_classes(active)) do
         pin_icon(active)
@@ -471,24 +471,24 @@ class Views::Metrics::Index < Views::Base
   # alternative (server-side cookie) costs more than it saves.
   def auto_refresh_indicator
     button(
-      type:  "button",
+      type: "button",
       title: "Toggle auto-refresh",
-      data:  { action: "click->auto-refresh#toggle" },
+      data: {action: "click->auto-refresh#toggle"},
       class: "inline-flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
     ) do
       span(
-        data:  { auto_refresh_target: "dot" },
+        data: {auto_refresh_target: "dot"},
         class: "inline-block rounded-full animate-voodu-pulse",
         style: "width: 6px; height: 6px; background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
       )
-      span(data: { auto_refresh_target: "label" }) { "realtime" }
+      span(data: {auto_refresh_target: "label"}) { "realtime" }
     end
   end
 
   def dot_sep
     span(
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
-      aria: { hidden: "true" }
+      aria: {hidden: "true"}
     )
   end
 
@@ -506,8 +506,8 @@ class Views::Metrics::Index < Views::Base
     div(class: "flex items-center gap-2.5 flex-wrap") do
       render Components::Metrics::RangePicker.new(range: @data&.range || "1h")
       render Components::Metrics::IntervalPicker.new(
-        current:      @data&.interval || "auto",
-        base_path:    metrics_path,
+        current: @data&.interval || "auto",
+        base_path: metrics_path,
         extra_params: request.query_parameters.except(:interval)
       )
 
@@ -520,10 +520,10 @@ class Views::Metrics::Index < Views::Base
 
         unless dashboard_mode?
           render Components::Metrics::PodPicker.new(
-            scope_kind:     @data&.scope_kind || "host",
-            scope_id:       @data&.scope_id,
+            scope_kind: @data&.scope_kind || "host",
+            scope_id: @data&.scope_id,
             current_island: @current_island,
-            pods:           @data&.all_pods || []
+            pods: @data&.all_pods || []
           )
         end
 
@@ -532,8 +532,8 @@ class Views::Metrics::Index < Views::Base
         # plain scope (host/pod) view.
         if @data && !multi_mode? && !dashboard_mode?
           render Components::Metrics::DisplaySettingsButton.new(
-            kind:                @data.display_kind,
-            scope_kind:          @data.scope_kind,
+            kind: @data.display_kind,
+            scope_kind: @data.scope_kind,
             display_settings_url: metrics_display_settings_path
           )
         end
@@ -548,8 +548,8 @@ class Views::Metrics::Index < Views::Base
   # see every selected panel at once. Esc / backdrop / ✕ exit.
   def fullscreen_button
     button(
-      type:  "button",
-      data:  { action: "click->fullscreen#open" },
+      type: "button",
+      data: {action: "click->fullscreen#open"},
       title: "Fullscreen",
       "aria-label": "View charts fullscreen",
       class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface " \
@@ -564,7 +564,7 @@ class Views::Metrics::Index < Views::Base
 
     render Components::Metrics::ReplicaChips.new(
       active_container: @data.scope_id,
-      siblings:         @data.sibling_replicas
+      siblings: @data.sibling_replicas
     )
   end
 
@@ -613,7 +613,7 @@ class Views::Metrics::Index < Views::Base
     # overlay. Hidden until fullscreen_controller#open; clicking it exits.
     div(
       hidden: true,
-      data:  { fullscreen_target: "backdrop", action: "click->fullscreen#close" },
+      data: {fullscreen_target: "backdrop", action: "click->fullscreen#close"},
       class: "fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm"
     )
 
@@ -621,9 +621,9 @@ class Views::Metrics::Index < Views::Base
     # classes ON this element, so the turbo-frame inside keeps swapping on
     # the realtime tick (no clone). The chrome bar + frame are children
     # the frame swap never touches (chrome is a sibling of the frame).
-    div(data: { fullscreen_target: "panel" }, class: "min-w-0") do
+    div(data: {fullscreen_target: "panel"}, class: "min-w-0") do
       fullscreen_chrome
-      div(data: { fullscreen_target: "body" }) do
+      div(data: {fullscreen_target: "body"}) do
         turbo_frame_tag("metrics-charts", src: current_request_url) do
           if multi_mode?
             div(class: "flex flex-col gap-5 vmd:gap-6") do
@@ -648,7 +648,7 @@ class Views::Metrics::Index < Views::Base
   def fullscreen_chrome
     div(
       hidden: true,
-      data:  { fullscreen_target: "chrome" },
+      data: {fullscreen_target: "chrome"},
       class: "sticky top-0 z-10 flex items-center justify-between gap-3 h-10 px-3 " \
              "bg-voodu-surface-2/95 backdrop-blur-sm border-b border-voodu-border-2"
     ) do
@@ -658,8 +658,8 @@ class Views::Metrics::Index < Views::Base
       end
 
       button(
-        type:  "button",
-        data:  { action: "click->fullscreen#close" },
+        type: "button",
+        data: {action: "click->fullscreen#close"},
         title: "Exit fullscreen (Esc)",
         "aria-label": "Exit fullscreen",
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface shrink-0"
@@ -696,7 +696,7 @@ class Views::Metrics::Index < Views::Base
 
     div(
       class: "flex flex-col gap-3",
-      data:  { controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s }
+      data: {controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s}
     ) do
       div(class: "flex items-center gap-2.5") do
         render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
@@ -704,7 +704,7 @@ class Views::Metrics::Index < Views::Base
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
 
         span(class: "text-[11.5px] text-voodu-muted") do
-          plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
+          plain "#{dash&.panels_count} #{(dash&.panels_count == 1) ? "panel" : "panels"}"
         end
 
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
@@ -715,18 +715,18 @@ class Views::Metrics::Index < Views::Base
         # THIS dashboard's display_kind — the multi-view equivalent of
         # the toolbar button a single dashboard gets.
         render Components::Metrics::DisplaySettingsButton.new(
-          kind:                 sec.display_kind,
-          scope_kind:           "host",
+          kind: sec.display_kind,
+          scope_kind: "host",
           display_settings_url: metrics_display_settings_path,
-          dashboard_id:         dash&.uuid,
-          compact:              true
+          dashboard_id: dash&.uuid,
+          compact: true
         )
       end
 
       # Body wrapper is the collapse target — metrics-section toggles `hidden`
       # on it (CSS only), keeping the grid in the DOM so the polling tick keeps
       # it fresh while collapsed.
-      div(data: { metrics_section_target: "body" }) do
+      div(data: {metrics_section_target: "body"}) do
         grid_for(sec)
       end
     end
@@ -736,13 +736,13 @@ class Views::Metrics::Index < Views::Base
   # that hides this group's charts while leaving the header + label.
   def collapse_toggle
     button(
-      type:         "button",
+      type: "button",
       "aria-label": "Collapse or expand this group",
-      data:         { action: "click->metrics-section#toggle", tooltip: "Collapse group" },
-      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+      data: {action: "click->metrics-section#toggle", tooltip: "Collapse group"},
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
     ) do
-      span(data: { role: "eye-open" }) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
-      span(data: { role: "eye-closed" }, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
+      span(data: {role: "eye-open"}) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
+      span(data: {role: "eye-closed"}, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
   end
 
@@ -753,7 +753,7 @@ class Views::Metrics::Index < Views::Base
     div(
       class: "flex flex-col gap-4 vmd:gap-5",
       data: {
-        controller:                 "metrics-display",
+        controller: "metrics-display",
         metrics_display_kind_value: data.display_kind
       }
     ) do
@@ -773,30 +773,30 @@ class Views::Metrics::Index < Views::Base
   def render_chart_cards(charts, data)
     div(
       class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
-      data:  { metrics_display_target: "grid" }
+      data: {metrics_display_target: "grid"}
     ) do
       charts.each do |c|
         if c[:missing]
           render_missing_card(c)
         else
           render Components::Metrics::ChartCard.new(
-            label:           c[:label],
-            color:           c[:color],
-            unit:            c[:unit],
-            points:          c[:points],
-            range_ms:        data.range_ms,
-            current:         c[:current],
-            expand_url:      expand_url_for(c, data),
+            label: c[:label],
+            color: c[:color],
+            unit: c[:unit],
+            points: c[:points],
+            range_ms: data.range_ms,
+            current: c[:current],
+            expand_url: expand_url_for(c, data),
             # data-metric-key the Settings/Order drawer matches on. In
             # dashboard mode it's the unique panel_key (charts can share
             # a metric); in scope mode there's one card per metric so the
             # metric name itself is unique.
-            metric:          c[:panel_key] || c[:metric],
-            section:         c[:section],
+            metric: c[:panel_key] || c[:metric],
+            section: c[:section],
             default_visible: c.fetch(:default_visible, true),
-            capacity_label:  c[:capacity_label],
-            capacity_pct:    c[:capacity_pct],
-            chart_type:      c[:chart_type]
+            capacity_label: c[:capacity_label],
+            capacity_pct: c[:capacity_pct],
+            chart_type: c[:chart_type]
           )
         end
       end
@@ -810,7 +810,7 @@ class Views::Metrics::Index < Views::Base
   def render_missing_card(c)
     div(
       class: "bg-voodu-surface border border-voodu-border border-dashed p-3.5 flex flex-col gap-2 min-w-0",
-      data:  c[:panel_key] ? { metrics_display_target: "card", metric_key: c[:panel_key] } : {}
+      data: c[:panel_key] ? {metrics_display_target: "card", metric_key: c[:panel_key]} : {}
     ) do
       span(
         class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
@@ -831,24 +831,24 @@ class Views::Metrics::Index < Views::Base
     # Dashboard charts carry their own resolved scope_kind/scope_id
     # (each panel resolves to its own pod); scope-mode charts inherit
     # the page's single scope.
-    sk  = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
-    sid = chart[:scope_id]   || (data.respond_to?(:scope_id)   ? data.scope_id   : nil)
+    sk = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
+    sid = chart[:scope_id] || (data.respond_to?(:scope_id) ? data.scope_id : nil)
 
     qp = {
       scope_kind: sk || "host",
-      scope_id:   sid,
-      range:      data&.range || "1h",
+      scope_id: sid,
+      range: data&.range || "1h",
       # `auto` is the default — omit from the URL so default views
       # have a clean `?range=1h` instead of `?range=1h&interval=auto`.
-      interval:   (data&.interval && data.interval != "auto") ? data.interval : nil,
-      metric:     chart[:metric],
-      scale:      chart[:scale],
-      label:      chart[:label],
-      color:      chart[:color],
-      unit:       chart[:unit],
+      interval: (data&.interval && data.interval != "auto") ? data.interval : nil,
+      metric: chart[:metric],
+      scale: chart[:scale],
+      label: chart[:label],
+      color: chart[:color],
+      unit: chart[:unit],
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
-      chart_type: (chart[:chart_type].to_s == "area" ? nil : chart[:chart_type])
+      chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
     }.compact
 
     "#{metrics_chart_path}?#{qp.to_query}"

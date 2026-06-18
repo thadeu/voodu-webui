@@ -14,7 +14,7 @@ class Components::UI::ToastStack < Components::Base
 
     div(
       class: "fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none",
-      aria: { live: "polite" }
+      aria: {live: "polite"}
     ) do
       @flash.each do |type, message|
         render Components::UI::Toast.new(variant: variant_for(type), message: message)
@@ -26,9 +26,9 @@ class Components::UI::ToastStack < Components::Base
 
   def variant_for(flash_key)
     case flash_key.to_s
-    when "notice"        then :success
+    when "notice" then :success
     when "alert", "error" then :danger
-    else                       :info
+    else :info
     end
   end
 end

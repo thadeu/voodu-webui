@@ -109,14 +109,14 @@ class LogTailIslandJob < ApplicationJob
   private
 
   def run_tail(island)
-    client       = Voodu::Client.new(island)
-    writer       = LogTail::Writer.new(island.id)
-    started_at   = Time.current
+    client = Voodu::Client.new(island)
+    writer = LogTail::Writer.new(island.id)
+    started_at = Time.current
     # Resume from the persisted watermark so a recycle/restart continues
     # with `since` instead of re-fetching a `tail=N` backfill. nil only
     # on a first-ever run (or after the watermark TTL lapsed).
     last_seen_ts = read_watermark(island.id)
-    appended     = 0
+    appended = 0
 
     Rails.logger.info(
       "log-tail island=#{island.key} started (poll=#{POLL_INTERVAL_SECONDS}s tail=#{TAIL_PER_POLL})"
@@ -179,17 +179,17 @@ class LogTailIslandJob < ApplicationJob
   # any cold-start overlap, so a re-fetch can never re-write a line.
   def poll_once(client, writer, last_seen_ts)
     line_buffer = +""
-    new_count   = 0
-    newest_ts   = last_seen_ts
+    new_count = 0
+    newest_ts = last_seen_ts
 
     # `since` advances the docker filter past everything we've
     # already persisted. The first poll has no `since` and uses
     # `tail` to bound the cold-start backfill instead.
     fetch_opts = if last_seen_ts
-                   { follow: false, tail: 0, since: last_seen_ts }
-                 else
-                   { follow: false, tail: TAIL_PER_POLL }
-                 end
+      {follow: false, tail: 0, since: last_seen_ts}
+    else
+      {follow: false, tail: TAIL_PER_POLL}
+    end
 
     client.logs_stream_multi(**fetch_opts) do |chunk|
       line_buffer << chunk
@@ -198,7 +198,7 @@ class LogTailIslandJob < ApplicationJob
         next if raw_line.empty?
 
         parsed = LogTail::Parser.parse(raw_line)
-        ts     = parsed[:ts]
+        ts = parsed[:ts]
 
         # STRICT `<`, not `<=`: docker's `--since` is inclusive AND
         # second-granular, so the boundary line is re-delivered on resume.

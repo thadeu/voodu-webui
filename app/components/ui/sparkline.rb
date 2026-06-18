@@ -35,12 +35,12 @@ class Components::UI::Sparkline < Components::Base
   PAD = 4
 
   def initialize(points:, color: "#34d399", width: 220, height: 56, show_fill: true, stroke: 1.5)
-    @points    = Array(points).map { |p| normalize(p) }
-    @color     = color
-    @width     = width
-    @height    = height
+    @points = Array(points).map { |p| normalize(p) }
+    @color = color
+    @width = width
+    @height = height
     @show_fill = show_fill
-    @stroke    = stroke
+    @stroke = stroke
   end
 
   def view_template
@@ -62,10 +62,10 @@ class Components::UI::Sparkline < Components::Base
       ]
     end
 
-    pts    = projected_points
+    pts = projected_points
     d_line = path_for(pts)
     d_area = "#{d_line} L #{pts.last[0]} #{@height} L #{pts.first[0]} #{@height} Z"
-    gid    = gradient_id
+    gid = gradient_id
 
     svg(
       width: "100%", height: @height,
@@ -77,12 +77,12 @@ class Components::UI::Sparkline < Components::Base
       # Settings → Display preferences instead of the browser's
       # local TZ (the previous default). Same WebTime.zone_name
       # source as the chart axis ticks + ChartCard headlines.
-      data: { controller: "sparkline-tooltip", tz: WebTime.zone_name },
+      data: {controller: "sparkline-tooltip", tz: WebTime.zone_name},
       style: "--voodu-spark-color: #{@color};"
     ) do |s|
       s.defs do
         s.linearGradient(id: gid, x1: 0, x2: 0, y1: 0, y2: 1) do
-          s.stop(offset: "0%",   "stop-color": @color, "stop-opacity": "0.32")
+          s.stop(offset: "0%", "stop-color": @color, "stop-opacity": "0.32")
           s.stop(offset: "100%", "stop-color": @color, "stop-opacity": "0")
         end
       end
@@ -108,11 +108,11 @@ class Components::UI::Sparkline < Components::Base
       cx, cy = pts.last
       s.circle(
         cx: cx, cy: cy, r: 5, fill: @color, opacity: "0.18",
-        data: { sparkline_tooltip_target: "tailDot" }
+        data: {sparkline_tooltip_target: "tailDot"}
       )
       s.circle(
         cx: cx, cy: cy, r: 2.5, fill: @color,
-        data: { sparkline_tooltip_target: "tailDot" }
+        data: {sparkline_tooltip_target: "tailDot"}
       )
 
       # Per-point hover strips. Invisible, full-height, mouse
@@ -133,7 +133,7 @@ class Components::UI::Sparkline < Components::Base
   def normalize(p)
     return p if p.is_a?(Hash)
 
-    { ts: nil, value: p.to_f, formatted: p.to_f.round(2).to_s }
+    {ts: nil, value: p.to_f, formatted: p.to_f.round(2).to_s}
   end
 
   def projected_points
@@ -184,7 +184,7 @@ class Components::UI::Sparkline < Components::Base
     return if pts.size < 2
 
     slot_w = (pts.last[0] - pts.first[0]).to_f / (pts.size - 1)
-    half   = slot_w / 2.0
+    half = slot_w / 2.0
 
     @points.each_with_index do |p, i|
       x = pts[i][0] - half
@@ -240,11 +240,11 @@ class Components::UI::Sparkline < Components::Base
     # Y positions hug top and bottom but leave room for the
     # 10px-tall text glyph itself.
     label_attrs = {
-      "text-anchor":     "end",
-      "fill":            "var(--voodu-muted-2, #6c7790)",
-      "font-size":       "9px",
-      "font-family":     "var(--voodu-font-mono, ui-monospace, monospace)",
-      "pointer-events":  "none"
+      "text-anchor": "end",
+      fill: "var(--voodu-muted-2, #6c7790)",
+      "font-size": "9px",
+      "font-family": "var(--voodu-font-mono, ui-monospace, monospace)",
+      "pointer-events": "none"
     }
 
     svg.text(x: @width - PAD, y: 10, **label_attrs) { max_p[:formatted] }

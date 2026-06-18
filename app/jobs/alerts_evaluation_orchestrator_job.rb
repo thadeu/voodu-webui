@@ -13,9 +13,9 @@ class AlertsEvaluationOrchestratorJob < ApplicationJob
 
   def perform
     Island.joins(:alert_rules)
-          .where(alert_rules: { enabled: true })
-          .distinct
-          .find_each do |island|
+      .where(alert_rules: {enabled: true})
+      .distinct
+      .find_each do |island|
       AlertsEvaluationIslandJob.perform_later(island.id)
     end
   end

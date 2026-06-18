@@ -56,28 +56,28 @@ class Views::Metrics::Frame < Views::Base
 
     div(
       class: "flex flex-col gap-3",
-      data:  { controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s }
+      data: {controller: "metrics-section", metrics_section_id_value: dash&.uuid.to_s}
     ) do
       div(class: "flex items-center gap-2.5") do
         render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 text-voodu-muted shrink-0")
         span(class: "text-[13px] font-semibold text-voodu-text") { dash&.name }
         span(class: "text-[11.5px] text-voodu-muted") do
-          plain "#{dash&.panels_count} #{dash&.panels_count == 1 ? 'panel' : 'panels'}"
+          plain "#{dash&.panels_count} #{(dash&.panels_count == 1) ? "panel" : "panels"}"
         end
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
 
         collapse_toggle
 
         render Components::Metrics::DisplaySettingsButton.new(
-          kind:                 sec.display_kind,
-          scope_kind:           "host",
+          kind: sec.display_kind,
+          scope_kind: "host",
           display_settings_url: metrics_display_settings_path,
-          dashboard_id:         dash&.uuid,
-          compact:              true
+          dashboard_id: dash&.uuid,
+          compact: true
         )
       end
 
-      div(data: { metrics_section_target: "body" }) do
+      div(data: {metrics_section_target: "body"}) do
         grid_for(sec)
       end
     end
@@ -85,13 +85,13 @@ class Views::Metrics::Frame < Views::Base
 
   def collapse_toggle
     button(
-      type:         "button",
+      type: "button",
       "aria-label": "Collapse or expand this group",
-      data:         { action: "click->metrics-section#toggle", tooltip: "Collapse group" },
-      class:        "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+      data: {action: "click->metrics-section#toggle", tooltip: "Collapse group"},
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
     ) do
-      span(data: { role: "eye-open" }) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
-      span(data: { role: "eye-closed" }, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
+      span(data: {role: "eye-open"}) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
+      span(data: {role: "eye-closed"}, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
   end
 
@@ -99,7 +99,7 @@ class Views::Metrics::Frame < Views::Base
     div(
       class: "flex flex-col gap-4 vmd:gap-5",
       data: {
-        controller:                 "metrics-display",
+        controller: "metrics-display",
         metrics_display_kind_value: data.display_kind
       }
     ) do
@@ -111,26 +111,26 @@ class Views::Metrics::Frame < Views::Base
   def render_grid(charts, data)
     div(
       class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
-      data:  { metrics_display_target: "grid" }
+      data: {metrics_display_target: "grid"}
     ) do
       charts.each do |c|
         if c[:missing]
           render_missing_card(c)
         else
           render Components::Metrics::ChartCard.new(
-            label:           c[:label],
-            color:           c[:color],
-            unit:            c[:unit],
-            points:          c[:points],
-            range_ms:        data.range_ms,
-            current:         c[:current],
-            expand_url:      expand_url_for(c, data),
-            metric:          c[:panel_key] || c[:metric],
-            section:         c[:section],
+            label: c[:label],
+            color: c[:color],
+            unit: c[:unit],
+            points: c[:points],
+            range_ms: data.range_ms,
+            current: c[:current],
+            expand_url: expand_url_for(c, data),
+            metric: c[:panel_key] || c[:metric],
+            section: c[:section],
             default_visible: c.fetch(:default_visible, true),
-            capacity_label:  c[:capacity_label],
-            capacity_pct:    c[:capacity_pct],
-            chart_type:      c[:chart_type]
+            capacity_label: c[:capacity_label],
+            capacity_pct: c[:capacity_pct],
+            chart_type: c[:chart_type]
           )
         end
       end
@@ -157,24 +157,24 @@ class Views::Metrics::Frame < Views::Base
   # Drift between the two = the maximize button breaks after the
   # first broadcast tick swap.
   def expand_url_for(chart, data)
-    sk  = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
-    sid = chart[:scope_id]   || (data.respond_to?(:scope_id)   ? data.scope_id   : nil)
+    sk = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
+    sid = chart[:scope_id] || (data.respond_to?(:scope_id) ? data.scope_id : nil)
 
     qp = {
       scope_kind: sk || "host",
-      scope_id:   sid,
-      range:      data.range || "1h",
+      scope_id: sid,
+      range: data.range || "1h",
       # Match Views::Metrics::Index#expand_url_for — omit `interval`
       # when `auto` so URLs stay clean on the default path.
-      interval:   (data.interval && data.interval != "auto") ? data.interval : nil,
-      metric:     chart[:metric],
-      scale:      chart[:scale],
-      label:      chart[:label],
-      color:      chart[:color],
-      unit:       chart[:unit],
+      interval: (data.interval && data.interval != "auto") ? data.interval : nil,
+      metric: chart[:metric],
+      scale: chart[:scale],
+      label: chart[:label],
+      color: chart[:color],
+      unit: chart[:unit],
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
-      chart_type: (chart[:chart_type].to_s == "area" ? nil : chart[:chart_type])
+      chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
     }.compact
 
     "#{metrics_chart_path}?#{qp.to_query}"

@@ -27,7 +27,7 @@
 class Views::Logs::PodsPicker < Views::Base
   def initialize(island_key:, pods: [])
     @island_key = island_key
-    @pods       = Array(pods)
+    @pods = Array(pods)
   end
 
   def view_template
@@ -40,7 +40,7 @@ class Views::Logs::PodsPicker < Views::Base
     div(
       class: "p-4 flex flex-col gap-3.5 @container",
       data: {
-        controller:                       "logs-pods-selector",
+        controller: "logs-pods-selector",
         logs_pods_selector_storage_key_value: "voodu:logs-pods:v1:#{@island_key}"
       }
     ) do
@@ -61,7 +61,7 @@ class Views::Logs::PodsPicker < Views::Base
       span(class: "flex-1 h-px bg-voodu-border")
       span(
         class: "text-[11px] font-voodu-mono text-voodu-text-2",
-        data:  { logs_pods_selector_target: "counter" }
+        data: {logs_pods_selector_target: "counter"}
       ) { "" }
     end
   end
@@ -78,12 +78,12 @@ class Views::Logs::PodsPicker < Views::Base
 
   def bulk_actions
     div(class: "flex items-center gap-2") do
-      bulk_button("Select all",   action: "selectAll")
-      bulk_button("Clear",        action: "clearAll")
+      bulk_button("Select all", action: "selectAll")
+      bulk_button("Clear", action: "clearAll")
       div(class: "flex-1")
       span(
         class: "text-[11px] text-voodu-muted-2",
-        data:  { logs_pods_selector_target: "dirtyHint" }
+        data: {logs_pods_selector_target: "dirtyHint"}
       ) { "" }
     end
   end
@@ -91,7 +91,7 @@ class Views::Logs::PodsPicker < Views::Base
   def bulk_button(label, action:)
     button(
       type: "button",
-      data: { action: "click->logs-pods-selector##{action}" },
+      data: {action: "click->logs-pods-selector##{action}"},
       class: "inline-flex items-center px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[11.5px] hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { label }
   end
@@ -148,10 +148,10 @@ class Views::Logs::PodsPicker < Views::Base
         checked: true,
         data: {
           logs_pods_selector_target: "toggle",
-          action:                    "change->logs-pods-selector#onToggle",
-          resource_name:             resource[:resource_name],
-          scope:                     resource[:scope],
-          containers:                resource[:containers].join(",")
+          action: "change->logs-pods-selector#onToggle",
+          resource_name: resource[:resource_name],
+          scope: resource[:scope],
+          containers: resource[:containers].join(",")
         },
         class: "accent-voodu-accent shrink-0 mt-0.5"
       )
@@ -169,7 +169,7 @@ class Views::Logs::PodsPicker < Views::Base
 
   def replica_summary(containers)
     n = containers.size
-    n == 1 ? "1 replica" : "#{n} replicas"
+    (n == 1) ? "1 replica" : "#{n} replicas"
   end
 
   def empty_state
@@ -187,16 +187,16 @@ class Views::Logs::PodsPicker < Views::Base
     by_scope = {}
 
     pods.each do |p|
-      scope    = (p[:scope] || p["scope"] || "(default)").to_s
+      scope = (p[:scope] || p["scope"] || "(default)").to_s
       resource = (p[:resource_name] || p["resource_name"]).to_s
       next if resource.empty?
 
       container = (p[:name] || p["name"]).to_s
-      image     = (p[:image] || p["image"]).to_s
+      image = (p[:image] || p["image"]).to_s
 
       by_scope[scope] ||= {}
       key = resource
-      by_scope[scope][key] ||= { resource_name: resource, scope: scope, image: image, containers: [] }
+      by_scope[scope][key] ||= {resource_name: resource, scope: scope, image: image, containers: []}
       by_scope[scope][key][:containers] << container if container.present?
     end
 

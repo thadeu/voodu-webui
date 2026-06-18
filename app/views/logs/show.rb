@@ -7,15 +7,15 @@ class Views::Logs::Show < Views::Base
   # drawer: true → embedded render path used by Components::UI::Drawer.
   # Skips the Dashboard chrome (sidebar/topbar) so the drawer's body
   # gets just the log viewer surface.
-  def initialize(current_path:, islands: [], current_island: nil, updated_at: nil, pod_name:, drawer: false, pods: [], back_to_pod: false)
-    @current_path   = current_path
-    @islands        = islands
+  def initialize(current_path:, pod_name:, islands: [], current_island: nil, updated_at: nil, drawer: false, pods: [], back_to_pod: false)
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @updated_at     = updated_at
-    @pod_name       = pod_name
-    @drawer         = drawer
-    @pods           = pods
-    @back_to_pod    = back_to_pod
+    @updated_at = updated_at
+    @pod_name = pod_name
+    @drawer = drawer
+    @pods = pods
+    @back_to_pod = back_to_pod
   end
 
   def view_template

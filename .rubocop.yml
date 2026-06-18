@@ -5,6 +5,7 @@
 # same rules through this inherit.
 require:
   - standard
+plugins:
   - standard-custom
   - standard-performance
 
@@ -24,10 +25,3 @@ AllCops:
     - "vendor/**/*"
     - "gems/**/*"
     - "storage/**/*"
-
-Layout/ArgumentAlignment:
-  Enabled: false
-
-Layout/SpaceInsideHashLiteralBraces:
-  Enabled: false
-  

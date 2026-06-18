@@ -7,10 +7,10 @@
 # data point doesn't visually overflow.
 class Components::UI::MiniBar < Components::Base
   def initialize(value:, max: 100, color: "var(--voodu-accent)", width: 56, height: 4)
-    @value  = value.to_f
-    @max    = max.to_f
-    @color  = color
-    @width  = width
+    @value = value.to_f
+    @max = max.to_f
+    @color = color
+    @width = width
     @height = height
   end
 

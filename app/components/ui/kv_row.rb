@@ -18,11 +18,11 @@
 # `dim: true` mutes the value column (for "never" / "(empty)" states).
 class Components::UI::KvRow < Components::Base
   def initialize(key:, mono: true, dim: false, copy: false, copy_value: nil)
-    @key                   = key
-    @mono                  = mono
-    @dim                   = dim
-    @copy                  = copy
-    @copy_value            = copy_value
+    @key = key
+    @mono = mono
+    @dim = dim
+    @copy = copy
+    @copy_value = copy_value
     @leading_actions_block = nil
   end
 

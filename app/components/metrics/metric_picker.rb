@@ -33,15 +33,15 @@ class Components::Metrics::MetricPicker < Components::Base
   #   so the swap stays modal-local (Turbo handles the response as a
   #   stream, no full-page navigation).
   def initialize(sections:, current_metric:, base_path:, extra_params: {}, turbo_stream: true)
-    @sections       = Array(sections)
+    @sections = Array(sections)
     @current_metric = current_metric.to_s
-    @base_path      = base_path
-    @extra_params   = extra_params || {}
-    @turbo_stream   = turbo_stream
+    @base_path = base_path
+    @extra_params = extra_params || {}
+    @turbo_stream = turbo_stream
   end
 
   def view_template
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       trigger
       menu
     end
@@ -54,7 +54,7 @@ class Components::Metrics::MetricPicker < Components::Base
 
     button(
       type: "button",
-      data: { action: "click->dropdown#toggle" },
+      data: {action: "click->dropdown#toggle"},
       class: "inline-flex items-center gap-2 px-2.5 h-9 min-w-[180px] border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] hover:bg-voodu-surface-2"
     ) do
       color_square(spec ? spec[:color] : "var(--voodu-muted)")
@@ -72,7 +72,7 @@ class Components::Metrics::MetricPicker < Components::Base
   def menu
     div(
       hidden: true,
-      data: { dropdown_target: "menu" },
+      data: {dropdown_target: "menu"},
       class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[240px] max-w-[320px] max-h-[420px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
       @sections.each do |section|
@@ -93,7 +93,7 @@ class Components::Metrics::MetricPicker < Components::Base
 
     a(
       href: build_url(spec),
-      data: @turbo_stream ? { turbo_stream: "true" } : { turbo: false },
+      data: @turbo_stream ? {turbo_stream: "true"} : {turbo: false},
       class: tokens(
         "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left",
         active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
@@ -138,10 +138,10 @@ class Components::Metrics::MetricPicker < Components::Base
   def build_url(spec)
     params = @extra_params.merge(
       metric: spec[:metric],
-      scale:  spec[:scale],
-      label:  spec[:label],
-      color:  spec[:color],
-      unit:   spec[:unit]
+      scale: spec[:scale],
+      label: spec[:label],
+      color: spec[:color],
+      unit: spec[:unit]
     )
 
     "#{@base_path}?#{params.to_query}"

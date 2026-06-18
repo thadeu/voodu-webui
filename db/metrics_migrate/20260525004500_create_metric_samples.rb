@@ -28,25 +28,25 @@ class CreateMetricSamples < ActiveRecord::Migration[8.1]
   def change
     create_table :metric_samples do |t|
       t.integer :tenant_id, null: false
-      t.string  :source,    null: false
-      t.string  :ts_iso,    null: false
-      t.text    :payload,   null: false
+      t.string :source, null: false
+      t.string :ts_iso, null: false
+      t.text :payload, null: false
 
       # STORED — the only generated column we materialise on disk.
       # Range scans against partial indexes need this to be a column,
       # not an expression, for the planner to pick the index.
       t.virtual :ts_epoch, type: :integer,
-                as: "CAST(strftime('%s', ts_iso) AS INTEGER)",
-                stored: true
+        as: "CAST(strftime('%s', ts_iso) AS INTEGER)",
+        stored: true
 
       # VIRTUAL — computed at read time. Free for un-indexed reads,
       # and the partial indexes below cover the indexed paths.
       t.virtual :scope, type: :string,
-                as: "json_extract(payload, '$.scope')"
+        as: "json_extract(payload, '$.scope')"
       t.virtual :name, type: :string,
-                as: "json_extract(payload, '$.name')"
+        as: "json_extract(payload, '$.name')"
       t.virtual :pod, type: :string,
-                as: "json_extract(payload, '$.container')"
+        as: "json_extract(payload, '$.container')"
 
       # No t.timestamps — payload's ts_iso is the source of truth.
       # created_at would just duplicate "when did we ingest" which
@@ -56,8 +56,8 @@ class CreateMetricSamples < ActiveRecord::Migration[8.1]
     # Hot path #1: system metric over time range.
     # Covers: WHERE tenant_id = ? AND source = 'system' AND ts_epoch BETWEEN ? AND ?
     add_index :metric_samples, [:tenant_id, :source, :ts_epoch],
-              where: "source = 'system'",
-              name: "idx_metric_samples_system"
+      where: "source = 'system'",
+      name: "idx_metric_samples_system"
 
     # Hot path #2: specific pod metric over time range.
     # Covers: WHERE tenant_id = ? AND source = 'pod'
@@ -66,14 +66,14 @@ class CreateMetricSamples < ActiveRecord::Migration[8.1]
     # `pod` is the rightmost column so prefix-matches without pod
     # (e.g. all replicas of a resource) still use the index.
     add_index :metric_samples, [:tenant_id, :source, :scope, :name, :pod, :ts_epoch],
-              where: "source = 'pod'",
-              name: "idx_metric_samples_pod"
+      where: "source = 'pod'",
+      name: "idx_metric_samples_pod"
 
     # Sync watermark — used by MetricsSyncIslandJob to derive `since`
     # for the next incremental pull. MAX(ts_epoch) per tenant is the
     # single hottest query in the warehouse; this dedicated index
     # makes it O(log n) instead of scanning the partial indexes.
     add_index :metric_samples, [:tenant_id, :ts_epoch],
-              name: "idx_metric_samples_watermark"
+      name: "idx_metric_samples_watermark"
   end
 end

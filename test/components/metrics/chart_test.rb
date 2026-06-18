@@ -3,7 +3,7 @@
 require "test_helper"
 
 class Components::Metrics::ChartTest < ActiveSupport::TestCase
-  BASE = { points: [], unit: "%", label: "CPU", range_ms: 900_000 }.freeze
+  BASE = {points: [], unit: "%", label: "CPU", range_ms: 900_000}.freeze
 
   # Two charts of the SAME metric render the same color + dimensions
   # (e.g. Host CPU + FreeSwitch CPU, both purple, both full-size when two
@@ -16,7 +16,7 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
     b = Components::Metrics::Chart.new(color: "var(--voodu-purple)", **BASE)
 
     assert_not_equal a.send(:clip_id), b.send(:clip_id),
-                     "identical-looking charts must not share a clipPath id"
+      "identical-looking charts must not share a clipPath id"
   end
 
   # The def (`<clipPath id=…>`) and the reference (`url(#…)`) are computed

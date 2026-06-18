@@ -26,13 +26,13 @@ class PodDetailData
   def initialize(client, island, name, force_refresh: false)
     @client = client
     @island = island
-    @name   = name
-    @force  = force_refresh
+    @name = name
+    @force = force_refresh
 
-    @raw        = nil
-    @error      = nil
+    @raw = nil
+    @error = nil
     @updated_at = Time.current
-    @metrics    = MetricsData.new(client, island)
+    @metrics = MetricsData.new(client, island)
 
     fetch!
   end
@@ -46,12 +46,12 @@ class PodDetailData
   # "replica_id" echoed back. Header rendering must not blow up on
   # that; this layer absorbs the difference so views/components stay
   # nil-safe.
-  def scope         = pick("scope")         || split_name[:scope]
+  def scope = pick("scope") || split_name[:scope]
   def resource_name = pick("resource_name") || split_name[:resource]
-  def replica_id    = pick("replica_id")    || split_name[:replica]
-  def kind          = pick("kind")
-  def image         = pick("image")
-  def restarts      = (@raw&.dig("restarts") || 0).to_i
+  def replica_id = pick("replica_id") || split_name[:replica]
+  def kind = pick("kind")
+  def image = pick("image")
+  def restarts = (@raw&.dig("restarts") || 0).to_i
 
   # status_sym — delegates to PodStatus (shared with OverviewData) so
   # the pill on the pod show header matches the one on the pods table
@@ -92,7 +92,7 @@ class PodDetailData
     %w[liveness readiness startup].filter_map do |kind|
       cfg = declared[kind]
 
-      { kind: kind, spec: cfg } if cfg.is_a?(Hash) && cfg.present?
+      {kind: kind, spec: cfg} if cfg.is_a?(Hash) && cfg.present?
     end
   end
 
@@ -136,19 +136,19 @@ class PodDetailData
     # ERROR/FAILURE metrics ALWAYS use --voodu-red (no other metric
     # may use red — reserved for incidents).
     base = [
-      stat_card("CPU",    :CpuChipOutline,     "%.1f" % cpu_pct, "%",     cpu_sub, "var(--voodu-purple)", cpu_series),
-      stat_card("MEMORY", :CircleStackOutline, mem_used_label,   mem_unit, mem_sub, "var(--voodu-blue)",  mem_series)
+      stat_card("CPU", :CpuChipOutline, "%.1f" % cpu_pct, "%", cpu_sub, "var(--voodu-purple)", cpu_series),
+      stat_card("MEMORY", :CircleStackOutline, mem_used_label, mem_unit, mem_sub, "var(--voodu-blue)", mem_series)
     ]
 
     if ingress_eligible?
       base + [
-        stat_card("REQUESTS",    :ChartBarOutline, req_per_sec_label,  "req/s", req_sub,     "var(--voodu-orange)", ingress_series_for_metric("req_count")),
-        stat_card("p95 LATENCY", :BoltOutline,     latency_p95_label,  "ms",    latency_sub, "var(--voodu-amber)",  ingress_series_for_metric("latency_p95_ms"))
+        stat_card("REQUESTS", :ChartBarOutline, req_per_sec_label, "req/s", req_sub, "var(--voodu-orange)", ingress_series_for_metric("req_count")),
+        stat_card("p95 LATENCY", :BoltOutline, latency_p95_label, "ms", latency_sub, "var(--voodu-amber)", ingress_series_for_metric("latency_p95_ms"))
       ]
     else
       base + [
-        stat_card("NET I/O",   :SignalOutline,      net_total_label, "", net_sub, "var(--voodu-green)", series_for_metric("net_rx_delta_bytes")),
-        stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label, "", blk_sub, "var(--voodu-cyan)",  series_for_metric("block_read_delta_bytes"))
+        stat_card("NET I/O", :SignalOutline, net_total_label, "", net_sub, "var(--voodu-green)", series_for_metric("net_rx_delta_bytes")),
+        stat_card("BLOCK I/O", :ServerStackOutline, blk_total_label, "", blk_sub, "var(--voodu-cyan)", series_for_metric("block_read_delta_bytes"))
       ]
     end
   end
@@ -202,14 +202,14 @@ class PodDetailData
     @metrics.points_for(
       source: :pod,
       metric: metric,
-      range:  "1h",
-      scope:  scope,
-      name:   resource_name,
+      range: "1h",
+      scope: scope,
+      name: resource_name,
       # `pod:` pins the series to this specific replica (container).
       # Without it, the chart would aggregate across siblings —
       # confusing on the pod show page which is explicitly about
       # one replica's runtime.
-      pod:    @name
+      pod: @name
     )
   end
 
@@ -291,7 +291,7 @@ class PodDetailData
         scope, res = nil, base
       end
 
-      { scope: scope.presence, resource: res.presence || n, replica: rep.presence }
+      {scope: scope.presence, resource: res.presence || n, replica: rep.presence}
     end
   end
 
@@ -309,8 +309,8 @@ class PodDetailData
   # was just deleted), @raw stays nil and the view renders the
   # "—" sentinels — same as a 404 from the HTTP path, no error.
   def fetch_from_warehouse!
-    pod_row     = @island.pods.find_by(container_name: @name)
-    @raw        = pod_row&.payload_hash
+    pod_row = @island.pods.find_by(container_name: @name)
+    @raw = pod_row&.payload_hash
     @updated_at = @island.last_synced_at || Time.current
 
     # Mark stale when the controller isn't CONFIRMED online — :offline
@@ -328,17 +328,17 @@ class PodDetailData
 
     cached = Rails.cache.read(cache_key)
     if cached
-      @raw        = cached[:raw]
+      @raw = cached[:raw]
       @updated_at = cached[:fetched_at]
       return
     end
 
-    @raw        = @client.pod(@name, spec: true)
+    @raw = @client.pod(@name, spec: true)
     @updated_at = Time.current
 
     Rails.cache.write(
       cache_key,
-      { raw: @raw, fetched_at: @updated_at },
+      {raw: @raw, fetched_at: @updated_at},
       expires_in: CACHE_TTL
     )
   rescue Voodu::Client::Error => e
@@ -378,7 +378,7 @@ class PodDetailData
   # change "what's CPU right now".
   def cpu_pct
     fallback = @raw&.dig("stats", "usage", "cpu_percent").to_f
-    latest   = @metrics.latest_for(
+    latest = @metrics.latest_for(
       source: :pod, metric: "cpu_percent", range: "1h",
       scope: scope, name: resource_name, pod: @name
     )
@@ -397,7 +397,7 @@ class PodDetailData
   # as cpu_pct above: stable across range pills.
   def mem_used_mb
     fallback = @raw&.dig("stats", "usage", "memory_usage_bytes").to_f
-    latest   = @metrics.latest_for(
+    latest = @metrics.latest_for(
       source: :pod, metric: "mem_usage_bytes", range: "1h",
       scope: scope, name: resource_name, pod: @name
     )
@@ -432,9 +432,9 @@ class PodDetailData
   end
 
   def mem_sub
-    return "pod stopped"        if status_sym != :running
-    return "no limit declared"  if mem_limit_mb.nil?
-    return "—"                  if mem_limit_mb.zero?
+    return "pod stopped" if status_sym != :running
+    return "no limit declared" if mem_limit_mb.nil?
+    return "—" if mem_limit_mb.zero?
 
     pct = (mem_used_mb.to_f / mem_limit_mb * 100).round
     "#{pct}% of limit"
@@ -456,12 +456,12 @@ class PodDetailData
 
   def net_total_label
     bytes = net_rx_bytes + net_tx_bytes
-    bytes.zero? && status_sym != :running ? "—" : format_bytes(bytes)
+    (bytes.zero? && status_sym != :running) ? "—" : format_bytes(bytes)
   end
 
   def net_sub
     return "pod stopped" if status_sym != :running
-    return "no data"     if net_rx_bytes.zero? && net_tx_bytes.zero?
+    return "no data" if net_rx_bytes.zero? && net_tx_bytes.zero?
 
     "↓ #{format_bytes(net_rx_bytes)}  ↑ #{format_bytes(net_tx_bytes)}"
   end
@@ -494,12 +494,12 @@ class PodDetailData
 
   def blk_total_label
     bytes = blk_read_bytes + blk_write_bytes
-    bytes.zero? && status_sym != :running ? "—" : format_bytes(bytes)
+    (bytes.zero? && status_sym != :running) ? "—" : format_bytes(bytes)
   end
 
   def blk_sub
     return "pod stopped" if status_sym != :running
-    return "no data"     if blk_read_bytes.zero? && blk_write_bytes.zero?
+    return "no data" if blk_read_bytes.zero? && blk_write_bytes.zero?
 
     "↓ #{format_bytes(blk_read_bytes)}  ↑ #{format_bytes(blk_write_bytes)}"
   end
@@ -516,9 +516,9 @@ class PodDetailData
   # an operator running `docker stats` sees alongside the WebUI.
   def format_bytes(b)
     b = b.to_i
-    return "0 B"                  if b.zero?
-    return "#{b} B"               if b < 1000
-    return "#{(b / 1000.0).round(1)} kB"     if b < 1_000_000
+    return "0 B" if b.zero?
+    return "#{b} B" if b < 1000
+    return "#{(b / 1000.0).round(1)} kB" if b < 1_000_000
     return "#{(b / 1_000_000.0).round(1)} MB" if b < 1_000_000_000
     return "#{(b / 1_000_000_000.0).round(1)} GB" if b < 1_000_000_000_000
 
@@ -552,9 +552,9 @@ class PodDetailData
     @metrics.points_for(
       source: :ingress,
       metric: metric,
-      range:  "1h",
-      scope:  scope,
-      name:   resource_name
+      range: "1h",
+      scope: scope,
+      name: resource_name
     )
   end
 
@@ -562,9 +562,9 @@ class PodDetailData
     @metrics.latest_for(
       source: :ingress,
       metric: metric,
-      range:  "1h",
-      scope:  scope,
-      name:   resource_name
+      range: "1h",
+      scope: scope,
+      name: resource_name
     ).to_f
   end
 
@@ -573,7 +573,7 @@ class PodDetailData
     return "—" unless ingress_eligible?
 
     rate = latest_ingress("req_count") / TICK_SECONDS
-    rate >= 10 ? rate.round.to_s : ("%.1f" % rate)
+    (rate >= 10) ? rate.round.to_s : ("%.1f" % rate)
   end
 
   def req_sub
@@ -587,10 +587,10 @@ class PodDetailData
       v = latest_ingress(k).to_i
       next if v.zero?
 
-      breakdown << "#{k.split('_').last}: #{v}"
+      breakdown << "#{k.split("_").last}: #{v}"
     end
 
-    "in last 15s · #{breakdown.join(' · ')}"
+    "in last 15s · #{breakdown.join(" · ")}"
   end
 
   # ── p95 LATENCY card ───────────────────────────────────────────
@@ -616,7 +616,7 @@ class PodDetailData
 
   def err_sub
     total = latest_ingress("req_count").to_i
-    errs  = latest_ingress("req_5xx").to_i
+    errs = latest_ingress("req_5xx").to_i
 
     return "no traffic" if total.zero?
     return "0 errors / #{total} reqs in last 15s" if errs.zero?
@@ -651,11 +651,11 @@ class PodDetailData
     t = Time.zone.parse(iso.to_s)
     distance = Time.current - t
     case distance
-    when 0..59            then "#{distance.to_i}s"
-    when 60..3599         then "#{(distance / 60).to_i}m"
-    when 3600..86_399     then "#{(distance / 3600).to_i}h"
+    when 0..59 then "#{distance.to_i}s"
+    when 60..3599 then "#{(distance / 60).to_i}m"
+    when 3600..86_399 then "#{(distance / 3600).to_i}h"
     when 86_400..2_591_999 then "#{(distance / 86_400).to_i}d #{((distance % 86_400) / 3600).to_i}h"
-    else                       "#{(distance / 86_400).to_i}d"
+    else "#{(distance / 86_400).to_i}d"
     end
   rescue ArgumentError, TypeError
     "—"

@@ -39,7 +39,7 @@ class Components::Pods::EnvCard < Components::Base
       # Both controllers live on the same wrapper — kv-filter walks
       # rows for the filter input, secret-reveal walks them for the
       # eye toggles. They don't conflict (different target names).
-      div(data: { controller: "kv-filter secret-reveal" }, class: "relative") do
+      div(data: {controller: "kv-filter secret-reveal"}, class: "relative") do
         filter_bar(entries.any?)
         rows(entries)
         confirm_popover if entries.any?
@@ -93,10 +93,10 @@ class Components::Pods::EnvCard < Components::Base
     ) do
       # Eye icon (visible when masked); slashed-eye (visible when revealed).
       # Stimulus swaps `hidden` between the two on toggle.
-      span(data: { secret_eye: true }) do
+      span(data: {secret_eye: true}) do
         render Icon::EyeOutline.new(class: "w-3.5 h-3.5")
       end
-      span(data: { secret_eye_slash: true }, hidden: true) do
+      span(data: {secret_eye_slash: true}, hidden: true) do
         render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5")
       end
     end
@@ -106,7 +106,7 @@ class Components::Pods::EnvCard < Components::Base
     if entries.empty?
       empty
     else
-      div(data: { kv_filter_target: "list" }) do
+      div(data: {kv_filter_target: "list"}) do
         entries.each { |k, v| env_row(k, v) }
       end
       empty_match
@@ -121,10 +121,10 @@ class Components::Pods::EnvCard < Components::Base
 
     div(
       data: {
-        kv_filter_target:     "row",
+        kv_filter_target: "row",
         secret_reveal_target: ("row" if revealable),
-        key:                  key.to_s.downcase,
-        value:                str.downcase
+        key: key.to_s.downcase,
+        value: str.downcase
       }.compact
     ) do
       row_component(key, str, redacted, revealable, pair)
@@ -156,11 +156,11 @@ class Components::Pods::EnvCard < Components::Base
 
     span do
       span(
-        data: { secret_mask: true },
+        data: {secret_mask: true},
         class: "select-none text-voodu-muted"
       ) { bullets }
       span(
-        data: { secret_value: true },
+        data: {secret_value: true},
         hidden: true
       ) { plain str }
     end
@@ -171,13 +171,13 @@ class Components::Pods::EnvCard < Components::Base
       type: "button",
       title: "Show value",
       "aria-label": "Show value",
-      data: { action: "click->secret-reveal#toggleOne" },
+      data: {action: "click->secret-reveal#toggleOne"},
       class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text"
     ) do
-      span(data: { secret_eye: true }) do
+      span(data: {secret_eye: true}) do
         render Icon::EyeOutline.new(class: "w-3 h-3")
       end
-      span(data: { secret_eye_slash: true }, hidden: true) do
+      span(data: {secret_eye_slash: true}, hidden: true) do
         render Icon::EyeSlashOutline.new(class: "w-3 h-3")
       end
     end
@@ -191,7 +191,7 @@ class Components::Pods::EnvCard < Components::Base
   def confirm_popover
     div(
       hidden: true,
-      data: { secret_reveal_target: "confirm" },
+      data: {secret_reveal_target: "confirm"},
       class: "absolute right-2 top-10 z-30 w-[280px] p-3 border border-voodu-amber/40 bg-voodu-surface-2 shadow-2xl flex flex-col gap-2"
     ) do
       div(class: "flex items-start gap-2") do
@@ -203,12 +203,12 @@ class Components::Pods::EnvCard < Components::Base
       div(class: "flex items-center gap-2 justify-end") do
         button(
           type: "button",
-          data: { action: "click->secret-reveal#cancelReveal" },
+          data: {action: "click->secret-reveal#cancelReveal"},
           class: "inline-flex items-center justify-center px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] hover:bg-voodu-surface-2 hover:text-voodu-text"
         ) { "Cancel" }
         button(
           type: "button",
-          data: { action: "click->secret-reveal#confirmReveal" },
+          data: {action: "click->secret-reveal#confirmReveal"},
           class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-amber/60 bg-voodu-amber-dim text-voodu-amber text-[12px] font-medium hover:bg-voodu-amber-dim hover:brightness-110"
         ) do
           render Icon::EyeOutline.new(class: "w-3 h-3")
@@ -225,7 +225,7 @@ class Components::Pods::EnvCard < Components::Base
   def empty_match
     div(
       hidden: true,
-      data: { kv_filter_target: "empty" },
+      data: {kv_filter_target: "empty"},
       class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]"
     ) { "no keys match the filter." }
   end

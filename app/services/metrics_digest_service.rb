@@ -22,7 +22,7 @@
 # Batching mirrors MetricsSyncIslandJob: BATCH_SIZE rows per
 # insert_all round-trip, bounded peak memory, amortised INSERT cost.
 class MetricsDigestService
-  BATCH_SIZE  = 500
+  BATCH_SIZE = 500
   NDJSON_FILE = "data.ndjson"
 
   def self.from_folder(folder_path:, tenant_id:)
@@ -114,7 +114,7 @@ class MetricsDigestService
       action: :metrics_tick,
       target: "metrics-charts"
     )
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn(
       "metrics-digest broadcast failed island=#{island.id}: #{e.class} #{e.message}"
     )
@@ -126,11 +126,11 @@ class MetricsDigestService
   # already filtered, so this is defence in depth.
   def self.parse_line(line)
     parsed = JSON.parse(line)
-    ts     = parsed["ts"]
+    ts = parsed["ts"]
     source = parsed["source"]
     return nil if ts.blank? || source.blank?
 
-    { source: source, ts_iso: ts, payload: line }
+    {source: source, ts_iso: ts, payload: line}
   rescue JSON::ParserError
     nil
   end

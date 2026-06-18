@@ -8,9 +8,9 @@
 class CreateMetricDashboards < ActiveRecord::Migration[8.1]
   def change
     create_table :metric_dashboards do |t|
-      t.references :island, null: false, foreign_key: { on_delete: :cascade }
-      t.string  :name,   null: false
-      t.json    :panels, null: false, default: []
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.string :name, null: false
+      t.json :panels, null: false, default: []
       t.boolean :pinned, null: false, default: false
       t.timestamps
     end
@@ -21,7 +21,7 @@ class CreateMetricDashboards < ActiveRecord::Migration[8.1]
     # enforces this transactionally; the partial unique index is the
     # DB-level backstop against a concurrent double-pin.
     add_index :metric_dashboards, :island_id, unique: true,
-              where: "pinned = 1",
-              name: "index_metric_dashboards_one_pinned_per_island"
+      where: "pinned = 1",
+      name: "index_metric_dashboards_one_pinned_per_island"
   end
 end

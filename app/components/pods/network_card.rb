@@ -15,12 +15,12 @@ class Components::Pods::NetworkCard < Components::Base
       if primary_network_name.blank?
         empty_state
       else
-        row("network")    { plain primary_network_name }
-        row("ip_address",  copy: true, copy_value: net["ip_address"].to_s) { plain dash(net["ip_address"]) }
-        row("gateway")    { plain dash(net["gateway"]) }
-        row("network_id",  copy: true, copy_value: net["network_id"].to_s) { network_id_value }
-        row("aliases")    { aliases_value }
-        row("ports")      { ports_value }
+        row("network") { plain primary_network_name }
+        row("ip_address", copy: true, copy_value: net["ip_address"].to_s) { plain dash(net["ip_address"]) }
+        row("gateway") { plain dash(net["gateway"]) }
+        row("network_id", copy: true, copy_value: net["network_id"].to_s) { network_id_value }
+        row("aliases") { aliases_value }
+        row("ports") { ports_value }
       end
     end
   end

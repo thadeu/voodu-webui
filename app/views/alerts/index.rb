@@ -10,17 +10,17 @@
 # DOM-stable.
 class Views::Alerts::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :active)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @data           = data
-    @active_tab     = active_tab
+    @data = data
+    @active_tab = active_tab
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands, current_island: @current_island,
-      breadcrumb: overview_crumbs({ label: "Alerts" })
+      breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new

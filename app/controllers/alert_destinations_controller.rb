@@ -77,9 +77,9 @@ class AlertDestinationsController < ApplicationController
 
   def destination_attributes
     attrs = params.require(:alert_destination)
-                  .permit(:name, :endpoint, :secret, :secret_header,
-                          :body_template, :on_firing, :on_resolved, :enabled)
-                  .to_h
+      .permit(:name, :endpoint, :secret, :secret_header,
+        :body_template, :on_firing, :on_resolved, :enabled)
+      .to_h
 
     # Single kind today; force it rather than trusting the form.
     attrs["kind"] = "webhook"
@@ -97,15 +97,15 @@ class AlertDestinationsController < ApplicationController
   # payload looks like a real one without writing history.
   def sample_event
     AlertEvent.new(
-      island:       current_island,
-      state:        "firing",
-      started_at:   Time.current,
-      threshold:    90,
-      rule_name:    "Test alert",
-      metric_kind:  "cpu",
+      island: current_island,
+      state: "firing",
+      started_at: Time.current,
+      threshold: 90,
+      rule_name: "Test alert",
+      metric_kind: "cpu",
       target_label: "host #{current_island.name}",
-      peak_value:   95.0,
-      last_value:   95.0
+      peak_value: 95.0,
+      last_value: 95.0
     )
   end
 end

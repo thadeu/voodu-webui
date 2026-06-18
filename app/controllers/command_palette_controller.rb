@@ -44,13 +44,13 @@ class CommandPaletteController < ApplicationController
     end
 
     globals = CommandSet.globals(
-      islands:        all_islands,
+      islands: all_islands,
       current_island: current,
-      helpers:        helpers
+      helpers: helpers
     )
 
     response.headers["Cache-Control"] = "private, max-age=30"
-    render json: { commands: per_island + globals }
+    render json: {commands: per_island + globals}
   end
 
   private
@@ -67,7 +67,7 @@ class CommandPaletteController < ApplicationController
   # into nil and keep the palette rendering for the OTHER islands.
   def safe_client(island)
     Voodu::Client.new(island)
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn("command_palette: client init failed for #{island.key}: #{e.class} #{e.message}")
     nil
   end

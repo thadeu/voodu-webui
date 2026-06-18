@@ -13,14 +13,14 @@ class DeliverAlertNotificationJob < ApplicationJob
   queue_as :default
 
   retry_on WebhookClient::TransportError, WebhookClient::ServerError,
-           wait: :polynomially_longer, attempts: 5
+    wait: :polynomially_longer, attempts: 5
 
   # Permanent failures: don't burn retries. The reason is recorded on
   # the destination (rescue below) before the raise propagates here.
   discard_on WebhookClient::ClientError
 
   def perform(event_id, destination_id, transition)
-    event       = AlertEvent.find_by(id: event_id)
+    event = AlertEvent.find_by(id: event_id)
     destination = AlertDestination.find_by(id: destination_id)
     return if event.nil? || destination.nil?
     return unless destination.enabled?

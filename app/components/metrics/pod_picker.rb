@@ -37,23 +37,23 @@ class Components::Metrics::PodPicker < Components::Base
   #                 a modal showing a pod-only metric (like
   #                 req_count) would lead to "no data" confusion.
   def initialize(scope_kind:, scope_id:, current_island:, pods: [],
-                 base_path: nil, extra_params: {}, turbo_stream: false,
-                 hide_host: false)
-    @scope_kind     = scope_kind         # "host" | "pod"
-    @scope_id       = scope_id           # host name or pod container name
+    base_path: nil, extra_params: {}, turbo_stream: false,
+    hide_host: false)
+    @scope_kind = scope_kind         # "host" | "pod"
+    @scope_id = scope_id           # host name or pod container name
     @current_island = current_island
-    @pods           = Array(pods)
-    @base_path      = base_path
-    @extra_params   = extra_params || {}
-    @turbo_stream   = turbo_stream
-    @hide_host      = hide_host
+    @pods = Array(pods)
+    @base_path = base_path
+    @extra_params = extra_params || {}
+    @turbo_stream = turbo_stream
+    @hide_host = hide_host
   end
 
   def view_template
     render Components::UI::ScopePicker.new(
-      trigger:         build_trigger,
+      trigger: build_trigger,
       primary_section: @hide_host ? nil : build_host_section,
-      pod_sections:    build_pod_sections
+      pod_sections: build_pod_sections
     )
   end
 
@@ -61,9 +61,9 @@ class Components::Metrics::PodPicker < Components::Base
 
   def build_trigger
     if @scope_kind == "host"
-      { icon: :CpuChipOutline, prefix: "host ", value: display_id }
+      {icon: :CpuChipOutline, prefix: "host ", value: display_id}
     else
-      { icon: :CubeOutline,    prefix: "pod ",  value: display_id }
+      {icon: :CubeOutline, prefix: "pod ", value: display_id}
     end
   end
 
@@ -78,13 +78,13 @@ class Components::Metrics::PodPicker < Components::Base
     host_name = @current_island&.name || "host"
 
     {
-      label:  "HOST",
+      label: "HOST",
       option: {
-        title:       host_name,
-        meta:        "#{@current_island&.host || "—"} · #{@pods.size} pods",
-        href:        metrics_url(kind: "host", id: host_name),
-        active:      @scope_kind == "host",
-        icon:        :CpuChipOutline,
+        title: host_name,
+        meta: "#{@current_island&.host || "—"} · #{@pods.size} pods",
+        href: metrics_url(kind: "host", id: host_name),
+        active: @scope_kind == "host",
+        icon: :CpuChipOutline,
         turbo_stream: @turbo_stream
       }
     }
@@ -95,10 +95,10 @@ class Components::Metrics::PodPicker < Components::Base
 
     @pods
       .group_by { |p| p[:scope] || p["scope"] || "(default)" }
-      .sort_by  { |k, _| k.to_s }
+      .sort_by { |k, _| k.to_s }
       .map do |scope_name, pods|
         {
-          label:   scope_name.to_s,
+          label: scope_name.to_s,
           options: pods.map { |p| pod_to_option(p) }
         }
       end
@@ -106,19 +106,19 @@ class Components::Metrics::PodPicker < Components::Base
 
   def pod_to_option(p)
     container = p[:name] || p["name"]
-    resource  = p[:resource_name] || p["resource_name"]
-    replica   = p[:replica_id] || p["replica_id"]
-    image     = p[:image] || p["image"]
-    status    = (p[:status] || p["status"] || "running").to_s.to_sym
+    resource = p[:resource_name] || p["resource_name"]
+    replica = p[:replica_id] || p["replica_id"]
+    image = p[:image] || p["image"]
+    status = (p[:status] || p["status"] || "running").to_s.to_sym
 
     title = replica.present? ? "#{resource}.#{replica}" : (resource || container)
 
     {
-      title:        title,
-      meta:         image,
-      href:         metrics_url(kind: "pod", id: container),
-      active:       @scope_kind == "pod" && @scope_id == container,
-      status:       status,
+      title: title,
+      meta: image,
+      href: metrics_url(kind: "pod", id: container),
+      active: @scope_kind == "pod" && @scope_id == container,
+      status: status,
       turbo_stream: @turbo_stream
     }
   end

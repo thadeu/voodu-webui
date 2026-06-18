@@ -27,7 +27,7 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
 
     captured = []
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) do |stream, **kwargs|
-      captured << { stream: stream, kwargs: kwargs }
+      captured << {stream: stream, kwargs: kwargs}
     end
 
     total = MetricsDigestService.from_folder(folder_path: @folder, tenant_id: @island.id)
@@ -36,7 +36,7 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
 
     expected_stream = "metrics-#{@island.id}"
     assert captured.any? { |c| c[:stream] == expected_stream },
-           "expected broadcast_action_to(#{expected_stream})"
+      "expected broadcast_action_to(#{expected_stream})"
   end
 
   test "from_io skips malformed and empty lines" do
@@ -57,8 +57,8 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
 
   test "ingest_lines accepts pre-parsed Hash rows" do
     rows = [
-      { source: "system", ts_iso: "2026-05-28T10:00:00Z", payload: '{"ts":"2026-05-28T10:00:00Z","source":"system"}' },
-      { source: "system", ts_iso: "2026-05-28T10:00:15Z", payload: '{"ts":"2026-05-28T10:00:15Z","source":"system"}' }
+      {source: "system", ts_iso: "2026-05-28T10:00:00Z", payload: '{"ts":"2026-05-28T10:00:00Z","source":"system"}'},
+      {source: "system", ts_iso: "2026-05-28T10:00:15Z", payload: '{"ts":"2026-05-28T10:00:15Z","source":"system"}'}
     ]
 
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) { |*| }

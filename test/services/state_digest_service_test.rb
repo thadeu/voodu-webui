@@ -22,14 +22,14 @@ class StateDigestServiceTest < ActiveSupport::TestCase
   test "from_folder replaces pod + system snapshots" do
     pods = [
       {
-        "name"          => "voodu-x-web.a3f9",
-        "kind"          => "deployment",
-        "scope"         => "x",
+        "name" => "voodu-x-web.a3f9",
+        "kind" => "deployment",
+        "scope" => "x",
         "resource_name" => "web",
-        "replica_id"    => "a3f9"
+        "replica_id" => "a3f9"
       }
     ]
-    system = { "host" => { "hostname" => "node-1" }, "uptime_seconds" => 12_345 }
+    system = {"host" => {"hostname" => "node-1"}, "uptime_seconds" => 12_345}
 
     # Wire shape pin: Go binary writes the full PAT envelope, NOT the
     # unwrapped Array/Hash. The service must peel `data.pods` /
@@ -37,9 +37,9 @@ class StateDigestServiceTest < ActiveSupport::TestCase
     # otherwise build_rows iterates over envelope keys and blows up
     # with TypeError on `String#[]`.
     File.write(@folder.join("pods.json"),
-               { "status" => "ok", "data" => { "pods" => pods, "degraded" => [] } }.to_json)
+      {"status" => "ok", "data" => {"pods" => pods, "degraded" => []}}.to_json)
     File.write(@folder.join("system.json"),
-               { "status" => "ok", "data" => system }.to_json)
+      {"status" => "ok", "data" => system}.to_json)
 
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) { |*| }
     stub_class_method(Turbo::StreamsChannel, :broadcast_update_to) { |*| }
@@ -48,7 +48,7 @@ class StateDigestServiceTest < ActiveSupport::TestCase
 
     assert_equal 1, Pod.where(island_id: @island.id).count
     assert_equal "voodu-x-web.a3f9",
-                 Pod.where(island_id: @island.id).first.container_name
+      Pod.where(island_id: @island.id).first.container_name
 
     assert System.find_by(island_id: @island.id), "system snapshot must exist"
   end
@@ -56,19 +56,19 @@ class StateDigestServiceTest < ActiveSupport::TestCase
   test "from_parsed broadcasts state_tick + status updates" do
     captured = []
     stub_class_method(Turbo::StreamsChannel, :broadcast_update_to) do |stream, **kwargs|
-      captured << { stream: stream, kind: :update, kwargs: kwargs }
+      captured << {stream: stream, kind: :update, kwargs: kwargs}
     end
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) do |stream, **kwargs|
-      captured << { stream: stream, kind: :action, kwargs: kwargs }
+      captured << {stream: stream, kind: :action, kwargs: kwargs}
     end
 
     StateDigestService.from_parsed(pods: [], system: {}, tenant_id: @island.id)
 
     stream = "island-state-#{@island.id}"
     assert captured.any? { |b| b[:stream] == stream && b[:kind] == :action },
-           "expected state_tick action broadcast"
+      "expected state_tick action broadcast"
     assert captured.any? { |b| b[:stream] == stream && b[:kind] == :update },
-           "expected status pill/dot update broadcasts"
+      "expected status pill/dot update broadcasts"
   end
 
   test "from_folder tolerates missing files (defaults to empty)" do

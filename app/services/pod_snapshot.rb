@@ -81,16 +81,16 @@ class PodSnapshot
       next if name.empty?
 
       seen[name] = {
-        island_id:      island.id,
+        island_id: island.id,
         container_name: name,
-        kind:           pod["kind"].to_s,
-        scope:          pod["scope"].to_s,
-        resource_name:  pod["resource_name"].to_s,
-        replica_id:     pod["replica_id"].presence,
-        payload:        pod.to_json,
-        synced_at:      now,
-        created_at:     now,
-        updated_at:     now
+        kind: pod["kind"].to_s,
+        scope: pod["scope"].to_s,
+        resource_name: pod["resource_name"].to_s,
+        replica_id: pod["replica_id"].presence,
+        payload: pod.to_json,
+        synced_at: now,
+        created_at: now,
+        updated_at: now
       }
     end
 

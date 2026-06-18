@@ -9,15 +9,15 @@
 # wired" — not "this is broken."
 class Views::Shared::MilestonePlaceholder < Components::Base
   def initialize(title:, blurb:, milestone:)
-    @title     = title
-    @blurb     = blurb
+    @title = title
+    @blurb = blurb
     @milestone = milestone
   end
 
   def view_template
     div(class: "mx-auto max-w-3xl px-6 py-10") do
       render(Components::UI::Card.new
-              .with_header { span(class: "text-sm font-semibold text-voodu-muted") { @milestone }}) do
+              .with_header { span(class: "text-sm font-semibold text-voodu-muted") { @milestone } }) do
         div(class: "flex flex-col gap-3 py-2") do
           h1(class: "text-xl font-semibold text-voodu-text") { @title }
           p(class: "text-voodu-text-2") { @blurb }

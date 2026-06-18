@@ -27,7 +27,7 @@
 #   }
 class Views::Metrics::DisplaySettings < Views::Base
   def initialize(kind:, items:)
-    @kind  = kind
+    @kind = kind
     @items = items
   end
 
@@ -43,7 +43,7 @@ class Views::Metrics::DisplaySettings < Views::Base
     div(
       class: "p-4 flex flex-col gap-4 @container",
       data: {
-        controller:                          "metrics-display-settings",
+        controller: "metrics-display-settings",
         metrics_display_settings_kind_value: @kind
       }
     ) do
@@ -67,7 +67,7 @@ class Views::Metrics::DisplaySettings < Views::Base
       button(
         type: "button",
         data: {
-          action:                          "click->metrics-display-settings#save",
+          action: "click->metrics-display-settings#save",
           metrics_display_settings_target: "updateBtn"
         },
         class: [
@@ -100,7 +100,7 @@ class Views::Metrics::DisplaySettings < Views::Base
       span(class: "text-[10px] text-voodu-muted-2") { "(applies when 3+ visible)" }
 
       div(
-        data: { metrics_display_settings_target: "colsPicker" },
+        data: {metrics_display_settings_target: "colsPicker"},
         class: "ml-auto inline-flex items-center gap-1"
       ) do
         [2, 3, 4].each { |n| cols_pill(n) }
@@ -112,8 +112,8 @@ class Views::Metrics::DisplaySettings < Views::Base
     button(
       type: "button",
       data: {
-        action:                          "click->metrics-display-settings#selectCols",
-        cols:                            n.to_s,
+        action: "click->metrics-display-settings#selectCols",
+        cols: n.to_s,
         metrics_display_settings_target: "colsBtn"
       },
       class: [
@@ -138,7 +138,7 @@ class Views::Metrics::DisplaySettings < Views::Base
   # grid layout regardless of how many cols are active.
   def cards_grid
     div(
-      data: { metrics_display_settings_target: "grid" },
+      data: {metrics_display_settings_target: "grid"},
       class: "grid grid-cols-2 @sm:grid-cols-3 @md:grid-cols-4 gap-2"
     ) do
       @items.each do |item|
@@ -157,11 +157,11 @@ class Views::Metrics::DisplaySettings < Views::Base
     div(
       data: {
         metrics_display_settings_target: "card",
-        card_type:                       "single",
-        metric:                          spec[:metric],
-        section:                         spec[:section],
-        default_visible:                 spec[:default_visible] == false ? "false" : "true",
-        action:                          "click->metrics-display-settings#toggle"
+        card_type: "single",
+        metric: spec[:metric],
+        section: spec[:section],
+        default_visible: (spec[:default_visible] == false) ? "false" : "true",
+        action: "click->metrics-display-settings#toggle"
       },
       class: card_base_classes
     ) do
@@ -186,12 +186,12 @@ class Views::Metrics::DisplaySettings < Views::Base
     div(
       data: {
         metrics_display_settings_target: "card",
-        card_type:                       "group",
-        group_key:                       item[:group_key],
-        sub_metrics:                     sub_metrics_csv,
-        section:                         item[:section],
-        expanded:                        "false",
-        action:                          "click->metrics-display-settings#toggle"
+        card_type: "group",
+        group_key: item[:group_key],
+        sub_metrics: sub_metrics_csv,
+        section: item[:section],
+        expanded: "false",
+        action: "click->metrics-display-settings#toggle"
       },
       class: card_base_classes
     ) do
@@ -199,7 +199,7 @@ class Views::Metrics::DisplaySettings < Views::Base
       card_label_row(item[:label], item[:section])
 
       span(class: "text-[10px] font-voodu-mono text-voodu-muted-2 leading-tight") do
-        span(data: { role: "count" }) { "0 of #{item[:members].size}" }
+        span(data: {role: "count"}) { "0 of #{item[:members].size}" }
         if item[:unit].present?
           plain " · #{item[:unit]}"
         end
@@ -224,7 +224,7 @@ class Views::Metrics::DisplaySettings < Views::Base
       # even when the panel was clamped — gives the operator a
       # clear "this popover came from THIS card" visual cue.
       div(
-        data: { role: "group-panel", group_panel_sub_metrics: sub_metrics_csv },
+        data: {role: "group-panel", group_panel_sub_metrics: sub_metrics_csv},
         class: tokens(
           "hidden",
           "absolute top-full mt-2 z-50",
@@ -239,7 +239,7 @@ class Views::Metrics::DisplaySettings < Views::Base
         # (top + left) match the panel border, so it reads as a
         # continuous "speech-bubble" pointer back to the card.
         div(
-          data: { role: "group-arrow" },
+          data: {role: "group-arrow"},
           class: tokens(
             "absolute -top-[5px] w-2.5 h-2.5 rotate-45",
             "border-t border-l border-voodu-border-2 bg-voodu-surface-2"
@@ -257,15 +257,15 @@ class Views::Metrics::DisplaySettings < Views::Base
   def sub_metric_row(spec)
     div(
       data: {
-        role:            "sub-metric",
-        metric:          spec[:metric],
-        default_visible: spec[:default_visible] == false ? "false" : "true",
-        action:          "click->metrics-display-settings#toggleSubMetric"
+        role: "sub-metric",
+        metric: spec[:metric],
+        default_visible: (spec[:default_visible] == false) ? "false" : "true",
+        action: "click->metrics-display-settings#toggleSubMetric"
       },
       class: "flex items-center gap-2 px-1.5 py-1.5 cursor-pointer hover:bg-voodu-surface"
     ) do
       span(
-        data:  { role: "sub-handle" },
+        data: {role: "sub-handle"},
         class: "cursor-grab active:cursor-grabbing text-voodu-muted-2 hover:text-voodu-text shrink-0",
         title: "Drag to reorder"
       ) do
@@ -273,11 +273,11 @@ class Views::Metrics::DisplaySettings < Views::Base
       end
 
       span(
-        data: { role: "checkbox" },
+        data: {role: "checkbox"},
         class: "inline-flex items-center justify-center w-3.5 h-3.5 border border-voodu-border shrink-0"
       ) do
         span(
-          data: { role: "check-icon" },
+          data: {role: "check-icon"},
           class: "hidden text-voodu-accent-2"
         ) do
           render Icon::CheckOutline.new(class: "w-2.5 h-2.5")
@@ -298,7 +298,7 @@ class Views::Metrics::DisplaySettings < Views::Base
   def card_header_row(color, with_chevron: false)
     div(class: "flex items-center gap-1.5") do
       span(
-        data:  { role: "drag-handle" },
+        data: {role: "drag-handle"},
         class: "cursor-grab active:cursor-grabbing text-voodu-muted-2 hover:text-voodu-text shrink-0",
         title: "Drag to reorder"
       ) do
@@ -306,21 +306,21 @@ class Views::Metrics::DisplaySettings < Views::Base
       end
 
       span(
-        data:  { role: "dot" },
+        data: {role: "dot"},
         class: "inline-block w-2 h-2 rounded-full shrink-0",
         style: "background: #{color};"
       )
 
       if with_chevron
         span(
-          data:  { role: "chevron" },
+          data: {role: "chevron"},
           class: "ml-auto text-voodu-muted-2 transition-transform"
         ) do
           render Icon::ChevronDownOutline.new(class: "w-3 h-3")
         end
       else
         span(
-          data:  { role: "check" },
+          data: {role: "check"},
           class: "hidden ml-auto text-voodu-accent-2"
         ) do
           render Icon::CheckOutline.new(class: "w-3 h-3")

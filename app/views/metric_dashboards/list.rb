@@ -14,7 +14,7 @@ class Views::MetricDashboards::List < Views::Base
   FRAME_ID = "dashboards-panel"
 
   def initialize(island:, dashboards:)
-    @island     = island
+    @island = island
     @dashboards = dashboards
   end
 
@@ -54,7 +54,7 @@ class Views::MetricDashboards::List < Views::Base
     div(class: "flex items-center gap-1 px-2 py-2 border-b border-voodu-border-2 hover:bg-voodu-surface-2") do
       a(
         href: metrics_path(pid: dashboard.uuid),
-        data: { turbo_frame: "_top" },
+        data: {turbo_frame: "_top"},
         class: "flex items-center gap-2.5 px-2 py-1 min-w-0 flex-1"
       ) do
         if dashboard.pinned
@@ -66,7 +66,7 @@ class Views::MetricDashboards::List < Views::Base
         div(class: "min-w-0 flex-1") do
           div(class: "text-[12.5px] font-medium text-voodu-text truncate") { dashboard.name }
           div(class: "text-[11px] text-voodu-muted") do
-            plain "#{dashboard.panels_count} #{dashboard.panels_count == 1 ? 'panel' : 'panels'}"
+            plain "#{dashboard.panels_count} #{(dashboard.panels_count == 1) ? "panel" : "panels"}"
             if dashboard.pinned
               plain " · "
               span(class: "text-voodu-accent-2") { "pinned" }
@@ -89,10 +89,10 @@ class Views::MetricDashboards::List < Views::Base
   def pin_button(dashboard)
     action = dashboard.pinned ? unpin_metric_dashboard_path(dashboard) : pin_metric_dashboard_path(dashboard)
 
-    form(action: action, method: "post", data: { turbo_frame: "_top" }, class: "inline-flex") do
+    form(action: action, method: "post", data: {turbo_frame: "_top"}, class: "inline-flex") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       button(
-        type:  "submit",
+        type: "submit",
         title: dashboard.pinned ? "Unpin" : "Pin as default",
         "aria-label": dashboard.pinned ? "Unpin #{dashboard.name}" : "Pin #{dashboard.name}",
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface shrink-0"
@@ -119,17 +119,17 @@ class Views::MetricDashboards::List < Views::Base
 
   def delete_button(dashboard)
     render Components::UI::Confirmable.new(
-      title:         "Delete dashboard",
-      message:       "Permanently delete \"#{dashboard.name}\"? This can't be undone.",
+      title: "Delete dashboard",
+      message: "Permanently delete \"#{dashboard.name}\"? This can't be undone.",
       confirm_label: "Delete",
-      danger:        true,
-      icon:          :TrashOutline,
+      danger: true,
+      icon: :TrashOutline,
       # Break out of the drawer's "dashboards-panel" turbo_frame so the
       # delete redirect lands on /metrics (full page) instead of 404ing
       # the missing frame ("Content missing").
-      turbo_frame:   "_top",
-      form:          { action: metric_dashboard_path(dashboard), method: :delete },
-      trigger:       {
+      turbo_frame: "_top",
+      form: {action: metric_dashboard_path(dashboard), method: :delete},
+      trigger: {
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-red hover:bg-voodu-surface shrink-0",
         title: "Delete",
         "aria-label": "Delete #{dashboard.name}"

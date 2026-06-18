@@ -18,12 +18,12 @@ class Views::Pods::Show < Views::Base
   # gets just the pod detail surface, and tells Pods::Header to drop
   # its "All pods" back link (the drawer's own close X covers that).
   def initialize(current_path:, islands: [], current_island: nil, data: nil, updated_at: nil, drawer: false)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @data           = data
-    @updated_at     = updated_at
-    @drawer         = drawer
+    @data = data
+    @updated_at = updated_at
+    @drawer = drawer
   end
 
   def view_template
@@ -33,10 +33,10 @@ class Views::Pods::Show < Views::Base
       render Components::Layouts::Dashboard.new(
         current_path: @current_path, islands: @islands,
         current_island: @current_island, updated_at: @updated_at,
-        breadcrumb: (@current_island && overview_crumbs(
-          { label: "Pods", href: pods_path(tenant_key: @current_island.key) },
-          { label: @data&.name }
-        ))
+        breadcrumb: @current_island && overview_crumbs(
+          {label: "Pods", href: pods_path(tenant_key: @current_island.key)},
+          {label: @data&.name}
+        )
       ) do
         if @current_island.nil?
           render Components::UI::NoIslandState.new
@@ -87,9 +87,9 @@ class Views::Pods::Show < Views::Base
     # attribute is a Turbo Drive feature, not Turbo Frames).
     turbo_frame_tag(
       "island-#{@current_island.id}-state",
-      target:  "_top",
+      target: "_top",
       refresh: "morph",
-      data:    { state_frame: true }
+      data: {state_frame: true}
     ) do
       if @data.error
         render Components::UI::ErrorState.new(error: @data.error)

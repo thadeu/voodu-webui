@@ -16,7 +16,7 @@
 # is exactly how a resolved last-alert clears the badge.
 class Components::Alerts::NavBadge < Components::Base
   def initialize(count:, variant: :pill)
-    @count   = count.to_i
+    @count = count.to_i
     @variant = variant
   end
 
@@ -29,7 +29,7 @@ class Components::Alerts::NavBadge < Components::Base
                "items-center justify-center min-w-[12px] h-[12px] px-1 text-[9px] " \
                "font-medium font-voodu-mono bg-voodu-red-dim text-voodu-red " \
                "rounded-full leading-none",
-        aria:  { label: "#{@count} alerts firing" }
+        aria: {label: "#{@count} alerts firing"}
       ) { @count.to_s }
     else
       span(

@@ -30,28 +30,28 @@ module LogTail
     # @yieldparam pod_name [String]
     # @yieldparam hash     [Hash] parsed line ({ts, pod, level, msg, raw, …})
     # @return [Integer] number of lines yielded
-    def self.each_line(island_id:, pods: nil, from:, until_:,
-                       content_search: nil, regex: false,
-                       limit: DEFAULT_MATCH_LIMIT, &block)
+    def self.each_line(island_id:, from:, until_:, pods: nil,
+      content_search: nil, regex: false,
+      limit: DEFAULT_MATCH_LIMIT, &block)
       new(
-        island_id:      island_id,
-        pods:           pods,
-        from:           from,
-        until_:         until_,
+        island_id: island_id,
+        pods: pods,
+        from: from,
+        until_: until_,
         content_search: content_search,
-        regex:          regex,
-        limit:          limit
+        regex: regex,
+        limit: limit
       ).each_line(&block)
     end
 
     def initialize(island_id:, pods:, from:, until_:,
-                   content_search:, regex:, limit:)
-      @island_id      = island_id
-      @from           = from
-      @until_         = until_
+      content_search:, regex:, limit:)
+      @island_id = island_id
+      @from = from
+      @until_ = until_
       @content_search = content_search.to_s
-      @matcher        = build_matcher(@content_search, regex)
-      @limit          = limit
+      @matcher = build_matcher(@content_search, regex)
+      @limit = limit
 
       # Resolve pod list: explicit list OR every pod with on-disk data.
       requested = Array(pods).compact.reject(&:empty?)
@@ -65,8 +65,8 @@ module LogTail
     def each_line
       return enum_for(:each_line) unless block_given?
 
-      yielded   = 0
-      from_iso  = @from.iso8601(3)
+      yielded = 0
+      from_iso = @from.iso8601(3)
       until_iso = @until_.iso8601(3)
 
       @pods.each do |pod|
@@ -151,9 +151,9 @@ module LogTail
       return true if @matcher.nil?
 
       record = {
-        msg:    (hash[:msg]    || hash["msg"]).to_s,
-        raw:    (hash[:raw]    || hash["raw"]).to_s,
-        level:  (hash[:level]  || hash["level"]).to_s,
+        msg: (hash[:msg] || hash["msg"]).to_s,
+        raw: (hash[:raw] || hash["raw"]).to_s,
+        level: (hash[:level] || hash["level"]).to_s,
         stream: (hash[:stream] || hash["stream"]).to_s
       }
 

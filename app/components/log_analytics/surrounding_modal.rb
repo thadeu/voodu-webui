@@ -26,10 +26,10 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   def view_template
     render(
       Components::UI::Modal.new(
-        title:    "Surrounding logs",
+        title: "Surrounding logs",
         subtitle: subtitle,
-        icon:     :ArrowsPointingOutOutline,
-        size:     :xl
+        icon: :ArrowsPointingOutOutline,
+        size: :xl
       )
     ) do
       context_strip
@@ -79,9 +79,9 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
 
   def export_copy(label, fmt)
     button(
-      type:  "button",
+      type: "button",
       title: "Copy this batch as #{fmt.upcase}",
-      data:  { action: "click->log-analytics#copyExport", export_url: surrounding_url(fmt: fmt) },
+      data: {action: "click->log-analytics#copyExport", export_url: surrounding_url(fmt: fmt)},
       class: export_btn_class
     ) do
       render Icon::ClipboardDocumentOutline.new(class: "w-3 h-3")
@@ -91,11 +91,11 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
 
   def export_download(label, fmt)
     a(
-      href:     surrounding_url(fmt: fmt),
+      href: surrounding_url(fmt: fmt),
       download: "",
-      title:    "Download this batch as #{label}",
-      data:     { turbo: false },
-      class:    export_btn_class
+      title: "Download this batch as #{label}",
+      data: {turbo: false},
+      class: export_btn_class
     ) do
       render Icon::ArrowDownTrayOutline.new(class: "w-3 h-3")
       span { label }
@@ -109,7 +109,7 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   def scope_toggle
     div(class: "inline-flex items-center gap-px p-[2px] border border-voodu-border bg-voodu-surface") do
       scope_button("This pod", all_pods: false, active: !@data.all_pods?)
-      scope_button("All pods", all_pods: true,  active: @data.all_pods?)
+      scope_button("All pods", all_pods: true, active: @data.all_pods?)
     end
   end
 
@@ -119,9 +119,9 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
     button(
       type: "button",
       data: {
-        action:   "click->log-analytics#openSurrounding",
-        ts:       @data.anchor_ts,
-        pod:      @data.pod,
+        action: "click->log-analytics#openSurrounding",
+        ts: @data.anchor_ts,
+        pod: @data.pod,
         all_pods: (all_pods ? "1" : "0")
       },
       class: tokens(
@@ -160,9 +160,9 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
           column_header
           @data.rows.each_with_index do |row, idx|
             render Components::LogAnalytics::Row.new(
-              row:          row,
+              row: row,
               surroundable: false,
-              anchor:       idx == @data.anchor_index
+              anchor: idx == @data.anchor_index
             )
           end
         end
@@ -182,11 +182,11 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
       button(
         type: "button",
         data: {
-          action:   "click->log-analytics#openSurrounding",
-          ts:       @data.anchor_ts,
-          pod:      @data.pod,
+          action: "click->log-analytics#openSurrounding",
+          ts: @data.anchor_ts,
+          pod: @data.pod,
           all_pods: (@data.all_pods? ? "1" : "0"),
-          expand:   @data.next_expand
+          expand: @data.next_expand
         },
         class: "flex items-center justify-center gap-1.5 w-full px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
       ) do
@@ -200,10 +200,10 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   # expand. With `fmt:` it serves the export of the exact batch shown.
   def surrounding_url(**extra)
     logs_analytics_surrounding_path(
-      pod:      @data.pod,
-      ts:       @data.anchor_ts,
+      pod: @data.pod,
+      ts: @data.anchor_ts,
       all_pods: (@data.all_pods? ? "1" : "0"),
-      expand:   @data.expand,
+      expand: @data.expand,
       **extra
     )
   end

@@ -7,7 +7,7 @@
 # (URLs, PATs, IDs).
 class Components::Form::Input < Components::Base
   def initialize(mono: false, error: false, **attrs)
-    @mono  = mono
+    @mono = mono
     @error = error
     @attrs = attrs
   end

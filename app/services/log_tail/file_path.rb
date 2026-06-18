@@ -19,7 +19,7 @@ module LogTail
   module FilePath
     module_function
 
-    LOG_ROOT     = "storage/logs"
+    LOG_ROOT = "storage/logs"
 
     # Cap per (pod, day) file in bytes. 250MB matches the operator
     # decision — drop+warn behaviour kicks in when a file hits this.
@@ -52,7 +52,7 @@ module LogTail
     # Per-day file: storage/logs/<island_id>/<pod>/YYYY-MM-DD.ndjson
     # `date` is a Date or anything responding to #strftime.
     def daily_file(island_id, pod_name, date)
-      pod_dir(island_id, pod_name).join("#{date.strftime('%Y-%m-%d')}.ndjson")
+      pod_dir(island_id, pod_name).join("#{date.strftime("%Y-%m-%d")}.ndjson")
     end
 
     # ensure_dir — mkdir_p on demand. Writer calls before every open
@@ -73,7 +73,7 @@ module LogTail
     # [from, until] window for a pod. Returns existing files only;
     # callers iterate this list to read NDJSON for export.
     def date_files_in_range(island_id, pod_name, from, until_)
-      from_date  = from.to_date
+      from_date = from.to_date
       until_date = until_.to_date
 
       (from_date..until_date).filter_map do |date|

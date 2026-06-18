@@ -12,8 +12,8 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   fixtures :islands
 
   setup do
-    @island       = islands(:alpha)
-    @prev_wh      = ENV["WAREHOUSE"]
+    @island = islands(:alpha)
+    @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
 
@@ -84,12 +84,12 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   def seed_running_web_pod
     @island.pods.create!(
       container_name: "web.aaaa",
-      kind:           "deployment",
-      scope:          "web",
-      resource_name:  "web",
-      replica_id:     "aaaa",
-      synced_at:      Time.current,
-      payload:        {
+      kind: "deployment",
+      scope: "web",
+      resource_name: "web",
+      replica_id: "aaaa",
+      synced_at: Time.current,
+      payload: {
         "name" => "web.aaaa", "scope" => "web", "resource_name" => "web",
         "replica_id" => "aaaa", "kind" => "deployment", "status" => "running",
         "image" => "nginx:1.27"

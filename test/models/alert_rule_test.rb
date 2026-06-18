@@ -104,9 +104,9 @@ class AlertRuleTest < ActiveSupport::TestCase
         firing: firing, enabled: enabled
       )
     end
-    make.("a", firing: true,  enabled: true)
-    make.("b", firing: true,  enabled: false)
-    make.("c", firing: false, enabled: true)
+    make.call("a", firing: true, enabled: true)
+    make.call("b", firing: true, enabled: false)
+    make.call("c", firing: false, enabled: true)
 
     assert_equal 1, AlertRule.firing_count_for(@island.id)
   end
@@ -141,7 +141,7 @@ class AlertRuleTest < ActiveSupport::TestCase
   test "metrics_link_params points host rules at the host scope" do
     rule = @island.alert_rules.new(metric_kind: "cpu", target_kind: "host")
 
-    assert_equal({ scope_kind: "host" }, rule.metrics_link_params)
+    assert_equal({scope_kind: "host"}, rule.metrics_link_params)
   end
 
   test "metrics_link_params resolves a pod rule to a live replica container" do
@@ -155,7 +155,7 @@ class AlertRuleTest < ActiveSupport::TestCase
       kind: "deployment", replica_id: "e1e1", payload: "{}", synced_at: Time.current
     )
 
-    assert_equal({ scope_kind: "pod", scope_id: "fsw-controller.e1e1" }, rule.metrics_link_params)
+    assert_equal({scope_kind: "pod", scope_id: "fsw-controller.e1e1"}, rule.metrics_link_params)
   end
 
   test "metrics_link_params falls back to host when the deployment has no live replica" do
@@ -165,7 +165,7 @@ class AlertRuleTest < ActiveSupport::TestCase
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
 
-    assert_equal({ scope_kind: "host" }, rule.metrics_link_params)
+    assert_equal({scope_kind: "host"}, rule.metrics_link_params)
   end
 
   test "destinations_for: no selection notifies all enabled destinations wanting the transition" do

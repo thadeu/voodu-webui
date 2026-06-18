@@ -15,12 +15,12 @@ class AlertPayloadTest < ActiveSupport::TestCase
   end
 
   def dest(kind, **attrs)
-    @island.alert_destinations.new({ name: "d", kind: kind }.merge(attrs))
+    @island.alert_destinations.new({name: "d", kind: kind}.merge(attrs))
   end
 
   test "webhook with a body template renders it to a verbatim JSON string" do
     d = dest("webhook", endpoint: "https://x.example/h",
-             body_template: '{"text":"{{rule}} {{state}}","v":"{{value}}{{unit}}"}')
+      body_template: '{"text":"{{rule}} {{state}}","v":"{{value}}{{unit}}"}')
     out = AlertPayload.for(@event, "firing", d)
 
     assert_kind_of String, out
@@ -31,7 +31,7 @@ class AlertPayloadTest < ActiveSupport::TestCase
 
   test "pagerduty tokens: event_action flips, dedup_key is the stable episode id" do
     d = dest("webhook", endpoint: "https://x.example/h",
-             body_template: '{"action":"{{event_action}}","key":"{{dedup_key}}"}')
+      body_template: '{"action":"{{event_action}}","key":"{{dedup_key}}"}')
 
     # Same persisted event → same dedup_key across both transitions, so
     # a resolve closes the incident the trigger opened.
@@ -58,7 +58,7 @@ class AlertPayloadTest < ActiveSupport::TestCase
   test "template tokens round noisy numbers and humanise the date" do
     @event.last_value = 23.24981689453125
     d = dest("webhook", endpoint: "https://x.example/h",
-             body_template: '{"v":"{{value}}","d":"{{started_at}}"}')
+      body_template: '{"v":"{{value}}","d":"{{started_at}}"}')
     parsed = JSON.parse(AlertPayload.for(@event, "firing", d))
 
     assert_equal "23.2", parsed["v"], "rounded to 1 decimal, no float noise"

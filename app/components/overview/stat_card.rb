@@ -20,15 +20,15 @@
 # chart cleanly via Sparkline's `return if points.size < 2`.
 class Components::Overview::StatCard < Components::Base
   def initialize(label:, icon:, value:, unit:, sub:, color:, series:, period: "1h", delta: nil)
-    @label  = label
-    @icon   = icon   # Heroicon constant symbol, e.g. :CpuChipOutline
-    @value  = value
-    @unit   = unit
-    @sub    = sub
-    @color  = color
+    @label = label
+    @icon = icon   # Heroicon constant symbol, e.g. :CpuChipOutline
+    @value = value
+    @unit = unit
+    @sub = sub
+    @color = color
     @series = series  # Array of {ts:, value:, formatted:} hashes
     @period = period
-    @delta  = delta  # e.g. "↑ 2.4%" — nil hides the change badge
+    @delta = delta  # e.g. "↑ 2.4%" — nil hides the change badge
   end
 
   def view_template
@@ -91,13 +91,13 @@ class Components::Overview::StatCard < Components::Base
     return if @series.blank?
 
     render Components::Metrics::Chart.new(
-      points:   @series,
-      color:    @color,
-      unit:     @unit,
-      label:    @label,
+      points: @series,
+      color: @color,
+      unit: @unit,
+      label: @label,
       range_ms: 60 * 60 * 1000,
-      height:   56,
-      axes:     false
+      height: 56,
+      axes: false
     )
   end
 end

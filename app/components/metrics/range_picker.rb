@@ -22,7 +22,7 @@ class Components::Metrics::RangePicker < Components::Base
   def view_template
     div(
       role: "tablist",
-      aria: { label: "Time range" },
+      aria: {label: "Time range"},
       class: "inline-flex items-stretch border border-voodu-border bg-voodu-surface"
     ) do
       RANGES.each_with_index do |r, i|
@@ -30,9 +30,9 @@ class Components::Metrics::RangePicker < Components::Base
 
         a(
           href: range_url(r),
-          data: { turbo: false },
+          data: {turbo: false},
           role: "tab",
-          aria: { selected: active.to_s },
+          aria: {selected: active.to_s},
           class: tokens(
             "inline-flex items-center justify-center min-w-9 px-2.5 h-8 font-voodu-mono text-[11px] font-bold",
             i.positive? ? "border-l border-voodu-border" : nil,

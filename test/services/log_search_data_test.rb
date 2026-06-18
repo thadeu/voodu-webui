@@ -17,7 +17,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   setup do
     @island = islands(:alpha)
-    @base   = Time.zone.local(2026, 6, 9, 14, 47, 50)
+    @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
 
     # Pin "now" to just after the seeded era. LogSearchData#window clamps
     # `from` to a retention floor relative to Time.current
@@ -36,8 +36,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   test "filters by time window and returns newest-first" do
     seed("web", [
-      [@base,             "first"],
-      [@base + 1.second,  "second"],
+      [@base, "first"],
+      [@base + 1.second, "second"],
       [@base + 2.seconds, "third"],
       [@base + 3.seconds, "fourth"]
     ])
@@ -52,8 +52,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   test "full-text search is a case-insensitive substring match" do
     seed("web", [
-      [@base,             "GET /health 200"],
-      [@base + 1.second,  "callid=8342416038 finished"],
+      [@base, "GET /health 200"],
+      [@base + 1.second, "callid=8342416038 finished"],
       [@base + 2.seconds, "GET /metrics 200"]
     ])
 
@@ -65,14 +65,14 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   test "| limit caps the result set to the newest N (matched stays honest)" do
     seed("web", [
-      [@base,             "line one"],
-      [@base + 1.second,  "line two"],
+      [@base, "line one"],
+      [@base + 1.second, "line two"],
       [@base + 2.seconds, "line three"],
       [@base + 3.seconds, "line four"]
     ])
 
     data = search(from: iso(@base - 1.second), until: iso(@base + 10.seconds),
-                  q: "@message like /line/ | limit 2")
+      q: "@message like /line/ | limit 2")
 
     assert_equal 2, data.query_limit
     assert_equal 4, data.matched, "all four matched the filter"
@@ -82,8 +82,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   test "regex search matches against the message body" do
     seed("web", [
-      [@base,             "status=200"],
-      [@base + 1.second,  "status=500"],
+      [@base, "status=200"],
+      [@base + 1.second, "status=500"],
       [@base + 2.seconds, "status=502"]
     ])
 
@@ -128,19 +128,19 @@ class LogSearchDataTest < ActiveSupport::TestCase
   end
 
   test "range falls back to the default when unknown" do
-    data = LogSearchData.new(island: @island, params: { range: "bogus" })
+    data = LogSearchData.new(island: @island, params: {range: "bogus"})
     assert_equal LogSearchData::DEFAULT_RANGE, data.range
     assert_not data.custom?
   end
 
   test "explicit from/until without a preset reads as custom" do
-    data = LogSearchData.new(island: @island, params: { from: iso(@base), until: iso(@base + 1.minute) })
+    data = LogSearchData.new(island: @island, params: {from: iso(@base), until: iso(@base + 1.minute)})
     assert data.custom?
     assert_equal "custom", data.range
   end
 
   test "range=custom stays custom even when from is blank (no silent preset fallback)" do
-    data = LogSearchData.new(island: @island, params: { range: "custom", from: "", until: "" })
+    data = LogSearchData.new(island: @island, params: {range: "custom", from: "", until: ""})
     assert data.custom?, "custom must be sticky so the inputs do not vanish on reload"
     assert_equal "custom", data.range
     # Window must resolve without a nil-comparison crash; blank from
@@ -150,7 +150,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   end
 
   test "from_iso / until_iso are unambiguous UTC strings" do
-    data = LogSearchData.new(island: @island, params: { range: "1h" })
+    data = LogSearchData.new(island: @island, params: {range: "1h"})
     assert_match(/Z\z/, data.from_iso)
     assert_match(/Z\z/, data.until_iso)
   end
@@ -158,7 +158,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   test "pages the newest-first result set by PAGE_SIZE" do
     with_page_size(5) do
       seed("web", (0..11).map { |i| [@base + i.seconds, "line-#{i}"] })
-      window = { range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds) }
+      window = {range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds)}
 
       p1 = search(window.merge(page: 1))
       assert_equal 5, p1.rows.size
@@ -198,7 +198,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
     assert_equal 5, sur.rows.size
     assert_equal "line-5", sur.rows[sur.anchor_index][:msg]
     assert_equal %w[line-7 line-6 line-5 line-4 line-3], sur.rows.map { |r| r[:msg] },
-                 "newest-first, matching the analytics result list"
+      "newest-first, matching the analytics result list"
   end
 
   test "surrounding clamps context at the window edges" do
@@ -267,12 +267,12 @@ class LogSearchDataTest < ActiveSupport::TestCase
       path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
       LogTail::FilePath.ensure_dir(File.dirname(path))
       row = {
-        ts:     time.iso8601(3),
-        pod:    pod,
+        ts: time.iso8601(3),
+        pod: pod,
         stream: "stdout",
-        level:  nil,
-        msg:    msg,
-        raw:    msg,
+        level: nil,
+        msg: msg,
+        raw: msg,
         parsed: false
       }
       File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }

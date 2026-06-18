@@ -64,10 +64,10 @@ module Internal
           # Go decoder's `Island.ID string` field would explode on a
           # number otherwise.
           {
-            id:       island.id.to_s,
-            key:      island.key,
+            id: island.id.to_s,
+            key: island.key,
             endpoint: island.endpoint,
-            pat:      island.pat
+            pat: island.pat
           }
         }
       }

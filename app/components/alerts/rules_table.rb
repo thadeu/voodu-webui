@@ -118,7 +118,7 @@ class Components::Alerts::RulesTable < Components::Base
   # Pause/resume is a plain POST — benign + instantly reversible, no
   # confirmation modal needed.
   def toggle_button(rule)
-    form(action: toggle_alert_rule_path(rule), method: "post", data: { turbo: false }) do
+    form(action: toggle_alert_rule_path(rule), method: "post", data: {turbo: false}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       render Components::UI::Button.new(
         variant: :ghost, size: :sm, type: :submit,
@@ -137,11 +137,11 @@ class Components::Alerts::RulesTable < Components::Base
 
   def delete_button(rule)
     render Components::UI::Confirmable.new(
-      title:         "Remove rule",
-      message:       "Permanently remove \"#{rule.name}\"? Its alert history goes with it.",
+      title: "Remove rule",
+      message: "Permanently remove \"#{rule.name}\"? Its alert history goes with it.",
       confirm_label: "Remove",
-      danger:        true,
-      icon:          :TrashOutline,
+      danger: true,
+      icon: :TrashOutline,
       form: {
         action: alert_rule_path(rule),
         method: :delete

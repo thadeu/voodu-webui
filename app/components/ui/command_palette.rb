@@ -35,7 +35,7 @@ class Components::UI::CommandPalette < Components::Base
       data: {
         controller: "command-palette",
         command_palette_endpoint_value: command_palette_path,
-        command_palette_csrf_value:     form_authenticity_token
+        command_palette_csrf_value: form_authenticity_token
       }
     ) do
       backdrop
@@ -59,7 +59,7 @@ class Components::UI::CommandPalette < Components::Base
   def dialog
     div(
       hidden: true,
-      data: { command_palette_target: "dialog" },
+      data: {command_palette_target: "dialog"},
       role: "dialog",
       "aria-modal": "true",
       "aria-label": "Command palette",
@@ -106,7 +106,7 @@ class Components::UI::CommandPalette < Components::Base
   # writes into. innerHTML replaced on every keystroke.
   def results_body
     div(
-      data: { command_palette_target: "results" },
+      data: {command_palette_target: "results"},
       role: "listbox",
       "aria-label": "Commands",
       class: "flex-1 min-h-0 overflow-auto scrollbar-hidden py-1.5"
@@ -115,15 +115,18 @@ class Components::UI::CommandPalette < Components::Base
 
   def footer_hints
     div(class: "hidden vmd:flex items-center gap-4 px-3.5 min-h-9 shrink-0 border-t border-voodu-border bg-voodu-bg-2 text-[11px] text-voodu-muted font-voodu-mono") do
-      hint_pair("navigate") { render Components::UI::Kbd.new { "↑" }; render Components::UI::Kbd.new { "↓" } }
-      hint_pair("select")   { render Components::UI::Kbd.new { "↵" } }
-      hint_pair("dismiss")  { render Components::UI::Kbd.new { "esc" } }
+      hint_pair("navigate") {
+        render Components::UI::Kbd.new { "↑" }
+        render Components::UI::Kbd.new { "↓" }
+      }
+      hint_pair("select") { render Components::UI::Kbd.new { "↵" } }
+      hint_pair("dismiss") { render Components::UI::Kbd.new { "esc" } }
       div(class: "flex-1")
       span do
         # Count starts at — and gets filled in by the JS controller
         # after the first fetch resolves. Initial render has no
         # numbers because the command list isn't loaded yet.
-        span(class: "text-voodu-text-2", data: { command_palette_target: "count" }) { "—" }
+        span(class: "text-voodu-text-2", data: {command_palette_target: "count"}) { "—" }
         plain " results"
       end
     end

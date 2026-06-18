@@ -25,7 +25,7 @@ class AlertRule < ApplicationRecord
 
   METRIC_KINDS = %w[cpu memory disk req_s].freeze
   TARGET_KINDS = %w[host pod].freeze
-  COMPARATORS  = %w[gte lte].freeze
+  COMPARATORS = %w[gte lte].freeze
 
   # Form-selectable sustained-for windows. Floor of 60s = 4 warehouse
   # buckets — enough samples that one noisy 15s tick can't fire alone.
@@ -35,18 +35,18 @@ class AlertRule < ApplicationRecord
   # open-ended rate.
   PERCENT_KINDS = %w[cpu memory disk].freeze
 
-  validates :name, presence: true, length: { maximum: 64 },
-                   uniqueness: { scope: :island_id }
-  validates :metric_kind, inclusion: { in: METRIC_KINDS }
-  validates :target_kind, inclusion: { in: TARGET_KINDS }
-  validates :comparator,  inclusion: { in: COMPARATORS }
-  validates :duration_seconds, inclusion: { in: DURATIONS }
-  validates :threshold, numericality: { greater_than: 0 }
-  validates :threshold, numericality: { less_than_or_equal_to: 100 },
-                        if: -> { PERCENT_KINDS.include?(metric_kind) }
+  validates :name, presence: true, length: {maximum: 64},
+    uniqueness: {scope: :island_id}
+  validates :metric_kind, inclusion: {in: METRIC_KINDS}
+  validates :target_kind, inclusion: {in: TARGET_KINDS}
+  validates :comparator, inclusion: {in: COMPARATORS}
+  validates :duration_seconds, inclusion: {in: DURATIONS}
+  validates :threshold, numericality: {greater_than: 0}
+  validates :threshold, numericality: {less_than_or_equal_to: 100},
+    if: -> { PERCENT_KINDS.include?(metric_kind) }
 
   validates :target_scope, :target_name, presence: true,
-                           if: -> { target_kind == "pod" }
+    if: -> { target_kind == "pod" }
 
   validate :disk_is_host_only
   validate :req_s_is_deployment_only
@@ -63,18 +63,18 @@ class AlertRule < ApplicationRecord
   # button is idempotent — re-clicking never duplicates or resets
   # thresholds the operator has since tuned.
   DEFAULTS = [
-    { name: "Host disk ≥ 85%",   metric_kind: "disk",   threshold: 85.0 },
-    { name: "Host CPU ≥ 90%",    metric_kind: "cpu",    threshold: 90.0 },
-    { name: "Host memory ≥ 90%", metric_kind: "memory", threshold: 90.0 }
+    {name: "Host disk ≥ 85%", metric_kind: "disk", threshold: 85.0},
+    {name: "Host CPU ≥ 90%", metric_kind: "cpu", threshold: 90.0},
+    {name: "Host memory ≥ 90%", metric_kind: "memory", threshold: 90.0}
   ].freeze
 
   def self.create_defaults!(island)
     DEFAULTS.map do |attrs|
       island.alert_rules.find_or_create_by!(name: attrs[:name]) do |rule|
-        rule.metric_kind      = attrs[:metric_kind]
-        rule.target_kind      = "host"
-        rule.comparator       = "gte"
-        rule.threshold        = attrs[:threshold]
+        rule.metric_kind = attrs[:metric_kind]
+        rule.target_kind = "host"
+        rule.comparator = "gte"
+        rule.threshold = attrs[:threshold]
         rule.duration_seconds = 300
       end
     end
@@ -93,7 +93,7 @@ class AlertRule < ApplicationRecord
   # toggle).
   def destinations_for(transition)
     chosen = alert_destinations.select(&:enabled?)
-    pool   = chosen.any? ? chosen : island.alert_destinations.enabled.to_a
+    pool = chosen.any? ? chosen : island.alert_destinations.enabled.to_a
 
     pool.select { |d| d.notifies?(transition) }
   end
@@ -105,13 +105,13 @@ class AlertRule < ApplicationRecord
   # deployment). A deployment with no live replica falls back to the
   # host grid rather than a blank pod view.
   def metrics_link_params
-    return { scope_kind: "host" } if host_target?
+    return {scope_kind: "host"} if host_target?
 
     container = island.pods
-                      .where(scope: target_scope, resource_name: target_name)
-                      .order(:container_name).limit(1).pick(:container_name)
+      .where(scope: target_scope, resource_name: target_name)
+      .order(:container_name).limit(1).pick(:container_name)
 
-    container ? { scope_kind: "pod", scope_id: container } : { scope_kind: "host" }
+    container ? {scope_kind: "pod", scope_id: container} : {scope_kind: "host"}
   end
 
   def host_target?
@@ -127,12 +127,12 @@ class AlertRule < ApplicationRecord
   end
 
   def comparator_symbol
-    comparator == "gte" ? "≥" : "≤"
+    (comparator == "gte") ? "≥" : "≤"
   end
 
   def duration_label
     secs = duration_seconds
-    secs >= 60 ? "#{secs / 60}m" : "#{secs}s"
+    (secs >= 60) ? "#{secs / 60}m" : "#{secs}s"
   end
 
   # "92.3" — the bare rounded number (1 decimal, trailing .0 trimmed),
@@ -142,7 +142,7 @@ class AlertRule < ApplicationRecord
     return "" if value.nil?
 
     rounded = value.to_f.round(1)
-    rounded % 1 == 0 ? rounded.to_i.to_s : rounded.to_s
+    (rounded % 1 == 0) ? rounded.to_i.to_s : rounded.to_s
   end
 
   # "92.3%" / "3.2 req/s" — the one value formatter every surface

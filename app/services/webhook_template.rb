@@ -42,20 +42,20 @@ class WebhookTemplate
   # value plus already-parsed literal args. Unknown filters and bad
   # arities are no-ops (see apply_filters) — never a 500, never a leak.
   FILTERS = {
-    "upcase"     => ->(v) { v.upcase },
-    "downcase"   => ->(v) { v.downcase },
+    "upcase" => ->(v) { v.upcase },
+    "downcase" => ->(v) { v.downcase },
     "capitalize" => ->(v) { v.capitalize },
-    "strip"      => ->(v) { v.strip },
-    "slice"      => ->(v, start, len = 1) { v[start, len].to_s },
-    "truncate"   => ->(v, len, ell = "...") { v.length > len ? v[0, [len - ell.length, 0].max] + ell : v },
-    "replace"    => ->(v, from, to = "") { v.gsub(from.to_s, to.to_s) },
-    "append"     => ->(v, suffix) { "#{v}#{suffix}" },
-    "prepend"    => ->(v, prefix) { "#{prefix}#{v}" },
-    "default"    => ->(v, fallback) { v.empty? ? fallback.to_s : v }
+    "strip" => ->(v) { v.strip },
+    "slice" => ->(v, start, len = 1) { v[start, len].to_s },
+    "truncate" => ->(v, len, ell = "...") { (v.length > len) ? v[0, [len - ell.length, 0].max] + ell : v },
+    "replace" => ->(v, from, to = "") { v.gsub(from.to_s, to.to_s) },
+    "append" => ->(v, suffix) { "#{v}#{suffix}" },
+    "prepend" => ->(v, prefix) { "#{prefix}#{v}" },
+    "default" => ->(v, fallback) { v.empty? ? fallback.to_s : v }
   }.freeze
 
   def self.render(template_json, tokens)
-    tree   = JSON.parse(template_json)
+    tree = JSON.parse(template_json)
     string = tokens.transform_keys(&:to_s).transform_values { |v| v.nil? ? "" : v.to_s }
 
     JSON.generate(substitute(tree, string))
@@ -63,8 +63,8 @@ class WebhookTemplate
 
   def self.substitute(node, tokens)
     case node
-    when Hash   then node.transform_values { |v| substitute(v, tokens) }
-    when Array  then node.map { |v| substitute(v, tokens) }
+    when Hash then node.transform_values { |v| substitute(v, tokens) }
+    when Array then node.map { |v| substitute(v, tokens) }
     when String then apply(node, tokens)
     else node
     end

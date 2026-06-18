@@ -19,7 +19,7 @@ Puma::Plugin.create do
 
     launcher.events.on_booted do
       binary = Poller.binary_path
-      @pid   = spawn(binary, out: $stdout, err: $stderr)
+      @pid = spawn(binary, out: $stdout, err: $stderr)
 
       launcher.log_writer.log("[poller] spawned PID #{@pid}")
     end

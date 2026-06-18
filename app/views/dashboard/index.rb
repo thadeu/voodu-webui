@@ -8,12 +8,12 @@
 #   - happy           → header + stat cards (auto-fit grid) + pods section
 class Views::Dashboard::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @data           = data
-    @active_tab     = active_tab
-    @updated_at     = updated_at
+    @data = data
+    @active_tab = active_tab
+    @updated_at = updated_at
   end
 
   def view_template
@@ -61,9 +61,9 @@ class Views::Dashboard::Index < Views::Base
     # state_tick reload.
     turbo_frame_tag(
       "island-#{@current_island.id}-state",
-      target:  "_top",
+      target: "_top",
       refresh: "morph",
-      data:    { state_frame: true }
+      data: {state_frame: true}
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         stale_banner if @data&.stale?
@@ -149,7 +149,7 @@ class Views::Dashboard::Index < Views::Base
   def dot_sep
     span(
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
-      aria: { hidden: "true" }
+      aria: {hidden: "true"}
     )
   end
 

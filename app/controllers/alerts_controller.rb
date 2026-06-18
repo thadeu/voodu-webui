@@ -11,7 +11,7 @@
 class AlertsController < ApplicationController
   def index
     data = AlertsPageData.new(current_island, history_filter: history_filter)
-    tab  = active_tab
+    tab = active_tab
 
     if request.headers["Turbo-Frame"] == "alerts-live"
       render Views::Alerts::Frame.new(data: data, active_tab: tab), layout: false

@@ -8,8 +8,8 @@ class MetricDashboardTest < ActiveSupport::TestCase
   setup { @island = islands(:alpha) }
 
   def host_panel
-    { "scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-      "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%" }
+    {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"}
   end
 
   test "panels round-trips as a Ruby Array (native json column)" do
@@ -36,9 +36,9 @@ class MetricDashboardTest < ActiveSupport::TestCase
   end
 
   test "a panel with an empty unit is valid (Requests, Net Rx, errors, …)" do
-    unitless = { "scope_kind" => "pod", "scope" => "api", "name" => "api", "kind" => "deployment",
-                 "metric" => "req_count", "scale" => "count",
-                 "label" => "api · Requests", "color" => "var(--voodu-orange)", "unit" => "" }
+    unitless = {"scope_kind" => "pod", "scope" => "api", "name" => "api", "kind" => "deployment",
+                "metric" => "req_count", "scale" => "count",
+                "label" => "api · Requests", "color" => "var(--voodu-orange)", "unit" => ""}
     d = @island.metric_dashboards.new(name: "reqs", panels: [unitless])
 
     assert d.valid?, d.errors.full_messages.to_sentence
@@ -47,8 +47,8 @@ class MetricDashboardTest < ActiveSupport::TestCase
   test "panels_well_formed rejects a pod panel missing its workload identity" do
     bad = @island.metric_dashboards.new(
       name: "x",
-      panels: [{ "scope_kind" => "pod", "metric" => "cpu_percent", "scale" => "percent",
-                 "label" => "l", "color" => "c", "unit" => "%" }]
+      panels: [{"scope_kind" => "pod", "metric" => "cpu_percent", "scale" => "percent",
+                "label" => "l", "color" => "c", "unit" => "%"}]
     )
 
     assert_not bad.valid?

@@ -6,9 +6,9 @@ class PollerDigestJobTest < ActiveJob::TestCase
   fixtures :islands
 
   setup do
-    @sync_hash   = "abcdef0123456789"
+    @sync_hash = "abcdef0123456789"
     @folder_root = Rails.root.join("storage", "poller")
-    @stubs       = []
+    @stubs = []
   end
 
   teardown do
@@ -20,19 +20,19 @@ class PollerDigestJobTest < ActiveJob::TestCase
   test "dispatches state digest, marks processed, deletes folder" do
     digest = PollerDigest.create!(
       sync_hash: @sync_hash,
-      type:      "state",
+      type: "state",
       tenant_id: islands(:alpha).id,
-      status:    "queued"
+      status: "queued"
     )
 
     folder = @folder_root.join("state", @sync_hash)
     FileUtils.mkdir_p(folder)
-    File.write(folder.join("pods.json"),   [].to_json)
+    File.write(folder.join("pods.json"), [].to_json)
     File.write(folder.join("system.json"), {}.to_json)
 
     called_with = []
     stub_class_method(StateDigestService, :from_folder) do |folder_path:, tenant_id:|
-      called_with << { folder_path: folder_path.to_s, tenant_id: tenant_id }
+      called_with << {folder_path: folder_path.to_s, tenant_id: tenant_id}
     end
 
     PollerDigestJob.new.perform(@sync_hash)
@@ -51,9 +51,9 @@ class PollerDigestJobTest < ActiveJob::TestCase
   test "dispatches metrics digest by type" do
     PollerDigest.create!(
       sync_hash: @sync_hash,
-      type:      "metrics",
+      type: "metrics",
       tenant_id: islands(:alpha).id,
-      status:    "queued"
+      status: "queued"
     )
 
     folder = @folder_root.join("metrics", @sync_hash)
@@ -73,10 +73,10 @@ class PollerDigestJobTest < ActiveJob::TestCase
 
   test "discards (raises AlreadyProcessed) on second run" do
     PollerDigest.create!(
-      sync_hash:    @sync_hash,
-      type:         "state",
-      tenant_id:    islands(:alpha).id,
-      status:       "processed",
+      sync_hash: @sync_hash,
+      type: "state",
+      tenant_id: islands(:alpha).id,
+      status: "processed",
       processed_at: Time.current
     )
 
@@ -88,9 +88,9 @@ class PollerDigestJobTest < ActiveJob::TestCase
   test "marks failed and re-raises when service blows up" do
     digest = PollerDigest.create!(
       sync_hash: @sync_hash,
-      type:      "state",
+      type: "state",
       tenant_id: islands(:alpha).id,
-      status:    "queued"
+      status: "queued"
     )
 
     stub_class_method(StateDigestService, :from_folder) do |**_|

@@ -14,16 +14,16 @@ class Views::MetricDashboards::Form < Views::Base
   FRAME_ID = "dashboards-panel"
 
   def initialize(island:, dashboard:, pods: [], embed: true,
-                 current_path: nil, islands: [], current_island: nil,
-                 return_to: nil)
-    @island         = island
-    @dashboard      = dashboard
-    @pods           = pods
-    @embed          = embed
-    @current_path   = current_path
-    @islands        = islands
+    current_path: nil, islands: [], current_island: nil,
+    return_to: nil)
+    @island = island
+    @dashboard = dashboard
+    @pods = pods
+    @embed = embed
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @return_to      = return_to
+    @return_to = return_to
   end
 
   def view_template
@@ -32,7 +32,7 @@ class Views::MetricDashboards::Form < Views::Base
     else
       render Components::Layouts::Dashboard.new(
         current_path: @current_path, islands: @islands, current_island: @current_island,
-        breadcrumb: overview_crumbs({ label: "Metrics" })
+        breadcrumb: overview_crumbs({label: "Metrics"})
       ) do
         div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 max-w-[720px]") { builder_panel }
       end
@@ -83,10 +83,10 @@ class Views::MetricDashboards::Form < Views::Base
       # redirects to the rendered dashboard, a 422 renders the full-page
       # builder (embed: false) with inline errors.
       data: {
-        turbo_frame:                       "_top",
-        controller:                        "dashboard-builder",
-        dashboard_builder_catalog_value:   catalog_json,
-        dashboard_builder_panels_value:    existing_panels_json
+        turbo_frame: "_top",
+        controller: "dashboard-builder",
+        dashboard_builder_catalog_value: catalog_json,
+        dashboard_builder_panels_value: existing_panels_json
       },
       class: "flex flex-col gap-4 px-4 py-4"
     ) do
@@ -110,8 +110,8 @@ class Views::MetricDashboards::Form < Views::Base
     label(class: "flex flex-col gap-1.5") do
       span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Name" }
       input(
-        type:  "text",
-        name:  "metric_dashboard[name]",
+        type: "text",
+        name: "metric_dashboard[name]",
         value: @dashboard.name,
         placeholder: "prod overview",
         autocomplete: "off",
@@ -140,10 +140,10 @@ class Views::MetricDashboards::Form < Views::Base
   # side. Selecting one updates the trigger label and repopulates the
   # metric picker for that source's kind.
   def source_picker
-    div(class: "vmd:flex-1 min-w-0 relative", data: { controller: "dropdown" }) do
+    div(class: "vmd:flex-1 min-w-0 relative", data: {controller: "dropdown"}) do
       picker_trigger("Host (system)", :sourceLabel)
-      div(hidden: true, data: { dropdown_target: "menu" }, class: menu_classes) do
-        source_option({ scope_kind: "host", label: "host" }, "Host (system)")
+      div(hidden: true, data: {dropdown_target: "menu"}, class: menu_classes) do
+        source_option({scope_kind: "host", label: "host"}, "Host (system)")
         workloads.each { |w| source_option(w, "#{w[:label]} · #{w[:kind]}") }
       end
     end
@@ -153,9 +153,9 @@ class Views::MetricDashboards::Form < Views::Base
   # catalog whenever the source changes (the offered metrics depend on
   # the source's kind).
   def metric_picker
-    div(class: "vmd:flex-1 min-w-0 relative", data: { controller: "dropdown" }) do
+    div(class: "vmd:flex-1 min-w-0 relative", data: {controller: "dropdown"}) do
       picker_trigger("Select metric", :metricLabel)
-      div(hidden: true, data: { dropdown_target: "menu", dashboard_builder_target: "metricMenu" }, class: menu_classes)
+      div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "metricMenu"}, class: menu_classes)
     end
   end
 
@@ -164,10 +164,10 @@ class Views::MetricDashboards::Form < Views::Base
   # controller hides them (and snaps back to Area) when the selected
   # metric has no ceiling, so you can only gauge a percent/capacity metric.
   def type_picker
-    div(class: "vmd:w-[156px] shrink-0 relative", data: { controller: "dropdown" }) do
+    div(class: "vmd:w-[156px] shrink-0 relative", data: {controller: "dropdown"}) do
       picker_trigger("Area", :typeLabel)
-      div(hidden: true, data: { dropdown_target: "menu", dashboard_builder_target: "typeMenu" }, class: menu_classes) do
-        type_option("area",         "Area")
+      div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "typeMenu"}, class: menu_classes) do
+        type_option("area", "Area")
         type_option("gauge_radial", "Gauge · radial", gauge: true)
         type_option("gauge_linear", "Gauge · linear", gauge: true)
       end
@@ -175,7 +175,7 @@ class Views::MetricDashboards::Form < Views::Base
   end
 
   def type_option(value, text, gauge: false)
-    data = { action: "click->dashboard-builder#selectType click->dropdown#close", chart_type: value }
+    data = {action: "click->dashboard-builder#selectType click->dropdown#close", chart_type: value}
     data[:gauge] = "true" if gauge
 
     button(type: "button", data: data, class: option_classes) { text }
@@ -183,13 +183,13 @@ class Views::MetricDashboards::Form < Views::Base
 
   def picker_trigger(label_text, target)
     button(
-      type:  "button",
-      data:  { action: "click->dropdown#toggle" },
+      type: "button",
+      data: {action: "click->dropdown#toggle"},
       class: "inline-flex items-center gap-2 px-2.5 h-9 w-full border border-voodu-border bg-voodu-surface text-voodu-text hover:bg-voodu-surface-2"
     ) do
       span(
         class: "min-w-0 truncate flex-1 text-left text-[12.5px] text-voodu-text",
-        data:  { dashboard_builder_target: target }
+        data: {dashboard_builder_target: target}
       ) { label_text }
       render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 text-voodu-muted shrink-0")
     end
@@ -197,16 +197,16 @@ class Views::MetricDashboards::Form < Views::Base
 
   def source_option(src, text)
     button(
-      type:  "button",
-      data:  { action: "click->dashboard-builder#selectSource click->dropdown#close", source: src.to_json },
+      type: "button",
+      data: {action: "click->dashboard-builder#selectSource click->dropdown#close", source: src.to_json},
       class: option_classes
     ) { text }
   end
 
   def add_button
     button(
-      type:  "button",
-      data:  { action: "click->dashboard-builder#add" },
+      type: "button",
+      data: {action: "click->dashboard-builder#add"},
       class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12.5px] font-medium hover:bg-voodu-accent/20 shrink-0"
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -227,9 +227,9 @@ class Views::MetricDashboards::Form < Views::Base
   def panels_list
     div(class: "flex flex-col gap-2") do
       span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Panels" }
-      div(data: { dashboard_builder_target: "list" }, class: "flex flex-col gap-1.5")
+      div(data: {dashboard_builder_target: "list"}, class: "flex flex-col gap-1.5")
       div(
-        data:  { dashboard_builder_target: "empty" },
+        data: {dashboard_builder_target: "empty"},
         class: "text-[11.5px] text-voodu-muted px-1"
       ) { "No panels yet — pick a source + metric above and press Add." }
     end
@@ -239,7 +239,7 @@ class Views::MetricDashboards::Form < Views::Base
     input(
       type: "hidden",
       name: "metric_dashboard[panels]",
-      data: { dashboard_builder_target: "hidden" }
+      data: {dashboard_builder_target: "hidden"}
     )
   end
 
@@ -253,7 +253,7 @@ class Views::MetricDashboards::Form < Views::Base
       div(class: "flex-1")
 
       button(
-        type:  "submit",
+        type: "submit",
         class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
       ) { @dashboard.persisted? ? "Save changes" : "Create dashboard" }
     end
@@ -270,14 +270,14 @@ class Views::MetricDashboards::Form < Views::Base
     Array(@pods).map do |p|
       {
         scope_kind: "pod",
-        scope:      (p["scope"] || p[:scope]).to_s,
-        name:       (p["resource_name"] || p[:resource_name]).to_s,
-        kind:       (p["kind"] || p[:kind]).to_s.presence || "pod",
-        label:      (p["resource_name"] || p[:resource_name]).to_s
+        scope: (p["scope"] || p[:scope]).to_s,
+        name: (p["resource_name"] || p[:resource_name]).to_s,
+        kind: (p["kind"] || p[:kind]).to_s.presence || "pod",
+        label: (p["resource_name"] || p[:resource_name]).to_s
       }
     end.reject { |w| w[:scope].empty? || w[:name].empty? }
-       .uniq { |w| [w[:scope], w[:name], w[:kind]] }
-       .sort_by { |w| [w[:scope], w[:name]] }
+      .uniq { |w| [w[:scope], w[:name], w[:kind]] }
+      .sort_by { |w| [w[:scope], w[:name]] }
   end
 
   # catalog_json — { kind => [spec, …] } the builder's metric <select>
@@ -287,8 +287,8 @@ class Views::MetricDashboards::Form < Views::Base
     kinds = (["host"] + workloads.map { |w| w[:kind] }).uniq
 
     kinds.each_with_object({}) do |kind, acc|
-      scope_kind = kind == "host" ? "host" : "pod"
-      acc[kind]  = MetricsPageData.metric_catalog_for(scope_kind, kind).map { |s| spec_json(s) }
+      scope_kind = (kind == "host") ? "host" : "pod"
+      acc[kind] = MetricsPageData.metric_catalog_for(scope_kind, kind).map { |s| spec_json(s) }
     end.to_json
   end
 
@@ -298,16 +298,16 @@ class Views::MetricDashboards::Form < Views::Base
 
   def spec_json(spec)
     {
-      metric:  spec[:metric],
-      scale:   spec[:scale].to_s,
-      label:   spec[:label],
-      color:   spec[:color],
-      unit:    spec[:unit].to_s,
+      metric: spec[:metric],
+      scale: spec[:scale].to_s,
+      label: spec[:label],
+      color: spec[:color],
+      unit: spec[:unit].to_s,
       section: spec[:section].to_s,
       # gauge — whether this metric has a ceiling a gauge can fill (a
       # percent metric, or memory/disk capacity). The builder only offers
       # the gauge types when true. Net/HTTP rates have no max → area only.
-      gauge:   gauge_metric?(spec)
+      gauge: gauge_metric?(spec)
     }
   end
 

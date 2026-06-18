@@ -7,8 +7,8 @@
 class Views::Logs::Frame < Views::Base
   def initialize(pod_name:, logs:, error: nil)
     @pod_name = pod_name
-    @logs     = logs
-    @error    = error
+    @logs = logs
+    @error = error
   end
 
   def view_template

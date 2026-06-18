@@ -11,7 +11,7 @@
 class Components::Metrics::ReplicaChips < Components::Base
   def initialize(active_container:, siblings: [])
     @active_container = active_container
-    @siblings         = Array(siblings)
+    @siblings = Array(siblings)
   end
 
   def view_template
@@ -30,13 +30,13 @@ class Components::Metrics::ReplicaChips < Components::Base
 
   def chip(sibling)
     container = sibling[:name] || sibling["name"]
-    replica   = sibling[:replica_id] || sibling["replica_id"]
-    status    = (sibling[:status] || sibling["status"] || "running").to_s.to_sym
-    active    = container == @active_container
+    replica = sibling[:replica_id] || sibling["replica_id"]
+    status = (sibling[:status] || sibling["status"] || "running").to_s.to_sym
+    active = container == @active_container
 
     a(
       href: replica_url(container),
-      data: { turbo: false },
+      data: {turbo: false},
       class: tokens(
         "inline-flex items-center gap-1.5 px-2 py-[3px] border font-voodu-mono text-[11.5px]",
         active ? "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2" : "border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2"

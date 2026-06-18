@@ -16,10 +16,10 @@
 # :mem_total_mb, :restarts, :age, :ports).
 class Components::Overview::PodsTable < Components::Base
   STATUS_TABS = [
-    { id: :all,        label: "All",        status: nil,         color: nil },
-    { id: :running,    label: "Running",    status: :running,    color: "var(--voodu-green)" },
-    { id: :restarting, label: "Restarting", status: :restarting, color: "var(--voodu-amber)" },
-    { id: :stopped,    label: "Stopped",    status: :stopped,    color: "var(--voodu-muted)" }
+    {id: :all, label: "All", status: nil, color: nil},
+    {id: :running, label: "Running", status: :running, color: "var(--voodu-green)"},
+    {id: :restarting, label: "Restarting", status: :restarting, color: "var(--voodu-amber)"},
+    {id: :stopped, label: "Stopped", status: :stopped, color: "var(--voodu-muted)"}
   ].freeze
 
   # show_heading — Overview embeds this table as one of multiple
@@ -28,9 +28,9 @@ class Components::Overview::PodsTable < Components::Base
   # own page_header — passing `show_heading: false` suppresses
   # the redundant H2 there.
   def initialize(pods:, total:, active_tab: :all, show_heading: true)
-    @pods         = pods
-    @total        = total
-    @active_tab   = active_tab
+    @pods = pods
+    @total = total
+    @active_tab = active_tab
     @show_heading = show_heading
   end
 
@@ -40,7 +40,7 @@ class Components::Overview::PodsTable < Components::Base
     # (<article>). Each row carries `data-key` (the searchable blob:
     # name + scope + resource + image + kind + status) so the
     # controller doesn't have to know about table vs card layout.
-    section(class: "flex flex-col gap-3", data: { controller: "kv-filter" }) do
+    section(class: "flex flex-col gap-3", data: {controller: "kv-filter"}) do
       heading if @show_heading
       toolbar
       desktop_table
@@ -78,7 +78,7 @@ class Components::Overview::PodsTable < Components::Base
   def tab_button(tab)
     active = tab[:id] == @active_tab
     count = tab_count(tab)
-    href = tab[:id] == :all ? "?" : "?status=#{tab[:id]}"
+    href = (tab[:id] == :all) ? "?" : "?status=#{tab[:id]}"
 
     a(
       href: href,
@@ -147,7 +147,7 @@ class Components::Overview::PodsTable < Components::Base
             # Hidden by default — kv-filter unhides it when the search
             # input zeroes every other row. Lives inside <tbody> so the
             # colspan spans the table.
-            tr(hidden: true, data: { kv_filter_target: "empty" }) do
+            tr(hidden: true, data: {kv_filter_target: "empty"}) do
               td(colspan: 6, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no pods match the filter." }
             end
           end
@@ -300,7 +300,7 @@ class Components::Overview::PodsTable < Components::Base
 
   def bar_cell(value:, unit:, color:, max:)
     div(class: "flex items-center gap-2") do
-      label = value.nil? ? "0.0#{unit}" : "#{'%.1f' % value}#{unit}"
+      label = value.nil? ? "0.0#{unit}" : "#{"%.1f" % value}#{unit}"
       span(class: "font-voodu-mono text-[11px] text-voodu-text w-12") { label }
       render Components::UI::MiniBar.new(value: value || 0, max: max, color: color)
     end

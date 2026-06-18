@@ -9,9 +9,9 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   fixtures :islands
 
   setup do
-    @island       = islands(:alpha)
-    @key          = @island.key
-    @prev_wh      = ENV["WAREHOUSE"]
+    @island = islands(:alpha)
+    @key = @island.key
+    @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
 
@@ -25,7 +25,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "create persists panels and redirects to the rendered dashboard" do
     assert_difference("MetricDashboard.count", 1) do
       post metric_dashboards_path(tenant_key: @key),
-           params: { metric_dashboard: { name: "overview", panels: [HOST].to_json } }
+        params: {metric_dashboard: {name: "overview", panels: [HOST].to_json}}
     end
 
     d = MetricDashboard.order(:id).last
@@ -37,7 +37,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
 
   test "create with a blank name re-renders 422" do
     post metric_dashboards_path(tenant_key: @key),
-         params: { metric_dashboard: { name: "", panels: [HOST].to_json } }
+      params: {metric_dashboard: {name: "", panels: [HOST].to_json}}
 
     assert_response :unprocessable_entity
   end
@@ -85,7 +85,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a pinned dashboard sets the default but does not lock out the host view" do
-    d = @island.metric_dashboards.create!(name: "pinned-one", panels: [HOST], pinned: true)
+    @island.metric_dashboards.create!(name: "pinned-one", panels: [HOST], pinned: true)
 
     # bare /metrics opens the pinned dashboard (the default)
     get metrics_path(tenant_key: @key)
@@ -99,8 +99,8 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "an explicit ?dashboard= overrides a different pinned dashboard" do
-    pinned = @island.metric_dashboards.create!(name: "the-pinned", panels: [HOST], pinned: true)
-    other  = @island.metric_dashboards.create!(name: "the-other",  panels: [HOST])
+    @island.metric_dashboards.create!(name: "the-pinned", panels: [HOST], pinned: true)
+    other = @island.metric_dashboards.create!(name: "the-other", panels: [HOST])
 
     get metrics_path(tenant_key: @key, pid: other.to_param)
     assert_response :success
@@ -172,7 +172,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
 
     multi = metrics_path(tenant_key: @key, pid: "#{a.to_param},#{b.to_param}")
     patch metric_dashboard_path(tenant_key: @key, id: b.to_param),
-          params: { return_to: multi, metric_dashboard: { name: "dash-b", panels: [HOST].to_json } }
+      params: {return_to: multi, metric_dashboard: {name: "dash-b", panels: [HOST].to_json}}
 
     assert_redirected_to multi
   end
@@ -181,8 +181,8 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     d = @island.metric_dashboards.create!(name: "dash-x", panels: [HOST])
 
     patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
-          params: { return_to: "https://evil.example.com/steal",
-                    metric_dashboard: { name: "dash-x", panels: [HOST].to_json } }
+      params: {return_to: "https://evil.example.com/steal",
+               metric_dashboard: {name: "dash-x", panels: [HOST].to_json}}
 
     assert_redirected_to metrics_path(tenant_key: @key, pid: d.to_param)
   end

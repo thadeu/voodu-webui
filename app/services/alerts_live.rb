@@ -29,17 +29,17 @@ class AlertsLive
     Turbo::StreamsChannel.broadcast_update_to(
       "island-state-#{island.id}",
       target: "alerts-badge-dot-#{island.id}",
-      html:   Components::Alerts::NavBadge.new(count: count, variant: :dot).call
+      html: Components::Alerts::NavBadge.new(count: count, variant: :dot).call
     )
 
     Turbo::StreamsChannel.broadcast_update_to(
       "island-state-#{island.id}",
       target: "alerts-badge-pill-#{island.id}",
-      html:   Components::Alerts::NavBadge.new(count: count, variant: :pill).call
+      html: Components::Alerts::NavBadge.new(count: count, variant: :pill).call
     )
 
     Turbo::StreamsChannel.broadcast_action_to("alerts-#{island.id}", action: :alerts_tick)
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn(
       "alerts-live broadcast island=#{island.key} failed: #{e.class}: #{e.message}"
     )

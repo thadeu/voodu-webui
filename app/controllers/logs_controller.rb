@@ -35,7 +35,7 @@ class LogsController < ApplicationController
     render Views::Logs::Index.new(
       **dashboard_context.merge(
         updated_at: Time.current,
-        pods:       pods_for_picker
+        pods: pods_for_picker
       )
     )
   end
@@ -51,7 +51,7 @@ class LogsController < ApplicationController
   def pods_picker
     view = Views::Logs::PodsPicker.new(
       island_key: current_island.key,
-      pods:       pods_for_picker
+      pods: pods_for_picker
     )
     render view, layout: false
   end
@@ -59,10 +59,10 @@ class LogsController < ApplicationController
   def show
     view = Views::Logs::Show.new(
       **dashboard_context.merge(
-        updated_at:  Time.current,
-        pod_name:    params[:name],
-        drawer:      drawer_embed?,
-        pods:        drawer_embed? ? [] : pods_for_picker,
+        updated_at: Time.current,
+        pod_name: params[:name],
+        drawer: drawer_embed?,
+        pods: drawer_embed? ? [] : pods_for_picker,
         back_to_pod: came_from_pod_page?(params[:name])
       )
     )
@@ -99,7 +99,7 @@ class LogsController < ApplicationController
     # client + chunk yield are already loaded).
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
       voodu_client.logs_stream(params[:name], follow: follow_param, tail: tail_param,
-                               since: params[:since].presence, timestamps: timestamps_param) do |chunk|
+        since: params[:since].presence, timestamps: timestamps_param) do |chunk|
         response.stream.write(chunk)
       end
     end
@@ -133,22 +133,22 @@ class LogsController < ApplicationController
   def warehouse_stream
     return write_no_island if current_island.nil?
 
-    pod   = params[:pod].presence
+    pod = params[:pod].presence
     since = parse_since(params[:since])
 
-    response.headers["Content-Type"]      = "text/plain; charset=utf-8"
-    response.headers["Cache-Control"]     = "no-cache"
+    response.headers["Content-Type"] = "text/plain; charset=utf-8"
+    response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
 
     count = 0
     LogTail::Reader.each_line(
-      island_id:      current_island.id,
-      pods:           pod ? [pod] : nil,
-      from:           since,
-      until_:         1.day.from_now,
+      island_id: current_island.id,
+      pods: pod ? [pod] : nil,
+      from: since,
+      until_: 1.day.from_now,
       content_search: nil,
-      regex:          false,
-      limit:          WAREHOUSE_STREAM_LIMIT
+      regex: false,
+      limit: WAREHOUSE_STREAM_LIMIT
     ) do |pod_name, hash|
       # Use `msg` (clean message body), NOT `raw` — the parser's
       # `raw` field is the ORIGINAL line as it came from the
@@ -160,7 +160,7 @@ class LogsController < ApplicationController
       # client-side parseLogLine extracts both (its regex looks
       # for "[pod] <ISO> <body>").
       msg = (hash["msg"] || hash[:msg] || "").to_s
-      ts  = (hash["ts"]  || hash[:ts] || "").to_s
+      ts = (hash["ts"] || hash[:ts] || "").to_s
       response.stream.write("[#{pod_name}] #{ts} #{msg}\n")
       count += 1
     end
@@ -184,12 +184,12 @@ class LogsController < ApplicationController
     # for the dev-reloader rationale.
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads do
       voodu_client.logs_stream_multi(
-        follow:     follow_param,
-        tail:       tail_param,
-        scope:      params[:scope],
-        kind:       params[:kind],
-        name:       params[:name],
-        since:      params[:since].presence,
+        follow: follow_param,
+        tail: tail_param,
+        scope: params[:scope],
+        kind: params[:kind],
+        name: params[:name],
+        since: params[:since].presence,
         timestamps: timestamps_param
       ) do |chunk|
         response.stream.write(chunk)
@@ -236,8 +236,8 @@ class LogsController < ApplicationController
   end
 
   def set_stream_headers
-    response.headers["Content-Type"]      = "text/plain; charset=utf-8"
-    response.headers["Cache-Control"]     = "no-cache"
+    response.headers["Content-Type"] = "text/plain; charset=utf-8"
+    response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
   end
 

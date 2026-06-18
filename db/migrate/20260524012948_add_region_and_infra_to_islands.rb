@@ -12,6 +12,6 @@ class AddRegionAndInfraToIslands < ActiveRecord::Migration[8.1]
   # chip when both are absent.
   def change
     add_column :islands, :region, :string
-    add_column :islands, :infra,  :string
+    add_column :islands, :infra, :string
   end
 end

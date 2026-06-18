@@ -1,5 +1,23 @@
 {
   "rubyLsp.rubyVersionManager": { "identifier": "rbenv" },
   "rubyLsp.formatter": "rubocop",
-  "rubyLsp.linters": ["rubocop"]
+  "rubyLsp.linters": ["rubocop"],
+
+  "[ruby]": {
+    "editor.defaultFormatter": "Shopify.ruby-lsp",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit"
+    }
+  },
+
+  "[javascript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  }
 }

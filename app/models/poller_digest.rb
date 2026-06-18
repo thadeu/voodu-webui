@@ -37,7 +37,7 @@ class PollerDigest < ApplicationRecord
   # retry-burning exceptions.
   AlreadyProcessed = Class.new(StandardError)
 
-  TYPES    = %w[metrics state].freeze
+  TYPES = %w[metrics state].freeze
   STATUSES = %w[queued processing processed failed].freeze
 
   # No `belongs_to :island` validation — keep the receipt intact even
@@ -47,12 +47,12 @@ class PollerDigest < ApplicationRecord
   # at the `islands` table because that IS the tenant registry.
   belongs_to :island, foreign_key: :tenant_id, optional: true
 
-  validates :type,      presence: true, inclusion: { in: TYPES }
+  validates :type, presence: true, inclusion: {in: TYPES}
   validates :sync_hash, presence: true, uniqueness: true
-  validates :status,    presence: true, inclusion: { in: STATUSES }
+  validates :status, presence: true, inclusion: {in: STATUSES}
 
   scope :processed, -> { where(status: "processed") }
-  scope :failed,    -> { where(status: "failed") }
+  scope :failed, -> { where(status: "failed") }
 
   # stale — rows older than the cutoff. Hits the partial fan on
   # `created_at`. Default cutoff is 1 hour ago, matching the

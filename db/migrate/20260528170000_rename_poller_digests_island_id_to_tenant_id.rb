@@ -27,8 +27,8 @@ class RenamePollerDigestsIslandIdToTenantId < ActiveRecord::Migration[8.1]
   def change
     rename_column :poller_digests, :island_id, :tenant_id
 
-    rename_index  :poller_digests,
-                  "index_poller_digests_on_island_id_and_type_and_created_at",
-                  "index_poller_digests_on_tenant_id_and_type_and_created_at"
+    rename_index :poller_digests,
+      "index_poller_digests_on_island_id_and_type_and_created_at",
+      "index_poller_digests_on_tenant_id_and_type_and_created_at"
   end
 end

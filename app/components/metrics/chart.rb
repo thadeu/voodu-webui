@@ -32,14 +32,14 @@
 class Components::Metrics::Chart < Components::Base
   # Padding for the full chart (with visible axes). Compact mode
   # (axes hidden) collapses these to tiny gutters.
-  PAD_LEFT_FULL    = 44   # room for y-axis labels
-  PAD_RIGHT_FULL   = 12
-  PAD_TOP_FULL     = 14
-  PAD_BOTTOM_FULL  = 22   # room for x-axis labels
+  PAD_LEFT_FULL = 44   # room for y-axis labels
+  PAD_RIGHT_FULL = 12
+  PAD_TOP_FULL = 14
+  PAD_BOTTOM_FULL = 22   # room for x-axis labels
 
-  PAD_LEFT_COMPACT   = 4
-  PAD_RIGHT_COMPACT  = 4
-  PAD_TOP_COMPACT    = 4
+  PAD_LEFT_COMPACT = 4
+  PAD_RIGHT_COMPACT = 4
+  PAD_TOP_COMPACT = 4
   PAD_BOTTOM_COMPACT = 4
 
   Y_TICKS = 5
@@ -52,20 +52,31 @@ class Components::Metrics::Chart < Components::Base
   #       chart surfaces (Overview, Pod show, /metrics) share
   #       the same SVG/JS rendering engine.
   def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true)
-    @points   = Array(points)
-    @color    = color
-    @unit     = unit
-    @label    = label
+    @points = Array(points)
+    @color = color
+    @unit = unit
+    @label = label
     @range_ms = range_ms.to_i
-    @height   = height
-    @width    = width
-    @axes     = axes
+    @height = height
+    @width = width
+    @axes = axes
   end
 
-  def pad_left;   @axes ? PAD_LEFT_FULL   : PAD_LEFT_COMPACT;   end
-  def pad_right;  @axes ? PAD_RIGHT_FULL  : PAD_RIGHT_COMPACT;  end
-  def pad_top;    @axes ? PAD_TOP_FULL    : PAD_TOP_COMPACT;    end
-  def pad_bottom; @axes ? PAD_BOTTOM_FULL : PAD_BOTTOM_COMPACT; end
+  def pad_left
+    @axes ? PAD_LEFT_FULL : PAD_LEFT_COMPACT
+  end
+
+  def pad_right
+    @axes ? PAD_RIGHT_FULL : PAD_RIGHT_COMPACT
+  end
+
+  def pad_top
+    @axes ? PAD_TOP_FULL : PAD_TOP_COMPACT
+  end
+
+  def pad_bottom
+    @axes ? PAD_BOTTOM_FULL : PAD_BOTTOM_COMPACT
+  end
 
   def view_template
     # Truly empty → honest "no data" placeholder (cold boot, no
@@ -90,24 +101,24 @@ class Components::Metrics::Chart < Components::Base
       @points = [only, only]
     end
 
-    pts    = projected_points
-    y_max  = y_axis_max
+    pts = projected_points
+    y_max = y_axis_max
     x_min, x_max = time_bounds
 
     div(
       class: "relative w-full",
       data: {
         controller: "metrics-chart",
-        metrics_chart_points_value:    points_for_js.to_json,
-        metrics_chart_segments_value:  normalized_segments.to_json,
-        metrics_chart_color_value:     @color,
-        metrics_chart_unit_value:      @unit,
-        metrics_chart_label_value:     @label,
-        metrics_chart_width_value:     @width,
-        metrics_chart_height_value:    @height,
-        metrics_chart_pad_left_value:  pad_left,
+        metrics_chart_points_value: points_for_js.to_json,
+        metrics_chart_segments_value: normalized_segments.to_json,
+        metrics_chart_color_value: @color,
+        metrics_chart_unit_value: @unit,
+        metrics_chart_label_value: @label,
+        metrics_chart_width_value: @width,
+        metrics_chart_height_value: @height,
+        metrics_chart_pad_left_value: pad_left,
         metrics_chart_pad_right_value: pad_right,
-        metrics_chart_pad_top_value:   pad_top,
+        metrics_chart_pad_top_value: pad_top,
         metrics_chart_pad_bottom_value: pad_bottom,
         metrics_chart_baseline_y_value: baseline_y,
         # responsive: client measures actual container width on
@@ -151,11 +162,11 @@ class Components::Metrics::Chart < Components::Base
         viewBox: "0 0 #{@width} #{@height}",
         class: "block overflow-visible",
         style: "touch-action: pan-y;",
-        data: { metrics_chart_target: "svg" }
+        data: {metrics_chart_target: "svg"}
       ) do |s|
         s.defs do
           s.linearGradient(id: gradient_id, x1: 0, y1: 0, x2: 0, y2: 1) do
-            s.stop(offset: "0%",   "stop-color": @color, "stop-opacity": "0.30")
+            s.stop(offset: "0%", "stop-color": @color, "stop-opacity": "0.30")
             s.stop(offset: "100%", "stop-color": @color, "stop-opacity": "0")
           end
 
@@ -172,7 +183,7 @@ class Components::Metrics::Chart < Components::Base
               x: pad_left, y: pad_top,
               width: @width - pad_left - pad_right,
               height: @height - pad_top - pad_bottom,
-              data: { metrics_chart_target: "clipRect" }
+              data: {metrics_chart_target: "clipRect"}
             )
           end
         end
@@ -193,12 +204,12 @@ class Components::Metrics::Chart < Components::Base
         s.g("clip-path": "url(##{clip_id})") do
           s.path(
             d: d_area, fill: "url(##{gradient_id})",
-            data: { metrics_chart_target: "area" }
+            data: {metrics_chart_target: "area"}
           )
           s.path(
             d: d_line, fill: "none", stroke: @color, "stroke-width": "1.5",
             "stroke-linecap": "round", "stroke-linejoin": "round",
-            data: { metrics_chart_target: "line" }
+            data: {metrics_chart_target: "line"}
           )
         end
 
@@ -211,7 +222,7 @@ class Components::Metrics::Chart < Components::Base
             x1: pad_left, x2: @width - pad_right,
             y1: baseline_y, y2: baseline_y,
             stroke: "var(--voodu-border)",
-            data: { metrics_chart_target: "hLine" }
+            data: {metrics_chart_target: "hLine"}
           )
         end
 
@@ -248,7 +259,7 @@ class Components::Metrics::Chart < Components::Base
   # `padLeft + x_norm * innerW` so hover lookup follows the chart
   # as its viewBox stretches to match the container.
   def points_for_js
-    pts     = projected_points
+    pts = projected_points
     inner_w = (@width - pad_left - pad_right).to_f
 
     return [] if inner_w <= 0
@@ -256,12 +267,12 @@ class Components::Metrics::Chart < Components::Base
     @points.each_with_index.map do |p, i|
       abs_x = pts[i][0]
       {
-        ts:        p[:ts],
-        value:     p[:value],
+        ts: p[:ts],
+        value: p[:value],
         formatted: p[:formatted],
-        x:         abs_x.round(2),
-        x_norm:    ((abs_x - pad_left) / inner_w).round(5),
-        y:         pts[i][1].round(2)
+        x: abs_x.round(2),
+        x_norm: ((abs_x - pad_left) / inner_w).round(5),
+        y: pts[i][1].round(2)
       }
     end
   end
@@ -278,7 +289,7 @@ class Components::Metrics::Chart < Components::Base
   # outage stays as two disconnected islands of data in the wide
   # post-resize chart, never auto-bridged.
   def normalized_segments
-    pts     = projected_points
+    pts = projected_points
     inner_w = (@width - pad_left - pad_right).to_f
 
     return [] if pts.empty? || inner_w <= 0
@@ -294,13 +305,13 @@ class Components::Metrics::Chart < Components::Base
 
     inner_w = (@width - pad_left - pad_right).to_f
     inner_h = (@height - pad_top - pad_bottom).to_f
-    x_span  = [(x_max - x_min).to_f, 1.0].max
-    y_span  = [y_max.to_f, 0.0001].max
+    x_span = [(x_max - x_min).to_f, 1.0].max
+    y_span = [y_max.to_f, 0.0001].max
 
     @points.map do |p|
       t = parse_ts_ms(p[:ts])
       x = pad_left + ((t - x_min) / x_span) * inner_w
-      y = pad_top  + (1 - (p[:value].to_f / y_span)) * inner_h
+      y = pad_top + (1 - (p[:value].to_f / y_span)) * inner_h
       [x, y]
     end
   end
@@ -359,7 +370,7 @@ class Components::Metrics::Chart < Components::Base
         y1: y, y2: y,
         stroke: "var(--voodu-border)",
         "stroke-opacity": i.zero? ? "0" : "0.5",
-        data: { metrics_chart_target: "hLine" }
+        data: {metrics_chart_target: "hLine"}
       )
 
       # Y-axis label x stays at pad_left - 6 across resize (the
@@ -413,9 +424,9 @@ class Components::Metrics::Chart < Components::Base
   #   beyond  → MM/DD
   def format_axis_time(ts)
     pattern =
-      if    @range_ms <= 60 * 60 * 1000      then "%H:%M:%S"
+      if @range_ms <= 60 * 60 * 1000 then "%H:%M:%S"
       elsif @range_ms <= 24 * 60 * 60 * 1000 then "%H:%M"
-      else                                        "%m/%d"
+      else "%m/%d"
       end
 
     WebTime.strftime(ts, pattern) || ""
@@ -457,15 +468,15 @@ class Components::Metrics::Chart < Components::Base
     mantissa = v / factor
 
     ceil = case mantissa
-           when 0..1     then 1
-           when 1..2     then 2
-           when 2..2.5   then 2.5
-           when 2.5..4   then 4
-           when 4..5     then 5
-           when 5..7.5   then 7.5
-           when 7.5..10  then 10
-           else               10
-           end
+    when 0..1 then 1
+    when 1..2 then 2
+    when 2..2.5 then 2.5
+    when 2.5..4 then 4
+    when 4..5 then 5
+    when 5..7.5 then 7.5
+    when 7.5..10 then 10
+    else 10
+    end
 
     ceil * factor
   end
@@ -527,7 +538,7 @@ class Components::Metrics::Chart < Components::Base
     return [pts] if pts.size < 3
 
     threshold = gap_threshold_for(pts)
-    segments  = [[pts[0]]]
+    segments = [[pts[0]]]
 
     (1...pts.size).each do |i|
       if (pts[i][0] - pts[i - 1][0]) > threshold

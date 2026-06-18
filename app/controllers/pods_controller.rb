@@ -35,9 +35,9 @@ class PodsController < ApplicationController
 
     view = Views::Pods::Show.new(
       **dashboard_context.merge(
-        data:       @data,
+        data: @data,
         updated_at: @data.updated_at,
-        drawer:     drawer_embed?
+        drawer: drawer_embed?
       )
     )
 
@@ -68,10 +68,10 @@ class PodsController < ApplicationController
 
   def tab_param
     case params[:status]
-    when "running"    then :running
+    when "running" then :running
     when "restarting" then :restarting
-    when "stopped"    then :stopped
-    else                   :all
+    when "stopped" then :stopped
+    else :all
     end
   end
 end

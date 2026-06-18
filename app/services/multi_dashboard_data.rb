@@ -12,7 +12,7 @@ class MultiDashboardData
   attr_reader :range, :interval
 
   def initialize(client, island, dashboards, range:, interval: nil)
-    @range    = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
+    @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
     @sections = Array(dashboards).map do |d|
       MetricDashboardData.new(client, island, d, range: @range, interval: @interval)
@@ -35,9 +35,7 @@ class MultiDashboardData
 
   # sections — the per-dashboard MetricDashboardData objects, in
   # selection order. The views render one stacked block each.
-  def sections
-    @sections
-  end
+  attr_reader :sections
 
   def dashboards
     @sections.map(&:dashboard)

@@ -22,10 +22,10 @@
 class Components::Metrics::ChartModal < Components::Base
   def view_template
     div(
-      id:     "chart-modal",
+      id: "chart-modal",
       hidden: true,
-      data:   { controller: "chart-modal" },
-      class:  "fixed inset-0 z-[65] flex items-center justify-center"
+      data: {controller: "chart-modal"},
+      class: "fixed inset-0 z-[65] flex items-center justify-center"
     ) do
       backdrop
       dialog
@@ -37,7 +37,7 @@ class Components::Metrics::ChartModal < Components::Base
   def backdrop
     div(
       "aria-hidden": "true",
-      data: { action: "click->chart-modal#backdropClick", chart_modal_target: "backdrop" },
+      data: {action: "click->chart-modal#backdropClick", chart_modal_target: "backdrop"},
       class: "absolute inset-0 bg-black/55 backdrop-blur-[3px]"
     )
   end
@@ -47,7 +47,7 @@ class Components::Metrics::ChartModal < Components::Base
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "chart-modal-title",
-      data: { chart_modal_target: "dialog" },
+      data: {chart_modal_target: "dialog"},
       class: tokens(
         "relative z-[1]",
         "w-[min(1100px,calc(100vw-32px))] max-h-[calc(100vh-48px)]",
@@ -80,7 +80,7 @@ class Components::Metrics::ChartModal < Components::Base
       button(
         type: "button",
         "aria-label": "Close",
-        data: { action: "click->chart-modal#close" },
+        data: {action: "click->chart-modal#close"},
         class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
       ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
     end

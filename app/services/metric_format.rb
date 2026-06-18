@@ -39,7 +39,7 @@ module MetricFormat
     return "0" if v.zero?
 
     abs = v.abs
-    return v.round.to_s    if abs >= 100
+    return v.round.to_s if abs >= 100
     return v.round(1).to_s if abs >= 10
     return v.round(1).to_s if abs >= 1
     return v.round(2).to_s if abs >= 0.01
@@ -48,11 +48,11 @@ module MetricFormat
   end
 
   def percent(v)
-    return "—"  if v.nil?
+    return "—" if v.nil?
     return "0%" if v.zero?
 
     abs = v.abs
-    return "#{v.round}%"       if abs >= 100
+    return "#{v.round}%" if abs >= 100
     return format("%.1f%%", v) if abs >= 1
     return format("%.2f%%", v) if abs >= 0.01
 

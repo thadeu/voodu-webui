@@ -63,7 +63,6 @@ class Components::Alerts::DestinationsTable < Components::Base
     end
   end
 
-
   def paused_tag
     span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted-2 border border-voodu-border-2 px-1.5 py-0.5") do
       "paused"
@@ -90,7 +89,7 @@ class Components::Alerts::DestinationsTable < Components::Base
 
   def delivery_label(dest)
     case dest.last_status
-    when "ok"     then "ok · #{ago(dest.last_delivered_at)}"
+    when "ok" then "ok · #{ago(dest.last_delivered_at)}"
     when "failed" then "failed"
     else "—"
     end
@@ -98,7 +97,7 @@ class Components::Alerts::DestinationsTable < Components::Base
 
   def delivery_style(dest)
     case dest.last_status
-    when "ok"     then "color: var(--voodu-green);"
+    when "ok" then "color: var(--voodu-green);"
     when "failed" then "color: var(--voodu-red);"
     else "color: var(--voodu-muted);"
     end
@@ -123,7 +122,7 @@ class Components::Alerts::DestinationsTable < Components::Base
   # Sends a one-off probe payload. Plain POST; the controller flashes
   # the ✓/✗ result. title carries the failure reason when present.
   def test_button(dest)
-    form(action: test_alert_destination_path(dest), method: "post", data: { turbo: false }) do
+    form(action: test_alert_destination_path(dest), method: "post", data: {turbo: false}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       render Components::UI::Button.new(
         variant: :ghost, size: :sm, type: :submit,
@@ -137,12 +136,12 @@ class Components::Alerts::DestinationsTable < Components::Base
 
   def delete_button(dest)
     render Components::UI::Confirmable.new(
-      title:         "Remove destination",
-      message:       "Stop sending alerts to \"#{dest.name}\"? Rules notifying only this destination will fall back to all.",
+      title: "Remove destination",
+      message: "Stop sending alerts to \"#{dest.name}\"? Rules notifying only this destination will fall back to all.",
       confirm_label: "Remove",
-      danger:        true,
-      icon:          :TrashOutline,
-      form: { action: alert_destination_path(dest), method: :delete },
+      danger: true,
+      icon: :TrashOutline,
+      form: {action: alert_destination_path(dest), method: :delete},
       trigger: {
         class: "inline-flex items-center gap-2 px-3 py-1.5 text-xs rounded-voodu-md " \
                "text-voodu-muted hover:text-voodu-red hover:bg-voodu-red-dim transition-colors",
@@ -177,10 +176,10 @@ class Components::Alerts::DestinationsTable < Components::Base
     secs = (Time.current - time).to_i.abs
 
     case secs
-    when 0..59        then "#{secs}s ago"
-    when 60..3599     then "#{secs / 60}m ago"
+    when 0..59 then "#{secs}s ago"
+    when 60..3599 then "#{secs / 60}m ago"
     when 3600..86_399 then "#{secs / 3600}h ago"
-    else                   "#{secs / 86_400}d ago"
+    else "#{secs / 86_400}d ago"
     end
   end
 end

@@ -45,15 +45,15 @@ module LogTail
       stripped = raw_line.to_s.chomp
 
       pod, body = split_prefix(stripped, pod_hint)
-      parsed    = try_json(body)
+      parsed = try_json(body)
 
       {
-        ts:     parsed.fetch(:ts,     Time.current.iso8601(3)),
-        pod:    pod.presence || "unknown",
+        ts: parsed.fetch(:ts, Time.current.iso8601(3)),
+        pod: pod.presence || "unknown",
         stream: parsed.fetch(:stream, "stdout"),
-        level:  parsed.fetch(:level,  nil),
-        msg:    parsed.fetch(:msg,    body),
-        raw:    stripped,
+        level: parsed.fetch(:level, nil),
+        msg: parsed.fetch(:msg, body),
+        raw: stripped,
         parsed: parsed[:parsed] == true
       }
     end
@@ -80,20 +80,20 @@ module LogTail
     # zerolog (same), bunyan (`time`, `level` numeric, `msg`).
     def try_json(body)
       stripped = body.to_s.strip
-      return { parsed: false } unless stripped.start_with?("{")
+      return {parsed: false} unless stripped.start_with?("{")
 
       doc = JSON.parse(stripped)
-      return { parsed: false } unless doc.is_a?(Hash)
+      return {parsed: false} unless doc.is_a?(Hash)
 
       {
         parsed: true,
-        ts:     normalize_ts(doc["time"] || doc["ts"] || doc["timestamp"]),
-        level:  normalize_level(doc["level"] || doc["lvl"] || doc["severity"]),
-        msg:    (doc["msg"] || doc["message"] || stripped).to_s,
+        ts: normalize_ts(doc["time"] || doc["ts"] || doc["timestamp"]),
+        level: normalize_level(doc["level"] || doc["lvl"] || doc["severity"]),
+        msg: (doc["msg"] || doc["message"] || stripped).to_s,
         stream: doc["stream"]
       }.compact
     rescue JSON::ParserError, EncodingError, ArgumentError
-      { parsed: false }
+      {parsed: false}
     end
 
     # normalize_ts — accept ISO8601 strings or numeric seconds/ms
@@ -104,7 +104,7 @@ module LogTail
       case raw
       when Numeric
         # Heuristic: > 1e12 means milliseconds; else seconds.
-        seconds = raw > 1e12 ? raw / 1000.0 : raw.to_f
+        seconds = (raw > 1e12) ? raw / 1000.0 : raw.to_f
         Time.zone.at(seconds).iso8601(3)
       else
         # Round-trip through Time.zone.parse to normalise format.
@@ -119,15 +119,15 @@ module LogTail
     # 30=info, 40=warn, 50=error, 60=fatal).
     BUNYAN_LEVELS = {
       10 => "TRACE", 20 => "DEBUG", 30 => "INFO",
-      40 => "WARN",  50 => "ERROR", 60 => "FATAL"
+      40 => "WARN", 50 => "ERROR", 60 => "FATAL"
     }.freeze
 
     def normalize_level(raw)
       return nil if raw.nil?
 
       case raw
-      when Numeric  then BUNYAN_LEVELS[raw.to_i] || "INFO"
-      when String   then raw.upcase
+      when Numeric then BUNYAN_LEVELS[raw.to_i] || "INFO"
+      when String then raw.upcase
       end
     end
   end

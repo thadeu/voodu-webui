@@ -7,7 +7,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @island = islands(:alpha)
-    @key    = @island.key
+    @key = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -32,10 +32,10 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     end
 
     rule = AlertRule.order(:id).last
-    assert_equal "pod",   rule.target_kind
+    assert_equal "pod", rule.target_kind
     assert_equal "clowk", rule.target_scope
-    assert_equal "web",   rule.target_name
-    assert_equal 50.0,    rule.threshold
+    assert_equal "web", rule.target_name
+    assert_equal 50.0, rule.threshold
     assert_redirected_to alerts_path(tenant_key: @key)
   end
 
@@ -78,7 +78,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to alerts_path(tenant_key: @key)
     rule.reload
     assert_equal 95.0, rule.threshold
-    assert_equal 600,  rule.duration_seconds
+    assert_equal 600, rule.duration_seconds
   end
 
   test "editing a firing rule's condition closes the stale episode" do

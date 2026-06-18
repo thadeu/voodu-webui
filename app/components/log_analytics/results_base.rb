@@ -40,7 +40,7 @@ class Components::LogAnalytics::ResultsBase < Components::Base
       div(class: "la-loadmore p-2 border-t border-voodu-border") do
         a(
           href: load_more_path(data, data.next_page),
-          data: { turbo_frame: frame_id, log_analytics_target: "loadMore" },
+          data: {turbo_frame: frame_id, log_analytics_target: "loadMore"},
           class: "flex items-center justify-center gap-1.5 w-full px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text transition-colors"
         ) do
           render Icon::ArrowDownOutline.new(class: "w-3.5 h-3.5")
@@ -58,12 +58,12 @@ class Components::LogAnalytics::ResultsBase < Components::Base
   # range server-side (identical window across all pages).
   def load_more_path(data, page)
     logs_analytics_path(
-      q:     data.search.presence,
+      q: data.search.presence,
       regex: (data.regex? ? "1" : nil),
-      pods:  data.pods.presence,
-      from:  data.from_iso,
+      pods: data.pods.presence,
+      from: data.from_iso,
       until: data.until_iso,
-      page:  page
+      page: page
     )
   end
 

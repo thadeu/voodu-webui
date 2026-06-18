@@ -68,7 +68,7 @@ class Components::Overview::PodCard < Components::Base
       stat_label("CPU")
       span(
         class: "font-voodu-mono text-[13px]",
-        style: "color: #{muted? ? 'var(--voodu-muted-2)' : 'var(--voodu-text)'};"
+        style: "color: #{muted? ? "var(--voodu-muted-2)" : "var(--voodu-text)"};"
       ) do
         plain cpu_value
         span(class: "text-voodu-muted") { "%" }
@@ -85,7 +85,7 @@ class Components::Overview::PodCard < Components::Base
       stat_label("Memory")
       span(
         class: "font-voodu-mono text-[13px]",
-        style: "color: #{muted? ? 'var(--voodu-muted-2)' : 'var(--voodu-text)'};"
+        style: "color: #{muted? ? "var(--voodu-muted-2)" : "var(--voodu-text)"};"
       ) do
         if mem_used && mem_total
           plain mem_used.to_s
@@ -138,7 +138,7 @@ class Components::Overview::PodCard < Components::Base
 
   def ports_label
     ports = @pod[:ports]
-    ports.present? ? ":#{ports.join(',')}" : "—"
+    ports.present? ? ":#{ports.join(",")}" : "—"
   end
 
   # open_pod_btn — icon-only affordance opening the pod detail page.
@@ -150,7 +150,7 @@ class Components::Overview::PodCard < Components::Base
   def open_pod_btn
     a(
       href: pod_path(name: @pod[:name]),
-      aria: { label: "Open pod" },
+      aria: {label: "Open pod"},
       title: "Open pod",
       class: "inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 hover:bg-voodu-surface-3 hover:text-voodu-text"
     ) do
@@ -172,18 +172,18 @@ class Components::Overview::PodCard < Components::Base
     return unless @pod[:status].in?(%i[running restarting])
 
     render(Components::UI::Confirmable.new(
-      title:         "Restart pod",
-      message:       %(Restart "#{@pod[:name]}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
+      title: "Restart pod",
+      message: %(Restart "#{@pod[:name]}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
       confirm_label: "Restart",
-      icon:          :ArrowPathOutline,
+      icon: :ArrowPathOutline,
       form: {
         action: restart_pod_path(name: @pod[:name]),
         method: :post
       },
       trigger: {
-        title:        "Restart pod",
+        title: "Restart pod",
         "aria-label": "Restart #{@pod[:name]}",
-        class:        "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
+        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-3 hover:text-voodu-text"
       }
     )) do
       render Icon::ArrowPathOutline.new(class: "w-3 h-3")
@@ -204,13 +204,13 @@ class Components::Overview::PodCard < Components::Base
 
   def cpu_color
     v = @pod[:cpu_pct] || 0
-    return "var(--voodu-red)"   if v > 90
+    return "var(--voodu-red)" if v > 90
     return "var(--voodu-amber)" if v > 70
 
     "var(--voodu-purple)"
   end
 
-  def mem_used  = @pod[:mem_used_mb]
+  def mem_used = @pod[:mem_used_mb]
   def mem_total = @pod[:mem_total_mb]
 
   def mem_color

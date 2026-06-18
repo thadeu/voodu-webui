@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "Shopify.ruby-lsp",
+    "dbaeumer.vscode-eslint",
+    "bradlc.vscode-tailwindcss",
+    "thadeu.clowk-theme",
+    "Thadeu.vscode-run-rspec-file"
+  ],
+  "unwantedRecommendations": [
+    "rebornix.ruby",
+    "misogi.ruby-rubocop",
+    "castwide.solargraph"
+  ]
+}

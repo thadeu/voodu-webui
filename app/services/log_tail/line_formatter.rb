@@ -31,7 +31,7 @@ module LogTail
       case format
       when "csv" then csv_line(hash)
       when "txt" then txt_line(hash)
-      else            ndjson_line(hash)
+      else ndjson_line(hash)
       end
     end
 
@@ -49,7 +49,7 @@ module LogTail
       pieces = [r[:ts], "[#{r[:pod]}]"]
       pieces << r[:level] if r[:level].present?
       pieces << r[:msg].to_s
-      "#{pieces.join(' ')}\n"
+      "#{pieces.join(" ")}\n"
     end
 
     # csv_line — RFC 4180 via CSV.generate_line (quotes commas/quotes/
@@ -64,11 +64,11 @@ module LogTail
     # string keys; in-memory shapers use symbols).
     def row_hash(hash)
       {
-        ts:     hash[:ts]     || hash["ts"],
-        pod:    hash[:pod]    || hash["pod"],
+        ts: hash[:ts] || hash["ts"],
+        pod: hash[:pod] || hash["pod"],
         stream: hash[:stream] || hash["stream"],
-        level:  hash[:level]  || hash["level"],
-        msg:    hash[:msg]    || hash["msg"]
+        level: hash[:level] || hash["level"],
+        msg: hash[:msg] || hash["msg"]
       }
     end
   end

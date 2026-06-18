@@ -9,10 +9,10 @@
 class Components::UI::NoIslandState < Components::Base
   def view_template
     div(class: "mx-auto max-w-md py-16 flex flex-col items-center gap-3 text-center") do
-      div(class: "h-10 w-10 rounded-voodu-md bg-voodu-accent-dim", aria: { hidden: "true" })
+      div(class: "h-10 w-10 rounded-voodu-md bg-voodu-accent-dim", aria: {hidden: "true"})
       h2(class: "text-lg font-semibold text-voodu-text") { "No island selected" }
       p(class: "text-voodu-text-2 text-sm") do
-        "Register a voodu controller to start monitoring its pods, "\
+        "Register a voodu controller to start monitoring its pods, " \
         "metrics, and logs."
       end
       div(class: "pt-2") do

@@ -79,29 +79,29 @@ class Components::UI::Drawer < Components::Base
   # `"min(100vw, 1600px)"`). Used both in the inline style of the
   # panel and in the resize handle's clamp logic.
   def initialize(title:, src:, open_url:,
-                 id:                  nil,
-                 trigger_attrs:       {},
-                 width:               "40vw",
-                 min_width:           "320px",
-                 max_width:           "min(100vw, 1200px)",
-                 resizable:           true,
-                 show_full_page_link: true,
-                 permanent:           true,
-                 custom_trigger:      false,
-                 storage_key:         "voodu:drawer-width")
-    @title               = title
-    @src                 = src
-    @open_url            = open_url
-    @width               = width
-    @min_width           = min_width
-    @max_width           = max_width
-    @resizable           = resizable
-    @trigger_attrs       = trigger_attrs
+    id: nil,
+    trigger_attrs: {},
+    width: "40vw",
+    min_width: "320px",
+    max_width: "min(100vw, 1200px)",
+    resizable: true,
+    show_full_page_link: true,
+    permanent: true,
+    custom_trigger: false,
+    storage_key: "voodu:drawer-width")
+    @title = title
+    @src = src
+    @open_url = open_url
+    @width = width
+    @min_width = min_width
+    @max_width = max_width
+    @resizable = resizable
+    @trigger_attrs = trigger_attrs
     @show_full_page_link = show_full_page_link
-    @permanent           = permanent
-    @custom_trigger      = custom_trigger
-    @storage_key         = storage_key
-    @id                  = id || "drawer-#{Digest::SHA1.hexdigest(src.to_s)[0, 12]}"
+    @permanent = permanent
+    @custom_trigger = custom_trigger
+    @storage_key = storage_key
+    @id = id || "drawer-#{Digest::SHA1.hexdigest(src.to_s)[0, 12]}"
   end
 
   def view_template(&trigger_body)
@@ -114,11 +114,11 @@ class Components::UI::Drawer < Components::Base
     # name). Omit the attribute entirely when not permanent (Turbo keys
     # off attribute presence, so "false" would still pin it).
     data = {
-      controller:               "drawer",
-      drawer_src_value:         @src,
-      drawer_min_width_value:   @min_width,
-      drawer_max_width_value:   @max_width,
-      drawer_resizable_value:   @resizable.to_s,
+      controller: "drawer",
+      drawer_src_value: @src,
+      drawer_min_width_value: @min_width,
+      drawer_max_width_value: @max_width,
+      drawer_resizable_value: @resizable.to_s,
       drawer_storage_key_value: @storage_key
     }
     data[:turbo_permanent] = true if @permanent
@@ -148,7 +148,7 @@ class Components::UI::Drawer < Components::Base
 
     a(
       href: @open_url,
-      data: { action: "click->drawer#open" },
+      data: {action: "click->drawer#open"},
       **@trigger_attrs,
       &trigger_body
     )
@@ -156,7 +156,7 @@ class Components::UI::Drawer < Components::Base
 
   def render_panel
     aside(
-      data: { drawer_target: "panel" },
+      data: {drawer_target: "panel"},
       role: "dialog",
       "aria-modal": "false",
       "aria-labelledby": panel_title_id,
@@ -197,9 +197,9 @@ class Components::UI::Drawer < Components::Base
     div(
       data: {
         drawer_target: "handle",
-        action:        "pointerdown->drawer#startResize"
+        action: "pointerdown->drawer#startResize"
       },
-      aria: { hidden: "true" },
+      aria: {hidden: "true"},
       title: "Drag to resize",
       class: "absolute top-0 left-0 bottom-0 w-1.5 -ml-1 cursor-col-resize hover:bg-voodu-accent/30 active:bg-voodu-accent/60 z-[5] touch-none"
     )
@@ -241,7 +241,7 @@ class Components::UI::Drawer < Components::Base
       type: "button",
       title: "Close",
       "aria-label": "Close",
-      data: { action: "click->drawer#close" },
+      data: {action: "click->drawer#close"},
       class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
     ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
   end
@@ -251,7 +251,7 @@ class Components::UI::Drawer < Components::Base
     # track (operator preference; the bar feels noisy in a peek
     # surface). Wheel/touch/keyboard scroll still works.
     div(
-      data: { drawer_target: "body" },
+      data: {drawer_target: "body"},
       class: "relative flex-1 overflow-auto scrollbar-hidden bg-voodu-bg"
     ) do
       # Spinning brand logo while the fetch is in flight. Replaced
@@ -267,7 +267,7 @@ class Components::UI::Drawer < Components::Base
           src: "/mono-white-512.png",
           alt: "loading",
           class: "h-24 w-24 animate-voodu-spin opacity-80",
-          aria: { label: "Loading" }
+          aria: {label: "Loading"}
         )
       end
     end

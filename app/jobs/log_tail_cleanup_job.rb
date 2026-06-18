@@ -25,14 +25,14 @@ class LogTailCleanupJob < ApplicationJob
     return unless Dir.exist?(root)
 
     threshold = LogTail::FilePath::RETENTION_DAYS.days.ago
-    deleted   = 0
-    bytes     = 0
+    deleted = 0
+    bytes = 0
 
     Dir.glob(root.join("**/*.ndjson")) do |path|
       mtime = File.mtime(path)
       next if mtime >= threshold
 
-      bytes  += File.size(path)
+      bytes += File.size(path)
       File.delete(path)
       deleted += 1
     rescue Errno::ENOENT
@@ -42,11 +42,23 @@ class LogTailCleanupJob < ApplicationJob
     # Remove empty pod-dirs (and empty island-dirs) so the tree
     # doesn't grow forever with decommissioned pod names.
     Dir.glob(root.join("*/*"))
-       .select { |d| File.directory?(d) && Dir.empty?(d) }
-       .each   { |d| Dir.rmdir(d) rescue nil }
+      .select { |d| File.directory?(d) && Dir.empty?(d) }
+      .each { |d|
+      begin
+        Dir.rmdir(d)
+      rescue
+        nil
+      end
+    }
     Dir.glob(root.join("*"))
-       .select { |d| File.directory?(d) && Dir.empty?(d) }
-       .each   { |d| Dir.rmdir(d) rescue nil }
+      .select { |d| File.directory?(d) && Dir.empty?(d) }
+      .each { |d|
+      begin
+        Dir.rmdir(d)
+      rescue
+        nil
+      end
+    }
 
     Rails.logger.info(
       "log-tail cleanup deleted=#{deleted} files freed=#{(bytes / 1024.0 / 1024.0).round}MB"

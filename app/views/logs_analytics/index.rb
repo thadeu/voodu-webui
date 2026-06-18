@@ -6,22 +6,22 @@
 # filter bar can re-query it in place; see LogsAnalyticsController#index.
 class Views::LogsAnalytics::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, updated_at: nil, pods: [], data: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @updated_at     = updated_at
-    @pods           = pods
-    @data           = data
+    @updated_at = updated_at
+    @pods = pods
+    @data = data
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands,
       current_island: @current_island, updated_at: @updated_at,
-      breadcrumb: (@current_island && overview_crumbs(
-        { label: "Logs", href: logs_analytics_path(tenant_key: @current_island.key) },
-        { label: "Analytics" }
-      ))
+      breadcrumb: @current_island && overview_crumbs(
+        {label: "Logs", href: logs_analytics_path(tenant_key: @current_island.key)},
+        {label: "Analytics"}
+      )
     ) do
       if @current_island.nil? || @data.nil?
         render Components::UI::NoIslandState.new

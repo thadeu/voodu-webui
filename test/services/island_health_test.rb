@@ -35,7 +35,7 @@ class IslandHealthTest < ActiveSupport::TestCase
 
   test "refresh! reads :online when the agent's /system responds" do
     stub_request(:get, %r{/api/pat/v1/system\z}).to_return(
-      status: 200, body: "{}", headers: { "Content-Type" => "application/json" }
+      status: 200, body: "{}", headers: {"Content-Type" => "application/json"}
     )
 
     assert_equal :online, IslandHealth.refresh!(@island)

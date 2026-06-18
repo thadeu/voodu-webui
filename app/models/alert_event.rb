@@ -12,13 +12,13 @@ class AlertEvent < ApplicationRecord
 
   STATES = %w[firing resolved].freeze
 
-  validates :state, inclusion: { in: STATES }
+  validates :state, inclusion: {in: STATES}
   validates :started_at, :threshold, :rule_name, :metric_kind, :target_label,
-            presence: true
+    presence: true
 
-  scope :firing,   -> { where(state: "firing") }
+  scope :firing, -> { where(state: "firing") }
   scope :resolved, -> { where(state: "resolved") }
-  scope :recent,   -> { order(started_at: :desc).limit(50) }
+  scope :recent, -> { order(started_at: :desc).limit(50) }
 
   def firing?
     state == "firing"

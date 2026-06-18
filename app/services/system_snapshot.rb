@@ -34,9 +34,9 @@ class SystemSnapshot
 
     System.upsert(
       {
-        island_id:  island.id,
-        payload:    system_payload.to_json,
-        synced_at:  now,
+        island_id: island.id,
+        payload: system_payload.to_json,
+        synced_at: now,
         created_at: now,
         updated_at: now
       },

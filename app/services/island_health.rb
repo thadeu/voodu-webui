@@ -99,7 +99,7 @@ class IslandHealth
     client ||= Voodu::Client.new(island)
     client.system
     true
-  rescue StandardError
+  rescue
     false
   end
 
@@ -125,7 +125,7 @@ class IslandHealth
     nil
   rescue Voodu::Client::Error => e
     humanize_error(e)
-  rescue StandardError => e
+  rescue => e
     "#{e.class.name.demodulize}: #{e.message}"
   end
 
@@ -137,7 +137,7 @@ class IslandHealth
     msg = err.message.to_s
     case msg
     when /401|Unauthorized/i then "Agent rejected the token (401 Unauthorized). Double-check the PAT."
-    when /403|Forbidden/i    then "Agent rejected the token (403 Forbidden). The PAT lacks the required scope."
+    when /403|Forbidden/i then "Agent rejected the token (403 Forbidden). The PAT lacks the required scope."
     when /ECONNREFUSED|connection refused/i then "Connection refused. Is the voodu agent running and the port reachable?"
     when /timeout|timed out/i then "Connection timed out. The host is reachable but the agent didn't answer in time."
     when /Failed to open TCP|no route/i then "Couldn't reach the host. Check the endpoint URL and firewall."

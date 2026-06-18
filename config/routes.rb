@@ -3,7 +3,7 @@ Rails.application.routes.draw do
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
+  get "up" => "rails/health#show", :as => :rails_health_check
 
   # ActionCable WebSocket endpoint.
   #
@@ -31,8 +31,8 @@ Rails.application.routes.draw do
   # Rails to render it through the asset pipeline; the controller
   # sets the right MIME (application/javascript). Layout adds the
   # `<link rel="manifest">` + a tiny inline registration script.
-  get "manifest"        => "rails/pwa#manifest",        as: :pwa_manifest
-  get "service-worker"  => "rails/pwa#service_worker",  as: :pwa_service_worker
+  get "manifest" => "rails/pwa#manifest", :as => :pwa_manifest
+  get "service-worker" => "rails/pwa#service_worker", :as => :pwa_service_worker
 
   # Island registry — operator-facing CRUD lives at the TENANT-LESS
   # root because it's the bootstrapping surface ("I have no islands
@@ -46,11 +46,11 @@ Rails.application.routes.draw do
   # private-IP guards live in the controller itself (see
   # Internal::PollerController).
   namespace :internal do
-    get  "poller/islands", to: "poller#islands",             as: :poller_islands
+    get "poller/islands", to: "poller#islands", as: :poller_islands
     # Inbound notification from the Go binary that a digest folder
     # has been written. PollerDigestController persists the receipt
     # row + enqueues PollerDigestJob; idempotent on sync_hash.
-    post "poller/digest",  to: "poller_digest#create",       as: :poller_digest
+    post "poller/digest", to: "poller_digest#create", as: :poller_digest
   end
 
   # Bare root — if any islands exist, ApplicationController redirects
@@ -83,20 +83,20 @@ Rails.application.routes.draw do
   # Tenant key is exactly 6 base62 chars — matches Island::KEY_*
   # constants. The constraint here prevents the route from
   # accidentally matching /islands/new etc.
-  scope ":tenant_key", constraints: { tenant_key: /[a-zA-Z0-9]{6}/ } do
+  scope ":tenant_key", constraints: {tenant_key: /[a-zA-Z0-9]{6}/} do
     root "dashboard#index", as: :tenant_root
 
-    get  "/pods",                to: "pods#index",    as: :pods
-    get  "/pods/:name",          to: "pods#show",     as: :pod,         constraints: { name: %r{[^/]+} }
-    post "/pods/:name/restart",  to: "pods#restart",  as: :restart_pod, constraints: { name: %r{[^/]+} }
+    get "/pods", to: "pods#index", as: :pods
+    get "/pods/:name", to: "pods#show", as: :pod, constraints: {name: %r{[^/]+}}
+    post "/pods/:name/restart", to: "pods#restart", as: :restart_pod, constraints: {name: %r{[^/]+}}
 
     # Logs — multi-source viewer + per-pod viewer + two live stream
     # proxies. `/logs/stream` MUST be registered before `/logs/:name`
     # so the matcher catches the literal first — otherwise `:name`
     # would swallow `stream` and the multi-source endpoint would render
     # the show page (HTML, wrong content-type for a stream subscriber).
-    get "/logs",              to: "logs#index",      as: :logs
-    get "/logs/stream",       to: "logs#stream_all", as: :logs_stream
+    get "/logs", to: "logs#index", as: :logs
+    get "/logs/stream", to: "logs#stream_all", as: :logs_stream
 
     # Warehouse-fed log endpoint: reads from storage/logs/<island_id>/
     # NDJSON files instead of opening a `docker logs -f` SSE through the
@@ -130,19 +130,19 @@ Rails.application.routes.draw do
     #
     # MUST precede `/logs/:name` for the same reason as /logs/stream —
     # the `:name` matcher would otherwise swallow "analytics".
-    get "/logs/analytics",             to: "logs_analytics#index",       as: :logs_analytics
+    get "/logs/analytics", to: "logs_analytics#index", as: :logs_analytics
     get "/logs/analytics/surrounding", to: "logs_analytics#surrounding", as: :logs_analytics_surrounding
     # Synchronous export of the CURRENT query (same filters), streamed as
     # a download — `fmt` (not `format`, which Rails reserves for the
     # response Mime). Copy actions fetch the same endpoint.
-    get "/logs/analytics/export",      to: "logs_analytics#export",      as: :logs_analytics_export
+    get "/logs/analytics/export", to: "logs_analytics#export", as: :logs_analytics_export
 
-    get "/logs/:name",        to: "logs#show",       as: :pod_logs,       constraints: { name: %r{[^/]+} }
-    get "/logs/:name/stream", to: "logs#stream",     as: :pod_log_stream, constraints: { name: %r{[^/]+} }
+    get "/logs/:name", to: "logs#show", as: :pod_logs, constraints: {name: %r{[^/]+}}
+    get "/logs/:name/stream", to: "logs#stream", as: :pod_log_stream, constraints: {name: %r{[^/]+}}
 
-    get  "/metrics",                    to: "metrics#index",            as: :metrics
-    get  "/metrics/chart",             to: "metrics#chart",            as: :metrics_chart
-    get  "/metrics/display_settings",  to: "metrics#display_settings", as: :metrics_display_settings
+    get "/metrics", to: "metrics#index", as: :metrics
+    get "/metrics/chart", to: "metrics#chart", as: :metrics_chart
+    get "/metrics/display_settings", to: "metrics#display_settings", as: :metrics_display_settings
 
     # Saved metric dashboards — named multi-panel views the operator
     # builds in the right-drawer builder. `show` is omitted: a dashboard
@@ -156,15 +156,14 @@ Rails.application.routes.draw do
       end
     end
 
-
-    get "/alerts",   to: "alerts#index",   as: :alerts
+    get "/alerts", to: "alerts#index", as: :alerts
 
     # Alert rules — operator-defined thresholds over the metrics
     # warehouse (CRUD + pause/resume). `show` is omitted: a rule is
     # "viewed" on /alerts itself. `defaults` seeds the host-level
     # starter pack (disk/cpu/mem) for a zero-rules island.
     resources :alert_rules, path: "alerts/rules", only: [:new, :create, :edit, :update, :destroy] do
-      member     { post :toggle }
+      member { post :toggle }
       collection { post :defaults }
     end
 
@@ -177,11 +176,11 @@ Rails.application.routes.draw do
     get "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same tenant scope so the
     # per-server context (current_island) flows through naturally.
-    post   "/settings/reconnect",       to: "settings#reconnect",  as: :reconnect_settings
-    delete "/settings/pats/:pat_id",    to: "settings#revoke_pat", as: :revoke_pat_settings
+    post "/settings/reconnect", to: "settings#reconnect", as: :reconnect_settings
+    delete "/settings/pats/:pat_id", to: "settings#revoke_pat", as: :revoke_pat_settings
     # Operator-global display prefs (timezone today; refresh
     # cadence, theme, etc. later). Singular form post since the
     # endpoint is "save the prefs blob," not REST CRUD.
-    post   "/settings/preferences",     to: "settings#update_preferences", as: :update_preferences_settings
+    post "/settings/preferences", to: "settings#update_preferences", as: :update_preferences_settings
   end
 end

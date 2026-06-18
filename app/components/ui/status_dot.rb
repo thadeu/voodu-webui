@@ -14,23 +14,23 @@
 # so the eye is not constantly drawn.
 class Components::UI::StatusDot < Components::Base
   COLOR = {
-    online:     "var(--voodu-green)",
-    running:    "var(--voodu-green)",
+    online: "var(--voodu-green)",
+    running: "var(--voodu-green)",
     restarting: "var(--voodu-amber)",
-    offline:    "var(--voodu-red)",
-    error:      "var(--voodu-red)",
-    stopped:    "var(--voodu-muted)",
-    pending:    "var(--voodu-muted)",
+    offline: "var(--voodu-red)",
+    error: "var(--voodu-red)",
+    stopped: "var(--voodu-muted)",
+    pending: "var(--voodu-muted)",
     # unknown reads as an alert (red), same as offline — a missing health
     # status is a problem, not a neutral state.
-    unknown:    "var(--voodu-red)"
+    unknown: "var(--voodu-red)"
   }.freeze
 
   def initialize(status:, size: 7, pulse: nil)
     @status = status.to_sym
-    @size   = size
+    @size = size
     # Pulse defaults to true for live states, false for terminal ones.
-    @pulse  = pulse.nil? ? @status.in?(%i[online running restarting]) : pulse
+    @pulse = pulse.nil? ? @status.in?(%i[online running restarting]) : pulse
   end
 
   def view_template
@@ -40,7 +40,7 @@ class Components::UI::StatusDot < Components::Base
       class: tokens("inline-block shrink-0 rounded-full", ("animate-voodu-pulse" if @pulse)),
       style: "width: #{@size}px; height: #{@size}px; background: #{color}; " \
              "box-shadow: 0 0 0 3px color-mix(in srgb, #{color} 18%, transparent);",
-      aria: { label: @status.to_s, role: "status" }
+      aria: {label: @status.to_s, role: "status"}
     )
   end
 end

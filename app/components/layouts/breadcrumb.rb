@@ -22,7 +22,7 @@ class Components::Layouts::Breadcrumb < Components::Base
     return if crumbs.empty?
 
     nav(
-      aria:  { label: "Breadcrumb" },
+      aria: {label: "Breadcrumb"},
       class: "shrink-0 flex items-center h-10 px-3.5 vmd:px-6 border-b border-voodu-border bg-voodu-bg overflow-x-auto scrollbar-hidden"
     ) do
       ol(class: "flex items-center gap-1.5 m-0 p-0 list-none text-[12.5px] whitespace-nowrap") do
@@ -49,11 +49,11 @@ class Components::Layouts::Breadcrumb < Components::Base
   # (e.g. /alerts?tab=destinations → Overview › Alerts › Destinations).
   def with_active_tab(crumbs)
     crumbs = Array(crumbs).compact.map(&:dup)
-    tab    = request ? request.query_parameters["tab"].to_s : ""
+    tab = request ? request.query_parameters["tab"].to_s : ""
     return crumbs if tab.blank? || crumbs.empty?
 
     crumbs.last[:href] ||= request.path
-    crumbs << { label: tab_label(tab) }
+    crumbs << {label: tab_label(tab)}
     crumbs
   end
 
@@ -64,13 +64,13 @@ class Components::Layouts::Breadcrumb < Components::Base
 
   def crumb_node(crumb, current)
     label = crumb[:label].to_s
-    href  = crumb[:href]
+    href = crumb[:href]
 
     if current
       span(class: "text-voodu-text font-medium truncate", "aria-current": "page") { label }
     elsif href
       a(
-        href:  href,
+        href: href,
         class: "text-voodu-link hover:text-voodu-link-2 hover:underline transition-colors truncate"
       ) { label }
     else

@@ -49,7 +49,7 @@ module InternalEndpointAuth
     provided = request.headers["X-Voodu-Internal-Token"].to_s
 
     if expected.blank? || provided.blank? ||
-       !ActiveSupport::SecurityUtils.secure_compare(expected, provided)
+        !ActiveSupport::SecurityUtils.secure_compare(expected, provided)
       head :unauthorized
     end
   end

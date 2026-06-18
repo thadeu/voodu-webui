@@ -10,7 +10,7 @@
 # operator stays on whichever tab they were viewing.
 class Views::Alerts::Frame < Views::Base
   def initialize(data:, active_tab: :active)
-    @data       = data
+    @data = data
     @active_tab = active_tab
   end
 

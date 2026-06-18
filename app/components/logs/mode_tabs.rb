@@ -16,8 +16,8 @@ class Components::Logs::ModeTabs < Components::Base
   # Analytics is the primary surface (search the warehouse); Follow (live
   # tail) is secondary. Order here drives the tab order left → right.
   TABS = [
-    { id: :analytics, label: "Analytics", icon: :MagnifyingGlassOutline, path: :logs_analytics },
-    { id: :follow,    label: "Follow",    icon: :BoltOutline,            path: :logs }
+    {id: :analytics, label: "Analytics", icon: :MagnifyingGlassOutline, path: :logs_analytics},
+    {id: :follow, label: "Follow", icon: :BoltOutline, path: :logs}
   ].freeze
 
   def initialize(active:)
@@ -27,7 +27,7 @@ class Components::Logs::ModeTabs < Components::Base
   def view_template
     nav(
       class: "inline-flex items-center gap-px p-[2px] border border-voodu-border bg-voodu-surface w-fit",
-      aria: { label: "Logs view" }
+      aria: {label: "Logs view"}
     ) do
       TABS.each { |tab| tab_link(tab) }
     end

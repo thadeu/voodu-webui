@@ -32,9 +32,9 @@
 #   )
 class Components::UI::PageHeader < Components::Base
   def initialize(title:)
-    @title          = title
+    @title = title
     @subtitle_block = nil
-    @actions_block  = nil
+    @actions_block = nil
   end
 
   def with_subtitle(&block)

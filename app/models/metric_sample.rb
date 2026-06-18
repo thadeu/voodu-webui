@@ -21,7 +21,6 @@
 # the primary DB and cross-DB ActiveRecord joins are out of scope.
 # Callers pass `tenant_id` directly to the scopes below.
 class MetricSample < MetricsRecord
-
   # bulk_insert — primary write path, called by MetricsSyncIslandJob.
   # `rows` is an Array of Hashes shaped exactly like the columns:
   #   [{ tenant_id:, source:, ts_iso:, payload: }, ...]

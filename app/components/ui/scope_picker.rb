@@ -40,13 +40,13 @@
 #     }
 class Components::UI::ScopePicker < Components::Base
   def initialize(trigger:, primary_section: nil, pod_sections: [])
-    @trigger         = trigger
+    @trigger = trigger
     @primary_section = primary_section
-    @pod_sections    = Array(pod_sections)
+    @pod_sections = Array(pod_sections)
   end
 
   def view_template
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       trigger_button
       menu
     end
@@ -65,7 +65,7 @@ class Components::UI::ScopePicker < Components::Base
     # h-8 — they're a denser secondary surface.
     button(
       type: "button",
-      data: { action: "click->dropdown#toggle" },
+      data: {action: "click->dropdown#toggle"},
       class: "inline-flex items-center gap-2 px-2.5 h-9 min-w-[180px] border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] hover:bg-voodu-surface-2"
     ) do
       render icon_klass.new(class: "w-3 h-3")
@@ -85,7 +85,7 @@ class Components::UI::ScopePicker < Components::Base
   def menu
     div(
       hidden: true,
-      data: { dropdown_target: "menu" },
+      data: {dropdown_target: "menu"},
       # scrollbar-hidden — native-macOS feel; the 280–360px panel
       # can't afford to lose 10px to a permanent scrollbar track.
       class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[280px] max-w-[360px] max-h-[400px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
@@ -127,13 +127,13 @@ class Components::UI::ScopePicker < Components::Base
   # `data-turbo="false"` for full-page navigation — the original
   # page-level pod picker behaviour.
   def option_row(opt)
-    active       = opt[:active]
-    title        = opt.fetch(:title)
-    meta         = opt[:meta].to_s
-    href         = opt.fetch(:href)
+    active = opt[:active]
+    title = opt.fetch(:title)
+    meta = opt[:meta].to_s
+    href = opt.fetch(:href)
     turbo_stream = opt[:turbo_stream]
 
-    data_attrs = turbo_stream ? { turbo_stream: "true" } : { turbo: false }
+    data_attrs = turbo_stream ? {turbo_stream: "true"} : {turbo: false}
 
     a(
       href: href,

@@ -12,18 +12,18 @@
 class CreateAlertDestinations < ActiveRecord::Migration[8.1]
   def change
     create_table :alert_destinations do |t|
-      t.references :island, null: false, foreign_key: { on_delete: :cascade }
-      t.string   :name,                null: false
-      t.string   :kind,                null: false
-      t.text     :endpoint_ciphertext, null: false
-      t.text     :secret_ciphertext
-      t.boolean  :on_firing,           null: false, default: true
-      t.boolean  :on_resolved,         null: false, default: true
-      t.boolean  :enabled,             null: false, default: true
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.string :name, null: false
+      t.string :kind, null: false
+      t.text :endpoint_ciphertext, null: false
+      t.text :secret_ciphertext
+      t.boolean :on_firing, null: false, default: true
+      t.boolean :on_resolved, null: false, default: true
+      t.boolean :enabled, null: false, default: true
 
       t.datetime :last_delivered_at
-      t.string   :last_status
-      t.string   :last_error
+      t.string :last_status
+      t.string :last_error
 
       t.timestamps
     end

@@ -18,14 +18,14 @@
 class Components::Layouts::Topbar < Components::Base
   def initialize(current_island: nil, islands: [], updated_at: nil, uptime: nil)
     @current_island = current_island
-    @islands        = islands
-    @updated_at     = updated_at
+    @islands = islands
+    @updated_at = updated_at
     # uptime is the LIVE host uptime label, sourced from /system on
     # the Overview page. Other pages don't fetch /system, so they
     # pass nil and we fall back to the (stale) Island#uptime — until
     # those pages get their own snapshots, this keeps the chip
     # non-blank but operators know the Overview is the live source.
-    @uptime         = uptime
+    @uptime = uptime
   end
 
   def view_template
@@ -67,14 +67,14 @@ class Components::Layouts::Topbar < Components::Base
   # the controller's connect() the instant it mounts.
   def theme_toggle
     button(
-      type:  "button",
-      data:  { controller: "theme", action: "click->theme#toggle" },
+      type: "button",
+      data: {controller: "theme", action: "click->theme#toggle"},
       title: "Toggle theme",
       "aria-label": "Toggle light / dark theme",
       class: "inline-flex items-center justify-center w-8 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text shrink-0"
     ) do
-      span(data: { theme_target: "sun" }) { render Icon::SunOutline.new(class: "w-4 h-4") }
-      span(data: { theme_target: "moon" }, hidden: true) { render Icon::MoonOutline.new(class: "w-4 h-4") }
+      span(data: {theme_target: "sun"}) { render Icon::SunOutline.new(class: "w-4 h-4") }
+      span(data: {theme_target: "moon"}, hidden: true) { render Icon::MoonOutline.new(class: "w-4 h-4") }
     end
   end
 
@@ -83,8 +83,8 @@ class Components::Layouts::Topbar < Components::Base
     button(
       type: "button",
       class: "vmd:hidden inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 shrink-0",
-      data: { action: "click->mobile-nav#toggle" },
-      aria: { label: "Open menu" }
+      data: {action: "click->mobile-nav#toggle"},
+      aria: {label: "Open menu"}
     ) do
       render Icon::Bars3Outline.new(class: "w-4 h-4")
     end
@@ -124,11 +124,11 @@ class Components::Layouts::Topbar < Components::Base
   end
 
   def island_switcher
-    div(class: "relative", data: { controller: "dropdown" }) do
+    div(class: "relative", data: {controller: "dropdown"}) do
       button(
         type: "button",
         class: "inline-flex items-center gap-1 font-voodu-mono text-[13px] font-semibold text-voodu-text hover:text-voodu-link",
-        data: { action: "click->dropdown#toggle" }
+        data: {action: "click->dropdown#toggle"}
       ) do
         span(class: "truncate") { @current_island.name }
         render Icon::ChevronDownOutline.new(class: "w-3 h-3 text-voodu-muted")
@@ -136,7 +136,7 @@ class Components::Layouts::Topbar < Components::Base
 
       div(
         hidden: true,
-        data: { dropdown_target: "menu" },
+        data: {dropdown_target: "menu"},
         class: "absolute left-0 top-full mt-1 min-w-[240px] z-40 border border-voodu-border bg-voodu-surface shadow-2xl"
       ) do
         div(class: "py-1") { @islands.each { |i| switcher_row(i) } }
@@ -185,11 +185,15 @@ class Components::Layouts::Topbar < Components::Base
   def region_chip
     region = @current_island.region
     region = nil if region == "—"
-    infra  = @current_island.infra
+    infra = @current_island.infra
 
     return if region.nil? && infra.nil?
 
-    label = region && infra ? "region" : (region ? "region" : "infra")
+    label = if region && infra
+      "region"
+    else
+      (region ? "region" : "infra")
+    end
     value =
       if region && infra
         "#{region} · #{infra}"
@@ -210,7 +214,7 @@ class Components::Layouts::Topbar < Components::Base
   def search_box
     button(
       type: "button",
-      data: { command_palette_open: "" },
+      data: {command_palette_open: ""},
       class: "hidden vmd:flex items-center gap-2 px-2.5 h-8 border border-voodu-border bg-voodu-surface w-[260px] vlg:w-[320px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text-2 transition-colors",
       role: "search",
       "aria-label": "Open command palette"
@@ -229,9 +233,9 @@ class Components::Layouts::Topbar < Components::Base
   def search_icon
     button(
       type: "button",
-      data: { command_palette_open: "" },
+      data: {command_palette_open: ""},
       class: "vmd:hidden inline-flex items-center justify-center w-9 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 shrink-0",
-      aria: { label: "Open command palette" }
+      aria: {label: "Open command palette"}
     ) do
       render Icon::MagnifyingGlassOutline.new(class: "w-4 h-4")
     end
@@ -262,7 +266,7 @@ class Components::Layouts::Topbar < Components::Base
   # banner + the offline pod rows.
   def updated_pill
     live = @current_island&.status == :online
-    dot  = live ? "var(--voodu-green)" : "var(--voodu-amber)"
+    dot = live ? "var(--voodu-green)" : "var(--voodu-amber)"
 
     # Chip-sized (px-2 py-[3px], no fixed height) so it lines up with the
     # region / uptime chips it now sits beside in the breadcrumb.
@@ -282,7 +286,7 @@ class Components::Layouts::Topbar < Components::Base
       )
       span(class: "text-voodu-muted-2") { "updated" }
       span(class: "font-voodu-mono text-voodu-text-2") do
-        span(data: { updated_at_target: "label" }) { "now" }
+        span(data: {updated_at_target: "label"}) { "now" }
         plain " ago"
       end
       span(class: "inline-flex items-center justify-center w-4 h-4 text-voodu-muted") do

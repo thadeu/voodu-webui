@@ -21,7 +21,7 @@ class MetricDashboardsController < ApplicationController
     @dashboards = current_island.metric_dashboards.order(:name).to_a
 
     render Views::MetricDashboards::List.new(
-      island:     current_island,
+      island: current_island,
       dashboards: @dashboards
     ), layout: false
   end
@@ -30,10 +30,10 @@ class MetricDashboardsController < ApplicationController
     @dashboard = current_island.metric_dashboards.new
 
     render Views::MetricDashboards::Form.new(
-      island:    current_island,
+      island: current_island,
       dashboard: @dashboard,
-      pods:      compact_pods,
-      embed:     true,
+      pods: compact_pods,
+      embed: true,
       return_to: referer_return_to
     ), layout: false
   end
@@ -46,7 +46,7 @@ class MetricDashboardsController < ApplicationController
       # A brand-new dashboard isn't in the prior ?pid= set, so default to
       # showing it solo — but honor an explicit return_to if one rode in.
       redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
-                  notice: "Dashboard #{@dashboard.name} created.")
+        notice: "Dashboard #{@dashboard.name} created.")
     else
       render_form_errors
     end
@@ -54,16 +54,16 @@ class MetricDashboardsController < ApplicationController
 
   def edit
     render Views::MetricDashboards::Form.new(
-      island:    current_island,
+      island: current_island,
       dashboard: @dashboard,
-      pods:      compact_pods,
-      embed:     true,
+      pods: compact_pods,
+      embed: true,
       return_to: referer_return_to
     ), layout: false
   end
 
   def update
-    @dashboard.name   = dashboard_params[:name]
+    @dashboard.name = dashboard_params[:name]
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
@@ -71,7 +71,7 @@ class MetricDashboardsController < ApplicationController
       # builder from (e.g. a multi-dashboard ?pid=a,b stack), not the
       # single edited dashboard.
       redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
-                  notice: "Dashboard #{@dashboard.name} updated.")
+        notice: "Dashboard #{@dashboard.name} updated.")
     else
       render_form_errors
     end
@@ -118,10 +118,10 @@ class MetricDashboardsController < ApplicationController
         render turbo_stream: turbo_stream.replace(
           Views::MetricDashboards::Form::FRAME_ID,
           Views::MetricDashboards::Form.new(
-            island:    current_island,
+            island: current_island,
             dashboard: @dashboard,
-            pods:      compact_pods,
-            embed:     true,
+            pods: compact_pods,
+            embed: true,
             return_to: return_to_path
           )
         ), status: :unprocessable_entity
@@ -135,14 +135,14 @@ class MetricDashboardsController < ApplicationController
   # sees inline errors with their entered name + panels intact.
   def render_form_full_page(status:)
     render Views::MetricDashboards::Form.new(
-      island:         current_island,
-      dashboard:      @dashboard,
-      pods:           compact_pods,
-      embed:          false,
-      current_path:   current_path,
-      islands:        all_islands,
+      island: current_island,
+      dashboard: @dashboard,
+      pods: compact_pods,
+      embed: false,
+      current_path: current_path,
+      islands: all_islands,
       current_island: current_island,
-      return_to:      return_to_path
+      return_to: return_to_path
     ), status: status
   end
 
@@ -166,7 +166,7 @@ class MetricDashboardsController < ApplicationController
   def internal_metrics_path(url)
     return nil if url.blank?
 
-    uri  = URI.parse(url)
+    uri = URI.parse(url)
     path = uri.path.to_s
     return nil unless path.start_with?("/") && !path.start_with?("//")
     return nil unless path == metrics_path

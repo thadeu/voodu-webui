@@ -13,7 +13,7 @@ class DropLogExports < ActiveRecord::Migration[8.1]
 
   def down
     create_table :log_exports do |t|
-      t.references :island, null: false, foreign_key: { on_delete: :cascade }
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
       t.text :params, null: false
       t.string :status, null: false, default: "queued"
       t.string :file_path

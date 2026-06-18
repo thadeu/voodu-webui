@@ -18,17 +18,17 @@
 # in a tenant-LESS /settings/global page.
 class Views::Settings::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, system: nil, pats: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @system         = system
-    @pats           = pats  # IslandPats::Result or nil
+    @system = system
+    @pats = pats  # IslandPats::Result or nil
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands, current_island: @current_island,
-      breadcrumb: overview_crumbs({ label: "Settings" })
+      breadcrumb: overview_crumbs({label: "Settings"})
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new
@@ -93,9 +93,9 @@ class Views::Settings::Index < Views::Base
           end
           input(
             type: "text",
-            id:   "settings-timezone",
+            id: "settings-timezone",
             name: "timezone",
-            value: current_tz == "UTC" ? "" : current_tz,
+            value: (current_tz == "UTC") ? "" : current_tz,
             placeholder: "America/Sao_Paulo",
             spellcheck: "false",
             autocomplete: "off",
@@ -128,7 +128,7 @@ class Views::Settings::Index < Views::Base
     render(
       Components::UI::PageHeader.new(title: "Settings")
         .with_subtitle { subtitle }
-        .with_actions  { header_actions }
+        .with_actions { header_actions }
     )
   end
 
@@ -166,9 +166,9 @@ class Views::Settings::Index < Views::Base
 
   def status_label
     case @current_island.status
-    when :online   then "agent online"
-    when :offline  then "agent offline"
-    else                "agent status unknown"
+    when :online then "agent online"
+    when :offline then "agent offline"
+    else "agent status unknown"
     end
   end
 
@@ -189,19 +189,19 @@ class Views::Settings::Index < Views::Base
 
   def header_remove_form
     render(Components::UI::Confirmable.new(
-      title:         "Remove server",
-      message:       %(Permanently remove "#{@current_island.name}" from the registry? You can re-add it later.),
+      title: "Remove server",
+      message: %(Permanently remove "#{@current_island.name}" from the registry? You can re-add it later.),
       confirm_label: "Remove",
-      danger:        true,
-      icon:          :TrashOutline,
+      danger: true,
+      icon: :TrashOutline,
       form: {
         action: island_path(@current_island),
         method: :delete
       },
       trigger: {
-        title:        "Remove server",
+        title: "Remove server",
         "aria-label": "Remove #{@current_island.name}",
-        class:        "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-red/30 text-voodu-red text-[12.5px] font-medium hover:bg-voodu-red-dim"
+        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-red/30 text-voodu-red text-[12.5px] font-medium hover:bg-voodu-red-dim"
       }
     )) do
       render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
@@ -214,13 +214,13 @@ class Views::Settings::Index < Views::Base
   def server_card
     render(Components::UI::SectionCard.new(title: "Server")) do
       div do
-        render(Components::UI::KvRow.new(key: "Name", copy: true, copy_value: @current_island.name))     { plain @current_island.name }
-        render(Components::UI::KvRow.new(key: "Key",  copy: true, copy_value: @current_island.key))      { plain @current_island.key }
+        render(Components::UI::KvRow.new(key: "Name", copy: true, copy_value: @current_island.name)) { plain @current_island.name }
+        render(Components::UI::KvRow.new(key: "Key", copy: true, copy_value: @current_island.key)) { plain @current_island.key }
         render(Components::UI::KvRow.new(key: "Endpoint", copy: true, copy_value: @current_island.endpoint)) { plain @current_island.endpoint }
-        render(Components::UI::KvRow.new(key: "Region"))     { meta_value(@current_island.region) }
-        render(Components::UI::KvRow.new(key: "Infra"))      { meta_value(@current_island.infra) }
+        render(Components::UI::KvRow.new(key: "Region")) { meta_value(@current_island.region) }
+        render(Components::UI::KvRow.new(key: "Infra")) { meta_value(@current_island.infra) }
         render(Components::UI::KvRow.new(key: "Registered")) { registered_value }
-        render(Components::UI::KvRow.new(key: "Status"))     { status_value }
+        render(Components::UI::KvRow.new(key: "Status")) { status_value }
       end
     end
   end
@@ -258,7 +258,7 @@ class Views::Settings::Index < Views::Base
     return if @pats.nil?
 
     title = pat_card_title
-    card  = Components::UI::SectionCard.new(title: title)
+    card = Components::UI::SectionCard.new(title: title)
 
     render card do
       if @pats.forbidden?
@@ -291,7 +291,7 @@ class Views::Settings::Index < Views::Base
   # last_used (relative) · Revoke.
   def pat_row(p)
     div(class: "grid items-center gap-3 px-3.5 py-2.5 border-b border-voodu-border last:border-b-0",
-        style: "grid-template-columns: 180px 1fr 140px 100px auto;") do
+      style: "grid-template-columns: 180px 1fr 140px 100px auto;") do
       pat_name(p)
       pat_redacted(p)
       pat_scopes(p)
@@ -346,7 +346,7 @@ class Views::Settings::Index < Views::Base
 
     t = Time.parse(raw.to_s)
     secs = (Time.current - t).to_i
-    return "just now"    if secs < 60
+    return "just now" if secs < 60
     return "#{secs / 60}m ago" if secs < 3_600
     return "#{secs / 3_600}h ago" if secs < 86_400
 
@@ -357,19 +357,19 @@ class Views::Settings::Index < Views::Base
 
   def pat_revoke_form(p)
     render(Components::UI::Confirmable.new(
-      title:         "Revoke token",
-      message:       %(Revoke "#{p["name"]}"? Any service still using this token will start getting 401 Unauthorized immediately.),
+      title: "Revoke token",
+      message: %(Revoke "#{p["name"]}"? Any service still using this token will start getting 401 Unauthorized immediately.),
       confirm_label: "Revoke",
-      danger:        true,
-      icon:          :TrashOutline,
+      danger: true,
+      icon: :TrashOutline,
       form: {
         action: revoke_pat_settings_path(pat_id: p["id"]),
         method: :delete
       },
       trigger: {
-        title:        "Revoke token",
+        title: "Revoke token",
         "aria-label": "Revoke #{p["name"]}",
-        class:        "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
+        class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
       }
     )) do
       span { "Revoke" }
@@ -412,16 +412,16 @@ class Views::Settings::Index < Views::Base
 
     render card do
       div do
-        render(Components::UI::KvRow.new(key: "Version"))      { version_value }
-        render(Components::UI::KvRow.new(key: "License"))      { span(class: "font-voodu-mono") { "Apache-2.0" } }
-        render(Components::UI::KvRow.new(key: "Hostname"))     { agent_field("host", "hostname") }
-        render(Components::UI::KvRow.new(key: "Kernel"))       { agent_field("host", "kernel") }
-        render(Components::UI::KvRow.new(key: "CPU cores"))    { cpu_cores_value }
+        render(Components::UI::KvRow.new(key: "Version")) { version_value }
+        render(Components::UI::KvRow.new(key: "License")) { span(class: "font-voodu-mono") { "Apache-2.0" } }
+        render(Components::UI::KvRow.new(key: "Hostname")) { agent_field("host", "hostname") }
+        render(Components::UI::KvRow.new(key: "Kernel")) { agent_field("host", "kernel") }
+        render(Components::UI::KvRow.new(key: "CPU cores")) { cpu_cores_value }
         render(Components::UI::KvRow.new(key: "Memory total")) { memory_total_value }
-        render(Components::UI::KvRow.new(key: "Disk total"))   { disk_total_value }
-        render(Components::UI::KvRow.new(key: "Uptime"))       { uptime_value }
-        render(Components::UI::KvRow.new(key: "Boot time"))    { boot_time_value }
-        render(Components::UI::KvRow.new(key: "Links"))        { about_links }
+        render(Components::UI::KvRow.new(key: "Disk total")) { disk_total_value }
+        render(Components::UI::KvRow.new(key: "Uptime")) { uptime_value }
+        render(Components::UI::KvRow.new(key: "Boot time")) { boot_time_value }
+        render(Components::UI::KvRow.new(key: "Links")) { about_links }
       end
     end
   end
@@ -443,7 +443,7 @@ class Views::Settings::Index < Views::Base
   # out of the dashboard).
   def about_links
     div(class: "flex items-center gap-2 flex-wrap") do
-      about_link("Docs", "https://voodu.clowk.in/docs",      :DocumentTextOutline)
+      about_link("Docs", "https://voodu.clowk.in/docs", :DocumentTextOutline)
       about_link("Repository", "https://github.com/thadeu/clowk-voodu", :CodeBracketOutline)
     end
   end
@@ -505,13 +505,13 @@ class Views::Settings::Index < Views::Base
     mounts = @system&.dig("disk")
     return dash unless mounts.is_a?(Array) && mounts.any?
 
-    root  = mounts.find { |m| m["mount"] == "/" } || mounts.first
+    root = mounts.find { |m| m["mount"] == "/" } || mounts.first
     bytes = root["total_bytes"].to_i
     return dash unless bytes.positive?
 
     span do
       span(class: "font-voodu-mono") { format_bytes(bytes) }
-      span(class: "text-voodu-muted ml-2") { "· #{root['mount']}" }
+      span(class: "text-voodu-muted ml-2") { "· #{root["mount"]}" }
     end
   end
 
@@ -523,7 +523,7 @@ class Views::Settings::Index < Views::Base
   def reconnect_button
     form(
       action: reconnect_settings_path, method: "post",
-      data: { turbo: false }, class: "inline-flex"
+      data: {turbo: false}, class: "inline-flex"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       button(
@@ -547,9 +547,9 @@ class Views::Settings::Index < Views::Base
   end
 
   def age_label(secs)
-    return "#{secs}s"          if secs < 60
-    return "#{secs / 60}m"     if secs < 3_600
-    return "#{secs / 3_600}h"  if secs < 86_400
+    return "#{secs}s" if secs < 60
+    return "#{secs / 60}m" if secs < 3_600
+    return "#{secs / 3_600}h" if secs < 86_400
 
     days = secs / 86_400
     hours = (secs % 86_400) / 3_600
@@ -557,9 +557,9 @@ class Views::Settings::Index < Views::Base
   end
 
   def uptime_label(secs)
-    days  = secs / 86_400
+    days = secs / 86_400
     hours = (secs % 86_400) / 3_600
-    mins  = (secs % 3_600) / 60
+    mins = (secs % 3_600) / 60
     if days.positive?
       "#{days}d #{hours}h"
     elsif hours.positive?
@@ -571,10 +571,10 @@ class Views::Settings::Index < Views::Base
 
   def format_bytes(b)
     b = b.to_f
-    return "#{b.round} B"                                  if b < 1_000
-    return "#{(b / 1_000.0).round(1)} kB"                  if b < 1_000_000
-    return "#{(b / 1_000_000.0).round(1)} MB"              if b < 1_000_000_000
-    return "#{(b / 1_000_000_000.0).round(1)} GB"          if b < 1_000_000_000_000
+    return "#{b.round} B" if b < 1_000
+    return "#{(b / 1_000.0).round(1)} kB" if b < 1_000_000
+    return "#{(b / 1_000_000.0).round(1)} MB" if b < 1_000_000_000
+    return "#{(b / 1_000_000_000.0).round(1)} GB" if b < 1_000_000_000_000
 
     "#{(b / 1_000_000_000_000.0).round(1)} TB"
   end

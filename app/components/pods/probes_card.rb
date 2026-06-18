@@ -76,7 +76,7 @@ class Components::Pods::ProbesCard < Components::Base
   def action_summary(spec)
     if (h = spec["http_get"]).is_a?(Hash)
       scheme = h["scheme"].to_s.downcase
-      prefix = scheme.present? && scheme != "http" ? "#{scheme.upcase} " : ""
+      prefix = (scheme.present? && scheme != "http") ? "#{scheme.upcase} " : ""
 
       "#{prefix}GET #{h["path"]}:#{h["port"]}"
     elsif (t = spec["tcp_socket"]).is_a?(Hash)

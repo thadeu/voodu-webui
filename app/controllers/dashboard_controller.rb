@@ -46,10 +46,10 @@ class DashboardController < ApplicationController
 
   def tab_param
     case params[:status]
-    when "running"    then :running
+    when "running" then :running
     when "restarting" then :restarting
-    when "stopped"    then :stopped
-    else                   :all
+    when "stopped" then :stopped
+    else :all
     end
   end
 end

@@ -42,7 +42,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   def summary_bar
     div(class: "flex items-center justify-between gap-3") do
-      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0", data: { log_analytics_target: "summary" }) do
+      div(class: "flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-voodu-muted min-w-0", data: {log_analytics_target: "summary"}) do
         span do
           span(class: "font-voodu-mono text-voodu-text-2") { @data.truncated? ? "#{delimited(@data.matched)}+" : delimited(@data.matched) }
           plain " matched"

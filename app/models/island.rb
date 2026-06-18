@@ -34,7 +34,7 @@ class Island < ApplicationRecord
   # Island purges its row sets in the same transaction (also enforced
   # at the DB level via `foreign_key: { on_delete: :cascade }`).
   has_many :pods, dependent: :destroy
-  has_one  :system, dependent: :destroy
+  has_one :system, dependent: :destroy
 
   # Saved metric dashboards (named multi-panel views on /metrics).
   # `dependent: :destroy` reaps them with the island; the DB foreign
@@ -44,8 +44,8 @@ class Island < ApplicationRecord
   # Alert rules + their firing episodes. Events also cascade through
   # alert_rules, but the direct association lets the /alerts history
   # render island-wide without joining rules.
-  has_many :alert_rules,        dependent: :destroy
-  has_many :alert_events,       dependent: :destroy
+  has_many :alert_rules, dependent: :destroy
+  has_many :alert_events, dependent: :destroy
   has_many :alert_destinations, dependent: :destroy
 
   before_validation :normalize_endpoint
@@ -63,18 +63,18 @@ class Island < ApplicationRecord
     StateSyncIslandJob.perform_later(id) if defined?(StateSyncIslandJob)
   end
 
-  validates :name, presence: true, uniqueness: true, length: { maximum: 64 }
+  validates :name, presence: true, uniqueness: true, length: {maximum: 64}
   validates :endpoint, presence: true, format: {
     with: %r{\Ahttps?://[^/]+:\d+}, message: "could not be normalised to scheme://host:port"
   }
   validates :pat_ciphertext, presence: true
-  validates :key, presence: true, uniqueness: true, format: { with: /\A[a-zA-Z0-9]{6}\z/ }
+  validates :key, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{6}\z/}
 
   # URL key alphabet. base62 (0-9, A-Z, a-z) chosen over base64 because
   # `/+=` are URL-significant and url-safe-base64 (`-_`) adds visual
   # noise. base62 is the sweet spot for hand-typeable + URL-clean.
   KEY_ALPHABET = ("0".."9").to_a + ("A".."Z").to_a + ("a".."z").to_a
-  KEY_LENGTH   = 6
+  KEY_LENGTH = 6
 
   # Convenience accessor — read/write as `island.pat` even though
   # the column is named pat_ciphertext (the name tells anyone reading
@@ -216,13 +216,13 @@ class Island < ApplicationRecord
   # humanize_uptime — "Nd Nh" / "Nh Nm" / "Nm" / "Ns" cascade. Class
   # method so any surface can format consistently.
   def self.humanize_uptime(secs)
-    days  = secs / 86_400
+    days = secs / 86_400
     hours = (secs % 86_400) / 3600
-    mins  = (secs % 3600) / 60
+    mins = (secs % 3600) / 60
 
     return "#{days}d #{hours}h" if days.positive?
     return "#{hours}h #{mins}m" if hours.positive?
-    return "#{mins}m"           if mins.positive?
+    return "#{mins}m" if mins.positive?
 
     "#{secs}s"
   end
@@ -307,7 +307,7 @@ class Island < ApplicationRecord
     end
 
     self.endpoint = raw
-  rescue StandardError
+  rescue
     # Anything weird — leave the original value in place so the
     # format validator surfaces a clear error to the operator.
   end

@@ -25,8 +25,8 @@ class IslandsController < ApplicationController
 
     render Views::Islands::Index.new(
       current_path: current_path,
-      islands:      @islands,
-      active_tab:   status_tab_param
+      islands: @islands,
+      active_tab: status_tab_param
     )
   end
 
@@ -44,7 +44,7 @@ class IslandsController < ApplicationController
     # they typed an empty endpoint.
     unless @island.valid?
       render Views::Islands::New.new(current_path: current_path, island: @island),
-             status: :unprocessable_entity
+        status: :unprocessable_entity
       return
     end
 
@@ -56,8 +56,8 @@ class IslandsController < ApplicationController
     # failed" state.
     if (probe_error = IslandHealth.probe!(@island))
       render Views::Islands::New.new(
-        current_path:     current_path,
-        island:           @island,
+        current_path: current_path,
+        island: @island,
         connection_error: probe_error
       ), status: :unprocessable_entity
       return
@@ -70,18 +70,18 @@ class IslandsController < ApplicationController
       IslandHealth.warm(@island, online: true)
 
       redirect_to tenant_root_path(tenant_key: @island.key),
-                  notice: "Server #{@island.name} registered."
+        notice: "Server #{@island.name} registered."
     else
       render Views::Islands::New.new(current_path: current_path, island: @island),
-             status: :unprocessable_entity
+        status: :unprocessable_entity
     end
   end
 
   def edit
     render Views::Islands::Edit.new(
       current_path: current_path,
-      island:       @island,
-      return_to:    safe_return_to
+      island: @island,
+      return_to: safe_return_to
     )
   end
 
@@ -97,7 +97,7 @@ class IslandsController < ApplicationController
 
     unless @island.valid?
       render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
-             status: :unprocessable_entity
+        status: :unprocessable_entity
       return
     end
 
@@ -105,9 +105,9 @@ class IslandsController < ApplicationController
     # want a "successful save" that points at an unreachable host.
     if (probe_error = IslandHealth.probe!(@island))
       render Views::Islands::Edit.new(
-        current_path:     current_path,
-        island:           @island,
-        return_to:        safe_return_to,
+        current_path: current_path,
+        island: @island,
+        return_to: safe_return_to,
         connection_error: probe_error
       ), status: :unprocessable_entity
       return
@@ -118,7 +118,7 @@ class IslandsController < ApplicationController
       redirect_to (safe_return_to || islands_path), notice: "Server #{@island.name} updated."
     else
       render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
-             status: :unprocessable_entity
+        status: :unprocessable_entity
     end
   end
 
@@ -146,7 +146,7 @@ class IslandsController < ApplicationController
   # default in the action (usually islands_path).
   def safe_return_to
     p = params[:return_to].to_s
-    p.start_with?("/") && !p.start_with?("//") ? p : nil
+    (p.start_with?("/") && !p.start_with?("//")) ? p : nil
   end
 
   def island_params
@@ -161,9 +161,9 @@ class IslandsController < ApplicationController
   # expects. Anything unknown falls back to :all.
   def status_tab_param
     case params[:status]
-    when "online"  then :online
+    when "online" then :online
     when "offline" then :offline
-    else                :all
+    else :all
     end
   end
 end

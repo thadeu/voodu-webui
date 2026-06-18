@@ -9,9 +9,9 @@
 # "gauge_linear". ChartCard does the formatting; this only draws.
 class Components::Metrics::GaugeLinear < Components::Base
   def initialize(pct:, color:, value_label: nil, capacity_label: nil)
-    @pct            = clamp(pct.to_f)
-    @color          = color
-    @value_label    = value_label
+    @pct = clamp(pct.to_f)
+    @color = color
+    @value_label = value_label
     @capacity_label = capacity_label
   end
 
@@ -37,7 +37,7 @@ class Components::Metrics::GaugeLinear < Components::Base
   private
 
   def fill_color
-    return "var(--voodu-red)"   if @pct >= 90
+    return "var(--voodu-red)" if @pct >= 90
     return "var(--voodu-amber)" if @pct >= 70
 
     @color
@@ -46,7 +46,7 @@ class Components::Metrics::GaugeLinear < Components::Base
   def pct_label
     # String#% — `format`/`sprintf` resolve to a shadowed 0-arg helper
     # in the Phlex component context (same reason PodCard uses "%.1f" % v).
-    @pct < 10 ? "#{'%.1f' % @pct}%" : "#{@pct.round}%"
+    (@pct < 10) ? "#{"%.1f" % @pct}%" : "#{@pct.round}%"
   end
 
   def clamp(v)

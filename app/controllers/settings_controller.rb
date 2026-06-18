@@ -12,7 +12,7 @@ class SettingsController < ApplicationController
     render Views::Settings::Index.new(
       **dashboard_context.merge(
         system: IslandSystem.fetch(voodu_client, current_island),
-        pats:   IslandPats.fetch(voodu_client, current_island)
+        pats: IslandPats.fetch(voodu_client, current_island)
       )
     )
   end

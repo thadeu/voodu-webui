@@ -17,7 +17,7 @@ class Components::Pods::Header < Components::Base
   # drawer's own X / open-in-new-tab affordances cover the close
   # and the "I want the full page" intents.
   def initialize(data:, drawer: false)
-    @data   = data
+    @data = data
     @drawer = drawer
   end
 
@@ -72,12 +72,12 @@ class Components::Pods::Header < Components::Base
 
   def meta_chips
     net = primary_network
-    ip  = net && net["ip_address"]
+    ip = net && net["ip_address"]
 
     div(class: "flex flex-wrap items-center gap-1.5 mt-3") do
       render Components::UI::StatusPill.new(status: @data.status_sym)
 
-      labeled_chip("kind",  @data.kind.to_s)
+      labeled_chip("kind", @data.kind.to_s)
       labeled_chip("scope", @data.scope.to_s)
       render Components::UI::Chip.new(mono: true) { plain @data.image.to_s.presence || "—" }
       labeled_chip("ip", ip.to_s) if ip
@@ -134,10 +134,10 @@ class Components::Pods::Header < Components::Base
     name = @data.name
 
     render(Components::UI::Drawer.new(
-      title:     "Logs · #{name}",
-      src:       "#{pod_logs_path(name: name)}?embed=1",
-      open_url:  pod_logs_path(name: name),
-      width:     "70vw",
+      title: "Logs · #{name}",
+      src: "#{pod_logs_path(name: name)}?embed=1",
+      open_url: pod_logs_path(name: name),
+      width: "70vw",
       # Logs are content-heavy (long lines, dense JSON dumps);
       # let the operator drag the drawer up to 85vw when they
       # need to read a wide payload without scrolling sideways.
@@ -158,7 +158,7 @@ class Components::Pods::Header < Components::Base
   # styling so the action row reads as a single visual group.
   def view_metrics_btn
     a(
-      href:  metrics_path(scope_kind: "pod", scope_id: @data.name),
+      href: metrics_path(scope_kind: "pod", scope_id: @data.name),
       title: "View metrics",
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
@@ -171,18 +171,18 @@ class Components::Pods::Header < Components::Base
     name = @data.name
 
     render(Components::UI::Confirmable.new(
-      title:         "Restart pod",
-      message:       %(Restart "#{name}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
+      title: "Restart pod",
+      message: %(Restart "#{name}"? The container will be stopped and recreated; in-flight traffic may be interrupted.),
       confirm_label: "Restart pod",
-      icon:          :ArrowPathOutline,
+      icon: :ArrowPathOutline,
       form: {
         action: restart_pod_path(name: name),
         method: :post
       },
       trigger: {
-        title:        "Restart pod",
+        title: "Restart pod",
         "aria-label": "Restart #{name}",
-        class:        "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
+        class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
       }
     )) do
       render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")

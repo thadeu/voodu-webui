@@ -11,10 +11,10 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   fixtures :islands
 
   setup do
-    @island       = islands(:alpha)
-    @key          = @island.key
-    @base         = Time.zone.local(2026, 6, 9, 14, 47, 50)
-    @prev_wh      = ENV["WAREHOUSE"]
+    @island = islands(:alpha)
+    @key = @island.key
+    @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
+    @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
 
     # Pin "now" to the seeded era so LogSearchData#window's retention-floor
@@ -46,13 +46,13 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
 
   test "frame request renders only the results table and applies the search" do
     seed("web", [
-      [@base,             "GET /health 200"],
-      [@base + 1.second,  "callid=8342416038 finished"]
+      [@base, "GET /health 200"],
+      [@base + 1.second, "callid=8342416038 finished"]
     ])
 
     get logs_analytics_path(tenant_key: @key),
-        params:  { range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid" },
-        headers: { "Turbo-Frame" => "logs-analytics-results" }
+      params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid"},
+      headers: {"Turbo-Frame" => "logs-analytics-results"}
 
     assert_response :success
     assert_match "callid=8342416038 finished", @response.body
@@ -63,8 +63,8 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
 
   test "empty result set renders the empty state" do
     get logs_analytics_path(tenant_key: @key),
-        params:  { range: "custom", from: iso(@base), until: iso(@base + 1.second), q: "nothing-matches-this" },
-        headers: { "Turbo-Frame" => "logs-analytics-results" }
+      params: {range: "custom", from: iso(@base), until: iso(@base + 1.second), q: "nothing-matches-this"},
+      headers: {"Turbo-Frame" => "logs-analytics-results"}
 
     assert_response :success
     assert_match "No log lines match this query", @response.body
@@ -75,8 +75,8 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
       seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
 
       get logs_analytics_path(tenant_key: @key),
-          params:  { range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds), page: 2 },
-          headers: { "Turbo-Frame" => "la-page-2" }
+        params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds), page: 2},
+        headers: {"Turbo-Frame" => "la-page-2"}
 
       assert_response :success
       assert_match 'id="la-page-2"', @response.body, "wrapped in the requested frame"
@@ -87,10 +87,10 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
 
   test "export streams the current query as a download, applying filters" do
     seed("web", [
-      [@base,             "GET /health 200"],
-      [@base + 1.second,  "callid=8342416038 finished"]
+      [@base, "GET /health 200"],
+      [@base + 1.second, "callid=8342416038 finished"]
     ])
-    window = { from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid" }
+    window = {from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid"}
 
     # NDJSON — full records, only the matching line, as an attachment.
     get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "ndjson")
@@ -119,7 +119,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
 
     get logs_analytics_surrounding_path(tenant_key: @key),
-        params: { pod: "web", ts: iso(@base + 3.seconds), fmt: "csv" }
+      params: {pod: "web", ts: iso(@base + 3.seconds), fmt: "csv"}
 
     assert_response :success
     assert_match "text/csv", @response.media_type
@@ -133,7 +133,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     seed("web", lines)
 
     get logs_analytics_surrounding_path(tenant_key: @key),
-        params: { pod: "web", ts: iso(@base + 3.seconds), before: 2, after: 2 }
+      params: {pod: "web", ts: iso(@base + 3.seconds), before: 2, after: 2}
 
     assert_response :success
     assert_match "Surrounding logs", @response.body
@@ -152,7 +152,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     lines.each do |time, msg|
       path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
       LogTail::FilePath.ensure_dir(File.dirname(path))
-      row = { ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false }
+      row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
       File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
     end
   end

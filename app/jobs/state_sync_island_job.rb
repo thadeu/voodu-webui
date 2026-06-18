@@ -53,7 +53,7 @@ class StateSyncIslandJob < ApplicationJob
     return unless island # deleted between orchestrator + job dispatch
 
     started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    client     = Voodu::Client.new(island)
+    client = Voodu::Client.new(island)
 
     # Fetch both endpoints. Sequential rather than parallel —
     # combined typical latency is ~200-400ms, well under the 10s
@@ -69,10 +69,10 @@ class StateSyncIslandJob < ApplicationJob
     # longer a problem since the controller migrated docker stats
     # from `exec.Command` to the SDK with per-container stagger —
     # spikes that were near-100% now top out around 20%.
-    pods_response   = client.pods(detail: true, spec: true)
+    pods_response = client.pods(detail: true, spec: true)
     system_response = client.system
 
-    pods_payload   = pods_payload_from(pods_response)
+    pods_payload = pods_payload_from(pods_response)
     system_payload = system_payload_from(system_response)
 
     # Outer transaction. StateDigestService.persist is itself
@@ -111,7 +111,7 @@ class StateSyncIslandJob < ApplicationJob
       "state-sync island=#{island.key} tenant=#{island.id} " \
       "pods=#{pods_payload.size} system=ok elapsed=#{elapsed_ms}ms"
     )
-  rescue Voodu::Client::Error => e
+  rescue Voodu::Client::Error
     # Sync failed (controller offline, network blip, PAT scope
     # mismatch). Warm health → :offline so the badge flips
     # immediately on the next page render instead of waiting out
@@ -140,8 +140,8 @@ class StateSyncIslandJob < ApplicationJob
   # and the digest service hasn't run.
   def broadcast_status_change(island, status)
     pill_html = Components::UI::StatusPill.new(status: status).call
-    dot_html  = Components::UI::StatusDot.new(status: status).call
-    stream    = "island-state-#{island.id}"
+    dot_html = Components::UI::StatusDot.new(status: status).call
+    stream = "island-state-#{island.id}"
 
     # `update` (not `replace`) — `replace` swaps the entire target
     # element including its id, so the FIRST broadcast removes the
@@ -154,13 +154,13 @@ class StateSyncIslandJob < ApplicationJob
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
       target: "island-status-pill-#{island.id}",
-      html:   pill_html
+      html: pill_html
     )
 
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
       target: "island-status-dot-#{island.id}",
-      html:   dot_html
+      html: dot_html
     )
 
     # state_tick fires last so the page-side handler runs AFTER the
@@ -169,7 +169,7 @@ class StateSyncIslandJob < ApplicationJob
     # renders against the just-updated warehouse (stale banner
     # appears/disappears, pod statuses reflect online/offline).
     Turbo::StreamsChannel.broadcast_action_to(stream, action: :state_tick)
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn(
       "state-sync broadcast island=#{island.key} failed: #{e.class}: #{e.message}"
     )
@@ -183,8 +183,8 @@ class StateSyncIslandJob < ApplicationJob
   def pods_payload_from(response)
     case response
     when Array then response
-    when Hash  then Array(response["pods"])
-    else            []
+    when Hash then Array(response["pods"])
+    else []
     end
   end
 

@@ -70,19 +70,19 @@ class Components::Metrics::ChartCard < Components::Base
   # that's missing the card silently falls back to the area chart so a
   # gauge panel on a limitless metric never renders blank.
   def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area")
-    @label           = label
-    @color           = color
-    @unit            = unit
-    @points          = Array(points)
-    @range_ms        = range_ms
-    @current         = current
-    @expand_url      = expand_url
-    @metric          = metric
-    @section         = section
+    @label = label
+    @color = color
+    @unit = unit
+    @points = Array(points)
+    @range_ms = range_ms
+    @current = current
+    @expand_url = expand_url
+    @metric = metric
+    @section = section
     @default_visible = default_visible
-    @capacity_label  = capacity_label
-    @capacity_pct    = capacity_pct
-    @chart_type      = chart_type
+    @capacity_label = capacity_label
+    @capacity_pct = capacity_pct
+    @chart_type = chart_type
   end
 
   def view_template
@@ -90,15 +90,15 @@ class Components::Metrics::ChartCard < Components::Base
 
     if @metric
       root_data[:metrics_display_target] = "card"
-      root_data[:metric_key]             = @metric
+      root_data[:metric_key] = @metric
     end
 
-    root_data[:section]         = @section if @section
-    root_data[:default_visible] = "false"  unless @default_visible
+    root_data[:section] = @section if @section
+    root_data[:default_visible] = "false" unless @default_visible
 
     div(
       class: "relative bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",
-      data:  root_data
+      data: root_data
     ) do
       card_header
       render_body
@@ -120,12 +120,12 @@ class Components::Metrics::ChartCard < Components::Base
   # metrics-chart ResizeObserver.
   def resize_handle(edge)
     div(
-      data:  { action: "pointerdown->metrics-display#startResize", resize_edge: edge },
-      aria:  { hidden: "true" },
+      data: {action: "pointerdown->metrics-display#startResize", resize_edge: edge},
+      aria: {hidden: "true"},
       title: "Drag to resize",
       class: tokens(
         "absolute top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-voodu-accent/30 active:bg-voodu-accent/60 z-10 touch-none",
-        edge == "left" ? "left-0" : "right-0"
+        (edge == "left") ? "left-0" : "right-0"
       )
     )
   end
@@ -151,17 +151,17 @@ class Components::Metrics::ChartCard < Components::Base
       end
     else
       render Components::Metrics::Chart.new(
-        points:   @points,
-        color:    @color,
-        unit:     @unit,
-        label:    @label,
+        points: @points,
+        color: @color,
+        unit: @unit,
+        label: @label,
         range_ms: @range_ms,
-        height:   200
+        height: 200
       )
     end
   end
 
-  def gauge?        = gauge_radial? || gauge_linear?
+  def gauge? = gauge_radial? || gauge_linear?
   def gauge_radial? = @chart_type.to_s == "gauge_radial" && !gauge_pct.nil?
   def gauge_linear? = @chart_type.to_s == "gauge_linear" && !gauge_pct.nil?
 
@@ -170,7 +170,7 @@ class Components::Metrics::ChartCard < Components::Base
   # nil → no ceiling → ChartCard renders the area chart instead.
   def gauge_pct
     return @capacity_pct unless @capacity_pct.nil?
-    return (@current || stats[:current]) if percent_unit?
+    return @current || stats[:current] if percent_unit?
 
     nil
   end
@@ -292,7 +292,7 @@ class Components::Metrics::ChartCard < Components::Base
   def maximize_link
     a(
       href: @expand_url,
-      data: { turbo_stream: "true" },
+      data: {turbo_stream: "true"},
       title: "Expand chart",
       "aria-label": "Expand #{@label} chart",
       class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
@@ -360,16 +360,16 @@ class Components::Metrics::ChartCard < Components::Base
   # stats — current/min/avg/max in one pass over the series. Same
   # shape the inspiration computes in `stats()` (line 350-355).
   def stats
-    return { min: nil, max: nil, avg: nil, current: nil } if @points.empty?
+    return {min: nil, max: nil, avg: nil, current: nil} if @points.empty?
 
-    values  = @points.map { |p| p[:value].to_f }
-    sum     = values.sum
+    values = @points.map { |p| p[:value].to_f }
+    sum = values.sum
     current = values.last
 
     {
-      min:     values.min,
-      max:     values.max,
-      avg:     sum / values.size,
+      min: values.min,
+      max: values.max,
+      avg: sum / values.size,
       current: current
     }
   end

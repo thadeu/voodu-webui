@@ -13,7 +13,7 @@ class AlertsPageData
   attr_reader :island, :history_filter
 
   def initialize(island, history_filter: AlertHistoryFilter.new)
-    @island         = island
+    @island = island
     @history_filter = history_filter
   end
 
@@ -31,9 +31,9 @@ class AlertsPageData
   # reading the live comparator.
   def firing_events
     @firing_events ||= island.alert_events.firing
-                             .joins(:alert_rule).where(alert_rules: { enabled: true })
-                             .includes(:alert_rule)
-                             .order(started_at: :desc).to_a
+      .joins(:alert_rule).where(alert_rules: {enabled: true})
+      .includes(:alert_rule)
+      .order(started_at: :desc).to_a
   end
 
   # Closed episodes inside the active filter window, newest first,
@@ -58,8 +58,8 @@ class AlertsPageData
   # the active tab's rows are ever materialised.
   def firing_count
     @firing_count ||= island.alert_events.firing
-                            .joins(:alert_rule).where(alert_rules: { enabled: true })
-                            .count
+      .joins(:alert_rule).where(alert_rules: {enabled: true})
+      .count
   end
 
   def rules_count
@@ -88,11 +88,11 @@ class AlertsPageData
   # rules on deployments (the only workloads ingress samples carry).
   def targets
     @targets ||= island.pods
-                       .distinct
-                       .pluck(:scope, :resource_name, :kind)
-                       .reject { |scope, name, _kind| scope.blank? || name.blank? }
-                       .sort
-                       .map { |scope, name, kind| { scope: scope, name: name, kind: kind.to_s } }
+      .distinct
+      .pluck(:scope, :resource_name, :kind)
+      .reject { |scope, name, _kind| scope.blank? || name.blank? }
+      .sort
+      .map { |scope, name, kind| {scope: scope, name: name, kind: kind.to_s} }
   end
 
   private

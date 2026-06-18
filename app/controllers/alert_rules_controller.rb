@@ -97,8 +97,8 @@ class AlertRulesController < ApplicationController
     page = AlertsPageData.new(current_island)
     view = Views::AlertRules::Form.new(
       **dashboard_context,
-      rule:         @rule,
-      targets:      page.targets,
+      rule: @rule,
+      targets: page.targets,
       destinations: page.destinations
     )
 
@@ -107,9 +107,9 @@ class AlertRulesController < ApplicationController
 
   def rule_attributes
     permitted = params.require(:alert_rule)
-                      .permit(:name, :metric_kind, :target, :comparator,
-                              :threshold, :duration_seconds, alert_destination_ids: [])
-    attrs  = permitted.to_h
+      .permit(:name, :metric_kind, :target, :comparator,
+        :threshold, :duration_seconds, alert_destination_ids: [])
+    attrs = permitted.to_h
     target = attrs.delete("target").to_s
 
     # Drop the empty-string sentinel the form sends so an all-unchecked

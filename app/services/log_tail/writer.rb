@@ -67,12 +67,12 @@ module LogTail
     SEED_FROM_DISK_BYTES = 1 * 1024 * 1024  # 1 MB
 
     def initialize(island_id)
-      @island_id   = island_id
-      @handles     = {}  # { [pod, date_str] => File }
-      @sizes       = {}  # { [pod, date_str] => Integer (cached size) }
-      @seen        = {}  # { [pod, date_str] => { hash => true } (insertion-ordered) }
+      @island_id = island_id
+      @handles = {}  # { [pod, date_str] => File }
+      @sizes = {}  # { [pod, date_str] => Integer (cached size) }
+      @seen = {}  # { [pod, date_str] => { hash => true } (insertion-ordered) }
       @write_count = 0
-      @disk_ok     = true
+      @disk_ok = true
     end
 
     # append — write one parsed line to the appropriate (pod, date)
@@ -85,8 +85,8 @@ module LogTail
       return false unless @disk_ok
 
       pod_name = LogTail::FilePath.safe_pod_name(pod)
-      date     = today
-      key      = [pod_name, date]
+      date = today
+      key = [pod_name, date]
 
       # Open the handle FIRST — ensure_handle seeds this bucket's dedupe
       # window from the file tail, so the check below sees lines written
@@ -120,8 +120,16 @@ module LogTail
     # close — flush + close all open handles. Called on job exit.
     def close
       @handles.each_value do |h|
-        h.flush rescue nil
-        h.close rescue nil
+        begin
+          h.flush
+        rescue
+          nil
+        end
+        begin
+          h.close
+        rescue
+          nil
+        end
       end
       @handles.clear
       @sizes.clear
@@ -147,7 +155,7 @@ module LogTail
     # insertion order since 1.9 so `.shift` reliably removes the
     # oldest entry.
     def fingerprint(parsed_hash)
-      ts  = (parsed_hash[:ts]  || parsed_hash["ts"]).to_s
+      ts = (parsed_hash[:ts] || parsed_hash["ts"]).to_s
       msg = (parsed_hash[:msg] || parsed_hash["msg"]).to_s
       "#{ts}|#{msg[0, 200]}"
     end
@@ -161,7 +169,7 @@ module LogTail
 
     def mark_written(key, parsed_hash)
       window = (@seen[key] ||= {})
-      fp     = fingerprint(parsed_hash)
+      fp = fingerprint(parsed_hash)
 
       # Re-insert to refresh recency (LRU-ish), then evict oldest
       # if over capacity.
@@ -185,7 +193,7 @@ module LogTail
 
       pod_name, date_str = key
       date_obj = Date.parse(date_str)
-      path     = LogTail::FilePath.daily_file(@island_id, pod_name, date_obj)
+      path = LogTail::FilePath.daily_file(@island_id, pod_name, date_obj)
 
       LogTail::FilePath.ensure_dir(File.dirname(path))
 
@@ -202,7 +210,7 @@ module LogTail
       end
 
       @handles[key] = file
-      @sizes[key]   = size
+      @sizes[key] = size
       seed_dedupe_from_disk(key, path)
       [file, size]
     end
@@ -226,7 +234,7 @@ module LogTail
         window[fingerprint(parsed)] = true if parsed.is_a?(Hash)
       end
       @seen[key] = window
-    rescue StandardError => e
+    rescue => e
       Rails.logger.warn("log-tail dedupe seed failed island=#{@island_id} #{path}: #{e.class}: #{e.message}")
       @seen[key] ||= {}
     end
@@ -256,8 +264,16 @@ module LogTail
       @handles.each do |key, handle|
         next if key.last == active_date
 
-        handle.flush rescue nil
-        handle.close rescue nil
+        begin
+          handle.flush
+        rescue
+          nil
+        end
+        begin
+          handle.close
+        rescue
+          nil
+        end
         @handles.delete(key)
         @sizes.delete(key)
         @seen.delete(key)  # yesterday's dedupe window is irrelevant today
@@ -273,18 +289,22 @@ module LogTail
       sentinel = JSON.generate({
         "_dropped" => true,
         "limit_mb" => LogTail::FilePath::PER_FILE_CAP_BYTES / (1024 * 1024),
-        "ts"       => Time.current.iso8601(3),
-        "msg"      => "Daily cap reached — further lines dropped"
+        "ts" => Time.current.iso8601(3),
+        "msg" => "Daily cap reached — further lines dropped"
       }) + "\n"
 
       begin
         handle.write(sentinel)
         handle.flush
-      rescue StandardError
+      rescue
         # already in an error state — proceed to close
       end
 
-      handle.close rescue nil
+      begin
+        handle.close
+      rescue
+        nil
+      end
       @handles.delete(key)
       @sizes[key] = LogTail::FilePath::PER_FILE_CAP_BYTES  # mark "full"
 
@@ -333,7 +353,7 @@ module LogTail
     # via the standard library when available; nil on unsupported
     # platforms (writer treats nil as "OK, keep writing").
     def disk_free_bytes
-      stat = File.stat(LogTail::FilePath.log_root)
+      File.stat(LogTail::FilePath.log_root)
       # Ruby stdlib doesn't expose statvfs portably; fall back to
       # `df` parsing for cross-platform reliability.
       out = `df -k #{LogTail::FilePath.log_root.to_s.shellescape} 2>/dev/null`
@@ -347,7 +367,7 @@ module LogTail
       return nil if cols.length < 4
 
       cols[3].to_i * 1024  # Available in 1024-blocks → bytes
-    rescue StandardError
+    rescue
       nil
     end
   end

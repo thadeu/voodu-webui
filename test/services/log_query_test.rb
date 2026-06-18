@@ -9,7 +9,7 @@ require "test_helper"
 # vs substring vs exact, and the graceful degrade when a query names no field.
 class LogQueryTest < ActiveSupport::TestCase
   def rec(msg: "", raw: nil, level: "", stream: "")
-    { msg: msg, raw: raw || msg, level: level, stream: stream }
+    {msg: msg, raw: raw || msg, level: level, stream: stream}
   end
 
   def match?(query, record)
@@ -104,7 +104,7 @@ class LogQueryTest < ActiveSupport::TestCase
     q = "filter @message like /INVITE/\n| filter @message like /sip/"
     assert match?(q, rec(msg: "INVITE sip:foo"))
     refute match?(q, rec(msg: "INVITE only")), "second filter must also pass"
-    refute match?(q, rec(msg: "sip only")),    "first filter must also pass"
+    refute match?(q, rec(msg: "sip only")), "first filter must also pass"
   end
 
   test "piped stages work without the explicit filter keyword too" do
@@ -117,7 +117,7 @@ class LogQueryTest < ActiveSupport::TestCase
     q = 'filter @level = "ERROR" | filter @message like /timeout/'
     assert match?(q, rec(msg: "upstream timeout", level: "ERROR"))
     refute match?(q, rec(msg: "upstream timeout", level: "WARN"))
-    refute match?(q, rec(msg: "all good",         level: "ERROR"))
+    refute match?(q, rec(msg: "all good", level: "ERROR"))
   end
 
   test "a pipe inside a regex is part of the pattern, not a stage separator" do
@@ -163,7 +163,7 @@ class LogQueryTest < ActiveSupport::TestCase
   test "@level equality is exact and case-insensitive" do
     assert match?('@level = "error"', rec(msg: "x", level: "ERROR"))
     refute match?('@level = "error"', rec(msg: "x", level: "WARN"))
-    refute match?('@level = "err"',   rec(msg: "x", level: "ERROR")) # exact, not substring
+    refute match?('@level = "err"', rec(msg: "x", level: "ERROR")) # exact, not substring
   end
 
   test "@level inequality" do
@@ -175,7 +175,7 @@ class LogQueryTest < ActiveSupport::TestCase
     q = '@level = "ERROR" and @message like /timeout/'
     assert match?(q, rec(msg: "upstream timeout", level: "ERROR"))
     refute match?(q, rec(msg: "upstream timeout", level: "WARN"))
-    refute match?(q, rec(msg: "all good",         level: "ERROR"))
+    refute match?(q, rec(msg: "all good", level: "ERROR"))
   end
 
   test "@stream selector" do

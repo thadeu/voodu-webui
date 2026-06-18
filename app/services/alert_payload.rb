@@ -18,8 +18,8 @@ class AlertPayload
   end
 
   def initialize(event, transition, destination)
-    @event       = event
-    @transition  = transition.to_s
+    @event = event
+    @transition = transition.to_s
     @destination = destination
   end
 
@@ -27,18 +27,18 @@ class AlertPayload
     return WebhookTemplate.render(@destination.body_template, template_tokens) if @destination.custom_body?
 
     {
-      event:        @transition,
-      state:        state_word,
-      island:       @event.island&.name,
-      rule:         @event.rule_name,
-      target:       @event.target_label,
-      metric:       @event.metric_kind,
-      threshold:    @event.threshold,
-      value:        @event.last_value,
-      peak:         @event.peak_value,
-      started_at:   @event.started_at&.utc&.iso8601,
-      resolved_at:  @event.resolved_at&.utc&.iso8601,
-      url:          link
+      event: @transition,
+      state: state_word,
+      island: @event.island&.name,
+      rule: @event.rule_name,
+      target: @event.target_label,
+      metric: @event.metric_kind,
+      threshold: @event.threshold,
+      value: @event.last_value,
+      peak: @event.peak_value,
+      started_at: @event.started_at&.utc&.iso8601,
+      resolved_at: @event.resolved_at&.utc&.iso8601,
+      url: link
     }.compact
   end
 
@@ -48,26 +48,26 @@ class AlertPayload
   # default structured payload keeps raw values + ISO for machines.
   def template_tokens
     {
-      "rule"        => @event.rule_name,
-      "state"       => state_word,
-      "event"       => @transition,
-      "target"      => @event.target_label,
-      "metric"      => @event.metric_kind,
-      "unit"        => @event.unit,
-      "value"       => AlertRule.format_metric_number(@event.last_value),
-      "threshold"   => AlertRule.format_metric_number(@event.threshold),
-      "peak"        => AlertRule.format_metric_number(@event.peak_value),
-      "island"      => @event.island&.name,
-      "started_at"  => human_time(@event.started_at),
+      "rule" => @event.rule_name,
+      "state" => state_word,
+      "event" => @transition,
+      "target" => @event.target_label,
+      "metric" => @event.metric_kind,
+      "unit" => @event.unit,
+      "value" => AlertRule.format_metric_number(@event.last_value),
+      "threshold" => AlertRule.format_metric_number(@event.threshold),
+      "peak" => AlertRule.format_metric_number(@event.peak_value),
+      "island" => @event.island&.name,
+      "started_at" => human_time(@event.started_at),
       "resolved_at" => human_time(@event.resolved_at),
-      "url"         => link,
+      "url" => link,
 
       # PagerDuty Events API v2: one template handles both transitions.
       # event_action trigger↔resolve; dedup_key is the episode id —
       # stable across the firing→resolved of the SAME AlertEvent, so a
       # resolve closes the incident the trigger opened.
       "event_action" => firing? ? "trigger" : "resolve",
-      "dedup_key"    => @event.to_dedup_key
+      "dedup_key" => @event.to_dedup_key
     }
   end
 
@@ -93,6 +93,6 @@ class AlertPayload
     base = ENV["APP_BASE_URL"].presence
     return nil if base.nil? || @event.island.nil?
 
-    "#{base.chomp('/')}/#{@event.island.key}/alerts"
+    "#{base.chomp("/")}/#{@event.island.key}/alerts"
   end
 end

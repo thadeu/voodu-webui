@@ -51,7 +51,7 @@ class MetricsSyncIslandJob < ApplicationJob
     island = Island.find_by(id: island_id)
     return unless island # deleted between orchestrator + job dispatch
 
-    client  = Voodu::Client.new(island)
+    client = Voodu::Client.new(island)
     last_ts = MetricSample.last_ts_for(island.id)
 
     # Stream the controller's NDJSON into MetricsDigestService — the

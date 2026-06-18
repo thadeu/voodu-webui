@@ -10,7 +10,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @island = islands(:alpha)
-    @key    = @island.key
+    @key = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
     # Freeze to midday so the history timeline's relative event times
@@ -204,7 +204,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
   test "Turbo-Frame request returns only the frame body" do
     create_rule
 
-    get alerts_path(tenant_key: @key), headers: { "Turbo-Frame" => "alerts-live" }
+    get alerts_path(tenant_key: @key), headers: {"Turbo-Frame" => "alerts-live"}
 
     assert_response :success
     assert_includes response.body, "alerts-live"

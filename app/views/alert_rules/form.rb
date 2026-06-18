@@ -15,18 +15,18 @@
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
   def initialize(current_path:, rule:, targets: [], destinations: [], islands: [], current_island: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @rule           = rule
-    @targets        = targets
-    @destinations   = destinations
+    @rule = rule
+    @targets = targets
+    @destinations = destinations
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands, current_island: @current_island,
-      breadcrumb: overview_crumbs({ label: "Alerts" })
+      breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
       render(modal) { form_body }
     end
@@ -40,10 +40,10 @@ class Views::AlertRules::Form < Views::Base
 
   def modal
     Components::UI::Modal.new(
-      title:    persisted? ? "Edit alert rule" : "New alert rule",
+      title: persisted? ? "Edit alert rule" : "New alert rule",
       subtitle: "Fires when the metric holds past the threshold for the whole window",
-      icon:     :BellOutline,
-      size:     :md,
+      icon: :BellOutline,
+      size: :md,
       close_to: alerts_path
     ).with_footer { footer_actions }
   end
@@ -52,9 +52,9 @@ class Views::AlertRules::Form < Views::Base
     form(
       action: persisted? ? alert_rule_path(@rule) : alert_rules_path,
       method: "post",
-      data:   { turbo: false, controller: "alert-rule-form" },
-      id:     "alert-rule-form",
-      class:  "flex flex-col gap-4 px-5 py-4"
+      data: {turbo: false, controller: "alert-rule-form"},
+      id: "alert-rule-form",
+      class: "flex flex-col gap-4 px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if persisted?
@@ -76,7 +76,7 @@ class Views::AlertRules::Form < Views::Base
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
         field(
           label: "Condition",
-          hint:  "Direction + threshold the metric is compared against.",
+          hint: "Direction + threshold the metric is compared against.",
           error: @rule.errors[:threshold].first
         ) do
           condition_inputs
@@ -84,7 +84,7 @@ class Views::AlertRules::Form < Views::Base
 
         field(
           label: "Sustained for",
-          hint:  "Every sample in this window must breach before it fires.",
+          hint: "Every sample in this window must breach before it fires.",
           error: @rule.errors[:duration_seconds].first
         ) do
           duration_select
@@ -142,7 +142,7 @@ class Views::AlertRules::Form < Views::Base
   end
 
   def metric_select
-    select_input(name: "alert_rule[metric_kind]", data: { alert_rule_form_target: "metric", action: "change->alert-rule-form#metricChanged" }) do
+    select_input(name: "alert_rule[metric_kind]", data: {alert_rule_form_target: "metric", action: "change->alert-rule-form#metricChanged"}) do
       metric_options.each do |value, label|
         option(value: value, selected: (@rule.metric_kind == value) || nil) { label }
       end
@@ -151,19 +151,19 @@ class Views::AlertRules::Form < Views::Base
 
   def metric_options
     [
-      ["cpu",    "CPU usage (%)"],
+      ["cpu", "CPU usage (%)"],
       ["memory", "Memory usage (%)"],
-      ["disk",   "Disk usage (%)"],
-      ["req_s",  "Requests per second"]
+      ["disk", "Disk usage (%)"],
+      ["req_s", "Requests per second"]
     ]
   end
 
   def target_select
-    select_input(name: "alert_rule[target]", data: { alert_rule_form_target: "target" }) do
+    select_input(name: "alert_rule[target]", data: {alert_rule_form_target: "target"}) do
       option(
-        value:    "host",
+        value: "host",
         selected: @rule.host_target? || nil,
-        data:     { kind: "host" }
+        data: {kind: "host"}
       ) { "Host (entire server)" }
 
       grouped_targets.each do |scope, entries|
@@ -171,9 +171,9 @@ class Views::AlertRules::Form < Views::Base
           entries.each do |entry|
             value = encode_target(entry[:scope], entry[:name])
             option(
-              value:    value,
+              value: value,
               selected: (current_target_value == value) || nil,
-              data:     { kind: entry[:kind] }
+              data: {kind: entry[:kind]}
             ) { entry[:name] }
           end
         end
@@ -192,7 +192,7 @@ class Views::AlertRules::Form < Views::Base
     return if current_target_value.blank?
     return if @targets.any? { |t| encode_target(t[:scope], t[:name]) == current_target_value }
 
-    option(value: current_target_value, selected: true, data: { kind: "deployment" }) do
+    option(value: current_target_value, selected: true, data: {kind: "deployment"}) do
       "#{@rule.target_scope}/#{@rule.target_name} (not running)"
     end
   end
@@ -235,7 +235,7 @@ class Views::AlertRules::Form < Views::Base
         )
         span(
           class: "absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-voodu-muted pointer-events-none",
-          data:  { alert_rule_form_target: "unit" }
+          data: {alert_rule_form_target: "unit"}
         ) { @rule.unit }
       end
     end
@@ -244,14 +244,14 @@ class Views::AlertRules::Form < Views::Base
   def threshold_value
     return nil if @rule.threshold.nil?
 
-    @rule.threshold % 1 == 0 ? @rule.threshold.to_i : @rule.threshold
+    (@rule.threshold % 1 == 0) ? @rule.threshold.to_i : @rule.threshold
   end
 
   def duration_select
     select_input(name: "alert_rule[duration_seconds]") do
       AlertRule::DURATIONS.each do |secs|
         option(value: secs, selected: (@rule.duration_seconds == secs) || nil) do
-          secs >= 60 ? "#{secs / 60} minute#{secs >= 120 ? 's' : ''}" : "#{secs} seconds"
+          (secs >= 60) ? "#{secs / 60} minute#{"s" if secs >= 120}" : "#{secs} seconds"
         end
       end
     end
@@ -286,8 +286,8 @@ class Views::AlertRules::Form < Views::Base
 
   def select_input(name:, extra_class: nil, data: nil)
     select(
-      name:  name,
-      data:  data,
+      name: name,
+      data: data,
       class: tokens(input_classes, "text-[13px] appearance-none cursor-pointer", extra_class)
     ) { yield }
   end

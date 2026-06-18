@@ -11,14 +11,14 @@
 # `mono: true` swaps the font to Geist Mono (host names, ports, ids).
 class Components::UI::Chip < Components::Base
   TONES = {
-    default: { color: "var(--voodu-text-2)",  bg: "var(--voodu-surface-2)", border: "var(--voodu-border)" },
-    accent:  { color: "var(--voodu-accent-2)", bg: "var(--voodu-accent-dim)", border: "var(--voodu-accent-line)" },
-    subtle:  { color: "var(--voodu-muted)",   bg: "transparent",            border: "var(--voodu-border)" }
+    default: {color: "var(--voodu-text-2)", bg: "var(--voodu-surface-2)", border: "var(--voodu-border)"},
+    accent: {color: "var(--voodu-accent-2)", bg: "var(--voodu-accent-dim)", border: "var(--voodu-accent-line)"},
+    subtle: {color: "var(--voodu-muted)", bg: "transparent", border: "var(--voodu-border)"}
   }.freeze
 
   def initialize(tone: :default, mono: false, **attrs)
-    @tone  = tone
-    @mono  = mono
+    @tone = tone
+    @mono = mono
     @attrs = attrs
   end
 

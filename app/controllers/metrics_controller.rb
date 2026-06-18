@@ -72,17 +72,17 @@ class MetricsController < ApplicationController
           voodu_client,
           current_island,
           scope_kind: params[:scope_kind],
-          scope_id:   params[:scope_id],
-          range:      params[:range],
-          interval:   params[:interval]
+          scope_id: params[:scope_id],
+          range: params[:range],
+          interval: params[:interval]
         )
 
         chart = data.single_chart(
-          metric:     params[:metric].to_s,
-          scale:      params[:scale].presence&.to_sym,
-          label:      params[:label].to_s,
-          color:      params[:color].to_s,
-          unit:       params[:unit].to_s,
+          metric: params[:metric].to_s,
+          scale: params[:scale].presence&.to_sym,
+          label: params[:label].to_s,
+          color: params[:color].to_s,
+          unit: params[:unit].to_s,
           chart_type: params[:chart_type].presence || :area
         )
 
@@ -92,17 +92,17 @@ class MetricsController < ApplicationController
         end
 
         body = Views::Metrics::ChartModalBody.new(
-          chart:           chart,
-          range:           params[:range].presence || "1h",
-          range_ms:        data.range_ms,
-          query:           request.query_parameters,
+          chart: chart,
+          range: params[:range].presence || "1h",
+          range_ms: data.range_ms,
+          query: request.query_parameters,
           # `data.all_pods` is the cached compact list (same one the
           # parent page's PodPicker uses). Always populate it — even
           # on host-scope modals, the in-modal picker needs the pod
           # list so the operator can drill from host into a pod
           # without closing the modal first.
-          pods:            data.all_pods,
-          current_island:  current_island,
+          pods: data.all_pods,
+          current_island: current_island,
           # Available metrics for the in-modal MetricPicker. Grouped
           # RESOURCE / HTTP. Pod-scope + ingress-eligible exposes
           # the full set (8 metrics); host gives 3; non-ingress pods
@@ -148,21 +148,21 @@ class MetricsController < ApplicationController
     # exactly the charts on this dashboard. Falls through to the scope
     # path (host/pod fixed metric set) when no dashboard is given.
     if params[:pid].present? &&
-       (dash = current_island.metric_dashboards.find_by(uuid: params[:pid]))
+        (dash = current_island.metric_dashboards.find_by(uuid: params[:pid]))
       render Views::Metrics::DisplaySettings.new(
-        kind:  "dashboard:#{dash.id}",
+        kind: "dashboard:#{dash.id}",
         items: dashboard_display_items(dash)
       ), layout: false
       return
     end
 
-    kind       = params[:kind].to_s.presence || "host"
-    scope_kind = params[:scope_kind].to_s == "pod" ? "pod" : "host"
+    kind = params[:kind].to_s.presence || "host"
+    scope_kind = (params[:scope_kind].to_s == "pod") ? "pod" : "host"
 
     items = MetricsPageData.display_settings_items_for(scope_kind, kind)
 
     render Views::Metrics::DisplaySettings.new(
-      kind:  kind,
+      kind: kind,
       items: items
     ), layout: false
   end
@@ -183,16 +183,16 @@ class MetricsController < ApplicationController
 
     if dashboards.size > 1
       return MultiDashboardData.new(voodu_client, current_island, dashboards,
-                                    range: params[:range], interval: params[:interval])
+        range: params[:range], interval: params[:interval])
     elsif dashboards.size == 1
       return MetricDashboardData.new(voodu_client, current_island, dashboards.first,
-                                     range: params[:range], interval: params[:interval])
+        range: params[:range], interval: params[:interval])
     end
 
     if params[:scope_kind].present? || params[:scope_id].present?
       return MetricsPageData.new(voodu_client, current_island,
-                                 scope_kind: params[:scope_kind], scope_id: params[:scope_id],
-                                 range: params[:range], interval: params[:interval])
+        scope_kind: params[:scope_kind], scope_id: params[:scope_id],
+        range: params[:range], interval: params[:interval])
     end
 
     pinned = current_island.metric_dashboards.pinned.first
@@ -271,15 +271,14 @@ class MetricsController < ApplicationController
       metric = panel["metric"].to_s
 
       {
-        kind:            :single,
-        metric:          MetricDashboard.panel_card_key(i),
-        label:           panel["label"].to_s,
-        color:           panel["color"].to_s,
-        unit:            panel["unit"].to_s,
-        section:         MetricsPageData::INGRESS_METRICS.include?(metric) ? "http" : "resource",
+        kind: :single,
+        metric: MetricDashboard.panel_card_key(i),
+        label: panel["label"].to_s,
+        color: panel["color"].to_s,
+        unit: panel["unit"].to_s,
+        section: MetricsPageData::INGRESS_METRICS.include?(metric) ? "http" : "resource",
         default_visible: true
       }
     end
   end
-
 end

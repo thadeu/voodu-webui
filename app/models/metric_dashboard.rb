@@ -23,7 +23,7 @@ class MetricDashboard < ApplicationRecord
   # error counts, Bytes Out all carry unit ""), so it only needs to
   # exist, not be present. Pod panels additionally need scope/name to
   # resolve the live replica; host panels don't.
-  PANEL_KEYS     = %w[scope_kind metric scale label color].freeze
+  PANEL_KEYS = %w[scope_kind metric scale label color].freeze
   POD_PANEL_KEYS = %w[scope name].freeze
 
   # Optional per-panel chart type. Absent → ChartCard defaults to "area".
@@ -32,8 +32,8 @@ class MetricDashboard < ApplicationRecord
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
 
-  validates :name, presence: true, length: { maximum: 128 },
-                   uniqueness: { scope: :island_id }
+  validates :name, presence: true, length: {maximum: 128},
+    uniqueness: {scope: :island_id}
   validate :panels_well_formed
 
   before_create :ensure_uuid
@@ -106,7 +106,7 @@ class MetricDashboard < ApplicationRecord
       end
 
       missing = PANEL_KEYS.reject { |k| panel[k].to_s.present? }
-      errors.add(:panels, "panel #{i + 1} is missing #{missing.join(', ')}") if missing.any?
+      errors.add(:panels, "panel #{i + 1} is missing #{missing.join(", ")}") if missing.any?
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
@@ -114,7 +114,7 @@ class MetricDashboard < ApplicationRecord
       next unless panel["scope_kind"].to_s == "pod"
 
       pod_missing = POD_PANEL_KEYS.reject { |k| panel[k].to_s.present? }
-      errors.add(:panels, "pod panel #{i + 1} is missing #{pod_missing.join(', ')}") if pod_missing.any?
+      errors.add(:panels, "pod panel #{i + 1} is missing #{pod_missing.join(", ")}") if pod_missing.any?
     end
   end
 end

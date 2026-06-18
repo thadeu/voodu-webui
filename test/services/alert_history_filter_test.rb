@@ -30,7 +30,7 @@ class AlertHistoryFilterTest < ActiveSupport::TestCase
   test "explicit custom range uses the parsed window" do
     f = AlertHistoryFilter.new(
       range: "custom",
-      from:  "2026-06-08T00:00:00.000Z",
+      from: "2026-06-08T00:00:00.000Z",
       until: "2026-06-09T00:00:00.000Z"
     )
 

@@ -17,7 +17,7 @@ class AlertNotifier
     rule.destinations_for(transition).each do |destination|
       DeliverAlertNotificationJob.perform_later(event.id, destination.id, transition)
     end
-  rescue StandardError => e
+  rescue => e
     Rails.logger.warn(
       "alert-notify enqueue event=#{event&.id} transition=#{transition} " \
       "failed: #{e.class}: #{e.message}"

@@ -10,7 +10,7 @@
 class CreateLogExports < ActiveRecord::Migration[8.1]
   def change
     create_table :log_exports do |t|
-      t.references :island, null: false, foreign_key: { on_delete: :cascade }
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
 
       # JSON blob: { from, until, pods, content_search, regex,
       # group_by_pod, format }. Stored as text for SQLite portability

@@ -53,8 +53,8 @@ class MetricsData
     points = Array(payload["series"]).map do |p|
       val = p["value"].to_f
       {
-        ts:        p["ts"],
-        value:     val,
+        ts: p["ts"],
+        value: val,
         formatted: formatter.call(val)
       }
     end
@@ -76,8 +76,8 @@ class MetricsData
 
       if last_bucket_ts.nil? || latest_record[:ts] > last_bucket_ts
         points << {
-          ts:        latest_record[:ts],
-          value:     latest_record[:value],
+          ts: latest_record[:ts],
+          value: latest_record[:value],
           formatted: formatter.call(latest_record[:value])
         }
       end
@@ -181,11 +181,11 @@ class MetricsData
   # because tooltip rendering goes through this service.
   def format_bytes(b)
     b = b.to_f
-    return "0 B"                                       if b.zero?
-    return "#{b.round} B"                              if b < 1_000
-    return "#{(b / 1_000.0).round(1)} kB"              if b < 1_000_000
-    return "#{(b / 1_000_000.0).round(1)} MB"          if b < 1_000_000_000
-    return "#{(b / 1_000_000_000.0).round(1)} GB"      if b < 1_000_000_000_000
+    return "0 B" if b.zero?
+    return "#{b.round} B" if b < 1_000
+    return "#{(b / 1_000.0).round(1)} kB" if b < 1_000_000
+    return "#{(b / 1_000_000.0).round(1)} MB" if b < 1_000_000_000
+    return "#{(b / 1_000_000_000.0).round(1)} GB" if b < 1_000_000_000_000
 
     "#{(b / 1_000_000_000_000.0).round(1)} TB"
   end
@@ -247,7 +247,7 @@ class MetricsData
       if payload.is_a?(Hash) && (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
         Rails.cache.write(
           latest_cache_key(identity_from(query)),
-          { ts: latest["ts"], value: latest["value"].to_f },
+          {ts: latest["ts"], value: latest["value"].to_f},
           expires_in: CACHE_TTL
         )
       end
@@ -340,5 +340,4 @@ class MetricsData
     normalized = params.compact.transform_keys(&:to_s).sort.to_h.to_query
     Digest::SHA256.hexdigest(normalized)[0, 16]
   end
-
 end

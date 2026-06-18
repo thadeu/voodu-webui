@@ -15,11 +15,11 @@ require "resolv"
 #   ServerError    — 5xx                               → retry
 #   ClientError    — 4xx (≠429) or blocked URL         → discard
 class WebhookClient
-  Error          = Class.new(StandardError)
+  Error = Class.new(StandardError)
   TransportError = Class.new(Error)
-  ServerError    = Class.new(Error)
-  ClientError    = Class.new(Error)
-  BlockedError   = Class.new(ClientError)
+  ServerError = Class.new(Error)
+  ClientError = Class.new(Error)
+  BlockedError = Class.new(ClientError)
 
   TIMEOUT = 10
 
@@ -62,7 +62,7 @@ class WebhookClient
 
   def conn
     @conn ||= Faraday.new do |f|
-      f.options.timeout      = TIMEOUT
+      f.options.timeout = TIMEOUT
       f.options.open_timeout = TIMEOUT
       f.headers["User-Agent"] = "voodu-webui/0.1"
     end
@@ -71,10 +71,10 @@ class WebhookClient
   def raise_for_status(resp)
     case resp.status
     when 200..299 then nil
-    when 429      then raise ServerError, "rate limited (HTTP 429)"   # transient → retry
+    when 429 then raise ServerError, "rate limited (HTTP 429)"   # transient → retry
     when 400..499 then raise ClientError, "client error (HTTP #{resp.status})"
     when 500..599 then raise ServerError, "server error (HTTP #{resp.status})"
-    else               raise ServerError, "unexpected (HTTP #{resp.status})"
+    else raise ServerError, "unexpected (HTTP #{resp.status})"
     end
   end
 

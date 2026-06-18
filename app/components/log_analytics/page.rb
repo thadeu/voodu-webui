@@ -22,13 +22,13 @@ class Components::LogAnalytics::Page < Components::Base
       class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 h-full",
       data: {
         controller: "log-analytics",
-        action:     "modal:close->log-analytics#closeSurrounding",
+        action: "modal:close->log-analytics#closeSurrounding",
         log_analytics_surrounding_url_value: logs_analytics_surrounding_path,
         # Resolved window as UTC ISO + the active range. On connect the
         # controller fills the custom datetime-local inputs from these,
         # converted to the browser's local zone (timezone-correct).
         log_analytics_range_value: @data.range,
-        log_analytics_from_value:  @data.from_iso,
+        log_analytics_from_value: @data.from_iso,
         log_analytics_until_value: @data.until_iso
       }
     ) do
@@ -45,6 +45,6 @@ class Components::LogAnalytics::Page < Components::Base
   # Surrounding Logs modal into. Lives at page root so the fixed-position
   # backdrop/dialog overlay the whole viewport, not just the table.
   def surrounding_host
-    div(data: { log_analytics_target: "surroundingHost" })
+    div(data: {log_analytics_target: "surroundingHost"})
   end
 end

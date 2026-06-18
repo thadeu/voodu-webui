@@ -75,7 +75,7 @@ class AlertDestinationTest < ActiveSupport::TestCase
 
   test "auth_header builds the custom header when name and value are set" do
     d = build(secret_header: "x-api-key", secret: "abc123")
-    assert_equal({ "x-api-key" => "abc123" }, d.auth_header)
+    assert_equal({"x-api-key" => "abc123"}, d.auth_header)
   end
 
   test "auth_header is empty when either name or value is missing" do
@@ -85,11 +85,11 @@ class AlertDestinationTest < ActiveSupport::TestCase
 
   test "auth_header carries arbitrary schemes verbatim" do
     d = build(secret_header: "Authorization", secret: 'Token token="xyz"')
-    assert_equal({ "Authorization" => 'Token token="xyz"' }, d.auth_header)
+    assert_equal({"Authorization" => 'Token token="xyz"'}, d.auth_header)
   end
 
   test "endpoint_masked hides the path/token" do
     assert_equal "https://hooks.slack.com/…",
-                 build(endpoint: "https://hooks.slack.com/services/T/B/SECRET").endpoint_masked
+      build(endpoint: "https://hooks.slack.com/services/T/B/SECRET").endpoint_masked
   end
 end

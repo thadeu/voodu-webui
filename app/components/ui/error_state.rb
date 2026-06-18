@@ -14,7 +14,7 @@ class Components::UI::ErrorState < Components::Base
 
   def view_template
     div(class: "mx-auto max-w-md py-16 flex flex-col items-center gap-3 text-center") do
-      div(class: "h-10 w-10 rounded-voodu-md bg-voodu-red-dim", aria: { hidden: "true" })
+      div(class: "h-10 w-10 rounded-voodu-md bg-voodu-red-dim", aria: {hidden: "true"})
       h2(class: "text-lg font-semibold text-voodu-text") { "Couldn't reach the controller" }
       p(class: "text-voodu-text-2 text-sm") { @error.class.name.demodulize }
       p(class: "font-voodu-mono text-xs text-voodu-muted") { @error.message }

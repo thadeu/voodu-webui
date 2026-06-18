@@ -21,18 +21,18 @@ class Components::Logs::PodSelectorButton < Components::Base
 
   def view_template
     render(Components::UI::Drawer.new(
-      title:               "Pods",
-      src:                 pods_picker_logs_path,
-      open_url:            pods_picker_logs_path,
-      width:               "32vw",
-      min_width:           "300px",
-      resizable:           true,
+      title: "Pods",
+      src: pods_picker_logs_path,
+      open_url: pods_picker_logs_path,
+      width: "32vw",
+      min_width: "300px",
+      resizable: true,
       show_full_page_link: false,
-      storage_key:         "voodu:drawer-width:logs-pods",
+      storage_key: "voodu:drawer-width:logs-pods",
       trigger_attrs: {
-        title:        "Pick which pods stream into the live tail",
+        title: "Pick which pods stream into the live tail",
         "aria-label": "Pick visible pods",
-        class:        trigger_classes
+        class: trigger_classes
       }
     )) do
       render Icon::Squares2x2Outline.new(class: "w-3 h-3")

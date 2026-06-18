@@ -45,8 +45,8 @@ class AlertEvaluator
   # older than max(STALE_FLOOR, cadence × STALE_CADENCES). Dense island
   # (cadence 15s) ⇒ 90s; coarse island (cadence 210s) ⇒ ~10.5min, so a
   # normal 206s-old sample reads as FRESH, not offline.
-  STALE_FLOOR     = 90
-  STALE_CADENCES  = 3
+  STALE_FLOOR = 90
+  STALE_CADENCES = 3
 
   # Fraction of EXPECTED samples (duration ÷ cadence) that must exist
   # in the window before we trust an all-breaching verdict — always at
@@ -77,7 +77,7 @@ class AlertEvaluator
 
     @island.alert_rules.enabled.find_each do |rule|
       transitions += 1 if evaluate(rule)
-    rescue StandardError => e
+    rescue => e
       Rails.logger.warn(
         "alerts-eval rule=#{rule.id} #{rule.name.inspect} failed: #{e.class}: #{e.message}"
       )
@@ -94,7 +94,7 @@ class AlertEvaluator
 
     return mark_no_data(rule) if series.empty?
 
-    cadence    = cadence_for(series)
+    cadence = cadence_for(series)
     last_value = series.last[:value]
 
     return mark_no_data(rule, last_value: last_value) if stale?(series, cadence)
@@ -119,8 +119,8 @@ class AlertEvaluator
 
     rule.update_columns(
       last_evaluated_at: Time.current,
-      last_value:        last_value,
-      last_status:       rule.firing? ? "firing" : "ok"
+      last_value: last_value,
+      last_status: rule.firing? ? "firing" : "ok"
     )
     transitioned
   end
@@ -128,12 +128,12 @@ class AlertEvaluator
   # ---- state machine -------------------------------------------------
 
   def breach?(rule, value)
-    rule.comparator == "gte" ? value >= rule.threshold : value <= rule.threshold
+    (rule.comparator == "gte") ? value >= rule.threshold : value <= rule.threshold
   end
 
   def fire!(rule, window, last_value)
     started_at = Time.zone.at(window.first[:epoch])
-    event      = nil
+    event = nil
 
     rule.transaction do
       # Re-check enabled inside the transaction: the operator may have
@@ -144,15 +144,15 @@ class AlertEvaluator
       return false unless AlertRule.where(id: rule.id, enabled: true).exists?
 
       event = rule.alert_events.create!(
-        island:       @island,
-        state:        "firing",
-        started_at:   started_at,
-        threshold:    rule.threshold,
-        rule_name:    rule.name,
-        metric_kind:  rule.metric_kind,
+        island: @island,
+        state: "firing",
+        started_at: started_at,
+        threshold: rule.threshold,
+        rule_name: rule.name,
+        metric_kind: rule.metric_kind,
         target_label: rule.target_label,
-        peak_value:   worst_value(rule, window),
-        last_value:   last_value
+        peak_value: worst_value(rule, window),
+        last_value: last_value
       )
       rule.update_columns(firing: true, firing_since: started_at)
     end
@@ -171,9 +171,9 @@ class AlertEvaluator
 
     rule.transaction do
       event&.update!(
-        state:       "resolved",
+        state: "resolved",
         resolved_at: Time.current,
-        last_value:  last_value
+        last_value: last_value
       )
       rule.update_columns(firing: false, firing_since: nil)
     end
@@ -189,7 +189,7 @@ class AlertEvaluator
     return if event.nil?
 
     worst = worst_value(rule, window)
-    peak  = if rule.comparator == "gte"
+    peak = if rule.comparator == "gte"
       [event.peak_value, worst].compact.max
     else
       [event.peak_value, worst].compact.min
@@ -202,7 +202,7 @@ class AlertEvaluator
   def worst_value(rule, window)
     values = window.map { |p| p[:value] }
 
-    rule.comparator == "gte" ? values.max : values.min
+    (rule.comparator == "gte") ? values.max : values.min
   end
 
   def mark_no_data(rule, last_value: nil)
@@ -210,7 +210,7 @@ class AlertEvaluator
     # blanking it to nil would make the firing card render "—" for a
     # rule that's still considered firing. Only overwrite when we
     # actually have a fresh reading.
-    attrs = { last_evaluated_at: Time.current, last_status: rule.firing? ? "stale" : "no_data" }
+    attrs = {last_evaluated_at: Time.current, last_status: rule.firing? ? "stale" : "no_data"}
     attrs[:last_value] = last_value unless last_value.nil? && rule.firing?
 
     rule.update_columns(attrs)
@@ -256,10 +256,10 @@ class AlertEvaluator
   # to the rule's display unit (% or req/s). Empty array = no data.
   def fetch_series(rule)
     case rule.metric_kind
-    when "cpu"    then cpu_series(rule)
+    when "cpu" then cpu_series(rule)
     when "memory" then memory_series(rule)
-    when "disk"   then disk_series(rule)
-    when "req_s"  then req_s_series(rule)
+    when "disk" then disk_series(rule)
+    when "req_s" then req_s_series(rule)
     else []
     end
   end
@@ -273,7 +273,7 @@ class AlertEvaluator
   def memory_series(rule)
     if rule.host_target?
       total = host_capacity("mem", "total_bytes") ||
-              latest_value(rule, source: "system", metric: "mem_total_bytes")
+        latest_value(rule, source: "system", metric: "mem_total_bytes")
       return [] unless total&.positive?
 
       percent_points(query(rule, source: "system", metric: "mem_used_bytes"), total)
@@ -287,7 +287,7 @@ class AlertEvaluator
 
   def disk_series(rule)
     total = host_capacity("disk", 0, "total_bytes") ||
-            latest_value(rule, source: "system", metric: "disk_total_bytes")
+      latest_value(rule, source: "system", metric: "disk_total_bytes")
     return [] unless total&.positive?
 
     percent_points(query(rule, source: "system", metric: "disk_used_bytes"), total)
@@ -300,18 +300,18 @@ class AlertEvaluator
     interval = envelope["interval_seconds"].to_i
     return [] unless interval.positive?
 
-    points(envelope).map { |p| { epoch: p[:epoch], value: p[:value] / interval } }
+    points(envelope).map { |p| {epoch: p[:epoch], value: p[:value] / interval} }
   end
 
   def query(rule, source:, metric:)
     MetricsWarehouse.query(
       @island,
-      source:   source,
-      metric:   metric,
-      range:    "#{[rule.duration_seconds + WINDOW_SLACK, MIN_LOOKBACK].max}s",
+      source: source,
+      metric: metric,
+      range: "#{[rule.duration_seconds + WINDOW_SLACK, MIN_LOOKBACK].max}s",
       interval: "#{BUCKET_SECONDS}s",
-      scope:    rule.host_target? ? nil : rule.target_scope,
-      name:     rule.host_target? ? nil : rule.target_name
+      scope: rule.host_target? ? nil : rule.target_scope,
+      name: rule.host_target? ? nil : rule.target_name
     )
   end
 
@@ -324,12 +324,12 @@ class AlertEvaluator
       value = point["value"]
       next if value.nil?
 
-      { epoch: Time.iso8601(point["ts"]).to_i, value: value.to_f }
+      {epoch: Time.iso8601(point["ts"]).to_i, value: value.to_f}
     end
   end
 
   def percent_points(envelope, total)
-    points(envelope).map { |p| { epoch: p[:epoch], value: p[:value] / total * 100.0 } }
+    points(envelope).map { |p| {epoch: p[:epoch], value: p[:value] / total * 100.0} }
   end
 
   # Host capacity from the state-sync snapshot (fresh every 10-15s).

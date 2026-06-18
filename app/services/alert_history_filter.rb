@@ -11,7 +11,7 @@
 class AlertHistoryFilter
   RANGES = {
     "24h" => 24.hours,
-    "7d"  => 7.days,
+    "7d" => 7.days,
     "30d" => 30.days
   }.freeze
 
@@ -53,7 +53,7 @@ class AlertHistoryFilter
 
       if custom?
         u = parsed_until || now
-        f = parsed_from  || (u - 1.day)
+        f = parsed_from || (u - 1.day)
       else
         f = RANGES.fetch(range).ago
         u = now

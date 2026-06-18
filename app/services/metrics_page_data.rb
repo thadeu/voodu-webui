@@ -28,13 +28,13 @@
 # is a future win when round-trip cost dominates.
 class MetricsPageData
   RANGES = {
-    "1m"  => "1m",
-    "5m"  => "5m",
+    "1m" => "1m",
+    "5m" => "5m",
     "15m" => "15m",
-    "1h"  => "1h",
-    "6h"  => "6h",
+    "1h" => "1h",
+    "6h" => "6h",
     "24h" => "24h",
-    "7d"  => "7d",
+    "7d" => "7d",
     "30d" => "30d"
   }.freeze
 
@@ -76,12 +76,12 @@ class MetricsPageData
   end
 
   def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil)
-    @client     = client
-    @island     = island
+    @client = client
+    @island = island
     @scope_kind = (scope_kind == "pod") ? "pod" : "host"
-    @scope_id   = scope_id
-    @range      = RANGES.key?(range) ? range : DEFAULT_RANGE
-    @interval   = INTERVALS.include?(interval) ? interval : DEFAULT_INTERVAL
+    @scope_id = scope_id
+    @range = RANGES.key?(range) ? range : DEFAULT_RANGE
+    @interval = INTERVALS.include?(interval) ? interval : DEFAULT_INTERVAL
 
     @metrics = MetricsData.new(client, island)
   end
@@ -128,8 +128,8 @@ class MetricsPageData
   # returns — label, color, unit, metric, scale — so the picker
   # can build the chart URL directly without lookup.
   def available_metric_specs
-    sections = [{ label: "RESOURCE", specs: chart_specs }]
-    sections << { label: "HTTP", specs: ingress_picker_specs } if ingress_eligible?
+    sections = [{label: "RESOURCE", specs: chart_specs}]
+    sections << {label: "HTTP", specs: ingress_picker_specs} if ingress_eligible?
     sections
   end
 
@@ -144,7 +144,7 @@ class MetricsPageData
   def single_chart(metric:, scale:, label:, color:, unit:, chart_type: :area)
     return nil if @client.nil?
 
-    spec = { metric: metric, scale: scale, label: label, color: color, unit: unit, chart_type: chart_type }
+    spec = {metric: metric, scale: scale, label: label, color: color, unit: unit, chart_type: chart_type}
 
     build_chart(spec) do
       if INGRESS_METRICS.include?(metric)
@@ -206,7 +206,7 @@ class MetricsPageData
     p = pod_record
     return [] if p.nil?
 
-    scope    = p["scope"] || p[:scope]
+    scope = p["scope"] || p[:scope]
     resource = p["resource_name"] || p[:resource_name]
 
     all_pods.select do |q|
@@ -238,16 +238,16 @@ class MetricsPageData
     base =
       if scope_kind == "host"
         [
-          { label: "CPU",    metric: "cpu_percent",     color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
-          { label: "Memory", metric: "mem_used_bytes",  color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
-          { label: "Disk",   metric: "disk_used_bytes", color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb }
+          {label: "CPU", metric: "cpu_percent", color: "var(--voodu-purple)", unit: "%", scale: :percent},
+          {label: "Memory", metric: "mem_used_bytes", color: "var(--voodu-blue)", unit: "GB", scale: :bytes_to_gb},
+          {label: "Disk", metric: "disk_used_bytes", color: "var(--voodu-teal)", unit: "GB", scale: :bytes_to_gb}
         ]
       else
         [
-          { label: "CPU",    metric: "cpu_percent",        color: "var(--voodu-purple)", unit: "%",  scale: :percent    },
-          { label: "Memory", metric: "mem_usage_bytes",    color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
-          { label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto },
-          { label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto }
+          {label: "CPU", metric: "cpu_percent", color: "var(--voodu-purple)", unit: "%", scale: :percent},
+          {label: "Memory", metric: "mem_usage_bytes", color: "var(--voodu-blue)", unit: "MB", scale: :bytes_to_mb},
+          {label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)", unit: "", scale: :bytes_auto},
+          {label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "", scale: :bytes_auto}
         ]
       end
 
@@ -267,14 +267,14 @@ class MetricsPageData
   # checks them in the group picker.
   def self.http_specs_static
     [
-      { label: "Requests",    metric: "req_count",      color: "var(--voodu-orange)", unit: "",   scale: :count,      section: "http", default_visible: true },
-      { label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)",   unit: "ms", scale: :ms,         section: "http", default_visible: false },
-      { label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)",  unit: "ms", scale: :ms,         section: "http", default_visible: true },
-      { label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", scale: :ms,         section: "http", default_visible: false },
-      { label: "3xx",         metric: "req_3xx",        color: "var(--voodu-sky)",    unit: "",   scale: :count,      section: "http", default_visible: false },
-      { label: "4xx",         metric: "req_4xx",        color: "var(--voodu-rose)",   unit: "",   scale: :count,      section: "http", default_visible: false },
-      { label: "5xx Errors",  metric: "req_5xx",        color: "var(--voodu-red)",    unit: "",   scale: :count,      section: "http", default_visible: true },
-      { label: "Bytes Out",   metric: "bytes_out",      color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto, section: "http", default_visible: true }
+      {label: "Requests", metric: "req_count", color: "var(--voodu-orange)", unit: "", scale: :count, section: "http", default_visible: true},
+      {label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)", unit: "ms", scale: :ms, section: "http", default_visible: false},
+      {label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)", unit: "ms", scale: :ms, section: "http", default_visible: true},
+      {label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", scale: :ms, section: "http", default_visible: false},
+      {label: "3xx", metric: "req_3xx", color: "var(--voodu-sky)", unit: "", scale: :count, section: "http", default_visible: false},
+      {label: "4xx", metric: "req_4xx", color: "var(--voodu-rose)", unit: "", scale: :count, section: "http", default_visible: false},
+      {label: "5xx Errors", metric: "req_5xx", color: "var(--voodu-red)", unit: "", scale: :count, section: "http", default_visible: true},
+      {label: "Bytes Out", metric: "bytes_out", color: "var(--voodu-pink)", unit: "", scale: :bytes_auto, section: "http", default_visible: true}
     ]
   end
 
@@ -297,13 +297,13 @@ class MetricsPageData
   # instance `range_ms` and MetricDashboardData share one mapping.
   def self.range_to_ms(range)
     case range
-    when "1m"  then 60 * 1000
-    when "5m"  then 5 * 60 * 1000
+    when "1m" then 60 * 1000
+    when "5m" then 5 * 60 * 1000
     when "15m" then 15 * 60 * 1000
-    when "1h"  then 60 * 60 * 1000
-    when "6h"  then 6 * 60 * 60 * 1000
+    when "1h" then 60 * 60 * 1000
+    when "6h" then 6 * 60 * 60 * 1000
     when "24h" then 24 * 60 * 60 * 1000
-    when "7d"  then 7 * 24 * 60 * 60 * 1000
+    when "7d" then 7 * 24 * 60 * 60 * 1000
     when "30d" then 30 * 24 * 60 * 60 * 1000
     else 60 * 60 * 1000
     end
@@ -329,23 +329,23 @@ class MetricsPageData
     items << http["req_count"].merge(kind: :single)
 
     items << {
-      kind:      :group,
-      label:     "Latency",
+      kind: :group,
+      label: "Latency",
       group_key: "latency",
-      color:     "var(--voodu-amber)",
-      unit:      "ms",
-      section:   "http",
-      members:   [http["latency_p90_ms"], http["latency_p95_ms"], http["latency_p99_ms"]]
+      color: "var(--voodu-amber)",
+      unit: "ms",
+      section: "http",
+      members: [http["latency_p90_ms"], http["latency_p95_ms"], http["latency_p99_ms"]]
     }
 
     items << {
-      kind:      :group,
-      label:     "Errors",
+      kind: :group,
+      label: "Errors",
       group_key: "errors",
-      color:     "var(--voodu-red)",
-      unit:      "",
-      section:   "http",
-      members:   [http["req_3xx"], http["req_4xx"], http["req_5xx"]]
+      color: "var(--voodu-red)",
+      unit: "",
+      section: "http",
+      members: [http["req_3xx"], http["req_4xx"], http["req_5xx"]]
     }
 
     items << http["bytes_out"].merge(kind: :single)
@@ -370,16 +370,16 @@ class MetricsPageData
   def chart_specs
     if @scope_kind == "host"
       [
-        { label: "CPU",    metric: "cpu_percent",      color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
-        { label: "Memory", metric: "mem_used_bytes",   color: "var(--voodu-blue)",   unit: "GB", scale: :bytes_to_gb },
-        { label: "Disk",   metric: "disk_used_bytes",  color: "var(--voodu-teal)",   unit: "GB", scale: :bytes_to_gb, chart_type: :gauge_radial }
+        {label: "CPU", metric: "cpu_percent", color: "var(--voodu-purple)", unit: "%", scale: :percent},
+        {label: "Memory", metric: "mem_used_bytes", color: "var(--voodu-blue)", unit: "GB", scale: :bytes_to_gb},
+        {label: "Disk", metric: "disk_used_bytes", color: "var(--voodu-teal)", unit: "GB", scale: :bytes_to_gb, chart_type: :gauge_radial}
       ]
     else
       [
-        { label: "CPU",    metric: "cpu_percent",            color: "var(--voodu-purple)", unit: "%",  scale: :percent     },
-        { label: "Memory", metric: "mem_usage_bytes",        color: "var(--voodu-blue)",   unit: "MB", scale: :bytes_to_mb },
-        { label: "Net Rx", metric: "net_rx_delta_bytes",     color: "var(--voodu-green)",  unit: "",   scale: :bytes_auto  },
-        { label: "Net Tx", metric: "net_tx_delta_bytes",     color: "var(--voodu-indigo)", unit: "",   scale: :bytes_auto  }
+        {label: "CPU", metric: "cpu_percent", color: "var(--voodu-purple)", unit: "%", scale: :percent},
+        {label: "Memory", metric: "mem_usage_bytes", color: "var(--voodu-blue)", unit: "MB", scale: :bytes_to_mb},
+        {label: "Net Rx", metric: "net_rx_delta_bytes", color: "var(--voodu-green)", unit: "", scale: :bytes_auto},
+        {label: "Net Tx", metric: "net_tx_delta_bytes", color: "var(--voodu-indigo)", unit: "", scale: :bytes_auto}
       ]
     end
   end
@@ -397,10 +397,10 @@ class MetricsPageData
   # failure / error / dead-replica chart we add (memorise this).
   def ingress_chart_specs
     [
-      { label: "Requests",    metric: "req_count",       color: "var(--voodu-orange)", unit: "",   scale: :count,      default_visible: true },
-      { label: "p95 Latency", metric: "latency_p95_ms",  color: "var(--voodu-amber)",  unit: "ms", scale: :ms,         default_visible: true },
-      { label: "5xx Errors",  metric: "req_5xx",         color: "var(--voodu-red)",    unit: "",   scale: :count,      default_visible: true },
-      { label: "Bytes Out",   metric: "bytes_out",       color: "var(--voodu-pink)",   unit: "",   scale: :bytes_auto, default_visible: true }
+      {label: "Requests", metric: "req_count", color: "var(--voodu-orange)", unit: "", scale: :count, default_visible: true},
+      {label: "p95 Latency", metric: "latency_p95_ms", color: "var(--voodu-amber)", unit: "ms", scale: :ms, default_visible: true},
+      {label: "5xx Errors", metric: "req_5xx", color: "var(--voodu-red)", unit: "", scale: :count, default_visible: true},
+      {label: "Bytes Out", metric: "bytes_out", color: "var(--voodu-pink)", unit: "", scale: :bytes_auto, default_visible: true}
     ]
   end
 
@@ -415,10 +415,10 @@ class MetricsPageData
   # rationale on gold/violet/sky/rose.
   def ingress_picker_only_specs
     [
-      { label: "p90 Latency", metric: "latency_p90_ms",  color: "var(--voodu-gold)",   unit: "ms", scale: :ms,    default_visible: false },
-      { label: "p99 Latency", metric: "latency_p99_ms",  color: "var(--voodu-violet)", unit: "ms", scale: :ms,    default_visible: false },
-      { label: "3xx",         metric: "req_3xx",         color: "var(--voodu-sky)",    unit: "",   scale: :count, default_visible: false },
-      { label: "4xx",         metric: "req_4xx",         color: "var(--voodu-rose)",   unit: "",   scale: :count, default_visible: false }
+      {label: "p90 Latency", metric: "latency_p90_ms", color: "var(--voodu-gold)", unit: "ms", scale: :ms, default_visible: false},
+      {label: "p99 Latency", metric: "latency_p99_ms", color: "var(--voodu-violet)", unit: "ms", scale: :ms, default_visible: false},
+      {label: "3xx", metric: "req_3xx", color: "var(--voodu-sky)", unit: "", scale: :count, default_visible: false},
+      {label: "4xx", metric: "req_4xx", color: "var(--voodu-rose)", unit: "", scale: :count, default_visible: false}
     ]
   end
 
@@ -428,8 +428,8 @@ class MetricsPageData
   # like a natural left-to-right "what happened" narrative:
   # volume, speed, outcome, bandwidth.
   def ingress_picker_specs
-    chart     = ingress_chart_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
-    extra     = ingress_picker_only_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
+    chart = ingress_chart_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
+    extra = ingress_picker_only_specs.each_with_object({}) { |s, h| h[s[:metric]] = s }
     by_metric = chart.merge(extra)
 
     %w[
@@ -452,29 +452,29 @@ class MetricsPageData
   # whatever was used to render the inline card).
   def build_chart(spec)
     points = yield
-    src    = source_for(spec[:metric])
-    cap    = capacity_for(spec)
+    src = source_for(spec[:metric])
+    cap = capacity_for(spec)
 
     unit = if spec[:scale] == :bytes_auto && points.any?
-             points.first[:formatted].to_s.split(" ").last.to_s
-           else
-             spec[:unit]
-           end
+      points.first[:formatted].to_s.split(" ").last.to_s
+    else
+      spec[:unit]
+    end
 
     {
-      label:           spec[:label],
-      color:           spec[:color],
-      unit:            unit,
-      points:          points,
-      current:         latest_scaled_for(spec),
-      metric:          spec[:metric],
-      source:          src,
+      label: spec[:label],
+      color: spec[:color],
+      unit: unit,
+      points: points,
+      current: latest_scaled_for(spec),
+      metric: spec[:metric],
+      source: src,
       # section — "resource" for system/pod cards, "http" for ingress.
       # Drives the inline [http] badge on the chart card label and
       # the `data-section` attribute that lets the metrics-display
       # controller route saved hide-state to the right bucket.
-      section:         src == "ingress" ? "http" : "resource",
-      scale:           spec[:scale],
+      section: (src == "ingress") ? "http" : "resource",
+      scale: spec[:scale],
       # default_visible — false for picker-only metrics (p90, p99,
       # 3xx, 4xx). When the operator hasn't configured display
       # settings for this kind yet, JS hides cards with
@@ -485,11 +485,11 @@ class MetricsPageData
       # (host or pod) so the operator reads "21.9 GB of 39 GB · 56%"
       # like they do on Overview. nil for CPU (no natural total) and
       # for HTTP/Net metrics (no fixed cap). See `capacity_for`.
-      capacity_label:  cap && cap[:label],
-      capacity_pct:    cap && cap[:pct],
+      capacity_label: cap && cap[:label],
+      capacity_pct: cap && cap[:pct],
       # chart_type — "area" (default) | "gauge_radial" | "gauge_linear".
       # Carried from the spec so ChartCard picks the right body.
-      chart_type:      spec.fetch(:chart_type, :area)
+      chart_type: spec.fetch(:chart_type, :area)
     }
   end
 
@@ -583,7 +583,7 @@ class MetricsPageData
         (current_bytes.to_f / total_bytes * 100).round
       end
 
-    { label: label, pct: pct }
+    {label: label, pct: pct}
   end
 
   # rescale_value — bytes → display-unit number, matching the same
@@ -647,7 +647,7 @@ class MetricsPageData
   def source_for(metric)
     return "ingress" if INGRESS_METRICS.include?(metric)
 
-    @scope_kind == "host" ? "system" : "pod"
+    (@scope_kind == "host") ? "system" : "pod"
   end
 
   # latest_scaled_for — dispatches to the right source (system / pod
@@ -656,7 +656,7 @@ class MetricsPageData
   # ingress metrics under "ingress"), so we use a single lookup.
   def latest_scaled_for(spec)
     metric = spec[:metric]
-    scale  = spec[:scale]
+    scale = spec[:scale]
 
     if INGRESS_METRICS.include?(metric)
       latest_ingress_scaled(metric, scale)
@@ -684,16 +684,16 @@ class MetricsPageData
       if @scope_kind == "pod"
         pod = pod_record
         scope = pod && (pod["scope"] || pod[:scope])
-        name  = pod && (pod["resource_name"] || pod[:resource_name])
+        name = pod && (pod["resource_name"] || pod[:resource_name])
 
         @metrics.points_for(
-          source:   :pod,
-          metric:   metric,
-          range:    @range,
+          source: :pod,
+          metric: metric,
+          range: @range,
           interval: @interval,
-          scope:    scope,
-          name:     name,
-          pod:      @scope_id   # replica-precise filter (container name)
+          scope: scope,
+          name: name,
+          pod: @scope_id   # replica-precise filter (container name)
         )
       else
         @metrics.points_for(source: :system, metric: metric, range: @range, interval: @interval)
@@ -712,12 +712,12 @@ class MetricsPageData
     when :bytes_to_mb
       points.map do |p|
         mb = p[:value].to_f / 1_000_000
-        { ts: p[:ts], value: mb, formatted: format("%.1f MB", mb) }
+        {ts: p[:ts], value: mb, formatted: format("%.1f MB", mb)}
       end
     when :bytes_to_gb
       points.map do |p|
         gb = p[:value].to_f / 1_000_000_000
-        { ts: p[:ts], value: gb, formatted: format("%.1f GB", gb) }
+        {ts: p[:ts], value: gb, formatted: format("%.1f GB", gb)}
       end
     when :bytes_auto
       max_b = points.map { |p| p[:value].to_f }.max || 0
@@ -725,21 +725,21 @@ class MetricsPageData
 
       points.map do |p|
         v = p[:value].to_f / divisor
-        { ts: p[:ts], value: v, formatted: format("%.1f %s", v, suffix) }
+        {ts: p[:ts], value: v, formatted: format("%.1f %s", v, suffix)}
       end
     when :count
       # Integer counters (req_count, req_5xx, …). No transform on
       # the numeric value but format as int (so "184" not "184.0").
       points.map do |p|
         n = p[:value].to_f
-        { ts: p[:ts], value: n, formatted: n.to_i.to_s }
+        {ts: p[:ts], value: n, formatted: n.to_i.to_s}
       end
     when :ms
       # Latency in milliseconds — emitted in ms by the ingress
       # sampler, so no transform. Format with " ms" suffix.
       points.map do |p|
         v = p[:value].to_f
-        { ts: p[:ts], value: v, formatted: format("%.1f ms", v) }
+        {ts: p[:ts], value: v, formatted: format("%.1f ms", v)}
       end
     else
       points
@@ -755,15 +755,15 @@ class MetricsPageData
     return [] unless pod
 
     scope = pod["scope"] || pod[:scope]
-    name  = pod["resource_name"] || pod[:resource_name]
+    name = pod["resource_name"] || pod[:resource_name]
 
     raw_points = @metrics.points_for(
-      source:   :ingress,
-      metric:   metric,
-      range:    @range,
+      source: :ingress,
+      metric: metric,
+      range: @range,
       interval: @interval,
-      scope:    scope,
-      name:     name
+      scope: scope,
+      name: name
     )
 
     rescale_points(raw_points, scale)
@@ -777,20 +777,20 @@ class MetricsPageData
     return nil unless pod
 
     scope = pod["scope"] || pod[:scope]
-    name  = pod["resource_name"] || pod[:resource_name]
+    name = pod["resource_name"] || pod[:resource_name]
 
     raw = @metrics.latest_for(
       source: :ingress,
       metric: metric,
-      range:  @range,
-      scope:  scope,
-      name:   name
+      range: @range,
+      scope: scope,
+      name: name
     )
     return nil if raw.nil?
 
     case scale
-    when :count      then raw.to_i
-    when :ms         then raw
+    when :count then raw.to_i
+    when :ms then raw
     when :bytes_auto
       divisor, _ = pick_byte_unit(raw.abs)
       raw / divisor
@@ -805,21 +805,21 @@ class MetricsPageData
   # series.last for that one render.
   def latest_scaled(metric, scale)
     raw = if @scope_kind == "pod"
-            pod = pod_record
-            scope = pod && (pod["scope"] || pod[:scope])
-            name  = pod && (pod["resource_name"] || pod[:resource_name])
-            @metrics.latest_for(source: :pod, metric: metric, range: @range,
-                                scope: scope, name: name, pod: @scope_id)
-          else
-            @metrics.latest_for(source: :system, metric: metric, range: @range)
-          end
+      pod = pod_record
+      scope = pod && (pod["scope"] || pod[:scope])
+      name = pod && (pod["resource_name"] || pod[:resource_name])
+      @metrics.latest_for(source: :pod, metric: metric, range: @range,
+        scope: scope, name: name, pod: @scope_id)
+    else
+      @metrics.latest_for(source: :system, metric: metric, range: @range)
+    end
 
     return nil if raw.nil?
 
     case scale
-    when :percent      then raw
-    when :bytes_to_mb  then raw / 1_000_000.0
-    when :bytes_to_gb  then raw / 1_000_000_000.0
+    when :percent then raw
+    when :bytes_to_mb then raw / 1_000_000.0
+    when :bytes_to_gb then raw / 1_000_000_000.0
     when :bytes_auto
       # Use the same divisor as the chart's first point's unit so
       # headline + axis labels speak the same dialect. Re-derive
@@ -835,9 +835,9 @@ class MetricsPageData
   # consistent (otherwise some ticks would be "120" and others
   # "1.2k" — confusing).
   def pick_byte_unit(max_b)
-    return [1.0,            "B"]  if max_b < 1_000
-    return [1_000.0,        "kB"] if max_b < 1_000_000
-    return [1_000_000.0,    "MB"] if max_b < 1_000_000_000
+    return [1.0, "B"] if max_b < 1_000
+    return [1_000.0, "kB"] if max_b < 1_000_000
+    return [1_000_000.0, "MB"] if max_b < 1_000_000_000
 
     [1_000_000_000.0, "GB"]
   end

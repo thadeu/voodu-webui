@@ -36,22 +36,22 @@ class Components::Layouts::Sidebar < Components::Base
   # instead of literal strings means future renames (`/metrics` →
   # `/observe/metrics`) are a one-line routes.rb change.
   NAV_ITEMS = [
-    { id: :overview, label: "Overview", icon: :Squares2x2Outline,   path: :tenant_root },
-    { id: :pods,     label: "Pods",     icon: :CubeOutline,         path: :pods },
-    { id: :metrics,  label: "Metrics",  icon: :ChartBarOutline,     path: :metrics },
+    {id: :overview, label: "Overview", icon: :Squares2x2Outline, path: :tenant_root},
+    {id: :pods, label: "Pods", icon: :CubeOutline, path: :pods},
+    {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
     # Logs lands on Analytics (the primary surface); `active_prefix`
     # keeps the item highlighted across the whole /logs/* family
     # (Analytics AND Follow), since the href no longer equals the prefix.
-    { id: :logs,     label: "Logs",     icon: :DocumentTextOutline, path: :logs_analytics, active_prefix: :logs },
-    { id: :alerts,   label: "Alerts",   icon: :BellOutline,         path: :alerts, badge: :alerts_count },
-    { id: :settings, label: "Settings", icon: :Cog6ToothOutline,    path: :settings }
+    {id: :logs, label: "Logs", icon: :DocumentTextOutline, path: :logs_analytics, active_prefix: :logs},
+    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
+    {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings}
   ].freeze
 
   def initialize(current_path: "/", islands: [], recent_islands: nil, current_island: nil)
-    @current_path    = current_path
-    @islands         = islands
-    @recent_islands  = recent_islands
-    @current_island  = current_island
+    @current_path = current_path
+    @islands = islands
+    @recent_islands = recent_islands
+    @current_island = current_island
   end
 
   def view_template
@@ -74,7 +74,7 @@ class Components::Layouts::Sidebar < Components::Base
         "flex flex-col border-r border-voodu-border bg-voodu-bg-2"
       ),
       data: {
-        controller:        "sidebar-collapse",
+        controller: "sidebar-collapse",
         mobile_nav_target: "sidebar",
         # Default to collapsed in the rendered HTML — JS expands on
         # connect() if localStorage says so. Avoids the "page loaded,
@@ -82,9 +82,9 @@ class Components::Layouts::Sidebar < Components::Base
         # `vmd:` prefix on every group-data-[collapsed]:* descendant
         # keeps mobile unaffected: the off-canvas drawer still shows
         # the full sidebar regardless of this attribute.
-        collapsed:         ""
+        collapsed: ""
       },
-      aria: { label: "Sidebar" }
+      aria: {label: "Sidebar"}
     ) do
       # Turbo Stream subscriptions — one per visible island so the
       # status dot in each row flips live when its state-sync job
@@ -126,10 +126,10 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       render img(
-        src:   "/mark-mint.svg",
-        alt:   "Clowk",
+        src: "/mark-mint.svg",
+        alt: "Clowk",
         class: "h-8 w-auto",
-        aria:  { hidden: "true" }
+        aria: {hidden: "true"}
       )
 
       div(class: "flex flex-col leading-tight flex-1 min-w-0 overflow-hidden vmd:group-data-[collapsed]:hidden") do
@@ -150,9 +150,9 @@ class Components::Layouts::Sidebar < Components::Base
           end
         end
         a(
-          href:  new_island_path,
+          href: new_island_path,
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
-          aria:  { label: "Add server" }
+          aria: {label: "Add server"}
         ) do
           render Icon::PlusOutline.new(class: "w-3 h-3")
         end
@@ -217,8 +217,8 @@ class Components::Layouts::Sidebar < Components::Base
   # so the operator can confirm which server they're hovering.
   def island_row(island)
     selected = @current_island && island.id == @current_island.id
-    status   = (island.status || :stopped).to_sym
-    letters  = avatar_letters_for(island.name)
+    status = (island.status || :stopped).to_sym
+    letters = avatar_letters_for(island.name)
 
     a(
       href: tenant_root_path(tenant_key: island.key),
@@ -239,7 +239,7 @@ class Components::Layouts::Sidebar < Components::Base
       # without a page refresh. See
       # StateSyncIslandJob#broadcast_status_change.
       span(
-        id:    "island-status-dot-#{island.id}",
+        id: "island-status-dot-#{island.id}",
         class: "shrink-0 vmd:group-data-[collapsed]:hidden"
       ) do
         render Components::UI::StatusDot.new(status: status)
@@ -255,7 +255,7 @@ class Components::Layouts::Sidebar < Components::Base
         ) { island.name }
 
         span(class: "font-voodu-mono text-[10.5px] text-voodu-muted truncate") do
-          count  = island.pods_count
+          count = island.pods_count
           suffix = count.nil? ? "— pods" : "#{count} pods"
           "#{island.host} · #{suffix}"
         end
@@ -270,7 +270,7 @@ class Components::Layouts::Sidebar < Components::Base
       span(
         class: "hidden vmd:group-data-[collapsed]:inline-flex items-center justify-center w-8 h-8 font-voodu-mono text-[10.5px] font-semibold uppercase tracking-tight",
         style: avatar_style_for(status, selected: selected),
-        aria:  { hidden: "true" }
+        aria: {hidden: "true"}
       ) { letters }
     end
   end
@@ -321,7 +321,7 @@ class Components::Layouts::Sidebar < Components::Base
 
     nav(
       class: "flex flex-col gap-1.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
-      aria:  { label: "Primary" }
+      aria: {label: "Primary"}
     ) do
       div(class: "px-2 pt-1 pb-0.5 vmd:group-data-[collapsed]:hidden") do
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Navigation" }
@@ -340,16 +340,16 @@ class Components::Layouts::Sidebar < Components::Base
   # bubbled top-right of the icon. Expanded view: icon + label +
   # right-aligned badge as before.
   def nav_item(item)
-    active      = nav_active?(item)
-    icon_klass  = Icon.const_get(item[:icon])
+    active = nav_active?(item)
+    icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
-    href        = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
+    href = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
 
     a(
-      href:           href,
-      title:          item[:label],
+      href: href,
+      title: item[:label],
       "aria-current": (active ? "page" : nil),
-      class:          tokens(
+      class: tokens(
         "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-2 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
         active ? "bg-voodu-accent-dim text-voodu-accent-2 border-voodu-accent-line font-medium" : "border-transparent text-voodu-text-2 hover:bg-voodu-hover hover:text-voodu-text"
@@ -424,10 +424,10 @@ class Components::Layouts::Sidebar < Components::Base
   def collapse_footer
     div(class: "hidden vmd:flex border-t border-voodu-border shrink-0 p-2 vmd:group-data-[collapsed]:justify-center") do
       button(
-        type:  "button",
+        type: "button",
         title: "Toggle sidebar",
         "aria-label": "Toggle sidebar",
-        data:  { action: "click->sidebar-collapse#toggle" },
+        data: {action: "click->sidebar-collapse#toggle"},
         class: tokens(
           "inline-flex items-center justify-center w-8 h-8",
           "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
@@ -435,7 +435,7 @@ class Components::Layouts::Sidebar < Components::Base
         )
       ) do
         span(
-          data:  { sidebar_collapse_target: "icon" },
+          data: {sidebar_collapse_target: "icon"},
           class: "inline-flex transition-transform duration-200"
         ) do
           render Icon::ChevronDoubleLeftOutline.new(class: "w-3.5 h-3.5")
@@ -467,7 +467,7 @@ class Components::Layouts::Sidebar < Components::Base
   # conflict with the swipe-to-close gesture.
   def collapse_handle
     div(
-      aria: { hidden: "true" },
+      aria: {hidden: "true"},
       class: tokens(
         "hidden vmd:block",
         # Absolute against the sidebar (vmd:relative). Anchored at
@@ -489,9 +489,9 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       button(
-        type:         "button",
+        type: "button",
         "aria-label": "Toggle sidebar",
-        data:         { action: "click->sidebar-collapse#toggle" },
+        data: {action: "click->sidebar-collapse#toggle"},
         class: tokens(
           "absolute inset-0",
           "flex items-center justify-center cursor-pointer",
@@ -510,7 +510,7 @@ class Components::Layouts::Sidebar < Components::Base
         # edge container. `group-hover/handle:` (named) layers the
         # stronger accent state for landing on the line itself.
         span(
-          aria:  { hidden: "true" },
+          aria: {hidden: "true"},
           class: tokens(
             "block h-12 w-px",
             "bg-transparent transition-all duration-150",

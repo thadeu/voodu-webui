@@ -22,14 +22,14 @@ class Components::UI::CopyButton < Components::Base
         clipboard_value_value: @value,
         action: "click->clipboard#copy"
       },
-      aria: { label: "#{@label}: #{@value}" },
+      aria: {label: "#{@label}: #{@value}"},
       title: @label
     ) do
       # Default icon — flipped to check by JS when copy succeeds.
-      span(data: { clipboard_target: "idle" }) do
+      span(data: {clipboard_target: "idle"}) do
         render Icon::DocumentDuplicateOutline.new(class: "w-3 h-3")
       end
-      span(data: { clipboard_target: "done" }, hidden: true) do
+      span(data: {clipboard_target: "done"}, hidden: true) do
         render Icon::CheckOutline.new(class: "w-3.5 h-3.5 text-voodu-green")
       end
     end

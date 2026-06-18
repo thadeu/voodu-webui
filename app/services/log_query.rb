@@ -50,9 +50,9 @@
 # Regexes compile with a per-match `timeout:` (Ruby 3.4) as a ReDoS backstop;
 # the Reader rescues Regexp::TimeoutError per line and treats it as a non-match.
 class LogQuery
-  FIELDS         = { "@message" => :message, "@level" => :level, "@stream" => :stream }.freeze
-  KEYWORDS       = %w[and or not like].freeze
-  REGEX_TIMEOUT  = 1.0
+  FIELDS = {"@message" => :message, "@level" => :level, "@stream" => :stream}.freeze
+  KEYWORDS = %w[and or not like].freeze
+  REGEX_TIMEOUT = 1.0
 
   # compile — convenience: LogQuery.compile(str) → Result.
   def self.compile(source)
@@ -80,9 +80,9 @@ class LogQuery
     return Result.new(predicate: ->(_rec) { true }, limit: nil, error: nil) if src.empty?
 
     @tokens = tokenize(src)
-    @pos    = 0
-    @limit  = nil
-    node    = parse_pipeline
+    @pos = 0
+    @limit = nil
+    node = parse_pipeline
     raise ParseError, "unexpected '#{peek[1]}'" if peek
 
     Result.new(predicate: node, limit: @limit, error: nil)
@@ -104,7 +104,7 @@ class LogQuery
     while i < n
       c = src[i]
 
-      if c =~ /\s/
+      if /\s/.match?(c)
         i += 1
       elsif c == "("
         tokens << [:lparen, "("]
@@ -123,7 +123,7 @@ class LogQuery
         tokens << [:field, m[0].downcase]
         i += m[0].length
       elsif c == "="
-        step = src[i + 1] == "=" ? 2 : 1
+        step = (src[i + 1] == "=") ? 2 : 1
         tokens << [:op, "="]
         i += step
       elsif c == "!"
@@ -178,7 +178,7 @@ class LogQuery
       end
     end
 
-    raise ParseError, "unterminated #{delim == '/' ? 'regex' : 'string'}" unless closed
+    raise ParseError, "unterminated #{(delim == "/") ? "regex" : "string"}" unless closed
 
     [buf, j]
   end
@@ -194,8 +194,8 @@ class LogQuery
     while type?(:pipe)
       advance
       right = parse_stage
-      left  = node
-      node  = ->(rec) { left.call(rec) && right.call(rec) }
+      left = node
+      node = ->(rec) { left.call(rec) && right.call(rec) }
     end
 
     node
@@ -235,8 +235,8 @@ class LogQuery
     while kw?("or")
       advance
       right = parse_and
-      left  = node
-      node  = ->(rec) { left.call(rec) || right.call(rec) }
+      left = node
+      node = ->(rec) { left.call(rec) || right.call(rec) }
     end
 
     node
@@ -248,8 +248,8 @@ class LogQuery
     while kw?("and")
       advance
       right = parse_unary
-      left  = node
-      node  = ->(rec) { left.call(rec) && right.call(rec) }
+      left = node
+      node = ->(rec) { left.call(rec) && right.call(rec) }
     end
 
     node
@@ -291,7 +291,7 @@ class LogQuery
     field = FIELDS[current[1]] or raise ParseError, "unknown field '#{current[1]}' — use @message, @level or @stream"
     advance
 
-    op   = type?(:op) || kw?("like") ? parse_op : :like
+    op = (type?(:op) || kw?("like")) ? parse_op : :like
     kind, raw = parse_value
 
     build_predicate(field, op, kind, raw)
@@ -318,8 +318,10 @@ class LogQuery
     t = peek or raise ParseError, "expected a value"
 
     case t[0]
-    when :regex          then advance; [:regex, t[1]]
-    when :string, :word  then advance; [:text, t[1]]
+    when :regex then advance
+                     [:regex, t[1]]
+    when :string, :word then advance
+                             [:text, t[1]]
     else raise ParseError, "expected a value, got '#{t[1]}'"
     end
   end
@@ -338,9 +340,9 @@ class LogQuery
       needle = raw.downcase
 
       case op
-      when :eq  then field_proc(field) { |str| str.casecmp?(raw) }
+      when :eq then field_proc(field) { |str| str.casecmp?(raw) }
       when :neq then field_proc(field) { |str| !str.casecmp?(raw) }
-      else           field_proc(field) { |str| str.downcase.include?(needle) }
+      else field_proc(field) { |str| str.downcase.include?(needle) }
       end
     end
   end
@@ -371,7 +373,7 @@ class LogQuery
   def peek
     @tokens[@pos]
   end
-  alias current peek
+  alias_method :current, :peek
 
   def advance
     @pos += 1
@@ -386,7 +388,7 @@ class LogQuery
   end
 
   def expect(kind)
-    raise ParseError, "expected '#{kind == :rparen ? ')' : kind}'" unless type?(kind)
+    raise ParseError, "expected '#{(kind == :rparen) ? ")" : kind}'" unless type?(kind)
 
     advance
   end

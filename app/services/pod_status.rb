@@ -39,9 +39,9 @@ class PodStatus
   # warehouse is empty for a freshly-deployed pod (sync hasn't ticked
   # yet) or when an operator hits a stale bookmark.
   def self.from_payload(payload, stale: false)
-    return :offline    if stale
-    return :stopped    if payload.nil?
-    return :running    if payload["running"]
+    return :offline if stale
+    return :stopped if payload.nil?
+    return :running if payload["running"]
     return :restarting if payload["status"].to_s.match?(/restart/i)
 
     :stopped
@@ -61,9 +61,9 @@ class PodStatus
     return :offline if stale
 
     s = status.to_s.downcase
-    return :running    if s == "running"
+    return :running if s == "running"
     return :restarting if s.include?("restart")
-    return :stopped    if s == "stopped" || s == "exited"
+    return :stopped if s == "stopped" || s == "exited"
 
     :stopped
   end

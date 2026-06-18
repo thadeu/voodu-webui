@@ -9,19 +9,19 @@
 # dedicated /pods page.
 class Views::Pods::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @data           = data
-    @active_tab     = active_tab
-    @updated_at     = updated_at
+    @data = data
+    @active_tab = active_tab
+    @updated_at = updated_at
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, islands: @islands,
       current_island: @current_island, updated_at: @updated_at,
-      breadcrumb: overview_crumbs({ label: "Pods" })
+      breadcrumb: overview_crumbs({label: "Pods"})
     ) do
       if @current_island.nil?
         render Components::UI::NoIslandState.new
@@ -54,9 +54,9 @@ class Views::Pods::Index < Views::Base
     # state_tick reload.
     turbo_frame_tag(
       "island-#{@current_island.id}-state",
-      target:  "_top",
+      target: "_top",
       refresh: "morph",
-      data:    { state_frame: true }
+      data: {state_frame: true}
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         stale_banner if @data&.stale?
@@ -123,18 +123,18 @@ class Views::Pods::Index < Views::Base
     scopes = @data.scopes
 
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
-      stat_bit("var(--voodu-green)", "running",    counts[:running])
+      stat_bit("var(--voodu-green)", "running", counts[:running])
       dot_sep
       stat_bit("var(--voodu-amber)", "restarting", counts[:restarting])
       dot_sep
-      stat_bit("var(--voodu-muted)", "stopped",    counts[:stopped])
+      stat_bit("var(--voodu-muted)", "stopped", counts[:stopped])
 
       next if scopes.empty?
 
       span(class: "hidden vmd:contents") do
         dot_sep
         span do
-          plain "#{scopes.size} scope#{'s' unless scopes.size == 1}: "
+          plain "#{scopes.size} scope#{"s" unless scopes.size == 1}: "
           span(class: "font-voodu-mono text-voodu-text-2") { scopes.join(", ") }
         end
       end
@@ -152,16 +152,16 @@ class Views::Pods::Index < Views::Base
   def dot_sep
     span(
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
-      aria: { hidden: "true" }
+      aria: {hidden: "true"}
     )
   end
 
   def status_counts
     all = @data.pods(filter_status: nil)
     {
-      running:    all.count { |p| p[:status] == :running },
+      running: all.count { |p| p[:status] == :running },
       restarting: all.count { |p| p[:status] == :restarting },
-      stopped:    all.count { |p| p[:status] == :stopped }
+      stopped: all.count { |p| p[:status] == :stopped }
     }
   end
 

@@ -52,12 +52,12 @@ class Components::UI::Modal < Components::Base
   }.freeze
 
   def initialize(title:, subtitle: nil, icon: nil, size: :md,
-                 blur: true, closable: true, close_to: nil)
-    @title    = title
+    blur: true, closable: true, close_to: nil)
+    @title = title
     @subtitle = subtitle
-    @icon     = icon
-    @size     = size
-    @blur     = blur
+    @icon = icon
+    @size = size
+    @blur = blur
     @closable = closable
     @close_to = close_to
 
@@ -70,7 +70,7 @@ class Components::UI::Modal < Components::Base
   end
 
   def view_template(&body)
-    div(data: { controller: "modal", modal_closable_value: @closable.to_s }) do
+    div(data: {controller: "modal", modal_closable_value: @closable.to_s}) do
       backdrop
       dialog(&body)
     end
@@ -83,7 +83,7 @@ class Components::UI::Modal < Components::Base
   def backdrop
     div(
       "aria-hidden": "true",
-      data: { action: "click->modal#backdropClick", modal_target: "backdrop" },
+      data: {action: "click->modal#backdropClick", modal_target: "backdrop"},
       class: tokens(
         "fixed inset-0 z-[65] bg-black/55",
         ("backdrop-blur-[3px]" if @blur)
@@ -98,7 +98,7 @@ class Components::UI::Modal < Components::Base
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "voodu-modal-title",
-      data: { modal_target: "dialog" },
+      data: {modal_target: "dialog"},
       class: tokens(
         "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[70]",
         SIZES.fetch(@size),
@@ -159,7 +159,7 @@ class Components::UI::Modal < Components::Base
       button(
         type: "button",
         "aria-label": "Close",
-        data: { action: "click->modal#close" },
+        data: {action: "click->modal#close"},
         class: close_btn_classes
       ) { render Icon::XMarkOutline.new(class: "w-3.5 h-3.5") }
     end

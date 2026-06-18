@@ -12,7 +12,7 @@ gem "stimulus-rails"
 gem "cssbundling-rails"
 gem "jbuilder"
 gem "bcrypt", "~> 3.1.7"
-gem "tzinfo-data", platforms: %i[ windows jruby ]
+gem "tzinfo-data", platforms: %i[windows jruby]
 gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
@@ -30,7 +30,7 @@ gem "csv", "~> 3.3", require: false
 gem "poller", path: "gems/poller"
 
 group :development, :test do
-  gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
+  gem "debug", platforms: %i[mri windows], require: "debug/prelude"
   gem "bundler-audit", require: false
   gem "brakeman", require: false
   gem "standard", require: false

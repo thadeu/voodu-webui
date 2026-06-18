@@ -14,13 +14,13 @@
 # IslandsController#create redirects to /<key>/.
 class Views::Islands::New < Views::Base
   def initialize(current_path:, island:, connection_error: nil)
-    @current_path     = current_path
-    @island           = island
+    @current_path = current_path
+    @island = island
     @connection_error = connection_error
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{ label: "Servers" }]) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{label: "Servers"}]) do
       render(modal) { form_body }
     end
   end
@@ -29,10 +29,10 @@ class Views::Islands::New < Views::Base
 
   def modal
     Components::UI::Modal.new(
-      title:    "Add server",
+      title: "Add server",
       subtitle: "Connect a Docker host running the voodu agent",
-      icon:     :PlusOutline,
-      size:     :md,
+      icon: :PlusOutline,
+      size: :md,
       close_to: islands_path
     ).with_footer { footer_actions }
   end
@@ -40,7 +40,7 @@ class Views::Islands::New < Views::Base
   def form_body
     form(
       action: islands_path, method: "post",
-      data: { turbo: false }, id: "add-server-form",
+      data: {turbo: false}, id: "add-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
@@ -49,7 +49,7 @@ class Views::Islands::New < Views::Base
 
       field(
         label: "Name",
-        hint:  "Display name shown in the sidebar.",
+        hint: "Display name shown in the sidebar.",
         error: @island.errors[:name].first
       ) do
         text_input(name: "island[name]", value: @island.name, placeholder: "prod-edge-02")
@@ -57,7 +57,7 @@ class Views::Islands::New < Views::Base
 
       field(
         label: "Server endpoint",
-        hint:  endpoint_hint,
+        hint: endpoint_hint,
         error: @island.errors[:endpoint].first
       ) do
         text_input(
@@ -69,7 +69,7 @@ class Views::Islands::New < Views::Base
 
       field(
         label: "Personal access token",
-        hint:  pat_hint,
+        hint: pat_hint,
         error: @island.errors[:pat_ciphertext].first
       ) do
         pat_input
@@ -145,7 +145,7 @@ class Views::Islands::New < Views::Base
   def pat_input
     div(
       class: "relative",
-      data: { controller: "pat-reveal" }
+      data: {controller: "pat-reveal"}
     ) do
       input(
         type: "password",
@@ -154,7 +154,7 @@ class Views::Islands::New < Views::Base
         placeholder: "vd_live_••••••••••••••••",
         autocomplete: "off",
         spellcheck: "false",
-        data: { pat_reveal_target: "input" },
+        data: {pat_reveal_target: "input"},
         class: tokens(
           "w-full pl-3 pr-16 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none",
           "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line",
@@ -163,7 +163,7 @@ class Views::Islands::New < Views::Base
       )
       button(
         type: "button",
-        data: { action: "click->pat-reveal#toggle", pat_reveal_target: "btn" },
+        data: {action: "click->pat-reveal#toggle", pat_reveal_target: "btn"},
         class: "absolute right-[1px] top-[1px] bottom-[1px] px-3 text-[11px] text-voodu-muted hover:text-voodu-text border-l border-voodu-border bg-voodu-surface"
       ) { "show" }
     end

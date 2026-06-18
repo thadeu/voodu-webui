@@ -36,9 +36,9 @@ class Components::Logs::Page < Components::Base
   # pods via the in-page picker leaves it false so the link
   # doesn't point at a page the operator wasn't on.
   def initialize(pod_name: nil, drawer: false, pods: [], back_to_pod: false)
-    @pod_name    = pod_name
-    @drawer      = drawer
-    @pods        = Array(pods)
+    @pod_name = pod_name
+    @drawer = drawer
+    @pods = Array(pods)
     @back_to_pod = back_to_pod
   end
 
@@ -52,13 +52,13 @@ class Components::Logs::Page < Components::Base
         # state machines that touch the same DOM — they don't share
         # targets, so cohabitation is safe.
         controller: "log-stream logs-columns",
-        log_stream_pod_value:        @pod_name.to_s,
+        log_stream_pod_value: @pod_name.to_s,
         log_stream_stream_url_value: stream_url,
         # Pods snapshot at render: list of { name, resource_name,
         # scope } used by the pod-selector filter to map container
         # names → resource_names (the user-facing identity the
         # drawer's checkboxes operate on).
-        log_stream_pods_value:       pods_json,
+        log_stream_pods_value: pods_json,
         # localStorage key the pod-selector drawer writes into.
         # Must match Views::Logs::PodsPicker's storageKeyValue or
         # the filter is read from the wrong bucket and silently
@@ -82,9 +82,9 @@ class Components::Logs::Page < Components::Base
   def pods_json
     @pods.map do |p|
       {
-        name:          p[:name]          || p["name"],
+        name: p[:name] || p["name"],
         resource_name: p[:resource_name] || p["resource_name"],
-        scope:         p[:scope]         || p["scope"]
+        scope: p[:scope] || p["scope"]
       }
     end.to_json
   end
@@ -201,10 +201,10 @@ class Components::Logs::Page < Components::Base
   # preference carries over).
   def open_pod_btn
     render(Components::UI::Drawer.new(
-      title:    "Pod · #{@pod_name}",
-      src:      "#{pod_path(name: @pod_name)}?embed=1",
+      title: "Pod · #{@pod_name}",
+      src: "#{pod_path(name: @pod_name)}?embed=1",
       open_url: pod_path(name: @pod_name),
-      width:    "70vw",
+      width: "70vw",
       trigger_attrs: {
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
       }
@@ -245,24 +245,24 @@ class Components::Logs::Page < Components::Base
       dot_sep
       stat(:visible, "0", " visible")
       dot_sep
-      stat(:sources, "0", lambda { " source#{'s' unless @pod_name}" })
+      stat(:sources, "0", lambda { " source#{"s" unless @pod_name}" })
     end
   end
 
   def streaming_state
     span(class: "inline-flex items-center gap-1.5") do
       span(
-        data: { log_stream_target: "stateDot" },
+        data: {log_stream_target: "stateDot"},
         class: "inline-block w-1.5 h-1.5 rounded-full animate-voodu-pulse",
         style: "background: var(--voodu-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent);"
       )
-      span(data: { log_stream_target: "stateLabel" }) { "streaming live" }
+      span(data: {log_stream_target: "stateLabel"}) { "streaming live" }
     end
   end
 
   def stat(target, initial, label)
     span do
-      span(class: "font-voodu-mono text-voodu-text-2", data: { log_stream_target: target.to_s }) { initial }
+      span(class: "font-voodu-mono text-voodu-text-2", data: {log_stream_target: target.to_s}) { initial }
       label_text = label.respond_to?(:call) ? label.call : label
       plain label_text
     end
@@ -271,7 +271,7 @@ class Components::Logs::Page < Components::Base
   def dot_sep
     span(
       class: "inline-block w-[3px] h-[3px] rounded-full bg-voodu-border-2",
-      aria: { hidden: "true" }
+      aria: {hidden: "true"}
     )
   end
 
@@ -298,10 +298,10 @@ class Components::Logs::Page < Components::Base
   # variants (theme.css) on light. Kept in lockstep with the JS
   # LEVEL_TONE in log_stream_controller.js.
   LEVEL_DEFAULT_TONE = {
-    "HTTP"  => { color: "var(--voodu-blue)",     bg: "color-mix(in srgb, var(--voodu-blue) 12%, transparent)",     border: "color-mix(in srgb, var(--voodu-blue) 40%, transparent)" },
-    "INFO"  => { color: "var(--voodu-accent-2)", bg: "color-mix(in srgb, var(--voodu-accent-2) 12%, transparent)", border: "color-mix(in srgb, var(--voodu-accent-2) 40%, transparent)" },
-    "WARN"  => { color: "var(--voodu-amber)",    bg: "color-mix(in srgb, var(--voodu-amber) 12%, transparent)",    border: "color-mix(in srgb, var(--voodu-amber) 40%, transparent)" },
-    "ERROR" => { color: "var(--voodu-red)",      bg: "color-mix(in srgb, var(--voodu-red) 14%, transparent)",      border: "color-mix(in srgb, var(--voodu-red) 45%, transparent)" }
+    "HTTP" => {color: "var(--voodu-blue)", bg: "color-mix(in srgb, var(--voodu-blue) 12%, transparent)", border: "color-mix(in srgb, var(--voodu-blue) 40%, transparent)"},
+    "INFO" => {color: "var(--voodu-accent-2)", bg: "color-mix(in srgb, var(--voodu-accent-2) 12%, transparent)", border: "color-mix(in srgb, var(--voodu-accent-2) 40%, transparent)"},
+    "WARN" => {color: "var(--voodu-amber)", bg: "color-mix(in srgb, var(--voodu-amber) 12%, transparent)", border: "color-mix(in srgb, var(--voodu-amber) 40%, transparent)"},
+    "ERROR" => {color: "var(--voodu-red)", bg: "color-mix(in srgb, var(--voodu-red) 14%, transparent)", border: "color-mix(in srgb, var(--voodu-red) 45%, transparent)"}
   }.freeze
 
   def level_pills
@@ -381,7 +381,6 @@ class Components::Logs::Page < Components::Base
     end
   end
 
-
   # tailwind_source_anchor — invisible div whose only purpose is to
   # hold the INACTIVE toggle classes as a string so the Tailwind
   # source scanner keeps them in the bundle. The buttons start
@@ -415,14 +414,14 @@ class Components::Logs::Page < Components::Base
       class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::PauseOutline.new(class: "w-3 h-3")
-      span(data: { pause_label: true }) { "Pause" }
+      span(data: {pause_label: true}) { "Pause" }
     end
   end
 
   def clear_btn
     button(
       type: "button",
-      data: { action: "click->log-stream#clear" },
+      data: {action: "click->log-stream#clear"},
       class: "inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::XMarkOutline.new(class: "w-3 h-3")
@@ -472,12 +471,12 @@ class Components::Logs::Page < Components::Base
         # column header sits at the very top of the scroll area — the
         # operator orients themselves on the column labels even before
         # the first line arrives.
-        div(class: "log-list", data: { log_stream_target: "list" }) do
+        div(class: "log-list", data: {log_stream_target: "list"}) do
           column_header
         end
 
         div(
-          data: { log_stream_target: "empty" },
+          data: {log_stream_target: "empty"},
           class: "px-4 py-10 text-center text-voodu-muted text-[12.5px]"
         ) { "Waiting for log lines…" }
       end
@@ -506,10 +505,10 @@ class Components::Logs::Page < Components::Base
   # orientation chrome, not navigation.
   def column_header
     div(class: "log-row log-header", "aria-hidden": "true") do
-      column_header_cell("ts",    "TIME",    "log-h-ts",    resizable: true)
-      column_header_cell("level", "LVL",     "log-h-level", resizable: true)
-      column_header_cell("pod",   "POD",     "log-h-pod",   resizable: true)
-      column_header_cell("body",  "PAYLOAD", "log-h-body",  resizable: false) do
+      column_header_cell("ts", "TIME", "log-h-ts", resizable: true)
+      column_header_cell("level", "LVL", "log-h-level", resizable: true)
+      column_header_cell("pod", "POD", "log-h-pod", resizable: true)
+      column_header_cell("body", "PAYLOAD", "log-h-body", resizable: false) do
         column_copy_all_button
         column_wrap_button
         column_settings_button
@@ -526,7 +525,7 @@ class Components::Logs::Page < Components::Base
   def column_header_cell(key, label, modifier_class, resizable:)
     span(
       class: "log-hcell #{modifier_class}",
-      data:  { logs_columns_target: "headerCell", column_key: key }
+      data: {logs_columns_target: "headerCell", column_key: key}
     ) do
       plain label
       yield if block_given?
@@ -536,7 +535,7 @@ class Components::Logs::Page < Components::Base
         class: "log-col-resize",
         title: "Drag to resize",
         data: {
-          action:     "mousedown->logs-columns#startResize",
+          action: "mousedown->logs-columns#startResize",
           column_key: key
         },
         "aria-hidden": "true"
@@ -557,9 +556,9 @@ class Components::Logs::Page < Components::Base
   # accent-green chip flash).
   def column_copy_all_button
     button(
-      type:        "button",
-      class:       "log-col-copy-all",
-      title:       "Copy all visible payloads",
+      type: "button",
+      class: "log-col-copy-all",
+      title: "Copy all visible payloads",
       "aria-label": "Copy all currently visible log payloads to clipboard",
       data: {
         action: "click->log-stream#copyAll"
@@ -589,9 +588,9 @@ class Components::Logs::Page < Components::Base
   # chip language.
   def column_wrap_button
     button(
-      type:        "button",
-      class:       "log-col-wrap",
-      title:       "Toggle wrap on all rows",
+      type: "button",
+      class: "log-col-wrap",
+      title: "Toggle wrap on all rows",
       "aria-label": "Toggle wrap on all log rows",
       data: {
         log_stream_target: "wrap",
@@ -618,9 +617,9 @@ class Components::Logs::Page < Components::Base
   # lives on a hot path and the glyph is trivial.
   def column_settings_button
     button(
-      type:        "button",
-      class:       "log-col-settings",
-      title:       "Column visibility",
+      type: "button",
+      class: "log-col-settings",
+      title: "Column visibility",
       "aria-label": "Choose visible log columns",
       data: {
         action: "click->logs-columns#togglePopover",
@@ -650,17 +649,17 @@ class Components::Logs::Page < Components::Base
   # plain toggles persisted to localStorage.
   def column_visibility_popover
     div(
-      class:  "log-cols-popover",
+      class: "log-cols-popover",
       hidden: true,
-      role:   "menu",
+      role: "menu",
       "aria-label": "Visible columns",
-      data:   { logs_columns_target: "popover" }
+      data: {logs_columns_target: "popover"}
     ) do
       div(class: "log-cols-popover-title") { "Visible columns" }
-      column_visibility_row("ts",    "Time")
+      column_visibility_row("ts", "Time")
       column_visibility_row("level", "Level")
-      column_visibility_row("pod",   "Pod")
-      column_visibility_row("body",  "Payload", required: true)
+      column_visibility_row("pod", "Pod")
+      column_visibility_row("body", "Payload", required: true)
     end
   end
 
@@ -669,13 +668,13 @@ class Components::Logs::Page < Components::Base
 
     label(class: label_class) do
       input(
-        type:     "checkbox",
-        checked:  true,
+        type: "checkbox",
+        checked: true,
         disabled: required,
         data: {
-          action:     "change->logs-columns#toggleVisibility",
+          action: "change->logs-columns#toggleVisibility",
           column_key: key,
-          required:   required ? "true" : "false",
+          required: required ? "true" : "false",
           logs_columns_target: "visibilityToggle"
         }
       )
@@ -700,7 +699,7 @@ class Components::Logs::Page < Components::Base
       type: "button",
       title: "Jump to top",
       "aria-label": "Jump to top of log stream",
-      data: { action: "click->log-stream#jumpToTop" },
+      data: {action: "click->log-stream#jumpToTop"},
       # top-10 (40px) clears the ~22px sticky column header + a small
       # gap so the chip feels "inside the log area," not glued to the
       # header. z-20 wins against the header's z-index: 2 (theme.css

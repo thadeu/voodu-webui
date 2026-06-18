@@ -9,27 +9,27 @@ class WebhookClientTest < ActiveSupport::TestCase
 
   test "posts JSON to a public https host" do
     stub = stub_request(:post, "https://#{PUBLIC}/hook")
-           .with(headers: { "Content-Type" => "application/json" }, body: { x: 1 }.to_json)
-           .to_return(status: 200)
+      .with(headers: {"Content-Type" => "application/json"}, body: {x: 1}.to_json)
+      .to_return(status: 200)
 
-    WebhookClient.post("https://#{PUBLIC}/hook", { x: 1 })
+    WebhookClient.post("https://#{PUBLIC}/hook", {x: 1})
 
     assert_requested stub
   end
 
   test "sends custom auth headers" do
     stub = stub_request(:post, "https://#{PUBLIC}/hook")
-           .with(headers: { "x-api-key" => "abc123" })
-           .to_return(status: 200)
+      .with(headers: {"x-api-key" => "abc123"})
+      .to_return(status: 200)
 
-    WebhookClient.post("https://#{PUBLIC}/hook", { x: 1 }, headers: { "x-api-key" => "abc123" })
+    WebhookClient.post("https://#{PUBLIC}/hook", {x: 1}, headers: {"x-api-key" => "abc123"})
 
     assert_requested stub
   end
 
   test "allows http URLs (local/internal endpoints)" do
     stub = stub_request(:post, "http://#{PUBLIC}/hook").to_return(status: 200)
-    WebhookClient.post("http://#{PUBLIC}/hook", { x: 1 })
+    WebhookClient.post("http://#{PUBLIC}/hook", {x: 1})
     assert_requested stub
   end
 

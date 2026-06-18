@@ -24,19 +24,19 @@
 # state to coordinate.
 class Views::Metrics::ChartModalBody < Views::Base
   def initialize(chart:, range:, range_ms:, query:, pods: [], current_island: nil, metric_sections: [])
-    @chart           = chart
-    @range           = range
-    @range_ms        = range_ms
-    @query           = query
-    @pods            = Array(pods)
-    @current_island  = current_island
+    @chart = chart
+    @range = range
+    @range_ms = range_ms
+    @query = query
+    @pods = Array(pods)
+    @current_island = current_island
     @metric_sections = Array(metric_sections)
   end
 
   def view_template
     div(
-      id:    "chart-modal-body",
-      data:  { refresh_url: refresh_url },
+      id: "chart-modal-body",
+      data: {refresh_url: refresh_url},
       class: "flex flex-col gap-3 p-4 vmd:p-5"
     ) do
       toolbar
@@ -87,8 +87,8 @@ class Views::Metrics::ChartModalBody < Views::Base
   # closing.
   def interval_picker_slot
     render Components::Metrics::IntervalPicker.new(
-      current:      current_interval,
-      base_path:    metrics_chart_path,
+      current: current_interval,
+      base_path: metrics_chart_path,
       extra_params: strip_interval_keys(@query),
       turbo_stream: true
     )
@@ -110,11 +110,11 @@ class Views::Metrics::ChartModalBody < Views::Base
     return if @metric_sections.empty?
 
     render Components::Metrics::MetricPicker.new(
-      sections:       @metric_sections,
+      sections: @metric_sections,
       current_metric: @chart[:metric] || @query[:metric] || @query["metric"],
-      base_path:      metrics_chart_path,
-      extra_params:   strip_metric_keys(@query),
-      turbo_stream:   true
+      base_path: metrics_chart_path,
+      extra_params: strip_metric_keys(@query),
+      turbo_stream: true
     )
   end
 
@@ -137,17 +137,17 @@ class Views::Metrics::ChartModalBody < Views::Base
   # can drill host↔pod within the same modal session.
   def pod_picker_slot
     sk = (@query[:scope_kind] || @query["scope_kind"]).to_s
-    sid = (@query[:scope_id]  || @query["scope_id"]).to_s
+    sid = (@query[:scope_id] || @query["scope_id"]).to_s
 
     render Components::Metrics::PodPicker.new(
-      scope_kind:     sk.presence || "host",
-      scope_id:       sid,
+      scope_kind: sk.presence || "host",
+      scope_id: sid,
       current_island: @current_island,
-      pods:           @pods,
-      base_path:      metrics_chart_path,
-      extra_params:   strip_scope_keys(@query),
-      turbo_stream:   true,
-      hide_host:      false
+      pods: @pods,
+      base_path: metrics_chart_path,
+      extra_params: strip_scope_keys(@query),
+      turbo_stream: true,
+      hide_host: false
     )
   end
 
@@ -166,7 +166,7 @@ class Views::Metrics::ChartModalBody < Views::Base
   def range_pills
     div(
       role: "tablist",
-      aria: { label: "Time range" },
+      aria: {label: "Time range"},
       class: "inline-flex items-stretch border border-voodu-border bg-voodu-surface"
     ) do
       RANGES.each_with_index do |r, i|
@@ -174,9 +174,9 @@ class Views::Metrics::ChartModalBody < Views::Base
 
         a(
           href: range_url(r),
-          data: { turbo_stream: "true" },
+          data: {turbo_stream: "true"},
           role: "tab",
-          aria: { selected: active.to_s },
+          aria: {selected: active.to_s},
           class: tokens(
             "inline-flex items-center justify-center min-w-9 px-2.5 h-8 font-voodu-mono text-[11px] font-bold",
             i.positive? ? "border-l border-voodu-border" : nil,
@@ -215,14 +215,14 @@ class Views::Metrics::ChartModalBody < Views::Base
     else
       div(class: "bg-voodu-surface border border-voodu-border p-3.5") do
         render Components::Metrics::Chart.new(
-          points:   @chart[:points],
-          color:    @chart[:color],
-          unit:     @chart[:unit],
-          label:    @chart[:label],
+          points: @chart[:points],
+          color: @chart[:color],
+          unit: @chart[:unit],
+          label: @chart[:label],
           range_ms: @range_ms,
-          width:    1100,
-          height:   480,
-          axes:     true
+          width: 1100,
+          height: 480,
+          axes: true
         )
       end
     end
@@ -320,17 +320,17 @@ class Views::Metrics::ChartModalBody < Views::Base
 
   def stats
     pts = Array(@chart[:points])
-    return { min: nil, max: nil, avg: nil } if pts.empty?
+    return {min: nil, max: nil, avg: nil} if pts.empty?
 
     vs = pts.map { |p| p[:value].to_f }
 
-    { min: vs.min, max: vs.max, avg: vs.sum / vs.size }
+    {min: vs.min, max: vs.max, avg: vs.sum / vs.size}
   end
 
   def format_value(v)
     return "—" if v.nil?
 
-    @chart[:unit].to_s == "%" ? MetricFormat.percent(v) : MetricFormat.number(v)
+    (@chart[:unit].to_s == "%") ? MetricFormat.percent(v) : MetricFormat.number(v)
   end
 
   # range_url — same as Components::Metrics::RangePicker but with

@@ -27,14 +27,14 @@ module Internal
 
     test "returns 401 with wrong token" do
       get internal_poller_islands_path,
-          headers: { "X-Voodu-Internal-Token" => "nope" }
+        headers: {"X-Voodu-Internal-Token" => "nope"}
 
       assert_response :unauthorized
     end
 
     test "returns 200 + island roster with right token from loopback" do
       get internal_poller_islands_path,
-          headers: { "X-Voodu-Internal-Token" => INTERNAL_TOKEN }
+        headers: {"X-Voodu-Internal-Token" => INTERNAL_TOKEN}
 
       assert_response :ok
 
@@ -56,10 +56,10 @@ module Internal
 
     test "returns 403 for non-loopback non-private IP even with right token" do
       get internal_poller_islands_path,
-          headers: {
-            "X-Voodu-Internal-Token" => INTERNAL_TOKEN,
-            "REMOTE_ADDR" => "203.0.113.7"
-          }
+        headers: {
+          "X-Voodu-Internal-Token" => INTERNAL_TOKEN,
+          "REMOTE_ADDR" => "203.0.113.7"
+        }
 
       assert_response :forbidden
     end
@@ -68,7 +68,7 @@ module Internal
       ENV.delete("POLLER_TOKEN")
 
       get internal_poller_islands_path,
-          headers: { "X-Voodu-Internal-Token" => "anything" }
+        headers: {"X-Voodu-Internal-Token" => "anything"}
 
       assert_response :unauthorized
     end

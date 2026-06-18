@@ -13,7 +13,7 @@ Rails.application.config.to_prepare do
       def remove(data)
         return super if subscriptions.key?(data["identifier"])
 
-        logger.info "Ignoring unsubscribe for unknown identifier: #{data['identifier']}"
+        logger.info "Ignoring unsubscribe for unknown identifier: #{data["identifier"]}"
       end
     end
   )

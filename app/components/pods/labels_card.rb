@@ -27,7 +27,7 @@ class Components::Pods::LabelsCard < Components::Base
       if entries.empty?
         div(class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]") { "no labels" }
       else
-        div(data: { controller: "kv-filter" }) do
+        div(data: {controller: "kv-filter"}) do
           filter_bar
           rows(entries)
         end
@@ -68,7 +68,7 @@ class Components::Pods::LabelsCard < Components::Base
   end
 
   def rows(entries)
-    div(data: { kv_filter_target: "list" }) do
+    div(data: {kv_filter_target: "list"}) do
       entries.each { |k, v| label_row(k, v) }
     end
     empty_match
@@ -98,7 +98,7 @@ class Components::Pods::LabelsCard < Components::Base
   def empty_match
     div(
       hidden: true,
-      data: { kv_filter_target: "empty" },
+      data: {kv_filter_target: "empty"},
       class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]"
     ) { "no labels match the filter." }
   end

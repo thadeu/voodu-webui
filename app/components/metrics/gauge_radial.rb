@@ -11,20 +11,20 @@
 # "gauge_radial". Pure server SVG (matches Chart's no-JS approach).
 # ChartCard does all the formatting; this component only draws.
 class Components::Metrics::GaugeRadial < Components::Base
-  R  = 76   # arc radius
+  R = 76   # arc radius
   CX = 100  # center x
   CY = 96   # baseline y the arc springs up from
   SW = 16   # arc stroke width
 
   def initialize(pct:, color:, sub_label: nil, max_w: 220)
-    @pct       = clamp(pct.to_f)
-    @color     = color
+    @pct = clamp(pct.to_f)
+    @color = color
     @sub_label = sub_label
-    @max_w     = max_w
+    @max_w = max_w
   end
 
   def view_template
-    arc  = Math::PI * R
+    arc = Math::PI * R
     fill = (@pct / 100.0) * arc
 
     svg(
@@ -66,7 +66,7 @@ class Components::Metrics::GaugeRadial < Components::Base
   # Threshold tints mirror Components::Overview::PodCard#cpu_color
   # (>90 red, >70 amber) so "near full" reads the same site-wide.
   def fill_color
-    return "var(--voodu-red)"   if @pct >= 90
+    return "var(--voodu-red)" if @pct >= 90
     return "var(--voodu-amber)" if @pct >= 70
 
     @color
@@ -75,7 +75,7 @@ class Components::Metrics::GaugeRadial < Components::Base
   def pct_label
     # String#% — `format`/`sprintf` resolve to a shadowed 0-arg helper
     # in the Phlex component context (same reason PodCard uses "%.1f" % v).
-    @pct < 10 ? "#{'%.1f' % @pct}%" : "#{@pct.round}%"
+    (@pct < 10) ? "#{"%.1f" % @pct}%" : "#{@pct.round}%"
   end
 
   def clamp(v)

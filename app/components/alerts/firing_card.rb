@@ -57,7 +57,7 @@ class Components::Alerts::FiringCard < Components::Base
 
   def pill_link(href, title, icon, label)
     a(
-      href:  href,
+      href: href,
       title: title,
       class: "inline-flex items-center gap-1 w-fit px-2 h-6 text-[11px] " \
              "bg-voodu-surface text-voodu-text border border-voodu-border " \
@@ -70,7 +70,7 @@ class Components::Alerts::FiringCard < Components::Base
 
   def values_block
     div(class: "flex items-center gap-4 vmd:gap-5 pl-[21px] vmd:pl-0 shrink-0") do
-      value_cell("now",  @event.format_value(@event.last_value), strong: true)
+      value_cell("now", @event.format_value(@event.last_value), strong: true)
       value_cell("peak", @event.format_value(@event.peak_value))
       value_cell("threshold", "#{comparator_symbol} #{@event.format_value(@event.threshold)}")
     end
@@ -101,10 +101,10 @@ class Components::Alerts::FiringCard < Components::Base
     secs = (Time.current - time).to_i.abs
 
     case secs
-    when 0..59        then "#{secs}s ago"
-    when 60..3599     then "#{secs / 60}m ago"
+    when 0..59 then "#{secs}s ago"
+    when 60..3599 then "#{secs / 60}m ago"
     when 3600..86_399 then "#{secs / 3600}h ago"
-    else                   "#{secs / 86_400}d ago"
+    else "#{secs / 86_400}d ago"
     end
   end
 end

@@ -7,13 +7,13 @@
 # toast_controller; clicking the × closes it immediately.
 class Components::UI::Toast < Components::Base
   VARIANTS = {
-    success: { bg: "bg-voodu-green-dim",  border: "border-voodu-green/40", text: "text-voodu-green" },
-    danger:  { bg: "bg-voodu-red-dim",    border: "border-voodu-red/40",   text: "text-voodu-red" },
-    info:    { bg: "bg-voodu-accent-dim", border: "border-voodu-accent-line", text: "text-voodu-accent-2" },
-    neutral: { bg: "bg-voodu-surface",    border: "border-voodu-border",   text: "text-voodu-text-2" }
+    success: {bg: "bg-voodu-green-dim", border: "border-voodu-green/40", text: "text-voodu-green"},
+    danger: {bg: "bg-voodu-red-dim", border: "border-voodu-red/40", text: "text-voodu-red"},
+    info: {bg: "bg-voodu-accent-dim", border: "border-voodu-accent-line", text: "text-voodu-accent-2"},
+    neutral: {bg: "bg-voodu-surface", border: "border-voodu-border", text: "text-voodu-text-2"}
   }.freeze
 
-  def initialize(variant: :info, message:)
+  def initialize(message:, variant: :info)
     @variant = variant
     @message = message
   end
@@ -27,15 +27,15 @@ class Components::UI::Toast < Components::Base
         "shadow-lg backdrop-blur",
         s[:bg], s[:border]
       ),
-      data: { controller: "toast", toast_timeout_value: 4000 },
+      data: {controller: "toast", toast_timeout_value: 4000},
       role: "status"
     ) do
       span(class: tokens("text-sm", s[:text])) { @message }
       button(
         type: "button",
         class: "ml-2 text-voodu-muted hover:text-voodu-text",
-        data: { action: "click->toast#dismiss" },
-        aria: { label: "Dismiss" }
+        data: {action: "click->toast#dismiss"},
+        aria: {label: "Dismiss"}
       ) { plain "×" }
     end
   end

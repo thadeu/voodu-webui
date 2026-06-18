@@ -59,7 +59,7 @@ class ApplicationController < ActionController::Base
   # value wins over the default.
   def default_url_options
     key = request.path_parameters[:tenant_key]
-    key.present? ? { tenant_key: key } : {}
+    key.present? ? {tenant_key: key} : {}
   end
 
   private
@@ -191,9 +191,9 @@ class ApplicationController < ActionController::Base
   # (recent_islands is exposed as a helper_method below).
   def dashboard_context
     {
-      current_path:    current_path,
-      islands:         all_islands,
-      current_island:  current_island
+      current_path: current_path,
+      islands: all_islands,
+      current_island: current_island
     }
   end
 

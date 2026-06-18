@@ -15,5 +15,5 @@
 class MetricsRecord < ApplicationRecord
   self.abstract_class = true
 
-  connects_to database: { writing: :metrics, reading: :metrics }
+  connects_to database: {writing: :metrics, reading: :metrics}
 end

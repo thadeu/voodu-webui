@@ -36,17 +36,17 @@ class LogSearchData
   # content-visibility when it adopted the shared `.log-list` grid, so
   # every rendered row pays full layout). Load more — auto-fired on scroll
   # — pages back through the rest.
-  PAGE_SIZE      = 2_500
+  PAGE_SIZE = 2_500
   MATCH_SCAN_CAP = 20_000
 
   # Selectable quick windows. Capped at the warehouse retention so a
   # preset can never promise data we already reaped (see
   # LogTail::FilePath::RETENTION_DAYS).
   RANGES = {
-    "5m"  => 5.minutes,
+    "5m" => 5.minutes,
     "30m" => 30.minutes,
-    "1h"  => 1.hour,
-    "3h"  => 3.hours,
+    "1h" => 1.hour,
+    "3h" => 3.hours,
     "12h" => 12.hours,
     "24h" => 24.hours
   }.freeze
@@ -64,7 +64,7 @@ class LogSearchData
   def initialize(island:, params: {})
     @island = island
     @params = normalize_params(params)
-    @page   = [@params[:page].to_i, 1].max
+    @page = [@params[:page].to_i, 1].max
   end
 
   # ── Query state (also consumed by the FilterBar so the UI and the
@@ -114,9 +114,9 @@ class LogSearchData
 
   def pods
     @pods ||= Array(@params[:pods])
-              .flat_map { |p| p.to_s.split(",") }
-              .map(&:strip)
-              .reject(&:blank?)
+      .flat_map { |p| p.to_s.split(",") }
+      .map(&:strip)
+      .reject(&:blank?)
   end
 
   def all_pods?
@@ -159,9 +159,7 @@ class LogSearchData
   end
 
   # 1-based page currently rendered, and the next page for Load more.
-  def page
-    @page
-  end
+  attr_reader :page
 
   def next_page
     @page + 1
@@ -206,34 +204,34 @@ class LogSearchData
   def load!
     return if @loaded
 
-    started   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     collected = []
-    scanned   = 0
+    scanned = 0
 
     LogTail::Reader.each_line(
-      island_id:      island.id,
-      pods:           pods.presence,
-      from:           from,
-      until_:         until_,
+      island_id: island.id,
+      pods: pods.presence,
+      from: from,
+      until_: until_,
       content_search: search.presence,
-      regex:          regex?,
-      limit:          MATCH_SCAN_CAP
+      regex: regex?,
+      limit: MATCH_SCAN_CAP
     ) do |pod, hash|
       collected << normalize(pod, hash)
       scanned += 1
     end
 
-    @matched    = scanned
-    @truncated  = scanned >= MATCH_SCAN_CAP
+    @matched = scanned
+    @truncated = scanned >= MATCH_SCAN_CAP
     collected.sort_by! { |r| r[:ts] }
-    @all        = collected.reverse
+    @all = collected.reverse
     # `| limit N` caps the result set to the newest N (sorted desc above, so
     # that's the first N). `matched` stays the true filter-match count — the
     # summary shows the limit separately, so "1,772 matched · limit 1,000"
     # reads honestly rather than hiding that more lines matched.
-    @all        = @all.first(query_limit) if query_limit
+    @all = @all.first(query_limit) if query_limit
     @elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
-    @loaded     = true
+    @loaded = true
   end
 
   # window — [from, until] as Time objects, memoised. Custom uses the
@@ -280,12 +278,12 @@ class LogSearchData
 
   def normalize(pod, hash)
     {
-      ts:     (hash["ts"]     || hash[:ts]).to_s,
-      pod:    pod,
+      ts: (hash["ts"] || hash[:ts]).to_s,
+      pod: pod,
       stream: (hash["stream"] || hash[:stream]).to_s,
-      level:  (hash["level"]  || hash[:level]),
-      msg:    (hash["msg"]    || hash[:msg]).to_s,
-      raw:    (hash["raw"]    || hash[:raw]).to_s,
+      level: hash["level"] || hash[:level],
+      msg: (hash["msg"] || hash[:msg]).to_s,
+      raw: (hash["raw"] || hash[:raw]).to_s,
       parsed: truthy?(hash["parsed"] || hash[:parsed])
     }
   end
@@ -293,7 +291,7 @@ class LogSearchData
   def normalize_params(params)
     h = params.respond_to?(:to_unsafe_h) ? params.to_unsafe_h : params.to_h
     h.symbolize_keys
-  rescue StandardError
+  rescue
     {}
   end
 

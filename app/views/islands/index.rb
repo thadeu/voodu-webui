@@ -18,19 +18,19 @@
 # transfers between the two screens.
 class Views::Islands::Index < Views::Base
   STATUS_TABS = [
-    { id: :all,     label: "All",     status: nil,      color: nil },
-    { id: :online,  label: "Online",  status: :online,  color: "var(--voodu-green)" },
-    { id: :offline, label: "Offline", status: :offline, color: "var(--voodu-red)" }
+    {id: :all, label: "All", status: nil, color: nil},
+    {id: :online, label: "Online", status: :online, color: "var(--voodu-green)"},
+    {id: :offline, label: "Offline", status: :offline, color: "var(--voodu-red)"}
   ].freeze
 
   def initialize(current_path:, islands:, active_tab: :all)
     @current_path = current_path
-    @islands      = islands
-    @active_tab   = active_tab
+    @islands = islands
+    @active_tab = active_tab
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, islands: @islands, breadcrumb: [{ label: "Servers" }]) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, islands: @islands, breadcrumb: [{label: "Servers"}]) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
 
@@ -60,9 +60,9 @@ class Views::Islands::Index < Views::Base
   def page_sub
     counts = status_counts
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
-      stat_bit("var(--voodu-green)", "online",  counts[:online])
+      stat_bit("var(--voodu-green)", "online", counts[:online])
       dot_sep
-      stat_bit("var(--voodu-red)",   "offline", counts[:offline])
+      stat_bit("var(--voodu-red)", "offline", counts[:offline])
     end
   end
 
@@ -105,7 +105,7 @@ class Views::Islands::Index < Views::Base
   # surface. Each row carries a `data-key` blob so the controller
   # filters BOTH layouts in lockstep.
   def server_section
-    section(class: "flex flex-col gap-3", data: { controller: "kv-filter" }) do
+    section(class: "flex flex-col gap-3", data: {controller: "kv-filter"}) do
       toolbar
       desktop_table
       mobile_list
@@ -131,7 +131,7 @@ class Views::Islands::Index < Views::Base
   def tab_button(tab)
     active = tab[:id] == @active_tab
     count = tab_count(tab)
-    href = tab[:id] == :all ? "?" : "?status=#{tab[:id]}"
+    href = (tab[:id] == :all) ? "?" : "?status=#{tab[:id]}"
 
     a(
       href: href,
@@ -187,7 +187,7 @@ class Views::Islands::Index < Views::Base
         end
         tbody do
           islands_for_active_tab.each { |i| desktop_row(i) }
-          tr(hidden: true, data: { kv_filter_target: "empty" }) do
+          tr(hidden: true, data: {kv_filter_target: "empty"}) do
             td(colspan: 6, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no servers match the filter." }
           end
         end
@@ -258,7 +258,7 @@ class Views::Islands::Index < Views::Base
       end
       div(
         hidden: true,
-        data: { kv_filter_target: "empty" },
+        data: {kv_filter_target: "empty"},
         class: "py-8 text-center text-voodu-muted text-[12px] border border-voodu-border bg-voodu-surface"
       ) { "no servers match the filter." }
     end
@@ -292,9 +292,9 @@ class Views::Islands::Index < Views::Base
 
   def mobile_meta(island)
     region = meta_value(island.region)
-    infra  = meta_value(island.infra)
-    age    = age_label(island)
-    parts  = [region, infra].reject { |v| v == "—" }
+    infra = meta_value(island.infra)
+    age = age_label(island)
+    parts = [region, infra].reject { |v| v == "—" }
     parts << "age #{age}"
 
     div(class: "flex flex-wrap items-center gap-1.5 text-[11px] text-voodu-muted") do
@@ -341,19 +341,19 @@ class Views::Islands::Index < Views::Base
 
   def remove_form(island)
     render(Components::UI::Confirmable.new(
-      title:         "Remove server",
-      message:       %(Permanently remove "#{island.name}" from the registry? You can re-add it later.),
+      title: "Remove server",
+      message: %(Permanently remove "#{island.name}" from the registry? You can re-add it later.),
       confirm_label: "Remove",
-      danger:        true,
-      icon:          :TrashOutline,
+      danger: true,
+      icon: :TrashOutline,
       form: {
         action: island_path(island),
         method: :delete
       },
       trigger: {
-        title:        "Remove server",
+        title: "Remove server",
         "aria-label": "Remove #{island.name}",
-        class:        "inline-flex items-center gap-1.5 px-2.5 h-8 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
+        class: "inline-flex items-center gap-1.5 px-2.5 h-8 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
       }
     )) do
       render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
@@ -378,7 +378,7 @@ class Views::Islands::Index < Views::Base
 
   def status_counts
     {
-      online:  @islands.count { |i| i.status == :online },
+      online: @islands.count { |i| i.status == :online },
       offline: @islands.count { |i| i.status == :offline }
     }
   end

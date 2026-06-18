@@ -7,12 +7,12 @@ require "test_helper"
 # 5-field shape; csv stays RFC-4180 safe.
 class LogTail::LineFormatterTest < ActiveSupport::TestCase
   REC = {
-    ts:     "2026-06-09T15:00:00.000Z",
-    pod:    "web",
+    ts: "2026-06-09T15:00:00.000Z",
+    pod: "web",
     stream: "stdout",
-    level:  "INFO",
-    msg:    "hi, \"world\"",
-    raw:    "raw original line",
+    level: "INFO",
+    msg: "hi, \"world\"",
+    raw: "raw original line",
     parsed: true
   }.freeze
 
@@ -50,7 +50,7 @@ class LogTail::LineFormatterTest < ActiveSupport::TestCase
   end
 
   test "row_hash reads string-keyed records (Reader shape)" do
-    str = { "ts" => "t", "pod" => "p", "stream" => "s", "level" => "INFO", "msg" => "m" }
-    assert_equal({ ts: "t", pod: "p", stream: "s", level: "INFO", msg: "m" }, LogTail::LineFormatter.row_hash(str))
+    str = {"ts" => "t", "pod" => "p", "stream" => "s", "level" => "INFO", "msg" => "m"}
+    assert_equal({ts: "t", pod: "p", stream: "s", level: "INFO", msg: "m"}, LogTail::LineFormatter.row_hash(str))
   end
 end

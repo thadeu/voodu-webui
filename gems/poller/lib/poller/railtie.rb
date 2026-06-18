@@ -18,14 +18,14 @@ module Poller
 
     initializer "poller.install_binstub" do |app|
       template = File.join(Poller::GEM_ROOT, "bin", "poller")
-      target   = app.root.join("bin", "poller").to_s
+      target = app.root.join("bin", "poller").to_s
 
       next if File.exist?(target)
       next unless File.exist?(template)
 
       FileUtils.cp(template, target)
       File.chmod(0o755, target)
-    rescue StandardError => e
+    rescue => e
       Rails.logger.warn("[poller] failed to install binstub: #{e.class}: #{e.message}") if Rails.logger
     end
   end

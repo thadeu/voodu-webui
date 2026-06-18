@@ -21,11 +21,11 @@ class Components::Metrics::DisplaySettingsButton < Components::Base
   # section dividers (per-dashboard settings), vs the full bordered
   # toolbar button on a single dashboard/scope.
   def initialize(kind:, scope_kind:, display_settings_url:, dashboard_id: nil, compact: false)
-    @kind                 = kind
-    @scope_kind           = scope_kind
+    @kind = kind
+    @scope_kind = scope_kind
     @display_settings_url = display_settings_url
-    @dashboard_id         = dashboard_id
-    @compact              = compact
+    @dashboard_id = dashboard_id
+    @compact = compact
   end
 
   def view_template
@@ -36,21 +36,21 @@ class Components::Metrics::DisplaySettingsButton < Components::Base
     src += "&pid=#{@dashboard_id}" if @dashboard_id
 
     render(Components::UI::Drawer.new(
-      title:               "Settings",
-      src:                 src,
-      open_url:            src,
-      width:               "30vw",
-      min_width:           "280px",
-      resizable:           true,
+      title: "Settings",
+      src: src,
+      open_url: src,
+      width: "30vw",
+      min_width: "280px",
+      resizable: true,
       show_full_page_link: false,
       # Dedicated storage key — settings drawer is compact card grid,
       # shouldn't inherit the wide width an operator set for the Logs
       # or Pod content drawers.
-      storage_key:         "voodu:drawer-width:metrics-settings",
+      storage_key: "voodu:drawer-width:metrics-settings",
       trigger_attrs: {
-        title:        "Settings",
+        title: "Settings",
         "aria-label": "Settings",
-        class:        btn_class
+        class: btn_class
       }
     )) do
       render Icon::AdjustmentsHorizontalOutline.new(class: "w-3.5 h-3.5")

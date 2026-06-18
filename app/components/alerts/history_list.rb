@@ -9,8 +9,8 @@
 # "TODAY" matches their wall clock, not the server's.
 class Components::Alerts::HistoryList < Components::Base
   def initialize(events:, total: nil, truncated: false)
-    @events    = events
-    @total     = total || events.size
+    @events = events
+    @total = total || events.size
     @truncated = truncated
   end
 
@@ -94,8 +94,8 @@ class Components::Alerts::HistoryList < Components::Base
     return "—" if z.nil?
 
     today = WebTime.in_zone(Time.current).to_date
-    date  = z.to_date
-    diff  = (today - date).to_i
+    date = z.to_date
+    diff = (today - date).to_i
 
     case diff
     when 0 then "Today"
@@ -115,10 +115,10 @@ class Components::Alerts::HistoryList < Components::Base
     secs = (Time.current - time).to_i.abs
 
     case secs
-    when 0..59        then "#{secs}s ago"
-    when 60..3599     then "#{secs / 60}m ago"
+    when 0..59 then "#{secs}s ago"
+    when 60..3599 then "#{secs / 60}m ago"
     when 3600..86_399 then "#{secs / 3600}h ago"
-    else                   "#{secs / 86_400}d ago"
+    else "#{secs / 86_400}d ago"
     end
   end
 end

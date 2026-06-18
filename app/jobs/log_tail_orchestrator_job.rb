@@ -43,7 +43,7 @@ class LogTailOrchestratorJob < ApplicationJob
   # can see why tailing paused.
   def over_disk_cap?(island_id)
     bytes = LogTail::FilePath.island_disk_bytes(island_id)
-    cap   = LogTail::FilePath::PER_ISLAND_CAP_BYTES
+    cap = LogTail::FilePath::PER_ISLAND_CAP_BYTES
 
     return false if bytes < cap
 

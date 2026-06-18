@@ -23,16 +23,16 @@
 #                 + scroll-into-view).
 class Components::LogAnalytics::Row < Components::Base
   def initialize(row:, surroundable: true, anchor: false)
-    @row          = row
+    @row = row
     @surroundable = surroundable
-    @anchor       = anchor
+    @anchor = anchor
   end
 
   def view_template
     div(
       class: tokens("log-row la-grid-row la-row group", @anchor ? "is-anchor" : nil),
       style: row_style,
-      data:  row_data
+      data: row_data
     ) do
       ts_cell
       pod_cell
@@ -46,7 +46,7 @@ class Components::LogAnalytics::Row < Components::Base
   # handler skips dblclicks that land on a chip). surrounding_anchor marks
   # the modal anchor for scroll-into-view.
   def row_data
-    data = { action: "dblclick->log-analytics#toggleRowWrap" }
+    data = {action: "dblclick->log-analytics#toggleRowWrap"}
     data[:surrounding_anchor] = "true" if @anchor
 
     data
@@ -59,7 +59,7 @@ class Components::LogAnalytics::Row < Components::Base
   # the message into the dark background — unreadable).
   def row_style
     style = "--row-accent: #{level_color};"
-    tone  = message_tone
+    tone = message_tone
     style += " --log-tone: #{tone};" if tone
 
     style
@@ -67,7 +67,7 @@ class Components::LogAnalytics::Row < Components::Base
 
   def message_tone
     case @row[:level].to_s.upcase
-    when "ERROR", "FATAL"  then "var(--voodu-red)"
+    when "ERROR", "FATAL" then "var(--voodu-red)"
     when "WARN", "WARNING" then "var(--voodu-amber)"
     end
   end
@@ -90,7 +90,7 @@ class Components::LogAnalytics::Row < Components::Base
   # millisecond stamp out to phantom nanoseconds. Falls back to the raw string
   # for an unparseable ts so a malformed line renders as-is, never blank.
   def local_ts
-    raw   = @row[:ts].to_s
+    raw = @row[:ts].to_s
     zoned = WebTime.in_zone(raw)
     return raw if zoned.nil?
 
@@ -119,11 +119,11 @@ class Components::LogAnalytics::Row < Components::Base
   # copy_chip — copies the raw line. Rightmost (right: 4px).
   def copy_chip
     button(
-      type:         "button",
-      class:        "log-copy",
-      title:        "Copy line",
+      type: "button",
+      class: "log-copy",
+      title: "Copy line",
       "aria-label": "Copy log line to clipboard",
-      data:         { action: "click->log-analytics#copyLine", raw: @row[:raw].presence || @row[:msg] }
+      data: {action: "click->log-analytics#copyLine", raw: @row[:raw].presence || @row[:msg]}
     ) do
       render Icon::ClipboardOutline.new
     end
@@ -134,11 +134,11 @@ class Components::LogAnalytics::Row < Components::Base
   # without re-hunting it.
   def wrap_chip
     button(
-      type:         "button",
-      class:        "log-wrap-single",
-      title:        "Toggle wrap for this line",
+      type: "button",
+      class: "log-wrap-single",
+      title: "Toggle wrap for this line",
       "aria-label": "Toggle wrap for this log line",
-      data:         { action: "click->log-analytics#toggleRowWrap", active: "false" }
+      data: {action: "click->log-analytics#toggleRowWrap", active: "false"}
     ) do
       svg(
         viewBox: "0 0 16 16", fill: "none", stroke: "currentColor",
@@ -158,11 +158,11 @@ class Components::LogAnalytics::Row < Components::Base
   # can locate the anchor.
   def surrounding_chip
     button(
-      type:         "button",
-      class:        "log-surrounding",
-      title:        "Show surrounding logs",
+      type: "button",
+      class: "log-surrounding",
+      title: "Show surrounding logs",
       "aria-label": "Show logs surrounding this line",
-      data:         { action: "click->log-analytics#openSurrounding", ts: @row[:ts], pod: @row[:pod] }
+      data: {action: "click->log-analytics#openSurrounding", ts: @row[:ts], pod: @row[:pod]}
     ) do
       render Icon::ArrowsPointingOutOutline.new
     end
@@ -172,11 +172,11 @@ class Components::LogAnalytics::Row < Components::Base
   # --voodu-red stays reserved for errors/failures (CLAUDE.md rule).
   def level_color
     case @row[:level].to_s.upcase
-    when "ERROR", "FATAL"  then "var(--voodu-red)"
+    when "ERROR", "FATAL" then "var(--voodu-red)"
     when "WARN", "WARNING" then "var(--voodu-amber)"
-    when "INFO"            then "var(--voodu-blue)"
-    when "DEBUG", "TRACE"  then "var(--voodu-muted)"
-    else                        "var(--voodu-border-2)"
+    when "INFO" then "var(--voodu-blue)"
+    when "DEBUG", "TRACE" then "var(--voodu-muted)"
+    else "var(--voodu-border-2)"
     end
   end
 end

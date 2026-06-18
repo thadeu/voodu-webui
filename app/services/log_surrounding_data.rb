@@ -31,7 +31,7 @@ class LogSurroundingData
 
   # Hard ceiling on kept context per side, and on the Load more level.
   MAX_CONTEXT = 5_000
-  MAX_EXPAND  = 4
+  MAX_EXPAND = 4
 
   attr_reader :island, :pod, :anchor_ts, :expand
 
@@ -43,15 +43,15 @@ class LogSurroundingData
   # @param before/after [Integer, nil] explicit context override (tests);
   #        defaults to the expand-scaled context.
   def initialize(island:, pod:, ts:, all_pods: false, expand: 0, before: nil, after: nil)
-    @island    = island
-    @pod       = pod.to_s
+    @island = island
+    @pod = pod.to_s
     @anchor_ts = ts.to_s
-    @all_pods  = all_pods
-    @expand    = expand.to_i.clamp(0, MAX_EXPAND)
+    @all_pods = all_pods
+    @expand = expand.to_i.clamp(0, MAX_EXPAND)
 
-    ctx     = [DEFAULT_CONTEXT * (@expand + 1), MAX_CONTEXT].min
+    ctx = [DEFAULT_CONTEXT * (@expand + 1), MAX_CONTEXT].min
     @before = (before || ctx).to_i.clamp(0, MAX_CONTEXT)
-    @after  = (after  || ctx).to_i.clamp(0, MAX_CONTEXT)
+    @after = (after || ctx).to_i.clamp(0, MAX_CONTEXT)
     @window = WINDOW * (@expand + 1)
   end
 
@@ -110,13 +110,13 @@ class LogSurroundingData
 
     scanned = []
     LogTail::Reader.each_line(
-      island_id:      island.id,
-      pods:           @all_pods ? nil : [@pod],
-      from:           anchor - @window,
-      until_:         anchor + @window,
+      island_id: island.id,
+      pods: @all_pods ? nil : [@pod],
+      from: anchor - @window,
+      until_: anchor + @window,
       content_search: nil,
-      regex:          false,
-      limit:          SCAN_CAP
+      regex: false,
+      limit: SCAN_CAP
     ) do |pod, hash|
       scanned << normalize(pod, hash)
     end
@@ -164,12 +164,12 @@ class LogSurroundingData
 
   def normalize(pod, hash)
     {
-      ts:     (hash["ts"]     || hash[:ts]).to_s,
-      pod:    pod,
+      ts: (hash["ts"] || hash[:ts]).to_s,
+      pod: pod,
       stream: (hash["stream"] || hash[:stream]).to_s,
-      level:  (hash["level"]  || hash[:level]),
-      msg:    (hash["msg"]    || hash[:msg]).to_s,
-      raw:    (hash["raw"]    || hash[:raw]).to_s,
+      level: hash["level"] || hash[:level],
+      msg: (hash["msg"] || hash[:msg]).to_s,
+      raw: (hash["raw"] || hash[:raw]).to_s,
       parsed: [true, "true", "1", 1].include?(hash["parsed"] || hash[:parsed])
     }
   end

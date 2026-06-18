@@ -17,15 +17,15 @@ module Components::LogAnalytics::ColumnChrome
   # vice versa). `body` stays last (the 1fr payload). Fixed default widths so
   # the grid skips the auto content-measure over thousands of rows; keep in
   # sync with `.log-list.la-list` in theme.css.
-  COLUMN_STORAGE_KEY    = "voodu:logs-analytics-columns:v1"
-  COLUMN_KEYS           = %w[ts pod body].freeze
-  COLUMN_DEFAULT_WIDTHS = { ts: 256, pod: 160 }.freeze
+  COLUMN_STORAGE_KEY = "voodu:logs-analytics-columns:v1"
+  COLUMN_KEYS = %w[ts pod body].freeze
+  COLUMN_DEFAULT_WIDTHS = {ts: 256, pod: 160}.freeze
 
   def column_grid_attrs
     {
-      controller:                        "logs-columns",
-      logs_columns_storage_key_value:    COLUMN_STORAGE_KEY,
-      logs_columns_columns_value:        COLUMN_KEYS.to_json,
+      controller: "logs-columns",
+      logs_columns_storage_key_value: COLUMN_STORAGE_KEY,
+      logs_columns_columns_value: COLUMN_KEYS.to_json,
       logs_columns_default_widths_value: COLUMN_DEFAULT_WIDTHS.to_json
     }
   end
@@ -47,21 +47,21 @@ module Components::LogAnalytics::ColumnChrome
   # resize handle; MESSAGE eats the 1fr and hosts `body_header_actions`.
   def column_header
     div(class: "log-row log-header") do
-      column_header_cell("ts",  "TIME", "log-h-ts",  resizable: true)
-      column_header_cell("pod", "POD",  "log-h-pod", resizable: true)
+      column_header_cell("ts", "TIME", "log-h-ts", resizable: true)
+      column_header_cell("pod", "POD", "log-h-pod", resizable: true)
       body_header_cell
     end
   end
 
   def column_header_cell(key, label, modifier, resizable:)
-    span(class: "log-hcell #{modifier}", data: { logs_columns_target: "headerCell", column_key: key }) do
+    span(class: "log-hcell #{modifier}", data: {logs_columns_target: "headerCell", column_key: key}) do
       span("aria-hidden": "true") { label }
       next unless resizable
 
       span(
         class: "log-col-resize",
         title: "Drag to resize",
-        data:  { action: "mousedown->logs-columns#startResize", column_key: key },
+        data: {action: "mousedown->logs-columns#startResize", column_key: key},
         "aria-hidden": "true"
       )
     end
@@ -70,7 +70,7 @@ module Components::LogAnalytics::ColumnChrome
   def body_header_cell
     span(
       class: "log-hcell log-h-body flex items-center gap-3",
-      data:  { logs_columns_target: "headerCell", column_key: "body" }
+      data: {logs_columns_target: "headerCell", column_key: "body"}
     ) do
       span("aria-hidden": "true") { "MESSAGE" }
       span(class: "flex-1")
@@ -80,5 +80,6 @@ module Components::LogAnalytics::ColumnChrome
 
   # body_header_actions — trailing controls in the MESSAGE header cell.
   # Default: none (the modal). The results table overrides it with its toolbar.
-  def body_header_actions; end
+  def body_header_actions
+  end
 end

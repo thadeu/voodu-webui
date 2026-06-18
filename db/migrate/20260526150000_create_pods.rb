@@ -13,7 +13,7 @@ class CreatePods < ActiveRecord::Migration[8.1]
       # in one transaction. The sync job is the only writer; clearing
       # the parent island's snapshots after delete is the only
       # remaining cleanup the sync job WOULD otherwise have to do.
-      t.references :island, null: false, foreign_key: { on_delete: :cascade }
+      t.references :island, null: false, foreign_key: {on_delete: :cascade}
 
       # Hot fields extracted out of `payload` so the sidebar count
       # query (`island.pods.count`) and every "find this pod by name"

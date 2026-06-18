@@ -6,8 +6,8 @@
 # Pure SVG, no JS. `animate-voodu-spin` is defined in theme.css.
 class Components::UI::Spinner < Components::Base
   def initialize(color: "currentColor", size: 12, stroke: 3)
-    @color  = color
-    @size   = size
+    @color = color
+    @size = size
     @stroke = stroke
   end
 

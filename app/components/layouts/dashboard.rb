@@ -22,18 +22,18 @@
 # coordinated controller (see mobile_nav_controller.js).
 class Components::Layouts::Dashboard < Components::Base
   def initialize(current_path: "/", islands: [], current_island: nil, updated_at: nil, uptime: nil, breadcrumb: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
-    @updated_at     = updated_at
-    @uptime         = uptime
-    @breadcrumb     = breadcrumb
+    @updated_at = updated_at
+    @uptime = uptime
+    @breadcrumb = breadcrumb
   end
 
   def view_template
     div(
       class: "flex h-screen w-screen overflow-hidden bg-voodu-bg text-voodu-text",
-      data: { controller: "mobile-nav" }
+      data: {controller: "mobile-nav"}
     ) do
       render Components::Layouts::Sidebar.new(
         current_path: @current_path,
@@ -81,7 +81,7 @@ class Components::Layouts::Dashboard < Components::Base
         mobile_nav_target: "backdrop",
         action: "click->mobile-nav#close"
       },
-      aria: { hidden: "true" }
+      aria: {hidden: "true"}
     )
   end
 end

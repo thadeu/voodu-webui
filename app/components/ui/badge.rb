@@ -8,17 +8,17 @@
 class Components::UI::Badge < Components::Base
   VARIANTS = {
     neutral: "bg-voodu-surface-2 text-voodu-text-2 border border-voodu-border",
-    accent:  "bg-voodu-accent-dim text-voodu-accent-2 border border-voodu-accent-line",
+    accent: "bg-voodu-accent-dim text-voodu-accent-2 border border-voodu-accent-line",
     success: "bg-voodu-green-dim text-voodu-green border border-voodu-green/30",
     warning: "bg-voodu-amber-dim text-voodu-amber border border-voodu-amber/30",
-    danger:  "bg-voodu-red-dim text-voodu-red border border-voodu-red/30",
-    info:    "bg-voodu-blue/15 text-voodu-blue border border-voodu-blue/30"
+    danger: "bg-voodu-red-dim text-voodu-red border border-voodu-red/30",
+    info: "bg-voodu-blue/15 text-voodu-blue border border-voodu-blue/30"
   }.freeze
 
   def initialize(variant: :neutral, dot: false, **attrs)
     @variant = variant
-    @dot     = dot
-    @attrs   = attrs
+    @dot = dot
+    @attrs = attrs
   end
 
   def view_template(&)

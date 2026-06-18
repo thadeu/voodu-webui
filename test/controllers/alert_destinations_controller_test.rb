@@ -9,7 +9,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @island = islands(:alpha)
-    @key    = @island.key
+    @key = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -52,7 +52,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
     d = AlertDestination.order(:id).last
     assert_equal "x-zapier-key", d.secret_header
     assert_equal "zap-abc", d.secret
-    assert_equal({ "x-zapier-key" => "zap-abc" }, d.auth_header)
+    assert_equal({"x-zapier-key" => "zap-abc"}, d.auth_header)
   end
 
   test "edit keeps the secret value when blank but clears the header name when emptied" do
@@ -63,8 +63,8 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
 
     # The URL is pre-filled in the real form, so it's re-submitted.
     patch alert_destination_path(tenant_key: @key, id: d.id), params: {
-      alert_destination: { name: "hdr", endpoint: "https://#{PUBLIC}/h",
-                           secret_header: "", secret: "", on_firing: "1", on_resolved: "1" }
+      alert_destination: {name: "hdr", endpoint: "https://#{PUBLIC}/h",
+                          secret_header: "", secret: "", on_firing: "1", on_resolved: "1"}
     }
 
     d.reload
@@ -100,7 +100,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
 
   test "invalid create (non-http endpoint) re-renders with the inline error" do
     post alert_destinations_path(tenant_key: @key), params: {
-      alert_destination: { name: "bad", endpoint: "ftp://evil.example/x", on_firing: "1" }
+      alert_destination: {name: "bad", endpoint: "ftp://evil.example/x", on_firing: "1"}
     }
 
     assert_response :unprocessable_entity
@@ -113,7 +113,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
     )
 
     patch alert_destination_path(tenant_key: @key, id: d.id), params: {
-      alert_destination: { name: "keep2", endpoint: "https://#{PUBLIC}/new", on_firing: "1", on_resolved: "1" }
+      alert_destination: {name: "keep2", endpoint: "https://#{PUBLIC}/new", on_firing: "1", on_resolved: "1"}
     }
 
     d.reload

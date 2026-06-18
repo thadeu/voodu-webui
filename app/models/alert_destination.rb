@@ -26,28 +26,28 @@ class AlertDestination < ApplicationRecord
   has_many :alert_rule_destinations, dependent: :destroy
   has_many :alert_rules, through: :alert_rule_destinations
 
-  KINDS       = %w[webhook].freeze
+  KINDS = %w[webhook].freeze
   TRANSITIONS = %w[firing resolved].freeze
 
   encrypts :endpoint_ciphertext
   encrypts :secret_ciphertext
   alias_attribute :endpoint, :endpoint_ciphertext
-  alias_attribute :secret,   :secret_ciphertext
+  alias_attribute :secret, :secret_ciphertext
 
-  validates :name, presence: true, length: { maximum: 64 },
-                   uniqueness: { scope: :island_id }
-  validates :kind, inclusion: { in: KINDS }
+  validates :name, presence: true, length: {maximum: 64},
+    uniqueness: {scope: :island_id}
+  validates :kind, inclusion: {in: KINDS}
   validates :endpoint, presence: true
-  validate  :endpoint_is_http_url
-  validate  :at_least_one_trigger
-  validate  :body_template_is_json
+  validate :endpoint_is_http_url
+  validate :at_least_one_trigger
+  validate :body_template_is_json
 
   scope :enabled, -> { where(enabled: true) }
 
   # Does this destination want to be told about `transition`?
   def notifies?(transition)
     case transition.to_s
-    when "firing"   then on_firing?
+    when "firing" then on_firing?
     when "resolved" then on_resolved?
     else false
     end
@@ -64,7 +64,7 @@ class AlertDestination < ApplicationRecord
   def auth_header
     return {} if secret_header.blank? || secret.blank?
 
-    { secret_header => secret }
+    {secret_header => secret}
   end
 
   # Endpoint with the path/token blanked for display — never render

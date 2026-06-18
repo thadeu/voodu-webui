@@ -22,9 +22,9 @@ class IslandPats
   TTL = 30.seconds
 
   Result = Struct.new(:ok, :pats, :forbidden, :error, keyword_init: true) do
-    def ok?         = ok
-    def forbidden?  = !ok && forbidden
-    def error?      = !ok && !forbidden
+    def ok? = ok
+    def forbidden? = !ok && forbidden
+    def error? = !ok && !forbidden
   end
 
   def self.fetch(client, island)

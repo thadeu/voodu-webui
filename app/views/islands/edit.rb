@@ -13,14 +13,14 @@ class Views::Islands::Edit < Views::Base
   # operator's flow on Settings instead of bouncing them back to
   # the /islands registry).
   def initialize(current_path:, island:, connection_error: nil, return_to: nil)
-    @current_path     = current_path
-    @island           = island
+    @current_path = current_path
+    @island = island
     @connection_error = connection_error
-    @return_to        = return_to
+    @return_to = return_to
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{ label: "Servers" }]) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{label: "Servers"}]) do
       render(modal) { form_body }
     end
   end
@@ -29,10 +29,10 @@ class Views::Islands::Edit < Views::Base
 
   def modal
     Components::UI::Modal.new(
-      title:    "Edit server",
+      title: "Edit server",
       subtitle: "Update name, endpoint, or rotate the PAT",
-      icon:     :PencilSquareOutline,
-      size:     :md,
+      icon: :PencilSquareOutline,
+      size: :md,
       close_to: close_destination
     ).with_footer { footer_actions }
   end
@@ -48,7 +48,7 @@ class Views::Islands::Edit < Views::Base
   def form_body
     form(
       action: island_path(@island), method: "post",
-      data: { turbo: false }, id: "edit-server-form",
+      data: {turbo: false}, id: "edit-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
@@ -72,7 +72,7 @@ class Views::Islands::Edit < Views::Base
 
       field(
         label: "Personal access token",
-        hint:  "Leave blank to keep the current token.",
+        hint: "Leave blank to keep the current token.",
         error: @island.errors[:pat_ciphertext].first
       ) do
         pat_input
@@ -135,19 +135,19 @@ class Views::Islands::Edit < Views::Base
   end
 
   def pat_input
-    div(class: "relative", data: { controller: "pat-reveal" }) do
+    div(class: "relative", data: {controller: "pat-reveal"}) do
       input(
         type: "password",
         name: "island[pat_ciphertext]",
         value: nil,
         placeholder: "Leave blank to keep current",
         autocomplete: "off", spellcheck: "false",
-        data: { pat_reveal_target: "input" },
+        data: {pat_reveal_target: "input"},
         class: "w-full pl-3 pr-16 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2 font-voodu-mono text-[12.5px]"
       )
       button(
         type: "button",
-        data: { action: "click->pat-reveal#toggle", pat_reveal_target: "btn" },
+        data: {action: "click->pat-reveal#toggle", pat_reveal_target: "btn"},
         class: "absolute right-[1px] top-[1px] bottom-[1px] px-3 text-[11px] text-voodu-muted hover:text-voodu-text border-l border-voodu-border bg-voodu-surface"
       ) { "show" }
     end

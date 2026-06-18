@@ -25,21 +25,21 @@
 # retried by the caller if appropriate.
 module Voodu
   class Client
-    Error           = Class.new(StandardError)
-    AuthError       = Class.new(Error) # 401 / 403 — PAT bad or insufficient scope
-    NotFoundError   = Class.new(Error) # 404 — resource missing
-    RateLimitError  = Class.new(Error) # 429 — action burst exceeded
-    ServerError     = Class.new(Error) # 5xx — controller broke
-    TransportError  = Class.new(Error) # network failure, timeout
+    Error = Class.new(StandardError)
+    AuthError = Class.new(Error) # 401 / 403 — PAT bad or insufficient scope
+    NotFoundError = Class.new(Error) # 404 — resource missing
+    RateLimitError = Class.new(Error) # 429 — action burst exceeded
+    ServerError = Class.new(Error) # 5xx — controller broke
+    TransportError = Class.new(Error) # network failure, timeout
 
     DEFAULT_TIMEOUT = 6 # seconds
 
     def initialize(island, timeout: DEFAULT_TIMEOUT)
-      @island  = island
+      @island = island
       @timeout = timeout
     end
 
-    def stats         = get("stats")
+    def stats = get("stats")
     def restart(name) = post("pods/#{CGI.escape(name)}/restart")
 
     # system — host-level snapshot: CPU%, memory, disk usage, disk I/O
@@ -83,10 +83,10 @@ module Voodu
     #       { "ts" => "2026-05-24T09:01:00Z", "value" => 13.1 }
     #     ] }
     def metrics(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
-      params = { source: source, metric: metric, range: range, interval: interval }
+      params = {source: source, metric: metric, range: range, interval: interval}
       params[:scope] = scope if scope.present?
-      params[:name]  = name  if name.present?
-      params[:pod]   = pod   if pod.present?
+      params[:name] = name if name.present?
+      params[:pod] = pod if pod.present?
       get("metrics", params)
     end
 
@@ -142,8 +142,8 @@ module Voodu
     def pods(detail: false, spec: false, stats: true)
       params = {}
       params[:detail] = "true" if detail
-      params[:spec]   = "true" if spec
-      params[:stats]  = "false" if detail && stats == false
+      params[:spec] = "true" if spec
+      params[:stats] = "false" if detail && stats == false
       get("pods", params.presence)
     end
 
@@ -158,7 +158,7 @@ module Voodu
     # `pods(spec: true)` does the list — declared manifest joined in
     # from etcd.
     def pod(name, spec: false)
-      params = spec ? { spec: "true" } : nil
+      params = spec ? {spec: "true"} : nil
       data = get("pods/#{CGI.escape(name)}", params)
       data.is_a?(Hash) ? (data["pod"] || data) : data
     end
@@ -167,7 +167,7 @@ module Voodu
     # single string. Use for "show me what's in the buffer right now"
     # paths (one-off render, no live update).
     def logs(name, tail: 200)
-      raw_get("pods/#{CGI.escape(name)}/logs", params: { tail: tail })
+      raw_get("pods/#{CGI.escape(name)}/logs", params: {tail: tail})
     end
 
     # Logs — single-pod follow stream. The PAT plane keeps the chunked
@@ -191,7 +191,7 @@ module Voodu
     def logs_stream(name, follow: true, tail: 20, since: nil, timestamps: false, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
-      params = { follow: follow, tail: tail }
+      params = {follow: follow, tail: tail}
       params[:since] = since if since.present?
       # timestamps=true anchors each line to docker's clock (RFC3339Nano
       # prefix). The viewer uses it to set a reliable resume watermark AND
@@ -225,10 +225,10 @@ module Voodu
     def logs_stream_multi(follow: true, tail: 20, scope: nil, kind: nil, name: nil, since: nil, timestamps: false, &on_chunk)
       raise ArgumentError, "block required" unless on_chunk
 
-      params = { follow: follow, tail: tail }
+      params = {follow: follow, tail: tail}
       params[:scope] = scope if scope.present?
-      params[:kind]  = kind  if kind.present?
-      params[:name]  = name  if name.present?
+      params[:kind] = kind if kind.present?
+      params[:name] = name if name.present?
       params[:since] = since if since.present?
       params[:timestamps] = true if timestamps
 
@@ -270,12 +270,12 @@ module Voodu
 
       buffer = +""
 
-      streaming_conn.get("/api/pat/v1/metrics/dump", { since: since.to_i }) do |req|
+      streaming_conn.get("/api/pat/v1/metrics/dump", {since: since.to_i}) do |req|
         req.options.on_data = proc do |chunk, _overall, _env|
           buffer << chunk
 
           while (nl = buffer.index("\n"))
-            line   = buffer.slice!(0..nl).chomp
+            line = buffer.slice!(0..nl).chomp
             next if line.empty?
 
             row = parse_dump_line(line)
@@ -305,24 +305,23 @@ module Voodu
     # never poison the batch.
     def parse_dump_line(line)
       parsed = JSON.parse(line)
-      ts     = parsed["ts"]
+      ts = parsed["ts"]
       source = parsed["source"]
       return nil if ts.blank? || source.blank?
 
-      { source: source, ts_iso: ts, payload: line }
+      {source: source, ts_iso: ts, payload: line}
     rescue JSON::ParserError
       nil
     end
 
-
     def conn
       @conn ||= Faraday.new(url: @island.endpoint) do |f|
-        f.request  :url_encoded
+        f.request :url_encoded
         f.response :json, content_type: /\bjson$/
-        f.options.timeout      = @timeout
+        f.options.timeout = @timeout
         f.options.open_timeout = @timeout
         f.headers["Authorization"] = "Bearer #{@island.pat}"
-        f.headers["User-Agent"]    = "voodu-webui/0.1"
+        f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end
 
@@ -332,10 +331,10 @@ module Voodu
     # to the main `conn`.
     def streaming_conn
       @streaming_conn ||= Faraday.new(url: @island.endpoint) do |f|
-        f.options.timeout      = nil
+        f.options.timeout = nil
         f.options.open_timeout = @timeout
         f.headers["Authorization"] = "Bearer #{@island.pat}"
-        f.headers["User-Agent"]    = "voodu-webui/0.1"
+        f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end
 
@@ -381,11 +380,11 @@ module Voodu
     def raise_for_status(resp)
       case resp.status
       when 200..299 then nil
-      when 401, 403 then raise AuthError,      error_msg(resp, "auth")
-      when 404      then raise NotFoundError,  error_msg(resp, "not found")
-      when 429      then raise RateLimitError, error_msg(resp, "rate limited")
-      when 500..599 then raise ServerError,    error_msg(resp, "controller error")
-      else               raise Error,          error_msg(resp, "unexpected #{resp.status}")
+      when 401, 403 then raise AuthError, error_msg(resp, "auth")
+      when 404 then raise NotFoundError, error_msg(resp, "not found")
+      when 429 then raise RateLimitError, error_msg(resp, "rate limited")
+      when 500..599 then raise ServerError, error_msg(resp, "controller error")
+      else raise Error, error_msg(resp, "unexpected #{resp.status}")
       end
     end
 

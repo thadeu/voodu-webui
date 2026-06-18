@@ -9,8 +9,8 @@
 #      new screen — copy a block, paste, tweak.
 class Views::Styleguide::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil)
-    @current_path   = current_path
-    @islands        = islands
+    @current_path = current_path
+    @islands = islands
     @current_island = current_island
   end
 
