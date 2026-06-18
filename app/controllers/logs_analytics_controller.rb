@@ -159,7 +159,19 @@ class LogsAnalyticsController < ApplicationController
   # the multi-pod case is one shape; the rest are scalars. `page` drives
   # Load more. Symbolised so LogSearchData's accessors read uniformly.
   def search_params
-    params.permit(:range, :from, :until, :q, :regex, :page, pods: []).to_h.symbolize_keys
+    # tenant_key is a routing param (always present); permit it so strong
+    # params stops logging it as "Unpermitted" on every request. LogSearchData
+    # ignores the extra key — it reads only the filter fields below.
+    params.permit(
+      :tenant_key,
+      :range,
+      :from,
+      :until,
+      :q,
+      :regex,
+      :page,
+      pods: []
+    ).to_h.symbolize_keys
   end
 
   # pods_for_picker — compact pod list for the scope dropdown. Shares the
