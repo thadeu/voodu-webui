@@ -97,6 +97,60 @@ func (c *RailsClient) FetchIslands() ([]Island, error) {
 	return env.Islands, nil
 }
 
+// MetricsWatermarkResponse is the envelope /internal/poller/metrics_watermark
+// returns: the newest metric ts (unix seconds) Rails has warehoused for the
+// island. The metrics fetcher seeds its cold-start `since` from this so a
+// restart backfills the gap the poller was offline for instead of starting at
+// now-ColdStartLookback. `Since` is 0 when the warehouse is empty for the
+// island (first-ever sync — nothing to backfill).
+type MetricsWatermarkResponse struct {
+	Version int   `json:"version"`
+	Since   int64 `json:"since"`
+}
+
+// FetchMetricsWatermark GETs /internal/poller/metrics_watermark for one island
+// and returns the warehoused high-water mark (unix seconds), 0 when the
+// warehouse is empty. Refuses an unknown `version`. Same wire contract +
+// boundary the Ruby MetricsSyncIslandJob uses (MetricSample.last_ts_for): a
+// global-max `since` means the controller re-delivers only strictly-newer rows
+// — backfill with zero duplicates.
+func (c *RailsClient) FetchMetricsWatermark(tenantID string) (int64, error) {
+	req, err := http.NewRequest("GET", c.BaseURL+"/internal/poller/metrics_watermark", nil)
+	if err != nil {
+		return 0, fmt.Errorf("build request: %w", err)
+	}
+
+	q := req.URL.Query()
+	q.Set("tenant_id", tenantID)
+	req.URL.RawQuery = q.Encode()
+
+	req.Header.Set("X-Voodu-Internal-Token", c.Token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("rails GET: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+
+		return 0, fmt.Errorf("rails returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var env MetricsWatermarkResponse
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return 0, fmt.Errorf("decode rails response: %w", err)
+	}
+
+	if env.Version != SupportedVersion {
+		return 0, fmt.Errorf("rails metrics_watermark version %d unsupported (need %d)", env.Version, SupportedVersion)
+	}
+
+	return env.Since, nil
+}
+
 // DigestRequest is the body the Rails /internal/poller/digest endpoint
 // expects. Rails uses (Type, TenantID, SyncHash) for dedup before
 // reading the on-disk folder.

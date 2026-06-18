@@ -47,6 +47,12 @@ Rails.application.routes.draw do
   # Internal::PollerController).
   namespace :internal do
     get "poller/islands", to: "poller#islands", as: :poller_islands
+    # Cold-start resume point for the Go binary's metrics stream. The
+    # poller's per-source watermark is in-memory (lost on restart), so
+    # on boot it asks for the newest ts we've already warehoused and
+    # resumes `/metrics/dump?since=<that>` — backfilling any gap while
+    # the WebUI/poller was offline instead of cold-starting at now-30s.
+    get "poller/metrics_watermark", to: "poller#metrics_watermark", as: :poller_metrics_watermark
     # Inbound notification from the Go binary that a digest folder
     # has been written. PollerDigestController persists the receipt
     # row + enqueues PollerDigestJob; idempotent on sync_hash.

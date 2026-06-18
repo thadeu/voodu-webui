@@ -307,6 +307,78 @@ func TestComputeSince_AllStaleFallsBackToCap(t *testing.T) {
 	}
 }
 
+// ── cold-start backfill seed ─────────────────────────────────────────
+
+// A seeded warehouse high-water mark wins on cold start: the first tick
+// resumes from what Rails already holds (backfilling the offline gap),
+// bypassing BOTH the short lookback AND the BackfillCap floor — an 8h gap
+// must come through, not get clamped to 10m.
+func TestComputeSince_ColdStartPrefersSeed(t *testing.T) {
+	now := time.Now()
+	f := newBareFetcher()
+	f.seededSince = now.Add(-8 * time.Hour).Unix()
+
+	got := f.computeSince(now)
+	if got != f.seededSince {
+		t.Fatalf("since = %d, want seeded = %d (must bypass the 10m cap to backfill the gap)", got, f.seededSince)
+	}
+}
+
+// Once real rows arrive (sourceTS populated), the seed is ignored — the
+// per-source path drives `since`, so the seed is strictly one-shot.
+func TestComputeSince_SeedIgnoredOnceSourceSeen(t *testing.T) {
+	now := time.Now()
+	f := newBareFetcher()
+	f.seededSince = now.Add(-8 * time.Hour).Unix()
+	f.sourceTS["system"] = now.Add(-30 * time.Second).Unix()
+
+	got := f.computeSince(now)
+	want := now.Add(-30 * time.Second).Unix()
+	if got != want {
+		t.Fatalf("since = %d, want live system = %d (seed must not apply after first rows)", got, want)
+	}
+}
+
+func TestSeedSince_FromWarehouse(t *testing.T) {
+	rails := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/poller/metrics_watermark" {
+			t.Errorf("rails path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("tenant_id") != "island-1" {
+			t.Errorf("tenant_id = %q", r.URL.Query().Get("tenant_id"))
+		}
+		if r.Header.Get("X-Voodu-Internal-Token") != "tok" {
+			t.Errorf("missing internal token")
+		}
+		_, _ = w.Write([]byte(`{"version":1,"since":1718700000}`))
+	}))
+	defer rails.Close()
+
+	f := NewFetcher(client.Island{ID: "island-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
+	f.seedSince()
+
+	if f.seededSince != 1718700000 {
+		t.Fatalf("seededSince = %d, want 1718700000", f.seededSince)
+	}
+}
+
+// An empty warehouse (since=0) or a Rails error leaves seededSince at 0 so
+// computeSince falls back to the short cold-start lookback rather than
+// pulling the controller's full retention on a brand-new island.
+func TestSeedSince_EmptyWarehouseStaysZero(t *testing.T) {
+	rails := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"version":1,"since":0}`))
+	}))
+	defer rails.Close()
+
+	f := NewFetcher(client.Island{ID: "island-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
+	f.seedSince()
+
+	if f.seededSince != 0 {
+		t.Fatalf("seededSince = %d, want 0", f.seededSince)
+	}
+}
+
 // ── dedup ────────────────────────────────────────────────────────────
 
 // The overlap a laggard-driven `since` re-delivers must be dropped, while

@@ -84,6 +84,13 @@ type Fetcher struct {
 	//              oldest live source, so the laggard catches up).
 	seriesTS map[string]int64
 	sourceTS map[string]int64
+
+	// seededSince (unix seconds) is the warehouse high-water mark fetched
+	// from Rails at Run start. Used as the cold-start `since` so a restart
+	// resumes from what we already hold (backfilling the offline gap)
+	// instead of now-ColdStartLookback. 0 = no seed (empty warehouse or
+	// seed failed) → fall back to the short lookback.
+	seededSince int64
 }
 
 // sample is the minimal projection of a dump line we need to attribute
@@ -116,6 +123,8 @@ func NewFetcher(island client.Island, root string, interval time.Duration, rails
 func (f *Fetcher) Run(ctx context.Context) {
 	t := time.NewTicker(f.Interval)
 	defer t.Stop()
+
+	f.seedSince()
 
 	f.tick(ctx)
 	for {
@@ -233,17 +242,53 @@ func (f *Fetcher) tick(ctx context.Context) {
 	}
 }
 
+// seedSince asks Rails for the newest metric ts already warehoused for this
+// island and records it as the cold-start `since`, so the first tick after a
+// (re)start backfills the gap the poller was offline for instead of starting
+// at now-ColdStartLookback. Non-fatal: a failure (Rails down, version skew)
+// logs and leaves seededSince at 0 — the fetcher still runs, just cold-starts
+// at the short lookback. The Rails dependency is optional (nil in tests).
+func (f *Fetcher) seedSince() {
+	if f.Rails == nil {
+		return
+	}
+
+	since, err := f.Rails.FetchMetricsWatermark(f.Island.ID)
+	if err != nil {
+		log.Printf("[poller] metrics %s: watermark seed failed: %v (cold-starting at -%s)", f.Island.ID, err, ColdStartLookback)
+
+		return
+	}
+
+	if since > 0 {
+		f.seededSince = since
+		if f.Verbose {
+			log.Printf("[poller] metrics %s: seeded since=%d from warehouse", f.Island.ID, since)
+		}
+	}
+}
+
 // computeSince returns the controller `since` (unix seconds) for this
 // tick: the OLDEST live source's watermark, so a lagging source catches
 // up. Sources with no watermark yet (never seen) don't constrain it;
 // sources older than BackfillCap are excluded so a dead stream can't
 // drag `since` backwards forever.
 //
-//   - cold (no source seen yet)   → now - ColdStartLookback
+//   - cold (no source seen yet)   → seededSince if set, else now - ColdStartLookback
 //   - every known source is stale → now - BackfillCap (bounded recovery)
 //   - otherwise                   → min(live source watermarks)
 func (f *Fetcher) computeSince(now time.Time) int64 {
 	if len(f.sourceTS) == 0 {
+		// Cold start. Prefer the warehouse high-water mark (seeded at Run
+		// start) so a restart backfills the offline gap; the controller
+		// clamps the read to its own retention window. Fall back to the
+		// short lookback when the warehouse is empty / the seed failed.
+		// Once the first tick persists rows, sourceTS is non-empty and the
+		// per-source path below takes over — seededSince is one-shot.
+		if f.seededSince > 0 {
+			return f.seededSince
+		}
+
 		return now.Add(-ColdStartLookback).Unix()
 	}
 
