@@ -58,9 +58,11 @@ export default class extends Controller {
     if (!this.hasLabelTarget || !this.isoValue) return
 
     const ts   = Date.parse(this.isoValue)
+
     if (Number.isNaN(ts)) return
 
     const secs = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+
     this.labelTarget.textContent = formatAge(secs)
   }
 }
@@ -77,5 +79,6 @@ function formatAge(secs) {
   if (secs < 60)     return `${secs}s`
   if (secs < 3600)   return `${Math.floor(secs / 60)}m`
   if (secs < 86400)  return `${Math.floor(secs / 3600)}h`
+
   return `${Math.floor(secs / 86400)}d`
 }

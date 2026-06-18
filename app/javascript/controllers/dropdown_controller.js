@@ -46,6 +46,7 @@ export default class extends Controller {
   // flip only when geometry actually forces it.
   alignToViewport() {
     const menu = this.menuTarget
+
     // Reset any previous flip before measuring — otherwise the
     // second open in a session would measure the already-flipped
     // position and never re-evaluate.

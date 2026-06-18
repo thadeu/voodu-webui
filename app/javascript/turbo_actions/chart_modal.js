@@ -37,6 +37,7 @@ import { Turbo } from "@hotwired/turbo-rails"
 // element the action operates on.
 Turbo.StreamActions.chart_modal_open = function () {
   const modal = this.targetElements[0]
+
   if (!modal) return
 
   modal.removeAttribute("hidden")
@@ -50,6 +51,7 @@ Turbo.StreamActions.chart_modal_open = function () {
 
 Turbo.StreamActions.chart_modal_close = function () {
   const modal = this.targetElements[0]
+
   if (!modal) return
 
   modal.setAttribute("hidden", "")

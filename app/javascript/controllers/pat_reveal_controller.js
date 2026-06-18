@@ -17,6 +17,7 @@ export default class extends Controller {
   toggle(event) {
     event.preventDefault()
     const showing = this.inputTarget.type === "text"
+
     this.inputTarget.type = showing ? "password" : "text"
     this.btnTarget.textContent = showing ? "show" : "hide"
   }

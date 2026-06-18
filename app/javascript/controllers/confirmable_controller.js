@@ -37,8 +37,10 @@ export default class extends Controller {
     if (this.confirmed) {
       // Reset so a future cancel-then-resubmit also confirms again.
       this.confirmed = false
+
       return
     }
+
     event.preventDefault()
     this.open()
   }
@@ -75,6 +77,7 @@ export default class extends Controller {
     // the footer matches the design's "Enter = proceed" expectation.
     requestAnimationFrame(() => {
       const buttons = this.dialogTarget?.querySelectorAll("button")
+
       buttons?.[buttons.length - 1]?.focus()
     })
   }

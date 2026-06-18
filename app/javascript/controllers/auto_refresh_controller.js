@@ -79,6 +79,7 @@ export default class extends Controller {
     if (!this.hasDotTarget) return
 
     const color = this.paused ? "var(--voodu-red)" : "var(--voodu-green)"
+
     this.dotTarget.style.background = color
     this.dotTarget.style.boxShadow  = `0 0 0 3px color-mix(in srgb, ${color} 18%, transparent)`
 
@@ -109,6 +110,7 @@ export default class extends Controller {
     if (!this.hasSourceTarget) return
 
     const el = this.sourceTarget.querySelector("turbo-cable-stream-source")
+
     if (!el) return
 
     this.detachedSource = el

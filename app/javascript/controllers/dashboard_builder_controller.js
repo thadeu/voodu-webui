@@ -61,6 +61,7 @@ export default class extends Controller {
     if (from === to || from == null || to == null) return
 
     const [moved] = this.panels.splice(from, 1)
+
     this.panels.splice(to, 0, moved)
 
     this.render()
@@ -72,6 +73,7 @@ export default class extends Controller {
   // this source's kind.
   selectSource(event) {
     const source = this.parse(event.currentTarget.dataset.source)
+
     if (!source) return
 
     this.currentSource = source
@@ -82,6 +84,7 @@ export default class extends Controller {
 
   selectMetric(event) {
     const spec = this.parse(event.currentTarget.dataset.metric)
+
     if (!spec) return
 
     this.currentMetric = spec
@@ -92,6 +95,7 @@ export default class extends Controller {
 
   selectType(event) {
     const t = event.currentTarget.dataset.chartType
+
     if (!t) return
 
     this.currentChartType = t
@@ -127,6 +131,7 @@ export default class extends Controller {
     specs.forEach((spec) => this.metricMenuTarget.appendChild(this.metricOption(spec)))
 
     this.currentMetric = specs[0] || null
+
     if (this.hasMetricLabelTarget) {
       this.metricLabelTarget.textContent = this.currentMetric ? this.currentMetric.label : "Select metric"
     }
@@ -136,6 +141,7 @@ export default class extends Controller {
 
   metricOption(spec) {
     const b = document.createElement("button")
+
     b.type = "button"
     b.className = "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-[#ffffff08]"
     b.textContent = spec.label
@@ -157,6 +163,7 @@ export default class extends Controller {
   remove(event) {
     event.preventDefault()
     const i = Number(event.params.index)
+
     if (Number.isNaN(i)) return
 
     this.panels.splice(i, 1)
@@ -201,9 +208,11 @@ export default class extends Controller {
 
   chip(panel, index) {
     const row = document.createElement("div")
+
     row.className = "flex items-center gap-2 px-2.5 h-9 border border-voodu-border bg-voodu-surface"
 
     const handle = document.createElement("span")
+
     handle.className = "inline-flex items-center justify-center w-4 h-6 text-voodu-muted-2 hover:text-voodu-text cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
     handle.setAttribute("data-role", "panel-handle")
     handle.setAttribute("aria-label", "Drag to reorder")
@@ -211,23 +220,27 @@ export default class extends Controller {
     row.appendChild(handle)
 
     const dot = document.createElement("span")
+
     dot.className = "inline-block w-2 h-2 rounded-full shrink-0"
     dot.style.background = panel.color || "var(--voodu-muted)"
     row.appendChild(dot)
 
     const label = document.createElement("span")
+
     label.className = "text-[12.5px] text-voodu-text truncate flex-1 min-w-0"
     label.textContent = panel.label
     row.appendChild(label)
 
     if (panel.chart_type && panel.chart_type !== "area") {
       const tag = document.createElement("span")
+
       tag.className = "text-[10px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.04em] shrink-0"
       tag.textContent = panel.chart_type === "gauge_radial" ? "radial" : "linear"
       row.appendChild(tag)
     }
 
     const remove = document.createElement("button")
+
     remove.type = "button"
     remove.className = "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-red shrink-0"
     remove.setAttribute("aria-label", `Remove ${panel.label}`)

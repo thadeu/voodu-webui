@@ -38,6 +38,7 @@ export default class extends Controller {
 
   connect() {
     this.shell = this.element.querySelector(".voodu-code")
+
     this.onScroll = () => {
       this.highlightTarget.scrollTop = this.inputTarget.scrollTop
       this.highlightTarget.scrollLeft = this.inputTarget.scrollLeft
@@ -73,6 +74,7 @@ export default class extends Controller {
     if (this.hasErrorTarget) this.errorTarget.classList.toggle("hidden", valid)
 
     const run = this.inputTarget.form?.querySelector("[data-role='run-query']")
+
     if (run) run.disabled = !valid
 
     return valid
@@ -131,6 +133,7 @@ export default class extends Controller {
 
     if (s !== e) {
       const sel = ta.value.slice(s, e)
+
       this.setText(open + sel + close, s, e)
       ta.setSelectionRange(s + 1, s + 1 + sel.length)
     } else {

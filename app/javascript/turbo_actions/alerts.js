@@ -11,6 +11,7 @@ import { Turbo } from "@hotwired/turbo-rails"
 
 Turbo.StreamActions.alerts_tick = function () {
   const frame = document.getElementById("alerts-live")
+
   if (frame && typeof frame.reload === "function") {
     frame.reload()
   }

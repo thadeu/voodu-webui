@@ -15,6 +15,7 @@ export default class extends Controller {
   fill(event) {
     event.preventDefault()
     const tmpl = event.currentTarget.dataset.template
+
     if (tmpl == null) return
 
     this.textareaTarget.value = tmpl

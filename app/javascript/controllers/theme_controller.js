@@ -47,6 +47,7 @@ export default class extends Controller {
   // white chrome, not black).
   syncMeta() {
     const meta = document.querySelector('meta[name="theme-color"]')
+
     if (meta) meta.setAttribute("content", META[this.current])
   }
 

@@ -141,6 +141,7 @@ export default class extends Controller {
       await this.fetching
       if (!this.isOpen) return
     }
+
     this.renderDefault()
   }
 
@@ -171,6 +172,7 @@ export default class extends Controller {
   // decide whether to ALSO kick a refresh.
   warmFromCache() {
     const env = readCache()
+
     if (!env) return
 
     this.commands = env.commands
@@ -254,6 +256,7 @@ export default class extends Controller {
 
   move(delta) {
     const max = this.flat.length - 1
+
     if (max < 0) return
     this.selected = Math.max(0, Math.min(max, this.selected + delta))
     this.refreshSelection()
@@ -272,18 +275,23 @@ export default class extends Controller {
     if (!this.loaded) return
 
     const q = this.inputTarget.value.trim()
+
     this.clearTarget.hidden = !q
 
     if (!q) {
       this.renderDefault()
+
       return
     }
 
     const scored = []
+
     for (const cmd of this.commands) {
       const s = scoreCommand(cmd, q)
+
       if (s !== null && s > 0) scored.push({ cmd, score: s })
     }
+
     scored.sort((a, b) => b.score - a.score)
     const top = scored.slice(0, 80).map(r => r.cmd)
 
@@ -311,6 +319,7 @@ export default class extends Controller {
   renderDefault() {
     if (!this.loaded) {
       this.renderLoading()
+
       return
     }
 
@@ -333,6 +342,7 @@ export default class extends Controller {
       : []
 
     const sections = []
+
     if (suggestions.length) sections.push({ label: "Recent",   items: suggestions })
     if (navigate.length)    sections.push({ label: "Navigate", items: navigate })
 
@@ -346,6 +356,7 @@ export default class extends Controller {
         </div>`
       if (this.hasCountTarget) this.countTarget.textContent = String(this.commands.length)
       this.flat = []
+
       return
     }
 
@@ -363,11 +374,13 @@ export default class extends Controller {
           <div class="text-[11.5px] mt-2">Try a pod name, "logs", "restart", or a navigate command.</div>
         </div>`
       if (this.hasCountTarget) this.countTarget.textContent = "0"
+
       return
     }
 
     const parts = []
     let runningIndex = 0
+
     for (const sec of sections) {
       parts.push(`
         <div class="mb-1">
@@ -377,12 +390,15 @@ export default class extends Controller {
             <span class="font-normal text-voodu-muted-2">${sec.items.length}</span>
           </div>
       `)
+
       for (const cmd of sec.items) {
         parts.push(renderRow(cmd, runningIndex, runningIndex === this.selected, query))
         runningIndex++
       }
+
       parts.push(`</div>`)
     }
+
     this.resultsTarget.innerHTML = parts.join("")
     if (this.hasCountTarget) this.countTarget.textContent = String(this.flat.length)
 
@@ -394,14 +410,17 @@ export default class extends Controller {
     this._rowBound = true
     this.resultsTarget.addEventListener("click", (e) => {
       const row = e.target.closest("[data-cmd-index]")
+
       if (!row) return
       this.selected = parseInt(row.dataset.cmdIndex, 10)
       this.runSelected()
     })
     this.resultsTarget.addEventListener("mousemove", (e) => {
       const row = e.target.closest("[data-cmd-index]")
+
       if (!row) return
       const i = parseInt(row.dataset.cmdIndex, 10)
+
       if (i !== this.selected) {
         this.selected = i
         this.refreshSelection()
@@ -414,6 +433,7 @@ export default class extends Controller {
       const i = parseInt(row.dataset.cmdIndex, 10)
       const selected = i === this.selected
       const destructive = row.dataset.cmdDestructive === "true"
+
       row.setAttribute("aria-selected", selected ? "true" : "false")
       row.dataset.cmdSelected = selected ? "true" : "false"
       const base = "grid items-center gap-3 px-3.5 py-2 min-h-10 cursor-pointer border-l-2 transition-colors"
@@ -421,16 +441,19 @@ export default class extends Controller {
       const sel  = destructive
         ? " border-voodu-red bg-voodu-red-dim/40"
         : " border-voodu-accent-line bg-voodu-accent-dim"
+
       row.className = base + (selected ? sel : idle)
     })
   }
 
   scrollSelectedIntoView() {
     const row = this.resultsTarget.querySelector(`[data-cmd-index="${this.selected}"]`)
+
     if (!row) return
     const c = this.resultsTarget
     const r = row.getBoundingClientRect()
     const cr = c.getBoundingClientRect()
+
     if (r.top < cr.top) c.scrollTop -= (cr.top - r.top + 4)
     else if (r.bottom > cr.bottom) c.scrollTop += (r.bottom - cr.bottom + 4)
   }
@@ -439,6 +462,7 @@ export default class extends Controller {
 
   runSelected() {
     const cmd = this.flat[this.selected]
+
     if (!cmd) return
     if (cmd.confirm && !window.confirm(cmd.confirm)) return
 
@@ -450,23 +474,28 @@ export default class extends Controller {
     this.close()
 
     const method = (cmd.method || "GET").toUpperCase()
+
     if (method === "GET") {
       window.location.href = cmd.href
+
       return
     }
 
     const form = document.createElement("form")
+
     form.method = "post"
     form.action = cmd.href
     form.style.display = "none"
 
     if (method !== "POST") {
       const m = document.createElement("input")
+
       m.type = "hidden"; m.name = "_method"; m.value = method.toLowerCase()
       form.appendChild(m)
     }
 
     const t = document.createElement("input")
+
     t.type = "hidden"; t.name = "authenticity_token"; t.value = this.csrfValue
     form.appendChild(t)
 
@@ -497,8 +526,10 @@ export default class extends Controller {
 function readCache() {
   try {
     const raw = sessionStorage.getItem(CACHE_KEY)
+
     if (!raw) return null
     const env = JSON.parse(raw)
+
     if (!env || typeof env.ts !== "number" || !Array.isArray(env.commands)) return null
 
     return env
@@ -526,6 +557,7 @@ function writeCache(commands) {
 function readLRU() {
   try {
     const raw = localStorage.getItem(LRU_KEY)
+
     if (!raw) return []
     const arr = JSON.parse(raw)
 
@@ -538,6 +570,7 @@ function readLRU() {
 function pushLRU(id) {
   try {
     const cur = readLRU().filter(x => x !== id)
+
     cur.unshift(id)
     localStorage.setItem(LRU_KEY, JSON.stringify(cur.slice(0, LRU_CAP)))
   } catch {
@@ -555,6 +588,7 @@ function detectCurrentTenantKey() {
 
 function appendCurrent(endpoint) {
   const cur = detectCurrentTenantKey()
+
   if (!cur) return endpoint
   const sep = endpoint.includes("?") ? "&" : "?"
 
@@ -569,6 +603,7 @@ function appendCurrent(endpoint) {
 function scoreCommand(cmd, query) {
   if (!query) return 0
   const q = query.toLowerCase().trim()
+
   if (!q) return 0
 
   const title  = cmd.title.toLowerCase()
@@ -576,14 +611,17 @@ function scoreCommand(cmd, query) {
   const terms  = q.split(/\s+/).filter(Boolean)
 
   let score = 0
+
   for (const term of terms) {
     if (corpus.indexOf(term) < 0) return null
 
     const ti = title.indexOf(term)
+
     if (ti === 0) {
       score += 1000
     } else if (ti > 0) {
       const before = title[ti - 1]
+
       if (before === " " || before === "." || before === "/" || before === "-") score += 500
       else score += 200
       score -= ti * 0.5
@@ -591,6 +629,7 @@ function scoreCommand(cmd, query) {
       score += 50
     }
   }
+
   score += GROUP_BOOST[cmd.group] || 0
 
   return score
@@ -598,6 +637,7 @@ function scoreCommand(cmd, query) {
 
 function groupCommands(commands) {
   const m = new Map()
+
   for (const c of commands) {
     if (!m.has(c.group)) m.set(c.group, [])
     m.get(c.group).push(c)
@@ -690,6 +730,7 @@ function leadingIndicator(cmd) {
   }
 
   const svg = cmd.icon && ICON_MAP[cmd.icon]
+
   if (svg) return svg
 
   return `<span aria-hidden="true" class="inline-block w-[5px] h-[5px] rounded-full bg-voodu-muted-2"></span>`
@@ -711,6 +752,7 @@ function statusColor(s) {
 function highlight(text, query) {
   if (!query) return escapeHtml(text)
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+
   if (!terms.length) return escapeHtml(text)
 
   const lower = text.toLowerCase()
@@ -721,6 +763,7 @@ function highlight(text, query) {
 
     while (i < lower.length) {
       const idx = lower.indexOf(term, i)
+
       if (idx < 0) break
       ranges.push([idx, idx + term.length])
       i = idx + term.length
@@ -734,6 +777,7 @@ function highlight(text, query) {
 
   for (let i = 1; i < ranges.length; i++) {
     const last = merged[merged.length - 1]
+
     if (ranges[i][0] <= last[1]) last[1] = Math.max(last[1], ranges[i][1])
     else merged.push(ranges[i])
   }

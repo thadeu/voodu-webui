@@ -66,12 +66,14 @@ export default class extends Controller {
     // overrides the server default so the operator's chosen size
     // sticks across visits.
     const saved = localStorage.getItem(this.storageKeyValue)
+
     if (saved && this.hasPanelTarget) this.panelTarget.style.width = saved
 
     // Restore open state if Turbo reconnected us while the panel is
     // still open (turbo_permanent preserves the open DOM state). The
     // listeners are already attached above; just re-flag + re-lock.
     this.isOpen = this.hasPanelTarget && this.panelTarget.dataset.open === "true"
+
     if (this.isOpen) {
       this.contentLoaded = true
       this.lockScroll()
@@ -101,6 +103,7 @@ export default class extends Controller {
       const focusable = this.panelTarget.querySelector(
         "a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])"
       )
+
       ;(focusable || this.panelTarget).focus({ preventScroll: true })
     })
   }
@@ -145,8 +148,10 @@ export default class extends Controller {
       const response = await fetch(this.srcValue, {
         headers: { "Accept": "text/html", "X-Drawer-Embed": "1" }
       })
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const html = await response.text()
+
       this.bodyTarget.innerHTML = html
       this.contentLoaded = true
     } catch (err) {
@@ -218,6 +223,7 @@ export default class extends Controller {
       : breathingMax
 
     const w = Math.max(min, Math.min(max, window.innerWidth - event.clientX))
+
     this.panelTarget.style.width = `${w}px`
   }
 
@@ -244,8 +250,10 @@ export default class extends Controller {
   // value (string), so this lives here rather than on the server.
   parseLengthToPx(v) {
     const m = String(v).match(/^([\d.]+)(px|vw)?$/)
+
     if (!m) return null
     const n = parseFloat(m[1])
+
     return m[2] === "vw" ? (n * window.innerWidth) / 100 : n
   }
 }

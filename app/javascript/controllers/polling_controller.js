@@ -28,7 +28,9 @@ export default class extends Controller {
     // global window events so unrelated controllers don't need a
     // Stimulus target reference into us.
     this.onPause  = () => { this.paused += 1 }
+
     this.onResume = () => { this.paused = Math.max(0, this.paused - 1) }
+
     window.addEventListener("polling:pause",  this.onPause)
     window.addEventListener("polling:resume", this.onResume)
   }
@@ -58,6 +60,7 @@ export default class extends Controller {
     // it's a leaf too — same code path covers both surfaces
     // without per-page branching.
     const frames = this.element.querySelectorAll("turbo-frame")
+
     frames.forEach((frame) => {
       if (frame.querySelector("turbo-frame")) return // skip parents
       if (typeof frame.reload === "function") frame.reload()

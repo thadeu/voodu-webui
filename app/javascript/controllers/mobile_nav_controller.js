@@ -27,6 +27,7 @@ export default class extends Controller {
 
   toggle(event) {
     event?.preventDefault()
+
     if (this.sidebarTarget.classList.contains("-translate-x-full")) {
       this.open()
     } else {

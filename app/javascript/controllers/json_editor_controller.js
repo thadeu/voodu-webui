@@ -68,6 +68,7 @@ export default class extends Controller {
     if (!this.hasGutterTarget) return
 
     const scrollbar = this.inputTarget.offsetWidth - this.inputTarget.clientWidth
+
     this.highlightTarget.style.paddingRight = `${12 + scrollbar}px`
 
     const lines = this.highlightTarget.children
@@ -132,6 +133,7 @@ export default class extends Controller {
 
     if (s !== e) {
       const sel = ta.value.slice(s, e)
+
       this.setText(open + sel + close, s, e)
       ta.setSelectionRange(s + 1, s + 1 + sel.length)
     } else {
@@ -150,6 +152,7 @@ export default class extends Controller {
     // Between a bracket pair → open a fresh indented line, caret on it.
     if (before && PAIRS[before] && before !== '"' && v[s] === PAIRS[before]) {
       const inner = `${indent}  `
+
       this.setText(`\n${inner}\n${indent}`, s, s)
       ta.setSelectionRange(s + 1 + inner.length, s + 1 + inner.length)
     } else {
@@ -179,6 +182,7 @@ export default class extends Controller {
 
     this.setText("", lineStart, lineStart + removed)
     const caret = Math.max(lineStart, s - removed)
+
     ta.setSelectionRange(caret, caret)
   }
 

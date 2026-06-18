@@ -22,6 +22,7 @@ Turbo.StreamActions.metrics_tick = function () {
 
 function reloadChartsFrame() {
   const frame = document.getElementById("metrics-charts")
+
   if (frame && typeof frame.reload === "function") {
     frame.reload()
   }
@@ -29,6 +30,7 @@ function reloadChartsFrame() {
 
 function refreshOpenModal() {
   const modal = document.getElementById("chart-modal")
+
   if (!modal || modal.hidden) return
 
   // The chart-modal-body div stores its current full-path URL as
@@ -37,6 +39,7 @@ function refreshOpenModal() {
   // metric / scope / range the operator was viewing.
   const body = document.getElementById("chart-modal-body")
   const url = body?.dataset?.refreshUrl
+
   if (!url) return
 
   fetch(url, { headers: { Accept: "text/vnd.turbo-stream.html" } })

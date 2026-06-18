@@ -28,6 +28,7 @@ export default class extends Controller {
       const k = row.dataset.key || ""
       const v = row.dataset.value || ""
       const match = !q || k.includes(q) || v.includes(q)
+
       row.hidden = !match
       if (match) visible++
     }

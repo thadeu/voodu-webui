@@ -82,6 +82,7 @@ export default class extends Controller {
     } else {
       this.fillFromPreset(this.rangeValue)
     }
+
     this.updateCustomLabel()
     this.refreshPodScope()
 
@@ -99,6 +100,7 @@ export default class extends Controller {
     if (this.hasFilterPanelTarget) {
       try {
         const saved = localStorage.getItem(FILTER_WIDTH_KEY)
+
         if (saved) this.filterPanelTarget.style.width = saved
       } catch (_e) {
         // localStorage disabled — fall back to the CSS default width.
@@ -125,6 +127,7 @@ export default class extends Controller {
   selectRange(event) {
     event.preventDefault()
     const value = event.currentTarget.dataset.range
+
     if (!value) return
 
     this.rangeTarget.value = value
@@ -155,9 +158,11 @@ export default class extends Controller {
   // the [now - Δ, now] window for a preset key. No-op for unknown keys.
   fillFromPreset(range) {
     const ms = RANGE_MS[range]
+
     if (!ms) return
 
     const now = new Date()
+
     if (this.hasFromInputTarget) this.fromInputTarget.value = formatLocal(new Date(now.getTime() - ms))
     if (this.hasUntilInputTarget) this.untilInputTarget.value = formatLocal(now)
     this.updateCustomLabel()
@@ -166,6 +171,7 @@ export default class extends Controller {
   repaintPresets(activeValue) {
     this.presetTargets.forEach((chip) => {
       const active = chip.dataset.range === activeValue
+
       chip.classList.remove(...(active ? CHIP_INACTIVE : CHIP_ACTIVE))
       chip.classList.add(...(active ? CHIP_ACTIVE : CHIP_INACTIVE))
     })
@@ -181,6 +187,7 @@ export default class extends Controller {
     if (!this.hasCustomLabelTarget) return
 
     const range = this.rangeTarget.value
+
     if (range !== "custom") {
       this.customLabelTarget.textContent = `${range} → now`
 
@@ -189,6 +196,7 @@ export default class extends Controller {
 
     const from = this.hasFromInputTarget ? this.fromInputTarget.value : ""
     const until = this.hasUntilInputTarget ? this.untilInputTarget.value : ""
+
     this.customLabelTarget.textContent = from && until ? formatRangeLabel(from, until) : "Custom"
   }
 
@@ -203,6 +211,7 @@ export default class extends Controller {
   toggleAllPods() {
     const boxes = this.hasPodCheckboxTarget ? this.podCheckboxTargets : []
     const allOn = boxes.length > 0 && boxes.every((cb) => cb.checked)
+
     boxes.forEach((cb) => { cb.checked = !allOn })
     this.refreshPodScope()
   }
@@ -230,6 +239,7 @@ export default class extends Controller {
 
     boxes.forEach((cb) => {
       const on = cb.checked
+
       if (on) {
         count += 1
         single = cb.dataset.label || cb.value
@@ -280,6 +290,7 @@ export default class extends Controller {
     if (!localInput || !hidden) return
 
     const raw = localInput.value
+
     if (!raw) {
       hidden.value = ""
 
@@ -287,6 +298,7 @@ export default class extends Controller {
     }
 
     const d = new Date(raw)
+
     hidden.value = isNaN(d.getTime()) ? "" : d.toISOString()
   }
 
@@ -331,6 +343,7 @@ export default class extends Controller {
     this.filterPanelTarget.dataset.open = "true"
     // Focus the editor once the slide settles so the caret lands ready.
     const editor = this.filterPanelTarget.querySelector(".voodu-code__input")
+
     if (editor) requestAnimationFrame(() => editor.focus())
   }
 
@@ -398,6 +411,7 @@ export default class extends Controller {
 
     const max = window.innerWidth - 80
     const width = Math.max(FILTER_MIN_WIDTH, Math.min(max, window.innerWidth - event.clientX))
+
     this.filterPanelTarget.style.width = `${width}px`
   }
 
@@ -435,14 +449,17 @@ export default class extends Controller {
 
     const node = event.currentTarget
     const row  = node.classList.contains("log-row") ? node : node.closest(".log-row")
+
     if (!row) return
 
     const wrapped = row.classList.toggle("log-row-wrap")
     const chip    = row.querySelector(".log-wrap-single")
+
     if (chip) chip.dataset.active = wrapped ? "true" : "false"
 
     if (event.type === "dblclick") {
       const sel = window.getSelection()
+
       if (sel && sel.removeAllRanges) sel.removeAllRanges()
     }
   }
@@ -453,6 +470,7 @@ export default class extends Controller {
   // scroller) keeps the choice; scrollerTargetConnected re-applies it.
   toggleWrap() {
     const on = !this.wrapEnabled()
+
     this.setWrapPref(on)
     this.applyWrap(on)
   }
@@ -498,6 +516,7 @@ export default class extends Controller {
     // Wrap rides the same `.log-wrap` class + `.log-body` rules as the
     // live tail (theme.css), toggled on the grid `.log-list`.
     const list = this.hasScrollerTarget ? this.scrollerTarget.querySelector(".log-list") : null
+
     if (list) list.classList.toggle("log-wrap", on)
 
     if (this.hasWrapToggleTarget) {
@@ -529,14 +548,17 @@ export default class extends Controller {
   async copyExport(event) {
     const btn = event.currentTarget
     const url = btn.dataset.exportUrl
+
     if (!url) return
 
     try {
       const resp = await fetch(url, { headers: { Accept: "text/plain" } })
+
       if (!resp.ok) return
 
       await navigator.clipboard.writeText(await resp.text())
       const prev = btn.getAttribute("title")
+
       btn.setAttribute("title", "Copied")
       setTimeout(() => btn.setAttribute("title", prev || ""), 1200)
     } catch (_e) {
@@ -549,10 +571,12 @@ export default class extends Controller {
   copyLine(event) {
     const btn = event.currentTarget
     const raw = btn.dataset.raw
+
     if (!raw) return
 
     navigator.clipboard.writeText(raw).then(() => {
       const prev = btn.getAttribute("title")
+
       btn.setAttribute("title", "Copied")
       setTimeout(() => btn.setAttribute("title", prev || ""), 1200)
     })
@@ -569,6 +593,7 @@ export default class extends Controller {
     const pod = btn.dataset.pod || ""
     const allPods = btn.dataset.allPods === "1"
     const expand = btn.dataset.expand || "0"
+
     if (!ts) return
 
     const params = new URLSearchParams({ ts, pod, all_pods: allPods ? "1" : "0", expand })
@@ -577,9 +602,11 @@ export default class extends Controller {
       const resp = await fetch(`${this.surroundingUrlValue}?${params.toString()}`, {
         headers: { Accept: "text/html" }
       })
+
       if (!resp.ok) return
 
       const html = await resp.text()
+
       this.surroundingHostTarget.innerHTML = html
 
       // Centre the clicked line. The anchor row is `.log-row` (display:
@@ -588,9 +615,11 @@ export default class extends Controller {
       // first so the centring lands on the right offset.
       requestAnimationFrame(() => {
         const anchor = this.surroundingHostTarget.querySelector("[data-surrounding-anchor]")
+
         if (!anchor) return
 
         const box = anchor.querySelector(".log-ts") || anchor.firstElementChild || anchor
+
         box.scrollIntoView({ block: "center" })
       })
     } catch (_e) {
@@ -620,6 +649,7 @@ function formatLocal(date) {
 // utcToLocalInput — UTC ISO string → local datetime-local value.
 function utcToLocalInput(iso) {
   const d = new Date(iso)
+
   if (isNaN(d.getTime())) return ""
 
   return formatLocal(d)
@@ -632,6 +662,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function formatRangeLabel(fromVal, untilVal) {
   const f = new Date(fromVal)
   const u = new Date(untilVal)
+
   if (isNaN(f.getTime()) || isNaN(u.getTime())) return "Custom"
 
   const pad = (n) => String(n).padStart(2, "0")

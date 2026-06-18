@@ -101,6 +101,7 @@ export default class extends Controller {
 
     orderList.forEach(metric => {
       const card = byMetric.get(metric)
+
       if (card) grid.appendChild(card)
     })
 
@@ -128,6 +129,7 @@ export default class extends Controller {
 
     // perRow → the DEFAULT cards-per-row; the default span is BASE_COLS/perRow.
     let perRow
+
     if (visibleCount <= 1)       perRow = 1
     else if (visibleCount === 2) perRow = 2
     else                         perRow = cols || 2
@@ -169,12 +171,14 @@ export default class extends Controller {
       // Custom width (sixtieths) if the operator resized this card, else the
       // default span derived from the columns preference.
       const span = Math.min(base, Math.max(1, map[card.dataset.metricKey] || def))
+
       card.style.gridColumn = `span ${span}`
     })
 
     // Non-card grid items (the "no running replica" placeholders) aren't
     // resizable, but still need the default span or they collapse to 1/12.
     const cards = new Set(this.cardTargets)
+
     Array.from(this.gridTarget.children).forEach(child => {
       if (cards.has(child)) return
 
@@ -194,6 +198,7 @@ export default class extends Controller {
     if (!this.hasGridTarget) return
 
     const base = this.baseCols || 1
+
     if (base <= 1) return
 
     const items = Array.from(this.gridTarget.children).filter(el => !el.hidden)
@@ -201,6 +206,7 @@ export default class extends Controller {
 
     items.forEach((item, i) => {
       const span = this.spanOf(item)
+
       if (rowSpan + span > base) rowSpan = 0 // this item wraps to a fresh row
 
       const next     = items[i + 1]
@@ -227,6 +233,7 @@ export default class extends Controller {
 
     const handle = event.currentTarget
     const card   = handle.closest("[data-metrics-display-target='card']")
+
     if (!card) return
 
     // Move the boundary with the same-row neighbour on this edge: their
@@ -235,6 +242,7 @@ export default class extends Controller {
     // card of a row is the flex filler (fillRows), so its outer edge has
     // nothing to trade with.
     const neighbor = this.rowNeighbor(card, handle.dataset.resizeEdge)
+
     if (!neighbor) return
 
     event.preventDefault()
@@ -247,6 +255,7 @@ export default class extends Controller {
 
     const gridWidth = this.gridTarget.clientWidth
     const gap       = parseFloat(getComputedStyle(this.gridTarget).columnGap) || 0
+
     this.resizeStep = (gridWidth + gap) / (this.baseCols || 1)
 
     document.addEventListener("pointermove", this.onResizeMove)
@@ -264,6 +273,7 @@ export default class extends Controller {
     const grow  = Math.round(this.resizeEdge === "left" ? -moved : moved)
 
     const self = Math.max(1, Math.min(this.resizePairTotal - 1, this.resizeStartSelf + grow))
+
     this.setSpan(this.resizeCard, self)
     this.setSpan(this.resizeNeighbor, this.resizePairTotal - self)
   }
@@ -309,6 +319,7 @@ export default class extends Controller {
 
   spanOf(card) {
     const m = (card.style.gridColumn || "").match(/span\s+(\d+)/)
+
     return m ? parseInt(m[1], 10) : (this.defaultSpan || 1)
   }
 
@@ -316,6 +327,7 @@ export default class extends Controller {
     if (!metricKey) return
 
     const store = this.readSizesStore()
+
     store[this.kindValue] ||= {}
     store[this.kindValue][metricKey] = span // sixtieths — explicit once resized
 

@@ -107,12 +107,14 @@ export default class extends Controller {
 
   resize() {
     const measured = this.element.getBoundingClientRect().width
+
     if (measured <= 0) return
 
     // Round down — sub-pixel viewBox widths confuse browser snap
     // and produce a 1-pixel gap at the right edge on some zoom
     // levels.
     const W = Math.floor(measured)
+
     if (W === this.widthValue && this.lastAppliedW === W) return
 
     this.widthValue    = W
@@ -121,6 +123,7 @@ export default class extends Controller {
     this.svg.setAttribute("viewBox", `0 0 ${W} ${this.heightValue}`)
 
     const innerW = W - this.padLeftValue - this.padRightValue
+
     if (innerW <= 0) return
 
     // Spanning rects (clip + overlay) — width = innerW, left edge
@@ -136,11 +139,13 @@ export default class extends Controller {
     // Spanning lines (gridlines + frame baseline). x1 stays at
     // padLeft; only x2 needs to move with W.
     const rightX = W - this.padRightValue
+
     this.hLineTargets.forEach((line) => line.setAttribute("x2", rightX))
 
     // X-axis tick labels — reposition via cached t ratio.
     this.xTickTargets.forEach((tick) => {
       const t = parseFloat(tick.dataset.xTickRatio)
+
       if (!Number.isFinite(t)) return
 
       tick.setAttribute("x", this.padLeftValue + t * innerW)
@@ -153,6 +158,7 @@ export default class extends Controller {
     // lookup. y is unchanged.
     this.points.forEach((p, i) => {
       const norm = this.pointsValue[i]?.x_norm
+
       if (Number.isFinite(norm)) {
         p.x = this.padLeftValue + norm * innerW
       }
@@ -194,6 +200,7 @@ export default class extends Controller {
 
     const overlay = event.currentTarget
     const rect    = overlay.getBoundingClientRect()
+
     if (rect.width <= 0) return
 
     // Cursor position within the inner chart area, 0..1. We match on `x_norm`
@@ -236,6 +243,7 @@ export default class extends Controller {
     const ns = "http://www.w3.org/2000/svg"
 
     const line = document.createElementNS(ns, "line")
+
     line.setAttribute("x1", x)
     line.setAttribute("x2", x)
     line.setAttribute("y1", this.padTopValue)
@@ -250,6 +258,7 @@ export default class extends Controller {
     // 1 SVG unit = 1 CSS pixel), so a plain <circle> renders as
     // a true circle — no inverse-scale compensation needed.
     const dot = document.createElementNS(ns, "circle")
+
     dot.setAttribute("cx", x)
     dot.setAttribute("cy", y)
     dot.setAttribute("r", "3.5")
@@ -305,7 +314,7 @@ export default class extends Controller {
     const ttRect = this.tooltip.getBoundingClientRect()
 
     let left = pxX + 12
-    let top  = Math.max(8, pxY - 30)
+    const top  = Math.max(8, pxY - 30)
 
     if (left + ttRect.width > containerRect.width - 4) {
       left = pxX - ttRect.width - 12
@@ -345,6 +354,7 @@ export default class extends Controller {
     if (!iso) return ""
 
     const d = new Date(iso)
+
     if (Number.isNaN(d.getTime())) return iso
 
     // Render in the operator's preferred timezone (Settings →
@@ -353,6 +363,7 @@ export default class extends Controller {
     // WebTime.zone_name. Falls back to "UTC" when the value is
     // missing (legacy callers / no operator preference set).
     const tz = this.hasTimezoneValue && this.timezoneValue ? this.timezoneValue : "UTC"
+
     try {
       const fmt = new Intl.DateTimeFormat("en-CA", {
         year:   "numeric",
@@ -370,11 +381,13 @@ export default class extends Controller {
       // we get the exact "YYYY-MM-DD HH:MM:SS TZ" layout the
       // operator's been seeing.
       const parts = fmt.formatToParts(d).reduce((acc, p) => (acc[p.type] = p.value, acc), {})
+
       return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second} ${parts.timeZoneName || tz}`
     } catch (_e) {
       // Invalid IANA name → fall back to UTC rendering so the
       // tooltip still shows something coherent.
       const pad = (n) => String(n).padStart(2, "0")
+
       return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
              `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`
     }
@@ -397,6 +410,7 @@ function segmentPath(seg) {
     const prevY = seg[i - 1][1]
     const currX = seg[i][0]
     const currY = seg[i][1]
+
     d += ` L ${currX} ${prevY} L ${currX} ${currY}`
   }
 

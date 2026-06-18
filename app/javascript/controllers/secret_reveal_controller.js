@@ -75,11 +75,13 @@ export default class extends Controller {
 
     if (this.allShown) {
       this.applyAll(false)
+
       return
     }
 
     if (this.confirmedValue) {
       this.applyAll(true)
+
       return
     }
 
@@ -143,6 +145,7 @@ export default class extends Controller {
       // No popover wired — degrade to silent reveal (still requires
       // explicit click, just no extra confirmation).
       this.applyAll(true)
+
       return
     }
 

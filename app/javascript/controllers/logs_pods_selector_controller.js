@@ -102,6 +102,7 @@ export default class extends Controller {
     if (selection === null) return
 
     const allowed = new Set(selection)
+
     this.toggleTargets.forEach((t) => {
       t.checked = allowed.has(t.dataset.resourceName)
     })
@@ -130,10 +131,13 @@ export default class extends Controller {
 
   loadSelection() {
     if (!this.storageKeyValue) return null
+
     try {
       const raw = localStorage.getItem(this.storageKeyValue)
+
       if (raw === null) return null
       const parsed = JSON.parse(raw)
+
       return Array.isArray(parsed) ? parsed : null
     } catch (_e) {
       return null
@@ -142,6 +146,7 @@ export default class extends Controller {
 
   storageWrite(arr) {
     if (!this.storageKeyValue) return
+
     try {
       localStorage.setItem(this.storageKeyValue, JSON.stringify(arr))
     } catch (_e) { /* quota / privacy mode — ignore */ }
@@ -149,6 +154,7 @@ export default class extends Controller {
 
   storageRemove() {
     if (!this.storageKeyValue) return
+
     try {
       localStorage.removeItem(this.storageKeyValue)
     } catch (_e) { /* ignore */ }

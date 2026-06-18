@@ -51,6 +51,7 @@ export default class extends Controller {
       const focusable = this.dialogTarget?.querySelector(
         "input:not([type='hidden']):not([disabled]), textarea, select, button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"
       )
+
       focusable?.focus()
     })
   }

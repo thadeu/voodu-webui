@@ -41,8 +41,10 @@ export default class extends Controller {
     })
 
     const selected = this.targetTarget.selectedOptions[0]
+
     if (selected && selected.disabled) {
       const fallback = options.find((option) => !option.disabled)
+
       if (fallback) this.targetTarget.value = fallback.value
     }
   }

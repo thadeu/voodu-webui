@@ -92,12 +92,14 @@ export default class extends Controller {
   startResize(event) {
     const handle = event.currentTarget
     const key    = handle.dataset.columnKey
+
     if (!key) return
 
     event.preventDefault()
     event.stopPropagation()
 
     const cell = handle.closest(".log-hcell")
+
     if (!cell) return
 
     // Pin the current resolved width as the starting point. For an
@@ -142,6 +144,7 @@ export default class extends Controller {
   stopResize() {
     if (!this.resize) {
       document.body.classList.remove("log-cols-resizing")
+
       return
     }
 
@@ -168,6 +171,7 @@ export default class extends Controller {
 
   openPopover() {
     this.popoverTarget.hidden = false
+
     if (this.hasSettingsButtonTarget) {
       this.settingsButtonTarget.setAttribute("aria-expanded", "true")
     }
@@ -181,6 +185,7 @@ export default class extends Controller {
       // Scrolling there pulls the header out from under the popover
       // visually — close instead of trying to follow.
       const scroller = this.element.querySelector('[data-log-stream-target="viewport"]')
+
       if (scroller) {
         scroller.addEventListener("scroll", this.onDocScroll, { passive: true })
         this.popoverScroller = scroller
@@ -193,10 +198,13 @@ export default class extends Controller {
     if (this.popoverTarget.hidden) return
 
     this.popoverTarget.hidden = true
+
     if (this.hasSettingsButtonTarget) {
       this.settingsButtonTarget.setAttribute("aria-expanded", "false")
     }
+
     document.removeEventListener("click", this.onDocClick)
+
     if (this.popoverScroller) {
       this.popoverScroller.removeEventListener("scroll", this.onDocScroll)
       this.popoverScroller = null
@@ -217,6 +225,7 @@ export default class extends Controller {
   toggleVisibility(event) {
     const input = event.currentTarget
     const key   = input.dataset.columnKey
+
     if (!key) return
 
     // PAYLOAD can never be hidden — the checkbox is `disabled` in
@@ -224,6 +233,7 @@ export default class extends Controller {
     // future call site forgets the disabled flag.
     if (input.dataset.required === "true") {
       input.checked = true
+
       return
     }
 
@@ -241,16 +251,20 @@ export default class extends Controller {
 
   loadState() {
     const empty = { hidden: [], widths: {} }
+
     try {
       const raw = localStorage.getItem(this.storageKeyValue)
+
       if (!raw) return empty
       const parsed = JSON.parse(raw)
+
       return {
         hidden: Array.isArray(parsed.hidden) ? parsed.hidden.filter((k) => this.columnsValue.includes(k) && k !== "body") : [],
         widths: (parsed.widths && typeof parsed.widths === "object") ? parsed.widths : {}
       }
     } catch (e) {
       console.warn("[voodu] logs-columns: localStorage load failed:", e)
+
       return empty
     }
   }
@@ -272,6 +286,7 @@ export default class extends Controller {
     for (const col of this.columnsValue) {
       if (col === "body") continue
       const cls = `${HIDE_CLASS_PREFIX}${col}`
+
       this.listEl.classList.toggle(cls, this.state.hidden.includes(col))
     }
   }
@@ -291,6 +306,7 @@ export default class extends Controller {
 
       if (this.state.hidden.includes(col)) continue
       const w = this.state.widths[col] || this.defaultWidthsValue[col]
+
       tracks.push(w ? `${w}px` : "auto")
     }
 

@@ -80,6 +80,7 @@ export default class extends Controller {
       if (card.dataset.cardType !== "group") return
 
       const panel = card.querySelector("[data-role='group-panel']")
+
       if (!panel) return
 
       const sortable = new Sortable(panel, {
@@ -142,6 +143,7 @@ export default class extends Controller {
 
     orderList.forEach(metric => {
       const card = byMetric.get(metric)
+
       if (card && !seen.has(card)) {
         this.gridTarget.appendChild(card)
         seen.add(card)
@@ -158,6 +160,7 @@ export default class extends Controller {
       if (card.dataset.cardType !== "group") return
 
       const panel = card.querySelector("[data-role='group-panel']")
+
       if (!panel) return
 
       const subSet = new Set(card.dataset.subMetrics.split(","))
@@ -166,6 +169,7 @@ export default class extends Controller {
         if (!subSet.has(metric)) return
 
         const row = panel.querySelector(`[data-role='sub-metric'][data-metric='${metric}']`)
+
         if (row) panel.appendChild(row)
       })
     })
@@ -201,6 +205,7 @@ export default class extends Controller {
   clearCardWidths() {
     try {
       const sizes = JSON.parse(sessionStorage.getItem("voodu:metrics:sizes:v3") || "{}")
+
       delete sizes[this.kindValue]
       sessionStorage.setItem("voodu:metrics:sizes:v3", JSON.stringify(sizes))
     } catch (_) {
@@ -220,6 +225,7 @@ export default class extends Controller {
 
     if (card.dataset.cardType === "group") {
       this.openGroupPanel(card)
+
       return
     }
 
@@ -244,10 +250,12 @@ export default class extends Controller {
 
     if (card.dataset.expanded === "true") {
       this.closeGroupPanel()
+
       return
     }
 
     const panel = card.querySelector("[data-role='group-panel']")
+
     if (!panel) return
 
     panel.classList.remove("hidden")
@@ -275,6 +283,7 @@ export default class extends Controller {
       panel.style.right = ""
 
       const arrow = panel.querySelector("[data-role='group-arrow']")
+
       if (arrow) arrow.style.left = ""
     }
 
@@ -294,6 +303,7 @@ export default class extends Controller {
   // clear "this popover came from THIS card" visual cue.
   anchorPanel(card, panel) {
     const drawer = card.closest("[data-drawer-target='panel']")
+
     if (!drawer) return
 
     const cardRect   = card.getBoundingClientRect()
@@ -320,8 +330,10 @@ export default class extends Controller {
     // aligned with the card even when the panel was shifted by
     // the clamp.
     const arrow = panel.querySelector("[data-role='group-arrow']")
+
     if (arrow) {
       const cardCenterInPanel = (cardRect.left + cardRect.width / 2) - viewportLeft
+
       // Subtract half the arrow's width (10px → 5px) so the arrow's
       // center, not its left edge, aligns with the card center.
       arrow.style.left = `${cardCenterInPanel - 5}px`
@@ -330,6 +342,7 @@ export default class extends Controller {
 
   rotateChevron(card, expanded) {
     const chevron = card.querySelector("[data-role='chevron']")
+
     if (chevron) chevron.style.transform = expanded ? "rotate(180deg)" : ""
   }
 
@@ -359,6 +372,7 @@ export default class extends Controller {
     this.applySubMetricState(row, !checked)
 
     const group = row.closest("[data-card-type='group']")
+
     if (group) this.updateGroupCount(group)
   }
 
@@ -366,6 +380,7 @@ export default class extends Controller {
     row.dataset.subChecked = isChecked ? "true" : "false"
 
     const check = row.querySelector("[data-role='check-icon']")
+
     if (check) check.classList.toggle("hidden", !isChecked)
 
     row.classList.toggle("opacity-40", !isChecked)
@@ -377,6 +392,7 @@ export default class extends Controller {
     const sel   = rows.filter(r => r.dataset.subChecked === "true").length
 
     const countEl = groupCard.querySelector("[data-role='count']")
+
     if (countEl) countEl.textContent = `${sel} of ${total}`
 
     const dimmed = sel === 0
@@ -459,9 +475,11 @@ export default class extends Controller {
     card.classList.toggle("border-voodu-border", !isHidden)
 
     const dot = card.querySelector("[data-role='dot']")
+
     if (dot) dot.style.opacity = isHidden ? "0.25" : "1"
 
     const check = card.querySelector("[data-role='check']")
+
     if (check) {
       check.classList.toggle("hidden", isHidden)
       check.classList.toggle("flex",   !isHidden)

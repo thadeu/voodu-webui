@@ -44,6 +44,7 @@ export default class extends Controller {
 
   show(event) {
     const strip = event.currentTarget
+
     this.ensureTooltip()
 
     const formatted = strip.dataset.formatted || strip.dataset.value || ""
@@ -87,6 +88,7 @@ export default class extends Controller {
     // muted accent so the tooltip dot is visible even if the
     // variable is missing.
     const raw = this.element.style.getPropertyValue("--voodu-spark-color").trim()
+
     return raw || "#34d399"
   }
 
@@ -128,6 +130,7 @@ export default class extends Controller {
     const color = this.accentColor
 
     const line = document.createElementNS(ns, "line")
+
     line.setAttribute("x1", px)
     line.setAttribute("y1", 0)
     line.setAttribute("x2", px)
@@ -142,6 +145,7 @@ export default class extends Controller {
     // gives the active point a glow so it pops against the curve
     // even when the value matches the line's color near it.
     const halo = document.createElementNS(ns, "circle")
+
     halo.setAttribute("cx", px)
     halo.setAttribute("cy", py)
     halo.setAttribute("r", "6")
@@ -150,6 +154,7 @@ export default class extends Controller {
     halo.setAttribute("pointer-events", "none")
 
     const dot = document.createElementNS(ns, "circle")
+
     dot.setAttribute("cx", px)
     dot.setAttribute("cy", py)
     dot.setAttribute("r", "3.5")
@@ -246,9 +251,11 @@ function renderContent(formatted, ts, color, tz) {
 // truth across the whole app — sparkline tooltips honour it too.
 function formatTs(iso, tz) {
   const d = new Date(iso)
+
   if (Number.isNaN(d.getTime())) return iso
 
   const zone = tz || "UTC"
+
   try {
     return new Intl.DateTimeFormat("en-GB", {
       hour:     "2-digit",

@@ -49,6 +49,7 @@ export default class extends Controller {
     } else {
       this.fillFromPreset(this.rangeValue)
     }
+
     this.updateCustomLabel()
   }
 
@@ -65,6 +66,7 @@ export default class extends Controller {
   selectRange(event) {
     event.preventDefault()
     const value = event.currentTarget.dataset.range
+
     if (!value) return
 
     this.rangeTarget.value = value
@@ -86,9 +88,11 @@ export default class extends Controller {
 
   fillFromPreset(range) {
     const ms = parseRangeMs(range)
+
     if (!ms) return
 
     const now = new Date()
+
     if (this.hasFromInputTarget) this.fromInputTarget.value = formatLocal(new Date(now.getTime() - ms))
     if (this.hasUntilInputTarget) this.untilInputTarget.value = formatLocal(now)
     this.updateCustomLabel()
@@ -97,6 +101,7 @@ export default class extends Controller {
   repaintPresets(activeValue) {
     this.presetTargets.forEach((chip) => {
       const active = chip.dataset.range === activeValue
+
       chip.classList.remove(...(active ? CHIP_INACTIVE : CHIP_ACTIVE))
       chip.classList.add(...(active ? CHIP_ACTIVE : CHIP_INACTIVE))
     })
@@ -106,6 +111,7 @@ export default class extends Controller {
     if (!this.hasCustomLabelTarget) return
 
     const range = this.rangeTarget.value
+
     if (range !== "custom") {
       this.customLabelTarget.textContent = `${range} → now`
 
@@ -114,6 +120,7 @@ export default class extends Controller {
 
     const from = this.hasFromInputTarget ? this.fromInputTarget.value : ""
     const until = this.hasUntilInputTarget ? this.untilInputTarget.value : ""
+
     this.customLabelTarget.textContent = from && until ? formatRangeLabel(from, until) : "Custom"
   }
 
@@ -135,6 +142,7 @@ export default class extends Controller {
     if (!localInput || !hidden) return
 
     const raw = localInput.value
+
     if (!raw) {
       hidden.value = ""
 
@@ -142,6 +150,7 @@ export default class extends Controller {
     }
 
     const d = new Date(raw)
+
     hidden.value = isNaN(d.getTime()) ? "" : d.toISOString()
   }
 }
@@ -150,6 +159,7 @@ export default class extends Controller {
 // unknown keys (e.g. "custom"), so callers no-op cleanly.
 function parseRangeMs(key) {
   const m = String(key).match(/^(\d+)(m|h|d)$/)
+
   if (!m) return 0
 
   return parseInt(m[1], 10) * UNIT_MS[m[2]]
@@ -169,6 +179,7 @@ function formatLocal(date) {
 
 function utcToLocalInput(iso) {
   const d = new Date(iso)
+
   if (isNaN(d.getTime())) return ""
 
   return formatLocal(d)
@@ -179,6 +190,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function formatRangeLabel(fromVal, untilVal) {
   const f = new Date(fromVal)
   const u = new Date(untilVal)
+
   if (isNaN(f.getTime()) || isNaN(u.getTime())) return "Custom"
 
   const pad = (n) => String(n).padStart(2, "0")

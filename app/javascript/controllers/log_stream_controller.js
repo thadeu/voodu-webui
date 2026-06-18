@@ -174,6 +174,7 @@ export default class extends Controller {
     // The window-level `logs-pods:changed` listener updates this
     // as the operator toggles checkboxes in the drawer.
     this.containerToResource = new Map()
+
     for (const p of this.podsValue) {
       if (p && p.name && p.resource_name) {
         this.containerToResource.set(p.name, p.resource_name)
@@ -206,9 +207,11 @@ export default class extends Controller {
   disconnect() {
     if (this.mockTimer) clearTimeout(this.mockTimer)
     if (this.rateTimer) clearInterval(this.rateTimer)
+
     if (this.onPodsFilterChanged) {
       window.removeEventListener("logs-pods:changed", this.onPodsFilterChanged)
     }
+
     if (this.streamAbort) this.streamAbort.abort()
   }
 
@@ -217,6 +220,7 @@ export default class extends Controller {
   togglePause() {
     this.paused = !this.paused
     this.refreshStateChrome()
+
     if (this.streaming) {
       // For a real stream "pause" just stops appending; we keep the
       // socket open so unpausing doesn't drop the in-flight tail.
@@ -231,6 +235,7 @@ export default class extends Controller {
   toggleFollow() {
     this.follow = !this.follow
     this.refreshToggleButton(this.followTarget, this.follow)
+
     if (this.follow) {
       this.userScrolled = false
       this.scrollToBottom()
@@ -240,6 +245,7 @@ export default class extends Controller {
 
   toggleWrap() {
     this.wrap = !this.wrap
+
     // The wrap toggle moved from the toolbar (Tailwind class swap)
     // to a chip in the PAYLOAD header (CSS `[data-active="true"]`
     // selector lights it up). We only need to flip the data-active
@@ -247,12 +253,14 @@ export default class extends Controller {
     if (this.hasWrapTarget) {
       this.wrapTarget.dataset.active = this.wrap ? "true" : "false"
     }
+
     this.listTarget.classList.toggle("log-wrap", this.wrap)
   }
 
   toggleLevel(event) {
     const btn = event.currentTarget
     const lvl = btn.dataset.level
+
     if (this.activeLevels.has(lvl)) this.activeLevels.delete(lvl)
     else this.activeLevels.add(lvl)
     this.refreshLevelButton(btn, this.activeLevels.has(lvl), lvl)
@@ -262,6 +270,7 @@ export default class extends Controller {
   applyFilter() {
     this.query = (this.hasFilterTarget ? this.filterTarget.value : "").trim().toLowerCase()
     let count = 0
+
     for (const row of this.listTarget.children) {
       // The sticky column-header row lives inside .log-list (so it
       // shares the column-template grid) but is never a filter target.
@@ -270,9 +279,11 @@ export default class extends Controller {
       if (row.classList.contains("log-header")) continue
 
       const ok = this.rowMatches(row)
+
       row.hidden = !ok
       if (ok) count++
     }
+
     this.visibleCount = count
     this.visibleTarget.textContent = count
     this.emptyTarget.hidden = count > 0
@@ -285,6 +296,7 @@ export default class extends Controller {
     // is structural and must survive a clear so the operator's next
     // tailed line still shows up under the right column labels.
     const dataRows = this.listTarget.querySelectorAll(".log-row:not(.log-header)")
+
     for (const r of dataRows) r.remove()
     this.visibleCount = 0
     this.bufferTarget.textContent  = "0"
@@ -315,6 +327,7 @@ export default class extends Controller {
   onScroll() {
     const el = this.viewportTarget
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+
     if (!atBottom && this.follow) {
       this.userScrolled = true
       this.follow = false
@@ -395,12 +408,15 @@ export default class extends Controller {
       headers:     { "Accept": "text/plain" },
       credentials: "same-origin",
     })
+
     if (!resp.ok) {
       this.appendSyntheticError(`HTTP ${resp.status} ${resp.statusText}`)
+
       return
     }
 
     const text = await resp.text()
+
     this.consumeChunk(text)
 
     // Flush trailing partial line (response is fully delivered; no
@@ -413,9 +429,11 @@ export default class extends Controller {
 
   buildPollUrl() {
     const base = this.streamUrlValue
+
     if (!this.warehouseSinceIso) return base
 
     const sep = base.includes("?") ? "&" : "?"
+
     return `${base}${sep}since=${encodeURIComponent(this.warehouseSinceIso)}`
   }
 
@@ -426,6 +444,7 @@ export default class extends Controller {
   sleepAbortable(ms) {
     return new Promise((resolve) => {
       const t = setTimeout(resolve, ms)
+
       this.streamAbort.signal.addEventListener("abort", () => {
         clearTimeout(t)
         resolve()
@@ -456,6 +475,7 @@ export default class extends Controller {
       attempt++
 
       const delay = Math.min(RECONNECT_BASE_MS * 2 ** (attempt - 1), RECONNECT_MAX_MS)
+
       await this.sleepAbortable(delay)
     }
   }
@@ -465,6 +485,7 @@ export default class extends Controller {
   // closed or errored — the caller reconnects).
   async openOneStream() {
     let resp
+
     try {
       resp = await fetch(this.buildStreamUrl(), {
         signal: this.streamAbort.signal,
@@ -473,11 +494,13 @@ export default class extends Controller {
       })
     } catch (e) {
       if (e.name === "AbortError") return "abort"
+
       return "end"
     }
 
     if (!resp.ok) {
       this.appendSyntheticError(`HTTP ${resp.status} ${resp.statusText} — reconnecting…`)
+
       return "end"
     }
 
@@ -487,6 +510,7 @@ export default class extends Controller {
     try {
       while (true) {
         const { value, done } = await reader.read()
+
         if (done) break
         this.consumeChunk(decoder.decode(value, { stream: true }))
       }
@@ -514,6 +538,7 @@ export default class extends Controller {
     if (!this.warehouseSinceIso) return this.streamUrlValue
 
     const u = new URL(this.streamUrlValue, window.location.origin)
+
     u.searchParams.delete("tail")
     u.searchParams.set(
       "since",
@@ -529,8 +554,10 @@ export default class extends Controller {
   consumeChunk(text) {
     this.lineBuffer += text
     let idx
+
     while ((idx = this.lineBuffer.indexOf("\n")) >= 0) {
       const line = this.lineBuffer.slice(0, idx).replace(/\r$/, "")
+
       this.lineBuffer = this.lineBuffer.slice(idx + 1)
       if (line.length > 0) this.ingestLine(line)
     }
@@ -546,11 +573,13 @@ export default class extends Controller {
 
     this.seenKeys.add(line)
     this.seenOrder.push(line)
+
     if (this.seenOrder.length > DEDUP_CAP) {
       this.seenKeys.delete(this.seenOrder.shift())
     }
 
     const parsed = parseLogLine(line, this.podValue)
+
     if (!parsed) return
 
     // Update the warehouse polling watermark from the parsed
@@ -562,6 +591,7 @@ export default class extends Controller {
     // watermark is set-but-never-read, harmless.
     if (parsed.ts && !isNaN(parsed.ts)) {
       const iso = parsed.ts.toISOString()
+
       if (!this.warehouseSinceIso || iso > this.warehouseSinceIso) {
         this.warehouseSinceIso = iso
       }
@@ -585,12 +615,15 @@ export default class extends Controller {
   backfillMock() {
     const back = []
     const now = Date.now()
+
     for (let i = 60; i > 0; i--) {
       const log = makeLog(pick(this.pool))
+
       if (!log) continue
       log.ts = new Date(now - i * 180 - Math.random() * 200)
       back.push(log)
     }
+
     back.sort((a, b) => a.ts - b.ts)
     for (const log of back) this.appendLog(log, { skipFollow: true })
     this.scrollToBottom()
@@ -601,13 +634,18 @@ export default class extends Controller {
       if (this.paused) return
       const burst = Math.random() < 0.18
       const batchSize = burst ? 2 + Math.floor(Math.random() * 4) : 1
+
       for (let i = 0; i < batchSize; i++) {
         const log = makeLog(pick(this.pool))
+
         if (log) this.appendLog(log)
       }
+
       const delay = burst ? 40 : 90 + Math.random() * 280
+
       this.mockTimer = setTimeout(tick, delay)
     }
+
     this.mockTimer = setTimeout(tick, 120)
   }
 
@@ -615,11 +653,14 @@ export default class extends Controller {
     this.rateTimer = setInterval(() => {
       if (this.buffer.length < 2) {
         this.rateTarget.textContent = "0"
+
         return
       }
+
       const last = this.buffer.slice(-100)
       const span = last[last.length - 1].ts - last[0].ts
       const rate = span <= 0 ? last.length : Math.round((last.length / span) * 1000 * 10) / 10
+
       this.rateTarget.textContent = rate
     }, 1000)
   }
@@ -632,15 +673,18 @@ export default class extends Controller {
     if (this.paused && !opts.skipPause) return
 
     this.buffer.push(log)
+
     while (this.buffer.length > this.bufferCapValue) {
       this.buffer.shift()
       // Pick the oldest DATA row to evict — skip the sticky column
       // header, which is always the first child but isn't part of
       // the rolling buffer.
       let dropped = this.listTarget.firstElementChild
+
       while (dropped && dropped.classList.contains("log-header")) {
         dropped = dropped.nextElementSibling
       }
+
       if (dropped) {
         if (!dropped.hidden) this.visibleCount--
         this.listTarget.removeChild(dropped)
@@ -649,6 +693,7 @@ export default class extends Controller {
 
     const row = this.renderRow(log)
     const matches = this.rowMatches(row)
+
     row.hidden = !matches
     this.listTarget.appendChild(row)
 
@@ -665,6 +710,7 @@ export default class extends Controller {
     const pc   = podColor(log.pod)
     const sp   = shortPod(log.pod)
     const row  = document.createElement("div")
+
     row.className = "log-row"
     row.dataset.level = log.level
     row.dataset.search = `${log.pod} ${log.ip} ${log.method || ""} ${log.path || ""} ${log.status || ""} ${log.message || ""}`.toLowerCase()
@@ -695,12 +741,14 @@ export default class extends Controller {
     row.style.setProperty("--row-accent", pc)
 
     const ts = document.createElement("span")
+
     ts.className = "log-ts"
     ts.textContent = fmtTime(log.ts)
     ts.style.setProperty("--row-accent", pc)
     row.appendChild(ts)
 
     const lvl = document.createElement("span")
+
     lvl.className = "log-level"
     lvl.textContent = log.level
     lvl.style.color = tone.color
@@ -710,6 +758,7 @@ export default class extends Controller {
     row.appendChild(lvl)
 
     const pod = document.createElement("span")
+
     pod.className = "log-pod"
     pod.textContent = sp
     pod.style.color = pc
@@ -723,31 +772,37 @@ export default class extends Controller {
     // tooltip carries it for one-off inspection on hover.
 
     const body = document.createElement("span")
+
     body.className = "log-body"
     body.style.setProperty("--row-accent", pc)
 
     if (log.type === "request") {
       const method = document.createElement("span")
+
       method.style.color = methodColor(log.method)
       method.style.fontWeight = "600"
       method.textContent = log.method
       body.appendChild(method)
       body.appendChild(document.createTextNode(" "))
       const path = document.createElement("span")
+
       path.style.color = "var(--voodu-log-payload)"
       path.textContent = log.path
       body.appendChild(path)
     } else if (log.type === "response") {
       const arrow = document.createElement("span")
+
       arrow.style.color = "var(--voodu-muted)"
       arrow.textContent = "← "
       body.appendChild(arrow)
       const status = document.createElement("span")
+
       status.style.color = statusColor(log.status)
       status.style.fontWeight = "600"
       status.textContent = log.status
       body.appendChild(status)
       const dur = document.createElement("span")
+
       dur.style.color = "var(--voodu-muted)"
       dur.textContent = ` · ${log.durationMs}ms`
       body.appendChild(dur)
@@ -757,6 +812,7 @@ export default class extends Controller {
       // theme.css) so a wall of logs reads cleanly on white — the level
       // is already conveyed by the LVL chip.
       const msg = document.createElement("span")
+
       msg.className = "log-msg"
       msg.style.setProperty("--log-tone", tone.color)
       msg.textContent = log.message
@@ -770,6 +826,7 @@ export default class extends Controller {
     // visible (data-active="true") when wrap is on for the row, so
     // the operator can disable it without re-hovering precisely.
     const wrapBtn = document.createElement("button")
+
     wrapBtn.type = "button"
     wrapBtn.className = "log-wrap-single"
     wrapBtn.title = "Toggle wrap for this line"
@@ -789,6 +846,7 @@ export default class extends Controller {
     // to the clipboard — matches operator's mental model: "the line
     // already has its own timestamp inside the JSON, just give me that."
     const copy = document.createElement("button")
+
     copy.type = "button"
     copy.className = "log-copy"
     copy.title = "Copy payload"
@@ -798,6 +856,7 @@ export default class extends Controller {
     body.appendChild(copy)
 
     row.appendChild(body)
+
     return row
   }
 
@@ -817,11 +876,14 @@ export default class extends Controller {
     event.stopPropagation()
     const btn = event.currentTarget
     const row = btn.closest(".log-row")
+
     if (!row) return
     const body = row.querySelector(".log-body")
+
     if (!body) return
 
     const text = this.extractBodyText(body)
+
     try {
       await navigator.clipboard.writeText(text)
       btn.dataset.copied = "true"
@@ -830,8 +892,10 @@ export default class extends Controller {
       // Manual-select fallback for browsers without clipboard API
       // access (file://, insecure context, denied permission).
       const range = document.createRange()
+
       range.selectNodeContents(body)
       const sel = window.getSelection()
+
       sel.removeAllRanges()
       sel.addRange(range)
     }
@@ -853,15 +917,18 @@ export default class extends Controller {
   async copyAll(event) {
     event.preventDefault()
     const btn = event.currentTarget
+
     if (!this.hasListTarget) return
 
     const lines = []
+
     for (const row of this.listTarget.children) {
       if (row.hidden) continue
       // Schema header has no payload to copy — skip it. Its
       // .log-body cell only carries the literal "PAYLOAD" label.
       if (row.classList.contains("log-header")) continue
       const body = row.querySelector(".log-body")
+
       if (!body) continue
       lines.push(this.extractBodyText(body))
     }
@@ -883,8 +950,10 @@ export default class extends Controller {
       // list element so the operator can Ctrl+C. Less polished but
       // never strands the action.
       const range = document.createRange()
+
       range.selectNodeContents(this.listTarget)
       const sel = window.getSelection()
+
       sel.removeAllRanges()
       sel.addRange(range)
     }
@@ -899,6 +968,7 @@ export default class extends Controller {
   // "Copy" bug later).
   extractBodyText(body) {
     let out = ""
+
     for (const node of body.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
         out += node.nodeValue
@@ -908,6 +978,7 @@ export default class extends Controller {
         out += node.textContent || ""
       }
     }
+
     return out
   }
 
@@ -951,6 +1022,7 @@ export default class extends Controller {
     // the dblclick path — handle both.
     const node = event.currentTarget
     const row = node.classList.contains("log-row") ? node : node.closest(".log-row")
+
     if (!row) return
 
     const wrapped = row.classList.toggle("log-row-wrap")
@@ -958,6 +1030,7 @@ export default class extends Controller {
     // Find the chip on this row to mirror data-active. There's
     // exactly one per row (created in renderRow).
     const chip = row.querySelector(".log-wrap-single")
+
     if (chip) chip.dataset.active = wrapped ? "true" : "false"
 
     // Double-clicking text inside `.log-body` selects a word as a
@@ -966,6 +1039,7 @@ export default class extends Controller {
     // copy intent). Clear it so the toggle feels clean.
     if (event.type === "dblclick") {
       const sel = window.getSelection()
+
       if (sel && sel.removeAllRanges) sel.removeAllRanges()
     }
   }
@@ -974,6 +1048,7 @@ export default class extends Controller {
     if (!this.activeLevels.has(row.dataset.level)) return false
     if (this.query && !row.dataset.search.includes(this.query)) return false
     if (!this.podMatchesResourceFilter(row.dataset.pod || row.dataset.container)) return false
+
     return true
   }
 
@@ -992,7 +1067,9 @@ export default class extends Controller {
     if (this.resourceFilter === null) return true
     if (!containerName) return true
     const resource = this.containerToResource.get(containerName)
+
     if (!resource) return true
+
     return this.resourceFilter.has(resource)
   }
 
@@ -1002,10 +1079,13 @@ export default class extends Controller {
   //   Set<string> — saved selection (possibly empty = hide all)
   loadResourceFilter() {
     if (!this.podsFilterKeyValue) return null
+
     try {
       const raw = localStorage.getItem(this.podsFilterKeyValue)
+
       if (raw === null) return null
       const parsed = JSON.parse(raw)
+
       return Array.isArray(parsed) ? new Set(parsed) : null
     } catch (_e) {
       return null
@@ -1034,11 +1114,13 @@ export default class extends Controller {
     if (this.hasStateLabelTarget) {
       this.stateLabelTarget.textContent = this.paused ? "paused" : "streaming live"
     }
+
     if (this.hasStateDotTarget) {
       this.stateDotTarget.style.background = this.paused ? "var(--voodu-muted)" : "var(--voodu-green)"
       this.stateDotTarget.style.boxShadow  = this.paused ? "none" : "0 0 0 3px color-mix(in srgb, var(--voodu-green) 18%, transparent)"
       this.stateDotTarget.style.animation  = this.paused ? "none" : "voodu-pulse 2.4s ease-in-out infinite"
     }
+
     if (this.hasPauseTarget) {
       this.pauseTarget.querySelector("[data-pause-label]").textContent = this.paused ? "Resume" : "Pause"
     }
@@ -1058,7 +1140,9 @@ export default class extends Controller {
 
   refreshLevelButton(btn, active, level) {
     const tone = LEVEL_TONE[level] || LEVEL_TONE.INFO
+
     btn.dataset.active = active ? "true" : "false"
+
     if (active) {
       btn.style.color = tone.color
       btn.style.background = tone.bg
@@ -1077,6 +1161,7 @@ export default class extends Controller {
   scrollToBottom() {
     if (!this.hasViewportTarget) return
     const el = this.viewportTarget
+
     el.scrollTop = el.scrollHeight
   }
 
@@ -1122,14 +1207,17 @@ function parseLogLine(raw, fallbackPod) {
   // Strip `[pod-name] ` first — when present that's the canonical
   // attribution from the multi-source stream and trumps the URL pod.
   const prefixMatch = line.match(POD_PREFIX_RE)
+
   if (prefixMatch) {
     pod  = prefixMatch[1]
     line = prefixMatch[2]
   }
 
   const isoMatch = line.match(ISO_RE)
+
   if (isoMatch) {
     const parsed = new Date(isoMatch[1])
+
     if (!isNaN(parsed)) ts = parsed
     line = isoMatch[2]
   }
@@ -1139,6 +1227,7 @@ function parseLogLine(raw, fallbackPod) {
 
   // HTTP request
   const reqMatch = line.match(HTTP_REQ_RE)
+
   if (reqMatch) {
     return { id: nextId(), ts, pod, ip, level: "HTTP", type: "request",
              method: reqMatch[1], path: reqMatch[2] }
@@ -1146,12 +1235,14 @@ function parseLogLine(raw, fallbackPod) {
 
   // HTTP response shape (rare in raw container logs but our CLI uses it)
   const resMatch = line.match(HTTP_RES_RE)
+
   if (resMatch) {
     return { id: nextId(), ts, pod, ip, level: "HTTP", type: "response",
              status: parseInt(resMatch[1], 10), durationMs: parseInt(resMatch[2], 10) }
   }
 
   let level = "INFO"
+
   if (/\b(ERROR|FATAL|panic)\b/i.test(line)) level = "ERROR"
   else if (/\b(WARN|WARNING)\b/i.test(line)) level = "WARN"
 
@@ -1159,6 +1250,7 @@ function parseLogLine(raw, fallbackPod) {
 }
 
 let _id = 1
+
 function nextId() { return _id++ }
 
 // ─── Mock generator (kept for /logs multi-source) ──────────────────
@@ -1245,17 +1337,22 @@ const POD_ACCENT_PALETTE = [
 ]
 
 function pick(arr)       { return arr[Math.floor(Math.random() * arr.length)] }
+
 function pickWeighted(w) {
   const keys = Object.keys(w)
   let total = 0
+
   for (const k of keys) total += w[k]
   let r = Math.random() * total
+
   for (const k of keys) { r -= w[k]; if (r < 0) return k }
+
   return keys[0]
 }
 
 function makeLog(podName) {
   const profile = POD_PROFILES[podName]
+
   if (!profile) return null
   const id = nextId()
   const ts = new Date()
@@ -1264,26 +1361,33 @@ function makeLog(podName) {
   if (!profile.paths) {
     const roll = Math.random()
     let level, msg
+
     if (roll < 0.85)      { level = "INFO";  msg = pick(profile.workerMsgs || ["Heartbeat"]) }
     else if (roll < 0.96) { level = "WARN";  msg = pick(profile.warnMsgs || ["(no warn)"])  }
     else                  { level = "ERROR"; msg = pick(profile.errorMsgs || ["(no err)"])  }
+
     return { id, ts, pod: podName, ip: "127.0.0.1", level, type: "message", message: msg }
   }
 
   const roll = Math.random()
+
   if (roll < 0.91) {
     if (Math.random() < 0.5) {
       return { id, ts, pod: podName, ip, level: "HTTP", type: "request",
                method: pickWeighted(profile.methods), path: profile.paths() }
     }
+
     const status = parseInt(pickWeighted(profile.statusMix), 10)
     const durationMs = status >= 500
       ? 50 + Math.round(Math.random() * 250)
       : Math.max(0, Math.round(Math.random() * 60))
+
     return { id, ts, pod: podName, ip, level: "HTTP", type: "response", status, durationMs }
   }
+
   if (roll < 0.96)  return { id, ts, pod: podName, ip, level: "INFO",  type: "message", message: pick(profile.infoMsgs  || ["ok"]) }
   if (roll < 0.988) return { id, ts, pod: podName, ip, level: "WARN",  type: "message", message: pick(profile.warnMsgs  || ["warn"]) }
+
   return { id, ts, pod: podName, ip, level: "ERROR", type: "message", message: pick(profile.errorMsgs || ["err"]) }
 }
 
@@ -1299,12 +1403,15 @@ function statusColor(s) {
   if (s >= 500) return "var(--voodu-red)"
   if (s >= 400) return "var(--voodu-amber)"
   if (s >= 300) return "var(--voodu-blue)"
+
   return "var(--voodu-green)"
 }
 
 function podColor(name) {
   let h = 0
+
   for (let i = 0; i < name.length; i++) h = ((h * 31) + name.charCodeAt(i)) >>> 0
+
   return POD_ACCENT_PALETTE[h % POD_ACCENT_PALETTE.length]
 }
 
@@ -1313,6 +1420,7 @@ function fmtTime(d) {
   const mm = String(d.getMinutes()).padStart(2, "0")
   const ss = String(d.getSeconds()).padStart(2, "0")
   const ms = String(d.getMilliseconds()).padStart(3, "0")
+
   return `${hh}:${mm}:${ss}.${ms}`
 }
 
@@ -1320,14 +1428,17 @@ function fmtFullTime(d) {
   const y  = d.getFullYear()
   const mo = String(d.getMonth() + 1).padStart(2, "0")
   const da = String(d.getDate()).padStart(2, "0")
+
   return `${y}-${mo}-${da} ${fmtTime(d)}`
 }
 
 function shortPod(name) {
   if (!name) return "—"
   const dot = name.indexOf(".")
+
   if (dot < 0) return name
   const left = name.slice(0, dot)
   const dash = left.lastIndexOf("-")
+
   return (dash < 0 ? left : left.slice(dash + 1)) + name.slice(dot)
 }
