@@ -98,6 +98,8 @@ class MetricDashboardData
   def chart_for(panel, index)
     key = MetricDashboard.panel_card_key(index)
 
+    return log_chart_for(panel, key) if panel["scope_kind"].to_s == "log"
+
     if panel["scope_kind"].to_s == "pod"
       scope_id = resolve_container(panel)
       return missing_card(panel, key) if scope_id.nil?
@@ -133,6 +135,54 @@ class MetricDashboardData
     # Settings/Order drawer toggles + reorders this panel by.
     chart.merge(scope_kind: scope_kind, scope_id: scope_id,
       default_visible: true, panel_key: key)
+  end
+
+  # log_chart_for — a log-count panel: count matches of the panel's LogQuery
+  # filter over the dashboard range via LogMetricData, returned as a `number`
+  # envelope the NumberCard renders. No client round-trip — LogMetricData
+  # reads the local NDJSON warehouse; we just resolve which replica containers
+  # to scan. An empty replica set still renders (count 0).
+  #
+  # default_visible: true — the operator explicitly chose this panel, so the
+  # metrics-display "hide picker-only on first run" heuristic must never hide
+  # it. panel_key → the data-metric-key the Settings/Order drawer toggles by.
+  def log_chart_for(panel, key)
+    data = LogMetricData.new(
+      @island,
+      query: panel["query"].to_s,
+      range: @range,
+      scope: panel["scope"].to_s,
+      name: panel["name"].to_s,
+      pods: resolve_containers(panel)
+    )
+
+    {
+      kind: :number,
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      value: data.value,
+      formatted: data.formatted,
+      series: data.series,
+      truncated: data.truncated?,
+      clamped: data.clamped?,
+      range: @range,
+      range_ms: range_ms,
+      default_visible: true,
+      panel_key: key
+    }
+  end
+
+  # resolve_containers — ALL live replica container names for the panel's
+  # workload (scope + name). Unlike resolve_container (which picks one replica
+  # for a metric series), a log count aggregates across EVERY replica — a
+  # request/call lands on whichever replica, so the matches are spread.
+  def resolve_containers(panel)
+    scope = panel["scope"].to_s
+    name = panel["name"].to_s
+
+    pods.select { |p| field(p, "scope") == scope && field(p, "resource_name") == name }
+      .map { |p| field(p, "name") }
+      .reject(&:blank?)
   end
 
   # resolve_container — workload (scope + resource_name) → the current

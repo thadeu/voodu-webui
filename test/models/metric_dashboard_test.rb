@@ -12,6 +12,12 @@ class MetricDashboardTest < ActiveSupport::TestCase
      "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"}
   end
 
+  def log_panel
+    {"scope_kind" => "log", "scope" => "fs", "name" => "fs",
+     "query" => "@message like /INVITE/", "agg" => "count",
+     "label" => "fs · INVITE", "color" => "var(--voodu-orange)", "chart_type" => "number"}
+  end
+
   test "panels round-trips as a Ruby Array (native json column)" do
     d = @island.metric_dashboards.create!(name: "a", panels: [host_panel])
 
@@ -53,6 +59,44 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
     assert_not bad.valid?
     assert bad.errors[:panels].present?
+  end
+
+  test "a log panel is valid with scope/name/query/label/color (no metric/scale)" do
+    d = @island.metric_dashboards.new(name: "calls", panels: [log_panel])
+
+    assert d.valid?, d.errors.full_messages.to_sentence
+  end
+
+  test "a log panel missing its query is rejected" do
+    bad = log_panel.except("query")
+    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+
+    assert_not d.valid?
+    assert d.errors[:panels].present?
+  end
+
+  test "a log panel missing its workload identity is rejected" do
+    bad = log_panel.except("name")
+    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+
+    assert_not d.valid?
+    assert d.errors[:panels].present?
+  end
+
+  test "the number chart type is rejected on a non-log panel" do
+    bad = host_panel.merge("chart_type" => "number")
+    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+
+    assert_not d.valid?
+    assert d.errors[:panels].present?
+  end
+
+  test "an unknown scope_kind is rejected" do
+    bad = host_panel.merge("scope_kind" => "wormhole")
+    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+
+    assert_not d.valid?
+    assert d.errors[:panels].present?
   end
 
   test "panels_well_formed rejects more than MAX_PANELS" do

@@ -13,6 +13,16 @@
 class Views::MetricDashboards::Form < Views::Base
   FRAME_ID = "dashboards-panel"
 
+  # Accent palette offered for log-count panels. A count has no canonical
+  # per-metric color (it isn't CPU/Memory/…), so the operator picks one.
+  # Drawn from the chart palette tokens; red stays available for "errors"
+  # counts (a 5xx / 480-Cancel filter).
+  LOG_COLORS = %w[
+    var(--voodu-orange) var(--voodu-amber) var(--voodu-green)
+    var(--voodu-blue) var(--voodu-purple) var(--voodu-pink)
+    var(--voodu-teal) var(--voodu-red)
+  ].freeze
+
   def initialize(island:, dashboard:, pods: [], embed: true,
     current_path: nil, islands: [], current_island: nil,
     return_to: nil)
@@ -99,7 +109,9 @@ class Views::MetricDashboards::Form < Views::Base
       input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 
       name_field
+      add_type_toggle
       add_panel_row
+      add_log_panel_row
       panels_list
       hidden_panels_input
       footer_actions
@@ -120,11 +132,36 @@ class Views::MetricDashboards::Form < Views::Base
     end
   end
 
+  # add_type_toggle — segmented control that picks which "add" block shows
+  # (Metric vs Log count), so the two builders don't compete for vertical
+  # space. The active state is painted by the builder controller via inline
+  # style (CSS-var colors) so it survives Tailwind purge without a safelist.
+  def add_type_toggle
+    div(class: "flex items-stretch gap-1 p-0.5 border border-voodu-border bg-voodu-surface w-full vmd:w-[300px]") do
+      add_type_button("metric", "Metric")
+      add_type_button("log", "Log count")
+    end
+  end
+
+  def add_type_button(value, text)
+    # Seed "metric" active (the default block) so the toggle paints right
+    # before Stimulus connects; the controller keeps it in sync after.
+    active = value == "metric"
+    style = active ? "background: var(--voodu-accent-dim); color: var(--voodu-accent-2);" : "color: var(--voodu-text-2);"
+
+    button(
+      type: "button",
+      data: {action: "click->dashboard-builder#setAddType", add_type: value, dashboard_builder_target: "addTypeBtn"},
+      style: style,
+      class: "flex-1 inline-flex items-center justify-center h-8 text-[12px] font-medium transition-colors"
+    ) { text }
+  end
+
   # add_panel_row — source + metric pickers (DS dropdowns) + Add.
   # Stacks on narrow viewports, sits inline at vmd+. The dropdown
   # controller owns open/close; dashboard-builder owns the selection.
   def add_panel_row
-    div(class: "flex flex-col gap-2 p-3 border border-voodu-border-2 bg-voodu-surface") do
+    div(class: "flex flex-col gap-2 p-3 border border-voodu-border-2 bg-voodu-surface", data: {dashboard_builder_target: "metricBlock"}) do
       span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Add panel" }
 
       div(class: "flex flex-col vmd:flex-row gap-2") do
@@ -211,6 +248,103 @@ class Views::MetricDashboards::Form < Views::Base
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
       span { "Add" }
+    end
+  end
+
+  # add_log_panel_row — the log-count panel builder. A pod source (logs are
+  # per-pod), a label, the LogQuery filter (same DSL as /logs/analytics), and
+  # an accent color → "Add count" appends a scope_kind:"log" panel. The count
+  # spans the dashboard's global range and renders as a NumberCard. Stacks on
+  # narrow viewports; the query input stays full-width (it's the long field).
+  def add_log_panel_row
+    div(hidden: true, data: {dashboard_builder_target: "logBlock"}, class: "flex flex-col gap-2.5 p-3 border border-voodu-border-2 bg-voodu-surface") do
+      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Add log count" }
+      span(class: "text-[11px] text-voodu-muted leading-relaxed") do
+        "Count log lines matching a filter over the dashboard range — same query language as Analytics."
+      end
+
+      div(class: "flex flex-col vmd:flex-row gap-2") do
+        log_source_picker
+        input(
+          type: "text",
+          placeholder: "Label — e.g. Calls (INVITE)",
+          autocomplete: "off",
+          data: {dashboard_builder_target: "logLabel"},
+          class: "vmd:flex-1 min-w-0 h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+        )
+      end
+
+      # Shared LogQuery editor (highlight + field validation + cheatsheet).
+      # submits:false → Cmd+Enter validates but never POSTs the dashboard form
+      # mid-edit; the builder reads the value via the logQuery target.
+      render Components::UI::QueryEditor.new(
+        value: "",
+        submits: false,
+        rows: "3",
+        min_h: "min-h-[84px]",
+        help_limit: false,
+        placeholder: "@message like /INVITE/",
+        input_data: {dashboard_builder_target: "logQuery"}
+      )
+
+      div(class: "flex items-center gap-2 flex-wrap") do
+        color_swatches
+        div(class: "flex-1")
+        add_log_button
+      end
+    end
+  end
+
+  # log_source_picker — workloads only (host has no per-pod logs). Selecting
+  # one sets the panel's scope/name; the metric picker is irrelevant here.
+  def log_source_picker
+    div(class: "vmd:w-[200px] shrink-0 relative", data: {controller: "dropdown"}) do
+      picker_trigger("Select pod", :logSourceLabel)
+      div(hidden: true, data: {dropdown_target: "menu"}, class: menu_classes) do
+        if workloads.empty?
+          div(class: "px-3 py-2 text-[12px] text-voodu-muted") { "No pods on this island" }
+        else
+          workloads.each { |w| log_source_option(w, "#{w[:label]} · #{w[:kind]}") }
+        end
+      end
+    end
+  end
+
+  def log_source_option(src, text)
+    button(
+      type: "button",
+      data: {action: "click->dashboard-builder#selectLogSource click->dropdown#close", source: src.to_json},
+      class: option_classes
+    ) { text }
+  end
+
+  # color_swatches — accent picker for the count tile. Inline-style fill (the
+  # tokens are CSS vars, not Tailwind classes); the active ring is toggled in
+  # JS via outline (also CSS-var driven) so nothing here depends on a
+  # purge-scanned class.
+  def color_swatches
+    div(class: "flex items-center gap-1.5 flex-wrap") do
+      LOG_COLORS.each do |c|
+        button(
+          type: "button",
+          title: c,
+          "aria-label": "Use accent #{c}",
+          data: {action: "click->dashboard-builder#selectLogColor", dashboard_builder_target: "logSwatch", color: c},
+          class: "w-5 h-5 rounded-full border border-voodu-border shrink-0",
+          style: "background: #{c};"
+        )
+      end
+    end
+  end
+
+  def add_log_button
+    button(
+      type: "button",
+      data: {action: "click->dashboard-builder#addLog"},
+      class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12.5px] font-medium hover:bg-voodu-accent/20 shrink-0"
+    ) do
+      render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
+      span { "Add count" }
     end
   end
 

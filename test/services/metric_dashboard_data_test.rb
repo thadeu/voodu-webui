@@ -17,7 +17,11 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     ENV["WAREHOUSE"] = "1"
   end
 
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
+  teardown do
+    ENV["WAREHOUSE"] = @prev_wh
+    dir = LogTail::FilePath.island_dir(@island.id)
+    FileUtils.rm_rf(dir) if Dir.exist?(dir)
+  end
 
   HOST = {
     "scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
@@ -54,6 +58,41 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_not charts[0][:missing], "host panel should still render"
     assert charts[1][:missing], "pod panel with no replica should be missing"
     assert_equal "web", charts[1][:source_label]
+  end
+
+  FS_CALLS = {
+    "scope_kind" => "log", "scope" => "fs", "name" => "fs",
+    "query" => "@message like /INVITE/", "agg" => "count",
+    "label" => "fs · INVITE", "color" => "var(--voodu-orange)", "chart_type" => "number"
+  }.freeze
+
+  test "log panel counts matching lines across the workload's replicas as a number envelope" do
+    seed_running_fs_pod("fs.aaaa")
+    seed_running_fs_pod("fs.bbbb")
+    seed_logs("fs.aaaa", ["INVITE one", "200 OK", "INVITE two"])
+    seed_logs("fs.bbbb", ["INVITE three"])
+    dash = make_dashboard([FS_CALLS])
+
+    charts = MetricDashboardData.new(client, @island, dash, range: "1h").charts
+
+    assert_equal 1, charts.size
+    c = charts.first
+    assert_equal :number, c[:kind]
+    assert_equal 3, c[:value], "both fs replicas counted, the 200 OK line excluded"
+    assert_equal "3", c[:formatted]
+    assert_equal "fs · INVITE", c[:label]
+    assert_equal "1h", c[:range]
+    assert_equal "k0", c[:panel_key]
+    assert c[:default_visible]
+  end
+
+  test "log panel with no live replica counts zero (no logs to scan)" do
+    dash = make_dashboard([FS_CALLS])
+
+    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+
+    assert_equal :number, c[:kind]
+    assert_equal 0, c[:value]
   end
 
   test "invalid range/interval fall back to defaults; range_ms derived" do
@@ -95,5 +134,33 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
         "image" => "nginx:1.27"
       }.to_json
     )
+  end
+
+  def seed_running_fs_pod(container)
+    replica = container.split(".").last
+
+    @island.pods.create!(
+      container_name: container, kind: "deployment", scope: "fs",
+      resource_name: "fs", replica_id: replica, synced_at: Time.current,
+      payload: {
+        "name" => container, "scope" => "fs", "resource_name" => "fs",
+        "replica_id" => replica, "kind" => "deployment", "status" => "running",
+        "image" => "freeswitch:1"
+      }.to_json
+    )
+  end
+
+  # seed_logs — write msgs into the NDJSON warehouse for `pod`, stamped a few
+  # seconds before now so they land inside any range window.
+  def seed_logs(pod, msgs)
+    now = Time.current
+
+    msgs.each_with_index do |msg, i|
+      time = now - (msgs.size - i).seconds
+      path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
+      LogTail::FilePath.ensure_dir(File.dirname(path))
+      row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
+      File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
+    end
   end
 end

@@ -45,6 +45,16 @@ common: &common
     # invoke docker stats).
     schedule: every 15 seconds
 
+  log_metrics_sync:
+    class: LogMetricsSyncOrchestratorJob
+    # 15s — matches the log-tail poll cadence (no point counting faster than
+    # logs land). Each per-island tick recomputes only the live 10-min window
+    # (cheap) + a one-time deep backfill per newly-pinned filter. Reads the
+    # local NDJSON warehouse, so it runs in BOTH Ruby-tail and Go-poller modes
+    # (no POLLER_SPAWN guard) — it's the only thing turning logs into counts
+    # when the binary owns tailing.
+    schedule: every 15 seconds
+
   alerts_evaluation:
     class: AlertsEvaluationOrchestratorJob
     # 30s — two warehouse sync ticks (14s) land between evaluations,

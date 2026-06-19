@@ -16,7 +16,9 @@ import Sortable from "sortablejs"
 // match the chosen source's workload kind.
 
 export default class extends Controller {
-  static targets = ["sourceLabel", "metricLabel", "metricMenu", "typeLabel", "typeMenu", "list", "empty", "hidden"]
+  static targets = ["sourceLabel", "metricLabel", "metricMenu", "typeLabel", "typeMenu", "list", "empty", "hidden",
+                    "logSourceLabel", "logLabel", "logQuery", "logSwatch",
+                    "addTypeBtn", "metricBlock", "logBlock"]
   static values  = {
     catalog: Object,
     panels:  Array
@@ -28,7 +30,13 @@ export default class extends Controller {
     this.currentMetric = null
     this.currentChartType = "area"
 
+    this.currentLogSource = null
+    this.currentLogColor = this.defaultLogColor()
+    this.addType = "metric"
+
     this.populateMetrics()
+    this.highlightLogColor()
+    this.syncAddType()
     this.render()
     this.sync()
     this.initSortable()
@@ -36,6 +44,34 @@ export default class extends Controller {
 
   disconnect() {
     if (this.sortable) this.sortable.destroy()
+  }
+
+  // ── add-type toggle (Metric | Log count) ──────────────────────────
+  // One "add" block visible at a time so the form doesn't stack two builders.
+
+  setAddType(event) {
+    const type = event.currentTarget.dataset.addType
+
+    if (!type) return
+
+    this.addType = type
+    this.syncAddType()
+  }
+
+  syncAddType() {
+    const isLog = this.addType === "log"
+
+    if (this.hasMetricBlockTarget) this.metricBlockTarget.hidden = isLog
+    if (this.hasLogBlockTarget) this.logBlockTarget.hidden = !isLog
+
+    if (this.hasAddTypeBtnTarget) {
+      this.addTypeBtnTargets.forEach((b) => {
+        const active = b.dataset.addType === this.addType
+
+        b.style.background = active ? "var(--voodu-accent-dim)" : "transparent"
+        b.style.color      = active ? "var(--voodu-accent-2)" : "var(--voodu-text-2)"
+      })
+    }
   }
 
   // initSortable — drag-reorder the panel chips. The grip handle
@@ -197,6 +233,96 @@ export default class extends Controller {
     return panel
   }
 
+  // ── log-count panels ──────────────────────────────────────────────
+  // A different shape from a metric panel: no metric/scale, but a LogQuery
+  // filter string + the workload identity, rendered as a big-number tile.
+
+  selectLogSource(event) {
+    const source = this.parse(event.currentTarget.dataset.source)
+
+    if (!source) return
+
+    this.currentLogSource = source
+    if (this.hasLogSourceLabelTarget) this.logSourceLabelTarget.textContent = event.currentTarget.textContent.trim()
+  }
+
+  selectLogColor(event) {
+    const color = event.currentTarget.dataset.color
+
+    if (!color) return
+
+    this.currentLogColor = color
+    this.highlightLogColor()
+  }
+
+  // defaultLogColor — first swatch's token, falling back to orange when the
+  // swatches haven't rendered (defensive; the form always renders them).
+  defaultLogColor() {
+    if (this.hasLogSwatchTarget && this.logSwatchTargets.length) return this.logSwatchTargets[0].dataset.color
+
+    return "var(--voodu-orange)"
+  }
+
+  // highlightLogColor — ring the active swatch. Uses outline (a CSS-var
+  // color) instead of a Tailwind ring class so it survives purge without a
+  // safelist entry.
+  highlightLogColor() {
+    if (!this.hasLogSwatchTarget) return
+
+    this.logSwatchTargets.forEach((el) => {
+      const active = el.dataset.color === this.currentLogColor
+
+      el.style.outline       = active ? "2px solid var(--voodu-accent)" : "none"
+      el.style.outlineOffset = active ? "1px" : "0"
+    })
+  }
+
+  addLog(event) {
+    event.preventDefault()
+    if (!this.currentLogSource) return
+
+    const query = this.hasLogQueryTarget ? this.logQueryTarget.value.trim() : ""
+
+    if (!query) {
+      if (this.hasLogQueryTarget) this.logQueryTarget.focus()
+
+      return
+    }
+
+    this.panels.push(this.buildLogPanel(query))
+    this.render()
+    this.sync()
+
+    if (this.hasLogLabelTarget) this.logLabelTarget.value = ""
+
+    if (this.hasLogQueryTarget) {
+      this.logQueryTarget.value = ""
+      // Repaint the syntax-highlight overlay (the query-editor controller
+      // only redraws on input) so the cleared field isn't left showing the
+      // previous query behind an empty textarea.
+      this.logQueryTarget.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+  }
+
+  // buildLogPanel — count panel. Label defaults to "<pod> · count" so an
+  // operator who skips the label field still gets a distinguishable tile.
+  buildLogPanel(query) {
+    const src   = this.currentLogSource
+    const label = (this.hasLogLabelTarget ? this.logLabelTarget.value : "").trim()
+
+    return {
+      scope_kind: "log",
+      scope:      src.scope,
+      name:       src.name,
+      kind:       src.kind,
+      query:      query,
+      agg:        "count",
+      label:      label || `${src.name} · count`,
+      color:      this.currentLogColor || "var(--voodu-orange)",
+      chart_type: "number"
+    }
+  }
+
   render() {
     if (!this.hasListTarget) return
 
@@ -231,11 +357,13 @@ export default class extends Controller {
     label.textContent = panel.label
     row.appendChild(label)
 
-    if (panel.chart_type && panel.chart_type !== "area") {
+    const typeTag = this.chipTypeTag(panel)
+
+    if (typeTag) {
       const tag = document.createElement("span")
 
       tag.className = "text-[10px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.04em] shrink-0"
-      tag.textContent = panel.chart_type === "gauge_radial" ? "radial" : "linear"
+      tag.textContent = typeTag
       row.appendChild(tag)
     }
 
@@ -250,6 +378,16 @@ export default class extends Controller {
     row.appendChild(remove)
 
     return row
+  }
+
+  // chipTypeTag — the small uppercase tag on a panel chip. Log panels read
+  // "count"; gauges read their shape; an area chart has no tag.
+  chipTypeTag(panel) {
+    if (panel.scope_kind === "log") return "count"
+    if (panel.chart_type === "gauge_radial") return "radial"
+    if (panel.chart_type === "gauge_linear") return "linear"
+
+    return null
   }
 
   sync() {

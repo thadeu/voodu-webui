@@ -15,6 +15,12 @@ class LogTailCleanupJob < ApplicationJob
   queue_as :default
 
   def perform
+    # Prune pre-aggregated log-count samples FIRST — before the poller guard.
+    # These live in the metrics warehouse and are written by the Ruby counter
+    # (LogMetricsSyncIslandJob) in BOTH modes, so Rails always owns their GC
+    # even when the Go binary owns the NDJSON file tree.
+    prune_log_metric_samples
+
     # POLLER_SPAWN=1 — Go binary owns the NDJSON tree, including
     # retention sweeps. Bailing here avoids two cleanup paths
     # racing on the same files (with the binary deleting bytes
@@ -63,5 +69,19 @@ class LogTailCleanupJob < ApplicationJob
     Rails.logger.info(
       "log-tail cleanup deleted=#{deleted} files freed=#{(bytes / 1024.0 / 1024.0).round}MB"
     )
+  end
+
+  private
+
+  # prune_log_metric_samples — reap log_count rows older than the log retention
+  # window. Counts beyond it are meaningless (the source NDJSON is already
+  # reaped) and the dashboard never sums past it. Bounded, indexed delete.
+  def prune_log_metric_samples
+    threshold = LogTail::FilePath::RETENTION_DAYS.days.ago.to_i
+    deleted = MetricSample.where(source: "log").where("ts_epoch < ?", threshold).delete_all
+
+    Rails.logger.info("log-metric cleanup pruned=#{deleted} samples") if deleted.positive?
+  rescue => e
+    Rails.logger.warn("log-metric cleanup failed: #{e.class} #{e.message}")
   end
 end

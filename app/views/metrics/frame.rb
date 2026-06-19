@@ -114,7 +114,9 @@ class Views::Metrics::Frame < Views::Base
       data: {metrics_display_target: "grid"}
     ) do
       charts.each do |c|
-        if c[:missing]
+        if c[:kind] == :number
+          render_number_card(c)
+        elsif c[:missing]
           render_missing_card(c)
         else
           render Components::Metrics::ChartCard.new(
@@ -135,6 +137,24 @@ class Views::Metrics::Frame < Views::Base
         end
       end
     end
+  end
+
+  # render_number_card — mirrors Views::Metrics::Index#render_number_card so
+  # a log-count tile renders identically on initial load and after a
+  # broadcast-tick frame swap. Drift = the count flickers shape on refresh.
+  def render_number_card(c)
+    render Components::Metrics::NumberCard.new(
+      label: c[:label],
+      color: c[:color],
+      formatted: c[:formatted],
+      range: c[:range],
+      metric: c[:panel_key],
+      truncated: c[:truncated],
+      clamped: c[:clamped],
+      series: c[:series] || [],
+      range_ms: c[:range_ms],
+      default_visible: c.fetch(:default_visible, true)
+    )
   end
 
   # render_missing_card — mirrors Views::Metrics::Index#render_missing_card

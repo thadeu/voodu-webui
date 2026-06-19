@@ -35,6 +35,10 @@ const HAS_FIELD = /@(message|level|stream)\b/i
 
 export default class extends Controller {
   static targets = ["input", "highlight", "error"]
+  // submits — whether Cmd/Ctrl+Enter submits the host form. True on Analytics
+  // (the editor IS the query form); false in the dashboard builder, where the
+  // builder reads the value itself and submitting would save mid-edit.
+  static values = { submits: { type: Boolean, default: true } }
 
   connect() {
     this.shell = this.element.querySelector(".voodu-code")
@@ -120,11 +124,13 @@ export default class extends Controller {
     }
   }
 
-  // run — submit the host form (only when the query is valid). Turbo swaps
-  // just the results frame (the form targets it + advances the URL), so the
-  // drawer stays open and the table updates behind it.
+  // run — submit the host form (only when the query is valid AND this editor
+  // owns submission). Turbo swaps just the results frame (the form targets it +
+  // advances the URL), so the drawer stays open and the table updates behind
+  // it. In a non-submitting host (the builder) run() just validates.
   run() {
-    if (this.validate()) this.inputTarget.form?.requestSubmit()
+    if (!this.validate()) return
+    if (this.submitsValue) this.inputTarget.form?.requestSubmit()
   }
 
   pair(open, close) {

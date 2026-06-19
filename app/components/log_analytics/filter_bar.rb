@@ -216,74 +216,17 @@ class Components::LogAnalytics::FilterBar < Components::Base
     end
   end
 
-  # query_section — the query-editor controller wraps the editor + the
-  # validation hint + the cheatsheet (all its targets must live under the
-  # controller element).
+  # query_section — the shared LogQuery editor (syntax highlight + field
+  # validation + cheatsheet). name=q so it serialises with this GET form; it's
+  # the analytics surface, so Cmd+Enter runs the query (submits default true).
   def query_section
-    div(class: "flex flex-col gap-2", data: {controller: "query-editor"}) do
-      field_label("Query")
-      query_editor
-      query_error
-      syntax_help
-    end
-  end
-
-  # query_editor — the .voodu-code shell. `--query` variant drops the gutter
-  # padding. The textarea is the real form field (name=q), pre-filled with the
-  # active query so the highlight paints on connect.
-  def query_editor
-    div(class: "voodu-code voodu-code--query relative overflow-hidden resize-y min-h-[120px] border border-voodu-border bg-voodu-surface") do
-      pre(class: "voodu-code__hl", "aria-hidden": "true", data: {query_editor_target: "highlight"})
-      textarea(
-        name: "q",
-        rows: "4",
-        spellcheck: "false",
-        autocapitalize: "off",
-        autocomplete: "off",
-        placeholder: "filter @message like /timeout/",
-        class: "voodu-code__input",
-        data: {
-          query_editor_target: "input",
-          action: "input->query-editor#render keydown->query-editor#keydown"
-        }
-      ) { @data.search }
-    end
-  end
-
-  # query_error — hidden until the query names no field; the query-editor
-  # controller reveals it (and blocks Run) so every filter is field-scoped.
-  def query_error
-    p(class: "hidden text-[11px] text-voodu-red", data: {query_editor_target: "error"}) do
-      plain "Every filter needs a field — e.g. "
-      code(class: "font-voodu-mono") { "@message like /…/" }
-    end
-  end
-
-  # syntax_help — collapsed cheatsheet. CloudWatch-style: a `filter` command
-  # over field clauses; `|` chains filters (AND). Every clause names a field;
-  # @message is the catch-all (matches the whole line).
-  def syntax_help
-    details(class: "group text-[11.5px] text-voodu-muted") do
-      summary(class: "cursor-pointer select-none text-voodu-text-2 hover:text-voodu-text") { "Syntax" }
-      div(class: "mt-2 flex flex-col gap-2 leading-relaxed") do
-        help_line("filter @message like /re/", "regex on the whole line (msg + raw)")
-        help_line('@level = "ERROR"', "exact match — @level · @stream")
-        help_line("and · or · not · ( )", "combine clauses in one filter")
-        help_line("filter … | filter …", "chain filters — each pipe ANDs")
-        help_line("| limit 1000", "cap to the newest N matches")
-        div(class: "pt-1 border-t border-voodu-border text-voodu-muted-2") do
-          plain "Example: "
-          code(class: "font-voodu-mono text-voodu-text-2") { "filter @message like /call-id/ | limit 1000" }
-        end
-      end
-    end
-  end
-
-  def help_line(syntax, note)
-    div(class: "flex items-baseline gap-2 min-w-0") do
-      code(class: "font-voodu-mono text-voodu-text-2 shrink-0") { syntax }
-      span(class: "truncate") { note }
-    end
+    render Components::UI::QueryEditor.new(
+      value: @data.search,
+      name: "q",
+      label: "Query",
+      placeholder: "filter @message like /timeout/",
+      rows: "4"
+    )
   end
 
   def pod_section

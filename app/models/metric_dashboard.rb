@@ -26,8 +26,20 @@ class MetricDashboard < ApplicationRecord
   PANEL_KEYS = %w[scope_kind metric scale label color].freeze
   POD_PANEL_KEYS = %w[scope name].freeze
 
+  # Log-count panels are a different beast: they count LOG LINES matching a
+  # LogQuery filter, not warehouse samples — so no metric/scale. They carry
+  # a workload identity (scope + name, like a pod panel) plus the filter
+  # string in `query`, and render as a big-number tile (chart_type
+  # "number") whose count spans the dashboard's global range. See
+  # LogMetricData + Components::Metrics::NumberCard.
+  LOG_PANEL_KEYS = %w[scope name query label color].freeze
+
+  # Allowed panel sources. "log" joins host/pod for log-count panels.
+  SCOPE_KINDS = %w[host pod log].freeze
+
   # Optional per-panel chart type. Absent → ChartCard defaults to "area".
-  CHART_TYPES = %w[area gauge_radial gauge_linear].freeze
+  # "number" is the log-count tile — valid only on a "log" panel.
+  CHART_TYPES = %w[area gauge_radial gauge_linear number].freeze
 
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
@@ -105,13 +117,24 @@ class MetricDashboard < ApplicationRecord
         next
       end
 
-      missing = PANEL_KEYS.reject { |k| panel[k].to_s.present? }
+      sk = panel["scope_kind"].to_s
+
+      unless SCOPE_KINDS.include?(sk)
+        errors.add(:panels, "panel #{i + 1} has an unknown source")
+        next
+      end
+
+      # Log panels carry query (not metric/scale); everyone else carries the
+      # metric layout. Pick the required-key set off the source.
+      required = (sk == "log") ? LOG_PANEL_KEYS : PANEL_KEYS
+      missing = required.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "panel #{i + 1} is missing #{missing.join(", ")}") if missing.any?
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
+      errors.add(:panels, "panel #{i + 1}: the number type is only for log panels") if ct == "number" && sk != "log"
 
-      next unless panel["scope_kind"].to_s == "pod"
+      next unless sk == "pod"
 
       pod_missing = POD_PANEL_KEYS.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "pod panel #{i + 1} is missing #{pod_missing.join(", ")}") if pod_missing.any?

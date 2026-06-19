@@ -50,6 +50,8 @@ class MetricsWarehouse
     req_count req_2xx req_3xx req_4xx req_5xx
     latency_p50_ms latency_p90_ms latency_p95_ms latency_p99_ms latency_max_ms
     bytes_out
+
+    log_count
   ].freeze
 
   # Friendly range aliases (mirror rangeAliases in handlers_metrics.go).
@@ -138,7 +140,13 @@ class MetricsWarehouse
     "latency_p90_ms" => "MAX",
     "latency_p95_ms" => "MAX",
     "latency_p99_ms" => "MAX",
-    "latency_max_ms" => "MAX"
+    "latency_max_ms" => "MAX",
+
+    # Log-count filters (LogMetricsSyncIslandJob). Each row is a per-tick
+    # partial tally for a 60s storage bucket; SUM rolls partials into the
+    # render-bucket total, same as the ingress counters. Total over a range =
+    # sum of every series point.
+    "log_count" => "SUM"
   }.freeze
   DEFAULT_AGGREGATION = "AVG"
 
