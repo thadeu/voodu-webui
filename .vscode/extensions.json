@@ -3,8 +3,9 @@
     "Shopify.ruby-lsp",
     "dbaeumer.vscode-eslint",
     "bradlc.vscode-tailwindcss",
+    "Thadeu.vscode-run-rspec-file",
     "thadeu.clowk-theme",
-    "Thadeu.vscode-run-rspec-file"
+    "thadeu.clowk-vscode-icons"
   ],
   "unwantedRecommendations": [
     "rebornix.ruby",
