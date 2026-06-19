@@ -83,6 +83,26 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert c[:default_visible]
   end
 
+  test "log panel with show_chart false keeps the count but drops the chart series" do
+    dash = make_dashboard([FS_CALLS.merge("show_chart" => false)])
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # same data as the chart case
+
+    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+
+    assert_equal :number, c[:kind]
+    assert_equal 3, c[:value], "count is still computed — only the chart is hidden"
+    assert_empty c[:series], "show_chart false → no timeline series (number-only tile)"
+  end
+
+  test "log panel with show_chart true renders the chart series" do
+    dash = make_dashboard([FS_CALLS.merge("show_chart" => true)])
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
+
+    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+
+    assert c[:series].any?, "show_chart true → timeline series present"
+  end
+
   test "log panel with no counted data yet reads zero" do
     dash = make_dashboard([FS_CALLS])
 

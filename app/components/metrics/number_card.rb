@@ -96,13 +96,14 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # value_block — the headline number, centered + grown (flex-1) so it lands
-  # mid-tile when grid-stretch matches a neighbouring chart's height.
+  # value_block — the headline number, centered + grown (flex-1) so it absorbs
+  # the card's extra height (vs the taller chart cards in the same row) and
+  # lands mid-tile above the sparkline — no empty gap.
   def value_block
     div(class: "flex-1 flex flex-col items-center justify-center gap-1.5 py-2") do
       div(class: "flex items-baseline gap-1") do
         span(class: "text-voodu-muted text-[22px] font-voodu-mono leading-none") { "≥" } if @truncated
-        span(class: "font-voodu-mono text-[40px] vmd:text-[44px] font-semibold leading-none text-voodu-text") { @formatted }
+        span(class: "font-voodu-mono #{value_size_classes} font-semibold leading-none text-voodu-text") { @formatted }
       end
 
       if @clamped
@@ -113,24 +114,54 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # sparkline — the count's trend, drawn with the SAME engine as the big
-  # charts (Components::Metrics::Chart) in compact mode (axes hidden), so the
-  # look matches the rest of /metrics. Needs ≥2 points; the live-scan fallback
-  # ships none, so the card stays a clean number until the warehouse fills.
-  def sparkline
-    return if @series.size < 2
+  # chart? — whether this tile draws its timeline chart. Needs ≥2 points; the
+  # operator can also turn it off per-panel (show_chart false → empty series).
+  # When false the tile is a bare number, so the headline gets the whole card.
+  def chart?
+    @series.size >= 2
+  end
 
-    div(class: "-mx-2 -mb-1.5") do
-      render Components::Metrics::Chart.new(
-        points: @series,
-        color: @color,
-        unit: "",
-        label: @label,
-        range_ms: @range_ms || (60 * 60 * 1000),
-        height: 44,
-        axes: false
-      )
+  # value_size_classes — the headline number's font size. A number-only tile
+  # (no chart) gives the count the entire card, so it scales up dramatically;
+  # a tile that ALSO draws a chart keeps a modest size (the chart needs the
+  # lower two-thirds). Long counts step down so a 7-figure number doesn't
+  # overflow the tile width (mono digits are wide). Sized off @formatted's
+  # length, which includes the thousands separators that take real space.
+  def value_size_classes
+    return "text-[40px] vmd:text-[44px]" if chart?
+
+    case @formatted.to_s.length
+    when 0..4 then "text-[72px] vmd:text-[88px]"
+    when 5..7 then "text-[52px] vmd:text-[60px]"
+    else "text-[40px] vmd:text-[44px]"
     end
+  end
+
+  # sparkline — the count's trend as a FULL area chart (axes + time X + value Y),
+  # the SAME area+gradient style the metric charts (CPU/Memory) use, so a count
+  # tile reads as "big number on top + a chart that matches its neighbours". The
+  # headline number (flex-1, centered) absorbs the slack, so the tile matches a
+  # neighbouring chart card's height with no gap.
+  #
+  # Height is 150 (vs the metric chart's 200): the big number + the "sum"
+  # sub-line eat the top of the tile, so a shorter chart keeps the count card's
+  # natural height ≤ the metric card's. That makes the metric card drive the
+  # row height and the number centers in the remaining space — instead of the
+  # count card being the tallest and forcing everything else taller. Needs ≥2
+  # points; the densified (full-window zero-fill) series keeps the area filled
+  # instead of collapsing to a bare line on mostly-zero counts.
+  def sparkline
+    return unless chart?
+
+    render Components::Metrics::Chart.new(
+      points: @series,
+      color: @color,
+      unit: "",
+      label: @label,
+      range_ms: @range_ms || (60 * 60 * 1000),
+      height: 150,
+      axes: true
+    )
   end
 
   # resize_handle — grab strip on the card's edge; mirrors ChartCard so a

@@ -32,27 +32,29 @@ import { Controller } from "@hotwired/stimulus"
 //   container reflows.
 export default class extends Controller {
   static targets = [
-    "svg",        // the inner <svg> (set programmatically too)
-    "overlay",    // hover rect catching mouse events
-    "line",       // <path> for the stroked curve
-    "area",       // <path> for the gradient fill
-    "clipRect",   // <rect> inside <clipPath>
-    "hLine",      // gridlines + frame baseline (span padLeft → W-padRight)
-    "xTick"       // X-axis tick labels (use data-x-tick-ratio)
+    "svg",        
+    "overlay",    
+    "line",       
+    "area",       
+    "clipRect",   
+    "hLine",      
+    "xTick",      
+    "bar"         
   ]
+
   static values  = {
-    points:     { type: Array,   default: [] },   // { ts, value, formatted, x, x_norm, y }
-    segments:   { type: Array,   default: [] },   // [[[xNorm, y], ...], ...]
+    points:     { type: Array,   default: [] },   
+    segments:   { type: Array,   default: [] },   
     color:      { type: String,  default: "#34d399" },
     unit:       { type: String,  default: "" },
     label:      { type: String,  default: "" },
-    width:      { type: Number,  default: 600 },  // initial viewBox W, updated on resize
+    width:      { type: Number,  default: 600 },  
     height:     { type: Number,  default: 200 },
     padLeft:    { type: Number,  default: 44 },
     padRight:   { type: Number,  default: 12 },
     padTop:     { type: Number,  default: 14 },
     padBottom:  { type: Number,  default: 22 },
-    baselineY:  { type: Number,  default: 178 },  // height - padBottom; precomputed server-side
+    baselineY:  { type: Number,  default: 178 },  
     responsive: { type: Boolean, default: false },
     // IANA name of the operator's chosen display timezone, threaded
     // through from WebTime.zone_name server-side. Defaults to UTC
@@ -153,6 +155,18 @@ export default class extends Controller {
 
     // Rebuild path d-strings from normalized segments.
     this.rebuildPaths(innerW)
+
+    // Reposition bars (bars mode has no path to rebuild): each rect carries
+    // its normalized x + width, so it tracks the new inner width instead of
+    // staying in the server's original coordinate space (which clipped/hid
+    // them on resize).
+    this.barTargets.forEach((bar) => {
+      const xn = parseFloat(bar.dataset.xNorm)
+      const wn = parseFloat(bar.dataset.wNorm)
+
+      if (Number.isFinite(xn)) bar.setAttribute("x", this.padLeftValue + xn * innerW)
+      if (Number.isFinite(wn)) bar.setAttribute("width", Math.max(0.8, wn * innerW))
+    })
 
     // Recompute each point's absolute x for hover nearest-x
     // lookup. y is unchanged.

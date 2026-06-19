@@ -17,7 +17,7 @@ import Sortable from "sortablejs"
 
 export default class extends Controller {
   static targets = ["sourceLabel", "metricLabel", "metricMenu", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
-                    "logSourceLabel", "logLabel", "logQuery", "logSwatch",
+                    "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "idleStep", "typeStep", "metricBlock", "logBlock",
                     "metricBlockTitle", "logBlockTitle", "backLink"]
   static values  = {
@@ -55,13 +55,22 @@ export default class extends Controller {
       this.onLogQueryInput = () => this.autoCommit()
       this.logQueryTarget.addEventListener("input", this.onLogQueryInput)
     }
+
+    // The DS color picker lives in a popover that portals OUT of this form to
+    // the modal dialog, so its `color-picker:change` doesn't bubble through
+    // here — listen on the document instead.
+    this.onCustomColor = this.onCustomColor.bind(this)
+    document.addEventListener("color-picker:change", this.onCustomColor)
   }
 
   disconnect() {
     if (this.sortable) this.sortable.destroy()
+
     if (this.hasLogQueryTarget && this.onLogQueryInput) {
       this.logQueryTarget.removeEventListener("input", this.onLogQueryInput)
     }
+    
+    document.removeEventListener("color-picker:change", this.onCustomColor)
   }
 
   // ── add wizard (step 1 type cards → step 2 config block) ──────────
@@ -205,6 +214,45 @@ export default class extends Controller {
     this.highlightMetricColor()
     this.recolorShapes()
     this.autoCommit()
+  }
+
+  // onCustomColor — the DS color picker (color_picker_controller) dispatches
+  // `color-picker:change` { color, name } as the operator drags. Apply it to
+  // the matching panel kind; coalesce the commit (drag fires many events).
+  onCustomColor(event) {
+    const { color, name } = event.detail || {}
+
+    if (!color) return
+
+    this.applyCustomColor(name, color)
+
+    if (this.colorRaf) return
+
+    this.colorRaf = requestAnimationFrame(() => {
+      this.colorRaf = null
+      this.autoCommit()
+    })
+  }
+
+  // applyCustomColor — reveal + colour the row's custom swatch (so the choice
+  // is visible + re-selectable), set the current colour, and re-ring swatches.
+  applyCustomColor(name, color) {
+    const sw = this.element.querySelector(`[data-role="custom-${name}"]`)
+
+    if (sw) {
+      sw.dataset.color = color
+      sw.style.background = color
+      sw.hidden = false
+    }
+
+    if (name === "log") {
+      this.currentLogColor = color
+      this.highlightLogColor()
+    } else {
+      this.currentMetricColor = color
+      this.highlightMetricColor()
+      this.recolorShapes()
+    }
   }
 
   // highlightMetricColor — ring the active metric color swatch (outline, a
@@ -399,6 +447,7 @@ export default class extends Controller {
     this.currentMetricColor = panel.color || (spec && spec.color) || null
     this.highlightMetricColor()
     this.recolorShapes()
+    if (String(panel.color).startsWith("#")) this.applyCustomColor("metric", panel.color)
 
     this.currentChartType = panel.chart_type || "area"
     this.syncTypeAvailability()
@@ -415,8 +464,15 @@ export default class extends Controller {
       this.logQueryTarget.dispatchEvent(new Event("input", { bubbles: true }))
     }
 
+    // Restore the chart toggle (default checked — a legacy panel without the
+    // key keeps its chart, matching the read path's default).
+    if (this.hasLogShowChartTarget) this.logShowChartTarget.checked = panel.show_chart !== false
+
     this.currentLogColor = panel.color || this.defaultLogColor()
     this.highlightLogColor()
+    // A saved hex is a custom colour (presets are CSS vars) — surface it as
+    // the row's custom swatch so it shows as selected.
+    if (String(panel.color).startsWith("#")) this.applyCustomColor("log", panel.color)
   }
 
   remove(event) {
@@ -488,6 +544,7 @@ export default class extends Controller {
     this.autoCommit()
   }
 
+
   // defaultLogColor — first swatch's token, falling back to orange when the
   // swatches haven't rendered (defensive; the form always renders them).
   defaultLogColor() {
@@ -516,6 +573,10 @@ export default class extends Controller {
     const src   = this.currentLogSource
     const label = (this.hasLogLabelTarget ? this.logLabelTarget.value : "").trim()
 
+    // show_chart — the "Show timeline chart" toggle. Default true when the
+    // target is absent (older markup) so a count tile keeps its chart.
+    const showChart = this.hasLogShowChartTarget ? this.logShowChartTarget.checked : true
+
     return {
       scope_kind: "log",
       scope:      src.scope,
@@ -525,7 +586,8 @@ export default class extends Controller {
       agg:        "count",
       label:      label || `${src.name} · count`,
       color:      this.currentLogColor || "var(--voodu-orange)",
-      chart_type: "number"
+      chart_type: "number",
+      show_chart: showChart
     }
   }
 

@@ -59,6 +59,28 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_not_includes render_card(series: []), "<svg"
   end
 
+  test "number-only tile (no chart) scales the count up to fill the card" do
+    html = render_card(series: [], formatted: "5")
+
+    assert_includes html, "text-[72px]", "short count goes large when there's no chart"
+  end
+
+  test "a tile WITH a chart keeps the count modest (chart needs the room)" do
+    series = [
+      {ts: "2026-06-19T14:45:00Z", value: 3.0, formatted: "3"},
+      {ts: "2026-06-19T14:46:00Z", value: 5.0, formatted: "5"}
+    ]
+    html = render_card(series: series, range_ms: 3_600_000, formatted: "5")
+
+    assert_includes html, "text-[40px]", "with a chart the number stays modest"
+    assert_not_includes html, "text-[72px]"
+  end
+
+  test "a long count steps the number-only size down so it doesn't overflow" do
+    assert_includes render_card(series: [], formatted: "1,284,902"), "text-[40px]"
+    assert_includes render_card(series: [], formatted: "12,345"), "text-[52px]"
+  end
+
   test "renders the agg sub-line when given, omits it for a plain count" do
     assert_includes render_card(sub: "avg-marker"), "avg-marker"
     assert_not_includes render_card(sub: nil), "avg-marker"

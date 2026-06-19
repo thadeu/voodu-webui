@@ -51,7 +51,7 @@ class Components::Metrics::Chart < Components::Base
   #       Overview StatCards and Pod show StatCards so all three
   #       chart surfaces (Overview, Pod show, /metrics) share
   #       the same SVG/JS rendering engine.
-  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true)
+  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, bars: false)
     @points = Array(points)
     @color = color
     @unit = unit
@@ -60,6 +60,10 @@ class Components::Metrics::Chart < Components::Base
     @height = height
     @width = width
     @axes = axes
+    # bars — draw one filled column per bucket instead of the area+line curve.
+    # The natural viz for DISCRETE counts (log-count sparklines): sparse events
+    # read as visible bars rather than a hairline spike on a flat baseline.
+    @bars = bars
   end
 
   def pad_left
@@ -170,6 +174,15 @@ class Components::Metrics::Chart < Components::Base
             s.stop(offset: "100%", "stop-color": @color, "stop-opacity": "0")
           end
 
+          # Bars carry a richer fade (bright top → soft bottom) so a single
+          # column still reads as filled, not as a faint sliver.
+          if @bars
+            s.linearGradient(id: bars_gradient_id, x1: 0, y1: 0, x2: 0, y2: 1) do
+              s.stop(offset: "0%", "stop-color": @color, "stop-opacity": "0.85")
+              s.stop(offset: "100%", "stop-color": @color, "stop-opacity": "0.22")
+            end
+          end
+
           # clipPath bounds the curve + area fill to the chart
           # drawing area. Catmull-Rom bezier interpolation can
           # overshoot the data envelope when adjacent points
@@ -196,21 +209,28 @@ class Components::Metrics::Chart < Components::Base
           render_x_axis(s, x_min, x_max)
         end
 
-        d_line = path_for(pts)
-        d_area = area_path_for(pts)
+        # Bars: one filled column per bucket (no line/area targets, so the
+        # responsive controller skips path-reproject — bars just stretch with
+        # the viewBox). Otherwise the area+line curve.
+        if @bars
+          render_bars(s, pts, clip_id)
+        else
+          d_line = path_for(pts)
+          d_area = area_path_for(pts)
 
-        # Both fill and stroke go through the clip so an overshoot
-        # below the baseline (or above the top) is invisibly cropped.
-        s.g("clip-path": "url(##{clip_id})") do
-          s.path(
-            d: d_area, fill: "url(##{gradient_id})",
-            data: {metrics_chart_target: "area"}
-          )
-          s.path(
-            d: d_line, fill: "none", stroke: @color, "stroke-width": "1.5",
-            "stroke-linecap": "round", "stroke-linejoin": "round",
-            data: {metrics_chart_target: "line"}
-          )
+          # Both fill and stroke go through the clip so an overshoot
+          # below the baseline (or above the top) is invisibly cropped.
+          s.g("clip-path": "url(##{clip_id})") do
+            s.path(
+              d: d_area, fill: "url(##{gradient_id})",
+              data: {metrics_chart_target: "area"}
+            )
+            s.path(
+              d: d_line, fill: "none", stroke: @color, "stroke-width": "1.5",
+              "stroke-linecap": "round", "stroke-linejoin": "round",
+              data: {metrics_chart_target: "line"}
+            )
+          end
         end
 
         # Frame baseline — solid line at the bottom of the chart
@@ -620,6 +640,60 @@ class Components::Metrics::Chart < Components::Base
   # gradient. Memoised so the def and the `url(#…)` reference agree.
   def gradient_id
     @gradient_id ||= "voodu-metric-#{Digest::MD5.hexdigest("#{@color}-#{object_id}")[0, 8]}"
+  end
+
+  def bars_gradient_id
+    @bars_gradient_id ||= "#{gradient_id}-bars"
+  end
+
+  # render_bars — one filled column per projected point, from its value down to
+  # the baseline. Zero-height buckets are skipped (a gap, honestly empty). Bar
+  # width ≈ the bucket spacing so dense data tiles into a solid fill and sparse
+  # counts stand out as discrete columns.
+  def render_bars(svg, pts, clip_id)
+    bw = bar_width(pts)
+    inner = (@width - pad_left - pad_right).to_f
+    w_norm = (inner.positive? ? bw / inner : 0).round(5)
+
+    # data-x-norm / data-w-norm let the metrics-chart controller reposition
+    # each bar on resize (it rewrites the viewBox; without this the bars stay
+    # in the old coordinate space and clip/vanish — the "flickering" bug).
+    svg.g("clip-path": "url(##{clip_id})") do |g|
+      # Baseline floor across the full width: a mostly-zero count series still
+      # reads as a chart instead of an empty hole. Only in compact mode — with
+      # axes, the frame baseline + y=0 gridline already draw the floor. hLine
+      # target → the controller stretches its x2 on resize.
+      unless @axes
+        g.line(
+          x1: pad_left, x2: @width - pad_right,
+          y1: baseline_y, y2: baseline_y,
+          stroke: @color, "stroke-opacity": "0.4", "stroke-width": "1",
+          data: {metrics_chart_target: "hLine"}
+        )
+      end
+
+      pts.each do |x, y|
+        h = baseline_y - y
+        next if h <= 0.4
+
+        x_norm = (inner.positive? ? (x - pad_left) / inner : 0).round(5)
+        g.rect(
+          x: x.round(2), y: y.round(2),
+          width: bw, height: h.round(2),
+          rx: "0.75", fill: "url(##{bars_gradient_id})",
+          data: {metrics_chart_target: "bar", x_norm: x_norm, w_norm: w_norm}
+        )
+      end
+    end
+  end
+
+  # bar_width — the bucket spacing (minus a hair for a gap), clamped so a
+  # single-point chart still draws a visible column.
+  def bar_width(pts)
+    return (@width - pad_left - pad_right) * 0.6 if pts.size < 2
+
+    spacing = pts[1][0] - pts[0][0]
+    [(spacing * 0.86).round(2), 1.0].max
   end
 
   # clip_id — UNIQUE PER CHART INSTANCE. The clipRect holds this chart's

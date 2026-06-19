@@ -218,10 +218,15 @@ class Components::Metrics::ChartCard < Components::Base
     # at narrow widths). The min/avg/max strip moved to stat_footer
     # under the chart — mirrors the expand modal's layout, keeps the
     # header clean and uncluttered on a 4-up grid.
+    # Header is single-line (no flex-wrap): a narrow card in a 4-up grid must
+    # NOT wrap the label/value/capacity onto a second line — that grows the card
+    # and pushes the whole grid row taller, breaking footer alignment across the
+    # row. Instead the label + capacity truncate (ellipsis) under pressure while
+    # the headline value (shrink-0) stays whole.
     div(class: "flex items-start justify-between gap-2") do
-      div(class: "flex items-baseline flex-wrap gap-x-2.5 gap-y-1 min-w-0") do
+      div(class: "flex items-baseline gap-x-2.5 min-w-0 overflow-hidden") do
         span(
-          class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
+          class: "text-[11.5px] font-semibold uppercase tracking-[0.05em] min-w-0 truncate",
           style: "color: #{@color};"
         ) { @label }
 
@@ -231,7 +236,7 @@ class Components::Metrics::ChartCard < Components::Base
         if @section == "http"
           span(
             class: "text-[9.5px] font-voodu-mono text-voodu-muted-2 uppercase tracking-[0.06em] " \
-                   "border border-voodu-border px-1 py-px translate-y-[-1px]",
+                   "border border-voodu-border px-1 py-px translate-y-[-1px] shrink-0",
             title: "HTTP metric (ingress)"
           ) { "http" }
         end
@@ -245,7 +250,7 @@ class Components::Metrics::ChartCard < Components::Base
         # Gauges render the value + capacity inside the dial/bar, so the
         # header drops the big number to avoid showing it twice.
         unless gauge?
-          span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text") do
+          span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text shrink-0 whitespace-nowrap") do
             if percent_unit?
               plain format_current(@current || s[:current])
             else
@@ -272,7 +277,11 @@ class Components::Metrics::ChartCard < Components::Base
 
     s = stats
 
-    div(class: "flex items-center flex-wrap gap-4 px-0.5") do
+    # Single line, no wrap: a narrow card must keep min/avg/max on ONE row so
+    # the card height stays constant across the grid (a wrapped footer grows the
+    # card and misaligns the whole row). Block + nowrap + text-ellipsis clips
+    # with a "…" instead of breaking to a second line.
+    div(class: "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-0.5") do
       stat_chip("min", s[:min])
       stat_chip("avg", s[:avg])
       stat_chip("max", s[:max])
@@ -304,8 +313,12 @@ class Components::Metrics::ChartCard < Components::Base
   # stat_chip — footer min/avg/max chip. Matches the expand modal's
   # stat_strip vocabulary (muted label + emphasized value) so the
   # inline card and the modal read the same.
+  # stat_chip — inline (NOT a flex item) so the parent's text-ellipsis can clip
+  # the row as one continuous line. mr-4 spaces the chips (last:mr-0 drops the
+  # trailing gap); inline-block would make each chip atomic and break the
+  # single-line ellipsis, so they stay plain inline spans.
   def stat_chip(label, value)
-    span(class: "text-[11px] font-voodu-mono text-voodu-muted") do
+    span(class: "text-[11px] font-voodu-mono text-voodu-muted mr-4 last:mr-0") do
       plain "#{label} "
       span(class: "text-voodu-text font-semibold") { format_value(value) }
     end
@@ -318,7 +331,7 @@ class Components::Metrics::ChartCard < Components::Base
   # competing with the headline.
   def capacity_chip
     span(
-      class: "font-voodu-mono text-[12px] text-voodu-muted",
+      class: "font-voodu-mono text-[12px] text-voodu-muted min-w-0 truncate",
       title: @capacity_pct ? "current / total · #{@capacity_pct}% used" : "current / total"
     ) do
       plain "/ #{@capacity_label}"

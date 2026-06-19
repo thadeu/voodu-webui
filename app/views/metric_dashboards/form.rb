@@ -368,6 +368,43 @@ class Views::MetricDashboards::Form < Views::Base
             style: "background: #{c};"
           )
         end
+        custom_color_swatch(name: "metric")
+      end
+    end
+  end
+
+  # custom_color_swatch — a "+" trigger that opens the DS color picker
+  # (Components::UI::ColorPicker) in a popover. The picker dispatches a
+  # `color-picker:change` event the dashboard-builder applies; `name`
+  # ("log"/"metric") tells it which panel kind to colour.
+  def custom_color_swatch(name:)
+    swatch_action = (name == "log") ? "selectLogColor" : "selectMetricColor"
+
+    div(class: "flex items-center gap-1.5") do
+      # The chosen custom color, added to the row as a re-selectable swatch
+      # (hidden until one is picked / a hex panel is loaded). It's a normal
+      # *Swatch target so the active-ring logic + selection reuse it.
+      button(
+        type: "button",
+        hidden: true,
+        title: "Custom color",
+        data: {action: "click->dashboard-builder##{swatch_action}", dashboard_builder_target: "#{name}Swatch", role: "custom-#{name}"},
+        class: "w-5 h-5 rounded-full border border-voodu-border shrink-0"
+      )
+
+      div(class: "relative", data: {controller: "popover"}) do
+        button(
+          type: "button",
+          title: "Custom color",
+          "aria-label": "Pick a custom color",
+          data: {action: "click->popover#toggle", popover_target: "trigger"},
+          class: "w-5 h-5 rounded-full border border-dashed border-voodu-muted-2 shrink-0 cursor-pointer " \
+                 "inline-flex items-center justify-center text-voodu-muted-2 hover:text-voodu-text hover:border-voodu-text"
+        ) { render Icon::PlusOutline.new(class: "w-3 h-3") }
+
+        div(hidden: true, data: {popover_target: "menu"}) do
+          render Components::UI::ColorPicker.new(name: name)
+        end
       end
     end
   end
@@ -514,6 +551,26 @@ class Views::MetricDashboards::Form < Views::Base
       )
 
       color_swatches
+      log_show_chart_toggle
+    end
+  end
+
+  # log_show_chart_toggle — lets the operator pick "just the number" vs "number
+  # + timeline chart". Checked by default (new panels show the chart); toggling
+  # auto-saves the panel like every other field. The read path (MetricDashboard
+  # Data#show_chart?) drops the series when unchecked, so the NumberCard renders
+  # the count alone.
+  def log_show_chart_toggle
+    label(class: "flex items-center gap-2 cursor-pointer select-none mt-0.5") do
+      input(
+        type: "checkbox",
+        checked: true,
+        data: {dashboard_builder_target: "logShowChart", action: "change->dashboard-builder#autoCommit"},
+        class: "w-4 h-4 shrink-0 cursor-pointer",
+        style: "accent-color: var(--voodu-accent);"
+      )
+      span(class: "text-[12px] text-voodu-text-2") { "Show timeline chart" }
+      span(class: "text-[11px] text-voodu-muted") { "— number + area over time" }
     end
   end
 
@@ -556,6 +613,7 @@ class Views::MetricDashboards::Form < Views::Base
           style: "background: #{c};"
         )
       end
+      custom_color_swatch(name: "log")
     end
   end
 

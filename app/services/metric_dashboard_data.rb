@@ -174,13 +174,18 @@ class MetricDashboardData
       until_: @until_
     )
 
+    # show_chart — the operator's per-panel toggle: a count tile can be just the
+    # big number (show_chart false) or number + timeline area chart (true).
+    # Series is only computed/passed when the chart is wanted; an empty series
+    # makes the NumberCard render the number alone. Absent key → true, so legacy
+    # panels keep their chart.
     {
       kind: :number,
       label: panel["label"].to_s,
       color: panel["color"].to_s,
       value: data.value,
       formatted: data.formatted,
-      series: data.series,
+      series: show_chart?(panel) ? data.series : [],
       meta: data.meta,
       clamped: data.clamped?,
       range: @range,
@@ -188,6 +193,17 @@ class MetricDashboardData
       default_visible: true,
       panel_key: key
     }
+  end
+
+  # show_chart? — whether a log-count panel wants its timeline chart. Defaults
+  # to true (absent key = legacy panel = keep the chart). Coerces the stored
+  # value robustly: the builder writes a real JSON boolean, but a hand-edited
+  # row might carry "false"/"0" — ActiveModel's boolean cast handles both.
+  def show_chart?(panel)
+    raw = panel["show_chart"]
+    return true if raw.nil?
+
+    ActiveModel::Type::Boolean.new.cast(raw)
   end
 
   # resolve_container — workload (scope + resource_name) → the current
