@@ -75,15 +75,23 @@ class MetricsPageData
     false
   end
 
-  def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil)
+  def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil, from: nil, until_: nil)
     @client = client
     @island = island
     @scope_kind = (scope_kind == "pod") ? "pod" : "host"
     @scope_id = scope_id
     @range = RANGES.key?(range) ? range : DEFAULT_RANGE
     @interval = INTERVALS.include?(interval) ? interval : DEFAULT_INTERVAL
+    @from = from
+    @until_ = until_
 
     @metrics = MetricsData.new(client, island)
+  end
+
+  # custom? — a valid explicit from/until window is in play (overrides the
+  # relative `range`). The window kwargs ride every fetch.
+  def custom?
+    @from.present? && @until_.present?
   end
 
   # charts — array of `{label, color, unit, points}` ready for
@@ -186,7 +194,30 @@ class MetricsPageData
   # math (it needs to know "where does the right edge land"
   # relative to now). Mirrors the inspiration's RANGES.ms.
   def range_ms
+    return custom_window_ms if custom?
+
     self.class.range_to_ms(@range)
+  end
+
+  # window_kwargs — the from/until pair passed to every MetricsData fetch.
+  # nil/nil in relative mode (a no-op there).
+  def window_kwargs
+    {from: @from, until_: @until_}
+  end
+
+  def custom_window_ms
+    f = parse_window_time(@from)
+    u = parse_window_time(@until_)
+
+    (f && u) ? ((u - f) * 1000).to_i : self.class.range_to_ms(@range)
+  end
+
+  def parse_window_time(value)
+    return value if value.is_a?(Time)
+
+    Time.zone.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   # pod_record — the full pod hash from /pods?detail=true for the
@@ -693,10 +724,11 @@ class MetricsPageData
           interval: @interval,
           scope: scope,
           name: name,
-          pod: @scope_id   # replica-precise filter (container name)
+          pod: @scope_id,   # replica-precise filter (container name)
+          **window_kwargs
         )
       else
-        @metrics.points_for(source: :system, metric: metric, range: @range, interval: @interval)
+        @metrics.points_for(source: :system, metric: metric, range: @range, interval: @interval, **window_kwargs)
       end
 
     rescale_points(raw_points, scale)
@@ -763,7 +795,8 @@ class MetricsPageData
       range: @range,
       interval: @interval,
       scope: scope,
-      name: name
+      name: name,
+      **window_kwargs
     )
 
     rescale_points(raw_points, scale)
@@ -784,7 +817,8 @@ class MetricsPageData
       metric: metric,
       range: @range,
       scope: scope,
-      name: name
+      name: name,
+      **window_kwargs
     )
     return nil if raw.nil?
 
@@ -809,9 +843,9 @@ class MetricsPageData
       scope = pod && (pod["scope"] || pod[:scope])
       name = pod && (pod["resource_name"] || pod[:resource_name])
       @metrics.latest_for(source: :pod, metric: metric, range: @range,
-        scope: scope, name: name, pod: @scope_id)
+        scope: scope, name: name, pod: @scope_id, **window_kwargs)
     else
-      @metrics.latest_for(source: :system, metric: metric, range: @range)
+      @metrics.latest_for(source: :system, metric: metric, range: @range, **window_kwargs)
     end
 
     return nil if raw.nil?

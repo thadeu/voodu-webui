@@ -78,10 +78,27 @@ export default class extends Controller {
     const t = this.triggerTarget.getBoundingClientRect()
     const h = this.host.getBoundingClientRect()
     const w = this.menu.offsetWidth
+    const menuH = this.menu.offsetHeight
 
-    this.menu.style.top = `${t.bottom - h.top + 4}px`
+    const MARGIN = 16
+    const GAP = 4
+    const spaceBelow = window.innerHeight - t.bottom - MARGIN
+    const spaceAbove = t.top - MARGIN
+
+    // Flip above the trigger when the menu would clip off the bottom AND
+    // there's more room above (e.g. a trigger near the page bottom). Cap the
+    // height to whichever side it lands on so it always stays scrollable.
+    if (spaceBelow < menuH && spaceAbove > spaceBelow) {
+      const maxH = Math.max(160, spaceAbove)
+
+      this.menu.style.top = `${t.top - h.top - Math.min(menuH, maxH) - GAP}px`
+      this.menu.style.maxHeight = `${maxH}px`
+    } else {
+      this.menu.style.top = `${t.bottom - h.top + GAP}px`
+      this.menu.style.maxHeight = `${Math.max(160, spaceBelow)}px`
+    }
+
     this.menu.style.left = `${Math.max(8, t.right - h.left - w)}px`
-    this.menu.style.maxHeight = `${Math.max(160, window.innerHeight - t.bottom - 16)}px`
   }
 
   close() {

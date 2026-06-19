@@ -801,6 +801,7 @@ body.log-cols-resizing * {
   --voodu-surface:   #11161f;
   --voodu-surface-2: #161c27;
   --voodu-surface-3: #1c2330;
+  --voodu-surface-side: #181f2b; /* secondary sidebar (panels rail) */
 
   /* ── Borders ── */
   --voodu-border:    #1f2632;
@@ -944,6 +945,7 @@ html[data-theme="light"] {
   --voodu-surface:   #ffffff;
   --voodu-surface-2: #f6f7f9;
   --voodu-surface-3: #eef0f3;
+  --voodu-surface-side: #fafafa; /* secondary sidebar (panels rail) */
 
   /* Borders are soft hairlines — the bg↔surface contrast carries the
    * hierarchy (Supabase model), so separators only need to whisper.
@@ -1027,6 +1029,7 @@ html[data-theme="light"] .voodu-dark {
   --voodu-surface:   #11161f;
   --voodu-surface-2: #161c27;
   --voodu-surface-3: #1c2330;
+  --voodu-surface-side: #181f2b; /* secondary sidebar (panels rail) */
 
   --voodu-border:    #1f2632;
   --voodu-border-2:  #29303f;
@@ -1068,6 +1071,7 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-surface:   var(--voodu-surface);
   --color-voodu-surface-2: var(--voodu-surface-2);
   --color-voodu-surface-3: var(--voodu-surface-3);
+  --color-voodu-surface-side: var(--voodu-surface-side);
   --color-voodu-border:    var(--voodu-border);
   --color-voodu-border-2:  var(--voodu-border-2);
   --color-voodu-text:        var(--voodu-text);
@@ -1104,6 +1108,7 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-surface:   var(--voodu-surface);
   --color-voodu-surface-2: var(--voodu-surface-2);
   --color-voodu-surface-3: var(--voodu-surface-3);
+  --color-voodu-surface-side: var(--voodu-surface-side);
 
   /* Borders */
   --color-voodu-border:   var(--voodu-border);

@@ -5,8 +5,10 @@
 # so current_island flows through naturally.
 #
 # Surfaces:
-#   - index / new / edit → rendered into the right drawer (embed mode,
-#     layout: false) by Components::UI::Drawer.
+#   - index → the manage MODAL (Views::MetricDashboards::Manage): a full-page
+#     master-detail dialog (rail of dashboards + an editor turbo-frame).
+#   - new / edit → the editor (Views::MetricDashboards::Form, layout: false)
+#     swapped into the modal's "dashboard-editor" frame.
 #   - create / update    → full-page POST (form is data-turbo:false,
 #     same as IslandsController). Success redirects to the rendered
 #     dashboard (/metrics?dashboard=<id>); a validation error re-renders
@@ -20,10 +22,16 @@ class MetricDashboardsController < ApplicationController
   def index
     @dashboards = current_island.metric_dashboards.order(:name).to_a
 
-    render Views::MetricDashboards::List.new(
+    # Full-page master-detail modal over the dashboard chrome (no layout:false
+    # — the view brings its own chrome). The right frame lazy-loads an editor.
+    render Views::MetricDashboards::Manage.new(
       island: current_island,
-      dashboards: @dashboards
-    ), layout: false
+      dashboards: @dashboards,
+      current_path: current_path,
+      islands: all_islands,
+      current_island: current_island,
+      active_uuid: params[:edit].presence
+    )
   end
 
   def new
@@ -43,9 +51,10 @@ class MetricDashboardsController < ApplicationController
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
-      # A brand-new dashboard isn't in the prior ?pid= set, so default to
-      # showing it solo — but honor an explicit return_to if one rode in.
-      redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
+      # Stay in the manager (don't auto-close): land back on this dashboard's
+      # editor with a fresh rail. Closing the modal (X/Esc) is the operator's
+      # call.
+      redirect_to(metric_dashboards_path(edit: @dashboard.uuid),
         notice: "Dashboard #{@dashboard.name} created.")
     else
       render_form_errors
@@ -67,10 +76,9 @@ class MetricDashboardsController < ApplicationController
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
-      # Land back on the exact /metrics view the operator opened the
-      # builder from (e.g. a multi-dashboard ?pid=a,b stack), not the
-      # single edited dashboard.
-      redirect_to(return_to_path || metrics_path(pid: @dashboard.uuid),
+      # Stay in the manager (don't auto-close) — reopen this dashboard's
+      # editor with a fresh rail rather than bouncing to /metrics.
+      redirect_to(metric_dashboards_path(edit: @dashboard.uuid),
         notice: "Dashboard #{@dashboard.name} updated.")
     else
       render_form_errors

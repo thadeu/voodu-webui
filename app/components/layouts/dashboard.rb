@@ -55,6 +55,9 @@ class Components::Layouts::Dashboard < Components::Base
 
     render Components::UI::ToastStack.new(flash: flash)
     render_command_palette
+    # Singleton DS confirm — replaces Turbo's native window.confirm for every
+    # data-turbo-confirm on the page (see Components::UI::TurboConfirm).
+    render Components::UI::TurboConfirm.new
   end
 
   private

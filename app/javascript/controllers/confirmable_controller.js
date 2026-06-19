@@ -71,7 +71,9 @@ export default class extends Controller {
     this.previousBodyOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
 
-    document.addEventListener("keydown", this.onKey)
+    // Capture phase + stopPropagation (see onKey) so Escape closes only
+    // THIS confirm, not a host modal it's nested inside.
+    document.addEventListener("keydown", this.onKey, true)
 
     // Focus the primary (confirm) button — the LAST button in
     // the footer matches the design's "Enter = proceed" expectation.
@@ -86,10 +88,13 @@ export default class extends Controller {
     this.modalTarget.hidden = true
     this.opened = false
     document.body.style.overflow = this.previousBodyOverflow
-    document.removeEventListener("keydown", this.onKey)
+    document.removeEventListener("keydown", this.onKey, true)
   }
 
   onKey(event) {
-    if (event.key === "Escape") this.close()
+    if (event.key !== "Escape") return
+
+    event.stopPropagation()
+    this.close()
   }
 }

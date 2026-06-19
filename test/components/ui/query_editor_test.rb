@@ -43,7 +43,9 @@ class Components::UI::QueryEditorTest < ActiveSupport::TestCase
   end
 
   test "label renders only when given" do
-    assert_includes render_editor(label: "Query"), "Query"
-    assert_not_includes render_editor, "Query"
+    # A distinct sentinel — "Query" would now collide with the "Query syntax"
+    # popover trigger that always renders.
+    assert_includes render_editor(label: "Filter expr ZZ"), "Filter expr ZZ"
+    assert_not_includes render_editor, "Filter expr ZZ"
   end
 end

@@ -155,10 +155,10 @@ class MetricsWarehouse
   # signature. Returns the JSON envelope (stringified keys) that
   # Voodu::Client#metrics would have returned, ready to flow through
   # MetricsData unchanged.
-  def self.query(island, source:, metric:, range:, interval:, scope: nil, name: nil, pod: nil)
+  def self.query(island, source:, metric:, range:, interval:, scope: nil, name: nil, pod: nil, from: nil, until_: nil)
     new(island).query(
       source: source, metric: metric, range: range, interval: interval,
-      scope: scope, name: name, pod: pod
+      scope: scope, name: name, pod: pod, from: from, until_: until_
     )
   end
 
@@ -166,13 +166,15 @@ class MetricsWarehouse
     @island = island
   end
 
-  def query(source:, metric:, range:, interval:, scope:, name:, pod:)
+  # query — `from`/`until_` (Time or ISO string) pin an explicit window for the
+  # custom-range mode; without them the window is `range` relative to now. The
+  # interval autopick uses the resolved window width either way.
+  def query(source:, metric:, range:, interval:, scope:, name:, pod:, from: nil, until_: nil)
     raise ArgumentError, "unknown metric #{metric.inspect}" unless ALLOWED_METRICS.include?(metric)
 
-    range_s = resolve_range(range)
+    start_t, end_t = resolve_window(range, from, until_)
+    range_s = (end_t - start_t).to_i
     interval_s = resolve_interval(interval, range_s)
-    end_t = Time.current
-    start_t = end_t - range_s
 
     base = scoped_relation(source, scope, name, pod, metric, start_t.to_i, end_t.to_i)
 
@@ -294,6 +296,27 @@ class MetricsWarehouse
   # path for tests that pass raw seconds.
   GO_DURATION = /\A(\d+)([smhd])\z/
   UNIT_SECONDS = {"s" => 1, "m" => 60, "h" => 3600, "d" => 86_400}.freeze
+
+  # resolve_window — [start_t, end_t] Time pair. A valid from+until_ (until_ >
+  # from) pins a fixed custom window; otherwise it's `range` back from now.
+  def resolve_window(range, from, until_)
+    f = parse_time(from)
+    u = parse_time(until_)
+
+    return [f, u] if f && u && u > f
+
+    end_t = Time.current
+    [end_t - resolve_range(range), end_t]
+  end
+
+  def parse_time(value)
+    return nil if value.blank?
+    return value if value.is_a?(Time)
+
+    Time.zone.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
+  end
 
   def resolve_range(raw)
     s = raw.to_s.strip

@@ -11,7 +11,9 @@
 # button that appends chips to an in-memory list serialized into a
 # hidden `metric_dashboard[panels]` JSON field on submit.
 class Views::MetricDashboards::Form < Views::Base
-  FRAME_ID = "dashboards-panel"
+  # The editor lives in the manage modal's right turbo-frame. Selecting a rail
+  # item / New swaps THIS frame; the controller's 422 re-render targets it too.
+  FRAME_ID = "dashboard-editor"
 
   # Accent palette offered for log-count panels. A count has no canonical
   # per-metric color (it isn't CPU/Memory/…), so the operator picks one.
@@ -21,6 +23,16 @@ class Views::MetricDashboards::Form < Views::Base
     var(--voodu-orange) var(--voodu-amber) var(--voodu-green)
     var(--voodu-blue) var(--voodu-purple) var(--voodu-pink)
     var(--voodu-teal) var(--voodu-red)
+  ].freeze
+
+  # Palette offered for METRIC panels. Each metric ships a canonical color
+  # (CPU purple, Memory blue, …) which is the default; this lets the operator
+  # override it. Covers every canonical chart token so the default always
+  # lands on a swatch.
+  METRIC_COLORS = %w[
+    var(--voodu-purple) var(--voodu-blue) var(--voodu-teal) var(--voodu-green)
+    var(--voodu-indigo) var(--voodu-cyan) var(--voodu-orange) var(--voodu-amber)
+    var(--voodu-pink) var(--voodu-red)
   ].freeze
 
   def initialize(island:, dashboard:, pods: [], embed: true,
@@ -52,31 +64,41 @@ class Views::MetricDashboards::Form < Views::Base
   private
 
   def builder_panel
-    turbo_frame_tag(FRAME_ID) do
-      div(class: "flex flex-col") do
-        builder_header
-        error_banner if @dashboard.errors.any?
+    turbo_frame_tag(FRAME_ID, class: "flex flex-col flex-1 min-h-0") do
+      # data-dashboard-uuid → the dashboard-rail controller reads this on
+      # turbo:frame-load to move its active highlight to the matching rail
+      # item. "new" matches nothing → rail goes to empty-selection state.
+      # flex-1 min-h-0 → carries the modal-body height down to the editor
+      # columns so the Panels sidebar can run full-height.
+      div(class: "flex flex-col flex-1 min-h-0", data: {dashboard_uuid: @dashboard.persisted? ? @dashboard.uuid : "new"}) do
         builder_form
       end
     end
   end
 
-  def builder_header
-    div(class: "flex items-center gap-2 px-4 py-3 border-b border-voodu-border") do
-      a(
-        href: metric_dashboards_path,
-        title: "Back to dashboards",
-        class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 shrink-0"
-      ) { render Icon::ArrowLeftOutline.new(class: "w-4 h-4") }
+  # pin_toggle — POST to pin/unpin: at most one pinned dashboard is the
+  # /metrics default. An anchor with data-turbo-method (NOT a nested
+  # <form> — that would be invalid HTML inside the builder form); _top so
+  # the redirect navigates the whole page. Sits on the title row next to
+  # the name input.
+  def pin_toggle
+    pinned = @dashboard.pinned
+    action = pinned ? unpin_metric_dashboard_path(@dashboard) : pin_metric_dashboard_path(@dashboard)
+    title = pinned ? "Unpin — /metrics stops defaulting here" : "Pin — open /metrics here by default"
 
-      span(class: "text-[13px] font-semibold text-voodu-text truncate") do
-        @dashboard.persisted? ? "Edit dashboard" : "New dashboard"
-      end
-    end
+    a(
+      href: action,
+      title: title, "aria-label": title,
+      data: {turbo_method: :post, turbo_frame: "_top"},
+      class: tokens(
+        "inline-flex items-center justify-center w-9 h-9 shrink-0 border",
+        pinned ? "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2" : "border-voodu-border bg-voodu-surface text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
+      )
+    ) { render((pinned ? Icon::BookmarkSolid : Icon::BookmarkOutline).new(class: "w-4 h-4")) }
   end
 
   def error_banner
-    div(class: "mx-4 mt-3 px-3 py-2 border border-voodu-red/40 bg-voodu-red-dim text-voodu-red text-[12px]") do
+    div(class: "px-3 py-2 border border-voodu-red/40 bg-voodu-red-dim text-voodu-red text-[12px]") do
       @dashboard.errors.full_messages.each { |m| div { m } }
     end
   end
@@ -96,9 +118,15 @@ class Views::MetricDashboards::Form < Views::Base
         turbo_frame: "_top",
         controller: "dashboard-builder",
         dashboard_builder_catalog_value: catalog_json,
-        dashboard_builder_panels_value: existing_panels_json
+        dashboard_builder_panels_value: existing_panels_json,
+        # DS confirm before saving (the singleton confirm-host swaps the
+        # native dialog). Submit → confirm → save → reopens the modal.
+        turbo_confirm: @dashboard.persisted? ? "Save changes to this dashboard?" : "Create this dashboard?"
       },
-      class: "flex flex-col gap-4 px-4 py-4"
+      # No padding here — the columns run edge-to-edge so the Panels
+      # sidebar is a true flush second sidebar (bg + border-r). The
+      # breathing room lives on the CONTENT column only (see content_pane).
+      class: "flex flex-col flex-1 min-h-0"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if @dashboard.persisted?
@@ -108,67 +136,238 @@ class Views::MetricDashboards::Form < Views::Base
       # single edited dashboard.
       input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 
-      name_field
-      add_type_toggle
-      add_panel_row
-      add_log_panel_row
-      panels_list
+      editor_split
       hidden_panels_input
+    end
+  end
+
+  # name_header — the dashboard NAME as the editor title, but rendered as a
+  # clearly-editable field: a persistent border + a pencil affordance on the
+  # right (so it doesn't read as static text), focusing to the accent border.
+  # Pin + delete sit to its right.
+  def name_header
+    div(class: "flex items-center gap-2 shrink-0") do
+      div(class: "flex-1 min-w-0 relative") do
+        input(
+          type: "text",
+          name: "metric_dashboard[name]",
+          value: @dashboard.name,
+          placeholder: "Untitled dashboard",
+          autocomplete: "off",
+          "aria-label": "Dashboard name",
+          class: "w-full bg-voodu-surface border border-voodu-border text-[16px] font-semibold text-voodu-text " \
+                 "placeholder:text-voodu-muted-2 pl-3 pr-9 py-2 hover:border-voodu-border-2 " \
+                 "focus:border-voodu-accent-line focus:bg-voodu-surface-2 focus:outline-none transition-colors"
+        )
+        span(class: "absolute right-3 top-1/2 -translate-y-1/2 text-voodu-muted-2 pointer-events-none") do
+          render Icon::PencilSquareOutline.new(class: "w-4 h-4")
+        end
+      end
+
+      if @dashboard.persisted?
+        pin_toggle
+        delete_button
+      end
+    end
+  end
+
+  # editor_split — the editor's two columns nested right of the modal's
+  # dashboards rail, giving the full surface a [dashboards][panels][form]
+  # read: a standalone Panels sidebar + the content pane (title row +
+  # detail editor). items-stretch so the panels sidebar's surface fills
+  # the column height. Stacks on mobile, side-by-side at vmd+.
+  def editor_split
+    div(class: "flex flex-col vmd:flex-row vmd:items-stretch flex-1 min-h-0") do
+      panels_sidebar
+      content_pane
+    end
+  end
+
+  # content_pane — the 3rd column: the dashboard's title row (name + pin +
+  # delete) over the panel detail editor. The title moved IN here from a
+  # full-width header, so it aligns with the form content rather than
+  # spanning over the panels sidebar. The detail editor scrolls inside (the
+  # title row stays put) when a config block is taller than the column.
+  # content_pane — the form column. ALL the editor padding lives here (the
+  # panels sidebar + dashboards rail stay flush), so the surface reads as
+  # [rail][panels][padded form].
+  def content_pane
+    div(class: "flex-1 min-w-0 flex flex-col gap-3 min-h-0 p-4") do
+      error_banner if @dashboard.errors.any?
+      name_header
+      detail_pane
       footer_actions
     end
   end
 
-  def name_field
-    label(class: "flex flex-col gap-1.5") do
-      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Name" }
-      input(
-        type: "text",
-        name: "metric_dashboard[name]",
-        value: @dashboard.name,
-        placeholder: "prod overview",
-        autocomplete: "off",
-        class: "h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[13px] placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
-      )
+  # panels_sidebar — the middle column: a STANDALONE panel (surface-3, a
+  # touch lighter than the dashboards rail's surface, with its own border)
+  # holding "Add panel" + the draggable panel list (rendered by
+  # dashboard_builder_controller, each row selects → content pane).
+  def panels_sidebar
+    div(class: "vmd:w-[230px] shrink-0 flex flex-col gap-2 p-3 bg-voodu-surface-side border-b vmd:border-b-0 vmd:border-r border-voodu-border min-h-0 overflow-hidden") do
+      # Thin header + square "+" (tooltip "Add panel"), mirroring the
+      # dashboards rail — no full-width green button eating vertical space.
+      div(class: "flex items-center justify-between gap-2 shrink-0") do
+        span(class: "text-[11px] font-medium text-voodu-text-2 uppercase tracking-[0.06em]") { "Panels" }
+        button(
+          type: "button",
+          data: {action: "click->dashboard-builder#newPanel", tooltip: "Add panel"},
+          "aria-label": "Add panel",
+          class: "inline-flex items-center justify-center w-7 h-7 shrink-0 border border-voodu-border bg-voodu-surface text-voodu-muted " \
+                 "hover:border-voodu-accent-line hover:bg-voodu-accent-dim hover:text-voodu-accent-2 transition-colors"
+        ) { render Icon::PlusOutline.new(class: "w-4 h-4") }
+      end
+
+      # The list scrolls inside the (full-height) sidebar when it outgrows
+      # the column; the header stays pinned above.
+      div(data: {dashboard_builder_target: "list"}, class: "flex flex-col gap-1.5 flex-1 min-h-0 overflow-auto scrollbar-hidden")
+      div(data: {dashboard_builder_target: "empty"}, class: "text-[11.5px] text-voodu-muted px-1 py-1 shrink-0") do
+        "No panels yet — + to start."
+      end
     end
   end
 
-  # add_type_toggle — segmented control that picks which "add" block shows
-  # (Metric vs Log count), so the two builders don't compete for vertical
-  # space. The active state is painted by the builder controller via inline
-  # style (CSS-var colors) so it survives Tailwind purge without a safelist.
-  def add_type_toggle
-    div(class: "flex items-stretch gap-1 p-0.5 border border-voodu-border bg-voodu-surface w-full vmd:w-[300px]") do
-      add_type_button("metric", "Metric")
-      add_type_button("log", "Log count")
+  # detail_pane — four mutually-exclusive states the builder controller toggles:
+  #   idleStep    — neutral placeholder (default on open: nothing selected)
+  #   typeStep    — the "Add panel" type chooser (Metric / Log count)
+  #   metricBlock — metric panel config (new or editing a selected row)
+  #   logBlock    — log-count config (new or editing a selected row)
+  # Opening a dashboard lands on idleStep; the type chooser only appears via
+  # "Add panel", so editing no longer reads as adding.
+  def detail_pane
+    div(class: "flex-1 min-w-0 min-h-0 overflow-auto flex flex-col") do
+      idle_placeholder
+      type_step_cards
+      add_panel_row
+      add_log_panel_row
     end
   end
 
-  def add_type_button(value, text)
-    # Seed "metric" active (the default block) so the toggle paints right
-    # before Stimulus connects; the controller keeps it in sync after.
-    active = value == "metric"
-    style = active ? "background: var(--voodu-accent-dim); color: var(--voodu-accent-2);" : "color: var(--voodu-text-2);"
+  # idle_placeholder — the resting state of the detail pane: a muted prompt
+  # to select a panel or add one. Replaces the type chooser as the default,
+  # so an edit session doesn't open looking like an add session.
+  def idle_placeholder
+    div(
+      data: {dashboard_builder_target: "idleStep"},
+      class: "flex flex-col items-center justify-center text-center gap-1.5 h-full min-h-[220px] border border-dashed border-voodu-border-2 px-6 py-10"
+    ) do
+      render Icon::Squares2x2Outline.new(class: "w-6 h-6 text-voodu-muted-2")
+      span(class: "text-[12.5px] text-voodu-text-2") { "Select a panel to edit" }
+      span(class: "text-[11.5px] text-voodu-muted") { "or add a new one with + Add panel" }
+    end
+  end
 
+  # type_step_cards — step 1 of the add wizard: pick the panel TYPE with two
+  # big cards (each with an SVG skeleton of what it renders). Replaces the old
+  # segmented Metric|Log tab, which read as ambiguous. Choosing a card hides
+  # this step and reveals that type's config block (step 2); a "Change type"
+  # link there returns here.
+  def type_step_cards
+    # hidden by default — the detail pane opens on idleStep; the controller
+    # reveals this only when "Add panel" is clicked (prevents a pre-JS flash
+    # of both idle + chooser).
+    div(hidden: true, data: {dashboard_builder_target: "typeStep"}, class: "flex flex-col gap-2") do
+      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Choose panel type" }
+
+      div(class: "flex flex-wrap gap-3") do
+        type_card("metric", "Metric", "CPU, memory, network, HTTP — chart or gauge") { metric_preview_svg }
+        type_card("log", "Log count", "Count log lines matching a filter — a number") { log_preview_svg }
+      end
+    end
+  end
+
+  # type_card — near-square pick card: a tall chart-preview area up top
+  # (full-bleed, so the skeleton reads at a glance) over a compact
+  # title + description. Fixed ~220px wide (max-w-full so it shrinks on
+  # mobile) and wraps instead of stretching across the wide modal.
+  def type_card(value, title, desc)
     button(
       type: "button",
-      data: {action: "click->dashboard-builder#setAddType", add_type: value, dashboard_builder_target: "addTypeBtn"},
-      style: style,
-      class: "flex-1 inline-flex items-center justify-center h-8 text-[12px] font-medium transition-colors"
-    ) { text }
+      data: {action: "click->dashboard-builder#chooseType", add_type: value},
+      class: "flex flex-col w-[220px] max-w-full overflow-hidden border border-voodu-border-2 bg-voodu-surface text-left hover:border-voodu-accent-line hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      div(class: "h-[120px] w-full flex items-center justify-center px-4 py-3 border-b border-voodu-border-2 bg-voodu-surface-2/40") { yield }
+      div(class: "flex flex-col gap-1 p-3") do
+        span(class: "block text-[13px] font-medium text-voodu-text") { title }
+        span(class: "block text-[11.5px] text-voodu-muted leading-snug") { desc }
+      end
+    end
   end
 
-  # add_panel_row — source + metric pickers (DS dropdowns) + Add.
-  # Stacks on narrow viewports, sits inline at vmd+. The dropdown
-  # controller owns open/close; dashboard-builder owns the selection.
+  # metric_preview_svg — a big area chart skeleton (CPU purple) that fills
+  # the card's preview area.
+  def metric_preview_svg
+    svg(viewBox: "0 0 200 100", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.polygon(points: "0,72 33,52 66,62 100,28 133,42 166,16 200,33 200,100 0,100", fill: "var(--voodu-purple)", opacity: "0.18")
+      s.polyline(points: "0,72 33,52 66,62 100,28 133,42 166,16 200,33", stroke: "var(--voodu-purple)", "stroke-width": "3", "stroke-linejoin": "round", "stroke-linecap": "round")
+    end
+  end
+
+  # log_preview_svg — a big-number + sparkline skeleton (orange) that fills
+  # the card's preview area.
+  def log_preview_svg
+    svg(viewBox: "0 0 200 100", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.text(x: "100", y: "50", "text-anchor": "middle", "font-size": "40", "font-weight": "700", fill: "var(--voodu-text)", "font-family": "var(--voodu-font-mono, monospace)") { "1,284" }
+      s.polyline(points: "40,82 80,74 120,80 160,68", stroke: "var(--voodu-orange)", "stroke-width": "3", "stroke-linecap": "round", "stroke-linejoin": "round")
+    end
+  end
+
+  # change_type_link — the config block's secondary action. The controller
+  # relabels it per mode: "Change type" while adding (→ back to the type
+  # cards), "Cancel" while editing (→ back to the idle placeholder,
+  # deselecting). Rendered in both blocks, so the target is plural.
+  def change_type_link
+    button(
+      type: "button",
+      data: {action: "click->dashboard-builder#backToTypes"},
+      class: "inline-flex items-center gap-1 text-[11.5px] text-voodu-muted hover:text-voodu-text"
+    ) do
+      render Icon::ArrowLeftOutline.new(class: "w-3 h-3")
+      span(data: {dashboard_builder_target: "backLink"}) { "Change type" }
+    end
+  end
+
+  # add_panel_row — source + metric pickers (DS dropdowns) + shape chips.
+  # No Add button: picking a source/metric/shape auto-saves the panel into
+  # the list (dashboard-builder#autoCommit). Stacks on narrow, inline at vmd+.
   def add_panel_row
-    div(class: "flex flex-col gap-2 p-3 border border-voodu-border-2 bg-voodu-surface", data: {dashboard_builder_target: "metricBlock"}) do
-      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Add panel" }
+    div(hidden: true, data: {dashboard_builder_target: "metricBlock"}, class: "flex flex-col gap-2.5 p-3 border border-voodu-border-2 bg-voodu-surface") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(
+          data: {dashboard_builder_target: "metricBlockTitle"},
+          class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]"
+        ) { "Metric panel" }
+        change_type_link
+      end
 
       div(class: "flex flex-col vmd:flex-row gap-2") do
         source_picker
         metric_picker
-        type_picker
-        add_button
+      end
+
+      shape_chips
+      metric_color_swatches
+    end
+  end
+
+  # metric_color_swatches — override the metric's canonical chart color.
+  # Defaults to the metric's own color (highlighted on select); picking
+  # another recolors the shape previews live + the rendered chart.
+  def metric_color_swatches
+    div(class: "flex items-center gap-2 flex-wrap pt-0.5") do
+      span(class: "text-[11px] text-voodu-muted-2 uppercase tracking-[0.04em]") { "Color" }
+      div(class: "flex items-center gap-1.5 flex-wrap") do
+        METRIC_COLORS.each do |c|
+          button(
+            type: "button",
+            title: c,
+            "aria-label": "Use color #{c}",
+            data: {action: "click->dashboard-builder#selectMetricColor", dashboard_builder_target: "metricSwatch", color: c},
+            class: "w-5 h-5 rounded-full border border-voodu-border shrink-0",
+            style: "background: #{c};"
+          )
+        end
       end
     end
   end
@@ -196,26 +395,56 @@ class Views::MetricDashboards::Form < Views::Base
     end
   end
 
-  # type_picker — chart type for the panel (Area / Gauge radial / Gauge
-  # linear). The gauge options carry data-gauge="true"; the builder
-  # controller hides them (and snaps back to Area) when the selected
-  # metric has no ceiling, so you can only gauge a percent/capacity metric.
-  def type_picker
-    div(class: "vmd:w-[156px] shrink-0 relative", data: {controller: "dropdown"}) do
-      picker_trigger("Area", :typeLabel)
-      div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "typeMenu"}, class: menu_classes) do
-        type_option("area", "Area")
-        type_option("gauge_radial", "Gauge · radial", gauge: true)
-        type_option("gauge_linear", "Gauge · linear", gauge: true)
-      end
+  # shape_chips — chart shape picker as the SAME square card pattern as the
+  # panel-type chooser: a skeleton preview up top + a label below. Gauge cards
+  # carry data-gauge="true"; the builder hides them + snaps back to Area when
+  # the metric has no ceiling. The active card is ringed in JS (highlightShape).
+  def shape_chips
+    div(class: "flex flex-wrap gap-2.5") do
+      shape_chip("area", "Area") { shape_area_svg }
+      shape_chip("gauge_radial", "Radial", gauge: true) { shape_radial_svg }
+      shape_chip("gauge_linear", "Linear", gauge: true) { shape_linear_svg }
     end
   end
 
-  def type_option(value, text, gauge: false)
-    data = {action: "click->dashboard-builder#selectType click->dropdown#close", chart_type: value}
+  def shape_chip(value, text, gauge: false)
+    data = {action: "click->dashboard-builder#selectType", chart_type: value, dashboard_builder_target: "shapeChip"}
     data[:gauge] = "true" if gauge
 
-    button(type: "button", data: data, class: option_classes) { text }
+    button(
+      type: "button",
+      data: data,
+      class: "flex flex-col w-[130px] max-w-full overflow-hidden border border-voodu-border-2 bg-voodu-surface text-left hover:border-voodu-accent-line hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      # text color (currentColor of the skeleton) is set live by the builder
+      # to the chosen metric color, so the preview shows the real chart hue.
+      div(
+        data: {dashboard_builder_target: "shapeSkeleton"},
+        class: "h-[58px] w-full flex items-center justify-center px-3 py-2 border-b border-voodu-border-2 bg-voodu-surface-2/40 text-voodu-muted"
+      ) { yield }
+      span(class: "block text-[12px] font-medium text-voodu-text px-2.5 py-2") { text }
+    end
+  end
+
+  def shape_area_svg
+    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.polygon(points: "0,28 20,18 40,22 60,10 80,16 80,40 0,40", fill: "currentColor", opacity: "0.18")
+      s.polyline(points: "0,28 20,18 40,22 60,10 80,16", stroke: "currentColor", "stroke-width": "2.5", "stroke-linejoin": "round", "stroke-linecap": "round")
+    end
+  end
+
+  def shape_radial_svg
+    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.path(d: "M14 34 A26 26 0 0 1 66 34", stroke: "var(--voodu-border-2)", "stroke-width": "5", "stroke-linecap": "round")
+      s.path(d: "M14 34 A26 26 0 0 1 52 12", stroke: "currentColor", "stroke-width": "5", "stroke-linecap": "round")
+    end
+  end
+
+  def shape_linear_svg
+    svg(viewBox: "0 0 80 40", class: "w-full h-full", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.rect(x: "8", y: "17", width: "64", height: "7", rx: "3.5", fill: "var(--voodu-border-2)")
+      s.rect(x: "8", y: "17", width: "42", height: "7", rx: "3.5", fill: "currentColor")
+    end
   end
 
   def picker_trigger(label_text, target)
@@ -240,25 +469,20 @@ class Views::MetricDashboards::Form < Views::Base
     ) { text }
   end
 
-  def add_button
-    button(
-      type: "button",
-      data: {action: "click->dashboard-builder#add"},
-      class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12.5px] font-medium hover:bg-voodu-accent/20 shrink-0"
-    ) do
-      render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
-      span { "Add" }
-    end
-  end
-
   # add_log_panel_row — the log-count panel builder. A pod source (logs are
   # per-pod), a label, the LogQuery filter (same DSL as /logs/analytics), and
-  # an accent color → "Add count" appends a scope_kind:"log" panel. The count
-  # spans the dashboard's global range and renders as a NumberCard. Stacks on
-  # narrow viewports; the query input stays full-width (it's the long field).
+  # an accent color. No Add button: source/label/query/color edits auto-save
+  # the panel (dashboard-builder#autoCommit). Stacks on narrow viewports; the
+  # query input stays full-width (it's the long field).
   def add_log_panel_row
-    div(hidden: true, data: {dashboard_builder_target: "logBlock"}, class: "flex flex-col gap-2.5 p-3 border border-voodu-border-2 bg-voodu-surface") do
-      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Add log count" }
+    div(hidden: true, data: {dashboard_builder_target: "logBlock"}, class: "flex flex-col flex-1 min-h-0 gap-2.5 p-3 border border-voodu-border-2 bg-voodu-surface") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(
+          data: {dashboard_builder_target: "logBlockTitle"},
+          class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]"
+        ) { "Log count" }
+        change_type_link
+      end
       span(class: "text-[11px] text-voodu-muted leading-relaxed") do
         "Count log lines matching a filter over the dashboard range — same query language as Analytics."
       end
@@ -269,7 +493,7 @@ class Views::MetricDashboards::Form < Views::Base
           type: "text",
           placeholder: "Label — e.g. Calls (INVITE)",
           autocomplete: "off",
-          data: {dashboard_builder_target: "logLabel"},
+          data: {dashboard_builder_target: "logLabel", action: "input->dashboard-builder#autoCommit"},
           class: "vmd:flex-1 min-w-0 h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
         )
       end
@@ -281,18 +505,15 @@ class Views::MetricDashboards::Form < Views::Base
         value: "",
         submits: false,
         rows: "3",
-        min_h: "min-h-[84px]",
+        min_h: "min-h-[120px]",
+        grow: true,
         help_limit: false,
         show_stats: true,
         placeholder: "@message like /INVITE/  ·  … | avg",
         input_data: {dashboard_builder_target: "logQuery"}
       )
 
-      div(class: "flex items-center gap-2 flex-wrap") do
-        color_swatches
-        div(class: "flex-1")
-        add_log_button
-      end
+      color_swatches
     end
   end
 
@@ -338,36 +559,12 @@ class Views::MetricDashboards::Form < Views::Base
     end
   end
 
-  def add_log_button
-    button(
-      type: "button",
-      data: {action: "click->dashboard-builder#addLog"},
-      class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12.5px] font-medium hover:bg-voodu-accent/20 shrink-0"
-    ) do
-      render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
-      span { "Add count" }
-    end
-  end
-
   def menu_classes
     "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[200px] w-full max-h-[280px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
   end
 
   def option_classes
     "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-voodu-hover"
-  end
-
-  # panels_list — chips rendered by the Stimulus controller from the
-  # in-memory list; the empty hint shows until the first panel lands.
-  def panels_list
-    div(class: "flex flex-col gap-2") do
-      span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Panels" }
-      div(data: {dashboard_builder_target: "list"}, class: "flex flex-col gap-1.5")
-      div(
-        data: {dashboard_builder_target: "empty"},
-        class: "text-[11.5px] text-voodu-muted px-1"
-      ) { "No panels yet — pick a source + metric above and press Add." }
-    end
   end
 
   def hidden_panels_input
@@ -378,20 +575,32 @@ class Views::MetricDashboards::Form < Views::Base
     )
   end
 
+  # footer_actions — the form's action bar, pinned to the bottom of the
+  # CONTENT column (not under the panels sidebar, which stays a clean
+  # second sidebar). A top border separates it from the detail editor;
+  # Save sits right. shrink-0 so it never compresses as the detail scrolls.
   def footer_actions
-    div(class: "flex items-center gap-2 pt-2") do
-      a(
-        href: metric_dashboards_path,
-        class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-      ) { "Cancel" }
-
-      div(class: "flex-1")
-
+    div(class: "flex items-center justify-end gap-2 pt-3 mt-1 border-t border-voodu-border shrink-0") do
       button(
         type: "submit",
-        class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
-      ) { @dashboard.persisted? ? "Save changes" : "Create dashboard" }
+        class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12.5px] font-medium hover:bg-voodu-accent/20"
+      ) do
+        render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
+        span { @dashboard.persisted? ? "Save changes" : "Create dashboard" }
+      end
     end
+  end
+
+  # delete_button — icon-only Turbo DELETE (with confirm) on the title row,
+  # right of the pin. _top so the destroy redirect (→ /metrics) navigates
+  # the whole page, not the frame.
+  def delete_button
+    a(
+      href: metric_dashboard_path(@dashboard),
+      data: {turbo_method: :delete, turbo_confirm: "Delete dashboard “#{@dashboard.name}”?", turbo_confirm_theme: "danger", turbo_frame: "_top"},
+      title: "Delete dashboard", "aria-label": "Delete dashboard",
+      class: "inline-flex items-center justify-center w-9 h-9 shrink-0 border border-voodu-border bg-voodu-surface text-voodu-muted hover:text-voodu-red hover:border-voodu-red/40 hover:bg-voodu-red-dim"
+    ) { render Icon::TrashOutline.new(class: "w-4 h-4") }
   end
 
   def form_action

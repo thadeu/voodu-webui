@@ -74,7 +74,8 @@ class MetricsController < ApplicationController
           scope_kind: params[:scope_kind],
           scope_id: params[:scope_id],
           range: params[:range],
-          interval: params[:interval]
+          interval: params[:interval],
+          **custom_window
         )
 
         chart = data.single_chart(
@@ -183,16 +184,16 @@ class MetricsController < ApplicationController
 
     if dashboards.size > 1
       return MultiDashboardData.new(voodu_client, current_island, dashboards,
-        range: params[:range], interval: params[:interval])
+        range: params[:range], interval: params[:interval], **custom_window)
     elsif dashboards.size == 1
       return MetricDashboardData.new(voodu_client, current_island, dashboards.first,
-        range: params[:range], interval: params[:interval])
+        range: params[:range], interval: params[:interval], **custom_window)
     end
 
     if params[:scope_kind].present? || params[:scope_id].present?
       return MetricsPageData.new(voodu_client, current_island,
         scope_kind: params[:scope_kind], scope_id: params[:scope_id],
-        range: params[:range], interval: params[:interval])
+        range: params[:range], interval: params[:interval], **custom_window)
     end
 
     pinned = current_island.metric_dashboards.pinned.first
@@ -203,8 +204,35 @@ class MetricsController < ApplicationController
       current_island,
       pinned,
       range: params[:range],
-      interval: params[:interval]
+      interval: params[:interval],
+      **custom_window
     )
+  end
+
+  # custom_window — {from:, until_:} Time pair for `range=custom` mode, else
+  # {from: nil, until_: nil}. Only populated when the range pill is "custom"
+  # AND both bounds parse AND until_ > from; a malformed/half/inverted pair
+  # collapses to nil so the data objects fall back to the relative `range`.
+  # Mirrors Logs Analytics: the absolute window is the focus, `range` is just
+  # a shortcut that seeds it.
+  def custom_window
+    @custom_window ||=
+      if params[:range].to_s == "custom"
+        f = parse_window_param(params[:from])
+        u = parse_window_param(params[:until])
+
+        (f && u && u > f) ? {from: f, until_: u} : {from: nil, until_: nil}
+      else
+        {from: nil, until_: nil}
+      end
+  end
+
+  def parse_window_param(value)
+    return nil if value.blank?
+
+    Time.zone.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   # explicit_dashboards — ordered, deduped dashboards from ?pid=a,b,c

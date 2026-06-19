@@ -22,7 +22,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"
   }.freeze
 
-  test "create persists panels and redirects to the rendered dashboard" do
+  test "create persists panels and reopens the manager on the new dashboard" do
     assert_difference("MetricDashboard.count", 1) do
       post metric_dashboards_path(tenant_key: @key),
         params: {metric_dashboard: {name: "overview", panels: [HOST].to_json}}
@@ -32,7 +32,8 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "overview", d.name
     assert_equal 1, d.panels.size
     assert_equal "cpu_percent", d.panels.first["metric"]
-    assert_redirected_to metrics_path(tenant_key: @key, pid: d.to_param)
+    # Don't auto-close: land back in the manager on the new dashboard.
+    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
   end
 
   test "create with a blank name re-renders 422" do
@@ -42,17 +43,16 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
-  test "index renders the switcher drawer body (embed)" do
+  test "index renders the manage modal with the dashboard rail + editor frame" do
     @island.metric_dashboards.create!(name: "saved-one", panels: [HOST])
 
-    get metric_dashboards_path(tenant_key: @key, embed: 1)
+    get metric_dashboards_path(tenant_key: @key)
 
     assert_response :success
-    assert_match "Dashboards", @response.body
-    assert_match "saved-one", @response.body
-    # pin + delete forms must break out of the drawer's turbo_frame
-    # (data-turbo-frame="_top") so their redirect doesn't 404 the frame.
-    assert_match 'data-turbo-frame="_top"', @response.body
+    assert_match "Dashboards", @response.body            # modal title
+    assert_match "saved-one", @response.body             # rail item
+    assert_match "New dashboard", @response.body         # rail new button
+    assert_match "dashboard-editor", @response.body      # lazy editor turbo-frame
   end
 
   test "new renders the builder (embed)" do
@@ -166,25 +166,24 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_match "2 dashboards", @response.body
   end
 
-  test "update redirects to return_to (the multi-dashboard view it was opened from)" do
-    a = @island.metric_dashboards.create!(name: "dash-a", panels: [HOST])
-    b = @island.metric_dashboards.create!(name: "dash-b", panels: [HOST])
+  test "update reopens the manager on the saved dashboard (does not auto-close)" do
+    d = @island.metric_dashboards.create!(name: "dash-b", panels: [HOST])
 
-    multi = metrics_path(tenant_key: @key, pid: "#{a.to_param},#{b.to_param}")
-    patch metric_dashboard_path(tenant_key: @key, id: b.to_param),
-      params: {return_to: multi, metric_dashboard: {name: "dash-b", panels: [HOST].to_json}}
+    patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
+      params: {metric_dashboard: {name: "dash-b2", panels: [HOST].to_json}}
 
-    assert_redirected_to multi
+    assert_equal "dash-b2", d.reload.name
+    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
   end
 
-  test "update ignores an off-site return_to and falls back to the single dashboard" do
+  test "update stays in the manager regardless of any return_to" do
     d = @island.metric_dashboards.create!(name: "dash-x", panels: [HOST])
 
     patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
-      params: {return_to: "https://evil.example.com/steal",
+      params: {return_to: metrics_path(tenant_key: @key, pid: d.to_param),
                metric_dashboard: {name: "dash-x", panels: [HOST].to_json}}
 
-    assert_redirected_to metrics_path(tenant_key: @key, pid: d.to_param)
+    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
   end
 
   test "multi ?pid silently drops unknown uuids and renders the rest" do

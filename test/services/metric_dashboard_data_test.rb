@@ -92,6 +92,37 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_equal 0, c[:value]
   end
 
+  test "custom from/until_ window bounds the log count series" do
+    base = Time.zone.local(2026, 6, 19, 12, 0, 0)
+    q = "@message like /INVITE/ | sum"
+    dash = make_dashboard([FS_CALLS.merge("query" => q)])
+
+    seed_log_at(q, base - 2.hours, 99)   # before the window
+    seed_log_at(q, base, 5)              # inside
+    seed_log_at(q, base + 5.minutes, 7)  # inside
+    seed_log_at(q, base + 2.hours, 50)   # after the window
+
+    data = MetricDashboardData.new(client, @island, dash, range: "1h",
+      from: base - 1.minute, until_: base + 10.minutes)
+
+    assert data.custom?, "explicit from+until → custom mode"
+
+    c = data.charts.first
+    assert_equal :number, c[:kind]
+    assert_equal 12, c[:value], "sum of in-window buckets only (5 + 7)"
+  end
+
+  test "custom window with a metric panel narrows MetricsPageData's fetch" do
+    base = Time.zone.local(2026, 6, 19, 12, 0, 0)
+    dash = make_dashboard([HOST])
+
+    data = MetricDashboardData.new(client, @island, dash, range: "1h",
+      from: base - 30.minutes, until_: base)
+
+    assert data.custom?
+    assert_equal (30 * 60 * 1000), data.range_ms, "range_ms = the custom window width, not the 1h shortcut"
+  end
+
   test "invalid range/interval fall back to defaults; range_ms derived" do
     dash = make_dashboard([HOST])
     data = MetricDashboardData.new(client, @island, dash, range: "zzz", interval: "bogus")
@@ -146,5 +177,16 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     end
 
     MetricSample.bulk_insert(rows)
+  end
+
+  # seed_log_at — one bucket row at an absolute time (for custom-window tests).
+  def seed_log_at(query, time, count)
+    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: query)
+    iso = "#{time.utc.iso8601[0, 16]}:00Z"
+
+    MetricSample.bulk_insert([
+      {tenant_id: @island.id, source: "log", ts_iso: iso,
+       payload: {source: "log", ts: iso, name: key, log_count: count}.to_json}
+    ])
   end
 end

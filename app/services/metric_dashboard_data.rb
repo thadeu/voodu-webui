@@ -21,12 +21,18 @@
 class MetricDashboardData
   attr_reader :dashboard, :range, :interval
 
-  def initialize(client, island, dashboard, range:, interval: nil)
+  def initialize(client, island, dashboard, range:, interval: nil, from: nil, until_: nil)
     @client = client
     @island = island
     @dashboard = dashboard
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
+    @from = from
+    @until_ = until_
+  end
+
+  def custom?
+    @from.present? && @until_.present?
   end
 
   # dashboard? — lets the Index/Frame views branch their toolbar
@@ -72,7 +78,18 @@ class MetricDashboardData
   end
 
   def range_ms
+    return scope_page.range_ms if custom?
+
     MetricsPageData.range_to_ms(@range)
+  end
+
+  # scope_page — a throwaway MetricsPageData carrying this dashboard's range +
+  # custom window, used to reuse its custom_window_ms math for range_ms.
+  def scope_page
+    @scope_page ||= MetricsPageData.new(
+      @client, @island, scope_kind: "host", scope_id: nil,
+      range: @range, interval: @interval, from: @from, until_: @until_
+    )
   end
 
   # pods — the compact pod list, fetched once and shared across every
@@ -113,7 +130,7 @@ class MetricDashboardData
     page = MetricsPageData.new(
       @client, @island,
       scope_kind: scope_kind, scope_id: scope_id,
-      range: @range, interval: @interval
+      range: @range, interval: @interval, from: @from, until_: @until_
     )
 
     chart = page.single_chart(
@@ -152,7 +169,9 @@ class MetricDashboardData
       range: @range,
       interval: @interval,
       scope: panel["scope"].to_s,
-      name: panel["name"].to_s
+      name: panel["name"].to_s,
+      from: @from,
+      until_: @until_
     )
 
     {

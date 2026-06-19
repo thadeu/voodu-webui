@@ -73,8 +73,15 @@ class Views::Metrics::Index < Views::Base
       # IS the header). The custom element still connects (connectedCallback
       # fires for display:none nodes) and the auto-refresh detach/re-attach
       # works the same — it targets the span, not its box.
-      span(class: "hidden", data: {auto_refresh_target: "source"}) do
-        turbo_stream_from "metrics-#{@current_island.id}"
+      # A fixed past window (range=custom) is NOT live — suppress the
+      # cable subscription so broadcast ticks don't refetch the same
+      # frozen window. The subtitle shows a static "fixed window" badge
+      # in its place. The auto-refresh controller no-ops without a source
+      # target (every leg guards on hasSourceTarget).
+      unless custom_window?
+        span(class: "hidden", data: {auto_refresh_target: "source"}) do
+          turbo_stream_from "metrics-#{@current_island.id}"
+        end
       end
 
       page_head
@@ -116,25 +123,11 @@ class Views::Metrics::Index < Views::Base
   def empty_create_state
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-6") do
       render Components::UI::PageHeader.new(title: "Metrics")
-
-      render(Components::UI::Drawer.new(
-        title: "Dashboards",
-        src: "#{new_metric_dashboard_path}?embed=1",
-        open_url: new_metric_dashboard_path,
-        width: "30vw",
-        min_width: "300px",
-        max_width: "min(100vw, 560px)",
-        show_full_page_link: false,
-        permanent: false,
-        custom_trigger: true,
-        storage_key: "voodu:drawer-width:dashboards"
-      )) do
-        empty_panel(
-          title: "No dashboards yet",
-          copy: "Metrics are dashboard-driven. Build one to watch host or pod metrics — pick a source, a metric, and a chart type.",
-          cta: true
-        )
-      end
+      empty_panel(
+        title: "No dashboards yet",
+        copy: "Metrics are dashboard-driven. Build one to watch host or pod metrics — pick a source, a metric, and a chart type.",
+        cta: true
+      )
     end
   end
 
@@ -145,9 +138,8 @@ class Views::Metrics::Index < Views::Base
       p(class: "text-[12.5px] text-voodu-muted max-w-[380px] m-0 leading-relaxed") { copy }
 
       if cta
-        button(
-          type: "button",
-          data: {action: "click->drawer#open"},
+        a(
+          href: metric_dashboards_path,
           class: "inline-flex items-center justify-center gap-1.5 px-3.5 h-9 mt-1 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
         ) do
           render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -181,94 +173,77 @@ class Views::Metrics::Index < Views::Base
   # dashboards" opens the right drawer for new/edit/delete.
   def dashboard_switcher_group
     div(class: "inline-flex items-stretch") do
-      # The Drawer WRAPS the dropdown (custom_trigger) so the "Manage"
-      # row inside the menu sits in the drawer's Stimulus scope, while
-      # the drawer PANEL renders as a sibling of the menu — not hidden
-      # or clipped to 0-width when the dropdown menu toggles.
-      render(Components::UI::Drawer.new(
-        title: "Dashboards",
-        src: "#{metric_dashboards_path}?embed=1",
-        open_url: metric_dashboards_path,
-        width: "30vw",
-        min_width: "300px",
-        max_width: "min(100vw, 560px)",
-        show_full_page_link: false,
-        permanent: false,
-        custom_trigger: true,
-        storage_key: "voodu:drawer-width:dashboards"
-      )) do
-        div(
-          class: "relative",
-          data: {
-            controller: "dropdown metric-multiselect",
-            metric_multiselect_base_value: metrics_path,
-            metric_multiselect_selected_value: current_pids.join(",")
-          }
+      div(
+        class: "relative",
+        data: {
+          controller: "dropdown metric-multiselect",
+          metric_multiselect_base_value: metrics_path,
+          metric_multiselect_selected_value: current_pids.join(",")
+        }
+      ) do
+        button(
+          type: "button",
+          data: {action: "click->dropdown#toggle"},
+          class: switcher_trigger_classes
         ) do
-          button(
-            type: "button",
-            data: {action: "click->dropdown#toggle"},
-            class: switcher_trigger_classes
+          render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+          span(class: "truncate max-w-[180px]") { current_view_name }
+          render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 text-voodu-muted shrink-0")
+        end
+
+        div(
+          hidden: true,
+          data: {dropdown_target: "menu"},
+          class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[260px] max-h-[420px] " \
+                 "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+        ) do
+          # Manage row — navigates to the manage modal (full page, _top).
+          a(
+            href: metric_dashboards_path,
+            data: {turbo_frame: "_top", action: "click->dropdown#close"},
+            class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
+                   "text-[12px] font-medium text-voodu-text-2 hover:bg-voodu-hover"
           ) do
             render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
-            span(class: "truncate max-w-[180px]") { current_view_name }
-            render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 text-voodu-muted shrink-0")
+            span(class: "flex-1") { "Manage dashboards" }
+            render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted-2 shrink-0")
           end
 
-          div(
-            hidden: true,
-            data: {dropdown_target: "menu"},
-            class: "absolute left-0 top-[calc(100%+4px)] z-50 min-w-[260px] max-h-[420px] " \
-                   "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
-          ) do
-            # Manage row — opens the wrapping drawer + closes the dropdown.
-            button(
-              type: "button",
-              data: {action: "click->drawer#open click->dropdown#close"},
-              class: "flex items-center gap-2.5 w-full px-3 py-2 min-h-[36px] text-left " \
-                     "text-[12px] font-medium text-voodu-text-2 hover:bg-voodu-hover"
-            ) do
-              render Icon::Squares2x2Outline.new(class: "w-3.5 h-3.5 shrink-0")
-              span(class: "flex-1") { "Manage dashboards" }
-              render Icon::ArrowRightOutline.new(class: "w-3 h-3 text-voodu-muted-2 shrink-0")
-            end
+          div(class: "h-px bg-voodu-border")
 
-            div(class: "h-px bg-voodu-border")
-
-            # Section header with a select-all / clear toggle for the rows below.
-            if all_dashboards.any?
-              div(class: "flex items-center justify-between gap-2 px-3 py-1.5 bg-voodu-bg-2 border-b border-voodu-border") do
-                span(class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted") { "Dashboards" }
-                button(
-                  type: "button",
-                  "aria-label": "Select all dashboards or clear the selection",
-                  data: {action: "click->metric-multiselect#toggleAll"},
-                  class: "inline-flex items-center gap-1 px-1.5 h-5 text-[10.5px] font-medium text-voodu-accent-2 hover:text-voodu-accent transition-colors"
-                ) do
-                  render Icon::CheckCircleOutline.new(class: "w-3.5 h-3.5")
-                  span(data: {metric_multiselect_target: "selectAllLabel"}) { "Select all" }
-                end
-              end
-            end
-
-            # Dashboard rows — checkbox toggles (no nav per click). Pick
-            # several, then "View selected" stacks them in pick order.
-            all_dashboards.each do |d|
-              multiselect_row(uuid: d.uuid, label: d.name, selected: current_pids.include?(d.uuid), pinned: d.pinned)
-            end
-
-            if all_dashboards.any?
-              div(class: "h-px bg-voodu-border")
-
+          # Section header with a select-all / clear toggle for the rows below.
+          if all_dashboards.any?
+            div(class: "flex items-center justify-between gap-2 px-3 py-1.5 bg-voodu-bg-2 border-b border-voodu-border") do
+              span(class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted") { "Dashboards" }
               button(
                 type: "button",
-                data: {action: "click->metric-multiselect#apply", metric_multiselect_target: "apply"},
-                class: "flex items-center justify-center gap-1.5 w-full px-3 py-2 min-h-[38px] " \
-                       "text-[12px] font-semibold text-voodu-accent-2 hover:bg-voodu-accent-dim"
+                "aria-label": "Select all dashboards or clear the selection",
+                data: {action: "click->metric-multiselect#toggleAll"},
+                class: "inline-flex items-center gap-1 px-1.5 h-5 text-[10.5px] font-medium text-voodu-accent-2 hover:text-voodu-accent transition-colors"
               ) do
-                render Icon::ArrowRightOutline.new(class: "w-3 h-3 shrink-0")
-                span(data: {metric_multiselect_target: "summary"}) { "View selected" }
+                render Icon::CheckCircleOutline.new(class: "w-3.5 h-3.5")
+                span(data: {metric_multiselect_target: "selectAllLabel"}) { "Select all" }
               end
+            end
+          end
+
+          # Dashboard rows — checkbox toggles (no nav per click). Pick
+          # several, then "View selected" stacks them in pick order.
+          all_dashboards.each do |d|
+            multiselect_row(uuid: d.uuid, label: d.name, selected: current_pids.include?(d.uuid), pinned: d.pinned)
+          end
+
+          if all_dashboards.any?
+            div(class: "h-px bg-voodu-border")
+
+            button(
+              type: "button",
+              data: {action: "click->metric-multiselect#apply", metric_multiselect_target: "apply"},
+              class: "flex items-center justify-center gap-1.5 w-full px-3 py-2 min-h-[38px] " \
+                     "text-[12px] font-semibold text-voodu-accent-2 hover:bg-voodu-accent-dim"
+            ) do
+              render Icon::ArrowRightOutline.new(class: "w-3 h-3 shrink-0")
+              span(data: {metric_multiselect_target: "summary"}) { "View selected" }
             end
           end
         end
@@ -411,10 +386,7 @@ class Views::Metrics::Index < Views::Base
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
       scope_subtitle
       dot_sep
-      span do
-        plain "last "
-        span(class: "font-voodu-mono text-voodu-text-2") { @data&.range || "1h" }
-      end
+      window_label
       if @data&.interval && @data.interval != "auto"
         dot_sep
         span do
@@ -423,7 +395,41 @@ class Views::Metrics::Index < Views::Base
         end
       end
       dot_sep
-      auto_refresh_indicator
+      custom_window? ? fixed_window_indicator : auto_refresh_indicator
+    end
+  end
+
+  # window_label — "last 1h" for a rolling preset; "window custom" for an
+  # explicit from/until span (the picker chip shows the exact local dates).
+  def window_label
+    if custom_window?
+      span do
+        plain "window "
+        span(class: "font-voodu-mono text-voodu-text-2") { "custom" }
+      end
+    else
+      span do
+        plain "last "
+        span(class: "font-voodu-mono text-voodu-text-2") { @data&.range || "1h" }
+      end
+    end
+  end
+
+  # custom_window? — the active data object is pinned to an explicit
+  # from/until window (range=custom), so the page is showing a frozen
+  # past span rather than a rolling "last N".
+  def custom_window?
+    @data.respond_to?(:custom?) && @data.custom?
+  end
+
+  # fixed_window_indicator — static, non-pulsing counterpart to the
+  # realtime toggle: a custom window is a snapshot of the past, not a
+  # live tail, so the live-pulse would lie. No cable subscription is
+  # attached in this mode (see body).
+  def fixed_window_indicator
+    span(class: "inline-flex items-center gap-1.5 text-voodu-muted") do
+      render Icon::CalendarDaysOutline.new(class: "w-3 h-3")
+      span { "fixed window" }
     end
   end
 
@@ -504,7 +510,13 @@ class Views::Metrics::Index < Views::Base
 
   def toolbar
     div(class: "flex items-center gap-2.5 flex-wrap") do
-      render Components::Metrics::RangePicker.new(range: @data&.range || "1h")
+      render Components::Metrics::RangePicker.new(
+        range: @data&.range || "1h",
+        custom: custom_window?,
+        from_iso: request.query_parameters[:from],
+        until_iso: request.query_parameters[:until],
+        extra_params: request.query_parameters.except(:range, :from, :until)
+      )
       render Components::Metrics::IntervalPicker.new(
         current: @data&.interval || "auto",
         base_path: metrics_path,
@@ -710,6 +722,7 @@ class Views::Metrics::Index < Views::Base
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
 
         collapse_toggle
+        edit_dashboard_link(dash)
 
         # Per-section settings (columns + visibility/order), scoped to
         # THIS dashboard's display_kind — the multi-view equivalent of
@@ -744,6 +757,21 @@ class Views::Metrics::Index < Views::Base
       span(data: {role: "eye-open"}) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
       span(data: {role: "eye-closed"}, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
+  end
+
+  # edit_dashboard_link — jump straight into this dashboard's editor (the
+  # manage modal opened to it via ?edit=<uuid>), so editing is one click from
+  # the chart grid instead of dropdown → Manage → pick. _top so it navigates
+  # the whole page out of the polling frame.
+  def edit_dashboard_link(dash)
+    return unless dash
+
+    a(
+      href: metric_dashboards_path(edit: dash.uuid),
+      data: {turbo_frame: "_top", tooltip: "Edit dashboard"},
+      "aria-label": "Edit dashboard",
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+    ) { render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5") }
   end
 
   # grid_for — the metrics-display-wrapped chart grid for ONE data
@@ -858,7 +886,11 @@ class Views::Metrics::Index < Views::Base
     qp = {
       scope_kind: sk || "host",
       scope_id: sid,
-      range: data&.range || "1h",
+      range: custom_window? ? "custom" : (data&.range || "1h"),
+      # Carry the explicit window so the maximized chart opens on the
+      # SAME span the operator is viewing (the endpoint re-resolves it).
+      from: custom_window? ? request.query_parameters[:from] : nil,
+      until: custom_window? ? request.query_parameters[:until] : nil,
       # `auto` is the default — omit from the URL so default views
       # have a clean `?range=1h` instead of `?range=1h&interval=auto`.
       interval: (data&.interval && data.interval != "auto") ? data.interval : nil,

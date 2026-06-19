@@ -109,6 +109,7 @@ class LogSurroundingData
     end
 
     scanned = []
+    seq = 0
     LogTail::Reader.each_line(
       island_id: island.id,
       pods: @all_pods ? nil : [@pod],
@@ -118,10 +119,15 @@ class LogSurroundingData
       regex: false,
       limit: SCAN_CAP
     ) do |pod, hash|
-      scanned << normalize(pod, hash)
+      row = normalize(pod, hash)
+      row[:seq] = (seq += 1) # read (file) order — the stable tiebreaker below
+      scanned << row
     end
 
-    scanned.sort_by! { |r| [r[:ts], r[:pod]] }
+    # sort_by is NOT stable, so lines sharing a timestamp (a multi-line SIP
+    # message logged in the same instant) could come out reversed. Tiebreak by
+    # the read/file order so a message's lines stay in their original sequence.
+    scanned.sort_by! { |r| [r[:ts], r[:pod], r[:seq]] }
     idx = locate_anchor(scanned)
 
     if idx.nil?
@@ -134,12 +140,10 @@ class LogSurroundingData
       @anchor_index = idx - lo
     end
 
-    # Present newest-first to match the /logs/analytics result list (which
-    # sorts ts desc). The scan + anchor slice above stay chronological —
-    # the before/after radius math reads cleanest that way — so we flip the
-    # kept window here and remap the anchor into reversed-index space.
-    @rows.reverse!
-    @anchor_index = (@rows.size - 1) - @anchor_index unless @anchor_index.nil?
+    # Present oldest-first (chronological): a SIP message / call trace reads
+    # top-to-bottom in the order it happened, which is what an operator scans
+    # a surrounding window for. The scan + anchor slice above are already
+    # chronological, so no flip — @anchor_index stays as-is.
 
     # More to reveal if the slice didn't cover everything scanned, or the
     # scan itself was capped — and we can still grow.

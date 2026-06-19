@@ -20,7 +20,7 @@
 class Components::UI::QueryEditor < Components::Base
   def initialize(value: "", name: nil, label: nil,
     placeholder: "filter @message like /timeout/",
-    rows: "4", min_h: "min-h-[120px]",
+    rows: "4", min_h: "min-h-[120px]", grow: false,
     submits: true, show_help: true, show_error: true, help_limit: true, show_stats: false,
     input_data: {})
     @value = value.to_s
@@ -29,6 +29,9 @@ class Components::UI::QueryEditor < Components::Base
     @placeholder = placeholder
     @rows = rows
     @min_h = min_h
+    # grow — let the shell flex to fill its (flex-col) parent's height instead
+    # of sitting at min_h. The host must give this component room to grow.
+    @grow = grow
     @submits = submits
     @show_help = show_help
     @show_error = show_error
@@ -42,7 +45,7 @@ class Components::UI::QueryEditor < Components::Base
     # Stimulus value default is true, so only emit the attribute to turn it OFF.
     wrapper_data[:query_editor_submits_value] = "false" unless @submits
 
-    div(class: "flex flex-col gap-2", data: wrapper_data) do
+    div(class: tokens("flex flex-col gap-2", ("flex-1 min-h-0" if @grow)), data: wrapper_data) do
       field_label(@label) if @label
       editor_shell
       error_hint if @show_error
@@ -54,9 +57,10 @@ class Components::UI::QueryEditor < Components::Base
 
   # editor_shell — the .voodu-code shell. `--query` variant drops the gutter.
   # The textarea is the real field (pre-filled so the highlight paints on
-  # connect); resize-y lets the operator grow it for a long pipeline.
+  # connect); resize-y lets the operator grow it for a long pipeline. When
+  # `grow`, the shell flexes to fill the parent instead of resting at min_h.
   def editor_shell
-    div(class: "voodu-code voodu-code--query relative overflow-hidden resize-y #{@min_h} border border-voodu-border bg-voodu-surface") do
+    div(class: tokens("voodu-code voodu-code--query relative overflow-hidden resize-y border border-voodu-border bg-voodu-surface", @grow ? "flex-1 min-h-0" : @min_h)) do
       pre(class: "voodu-code__hl", "aria-hidden": "true", data: {query_editor_target: "highlight"})
 
       textarea(
@@ -84,13 +88,30 @@ class Components::UI::QueryEditor < Components::Base
     end
   end
 
-  # syntax_help — collapsed cheatsheet. `| limit` only makes sense where the
-  # result set is paged (Analytics); a count tallies every match, so the
-  # builder drops the limit line via help_limit:false.
+  # syntax_help — the cheatsheet as a click POPOVER (not an inline
+  # details), so it doesn't push the form around and escapes the modal's
+  # overflow clipping (same pattern as the Alerts destination help). `| limit`
+  # only makes sense where the result set is paged (Analytics); a count
+  # tallies every match, so the builder drops that line via help_limit:false.
   def syntax_help
-    details(class: "group text-[11.5px] text-voodu-muted") do
-      summary(class: "cursor-pointer select-none text-voodu-text-2 hover:text-voodu-text") { "Syntax" }
-      div(class: "mt-2 flex flex-col gap-2 leading-relaxed") do
+    div(class: "relative self-start", data: {controller: "popover"}) do
+      button(
+        type: "button",
+        "aria-label": "Query syntax reference",
+        data: {action: "click->popover#toggle", popover_target: "trigger", tooltip: "Query syntax"},
+        class: "inline-flex items-center gap-1 text-[11.5px] text-voodu-text-2 hover:text-voodu-text"
+      ) do
+        render Icon::QuestionMarkCircleOutline.new(class: "w-3.5 h-3.5")
+        span { "Syntax" }
+      end
+
+      # Portaled to the dialog by the popover controller; static content only.
+      div(
+        hidden: true,
+        data: {popover_target: "menu"},
+        class: "w-[360px] max-w-[calc(100vw-32px)] overflow-y-auto border border-voodu-border-2 " \
+               "bg-voodu-surface shadow-2xl p-3.5 flex flex-col gap-2 text-[11.5px] text-voodu-muted leading-relaxed"
+      ) do
         help_line("filter @message like /re/", "regex on the whole line (msg + raw)")
         help_line('@level = "ERROR"', "exact match — @level · @stream")
         help_line("and · or · not · ( )", "combine clauses in one filter")

@@ -28,7 +28,8 @@
 #   subtitle:  — small line under the title. Optional.
 #   icon:      — icon symbol (PhlexIcons::Hero const name) shown in
 #                the header avatar. Optional.
-#   size:      — :sm (400) | :md (520) | :lg (1024). Default :md.
+#   size:      — :sm (400) | :md (520) | :lg (1024) | :wide (85vw) |
+#                :xl (95vw). Default :md.
 #                (Always capped by `100vw - 24px` so it never exceeds
 #                the viewport on mobile.)
 #   blur:      — backdrop CSS `backdrop-blur`. Default true.
@@ -46,6 +47,10 @@ class Components::UI::Modal < Components::Base
     sm: "w-[min(400px,calc(100vw-24px))]",
     md: "w-[min(520px,calc(100vw-24px))]",
     lg: "w-[min(1024px,calc(100vw-24px))]",
+    # wide — 80vw for master-detail surfaces (the dashboard manager) that
+    # want room to breathe without the near-edge feel of :xl. Caps at
+    # 1500px on ultrawide.
+    wide: "w-[min(80vw,1500px)]",
     # xl — near-full-width for dense, wide content (log windows). Caps
     # at 1600px so it doesn't sprawl on ultrawide monitors.
     xl: "w-[min(95vw,1600px)]"
@@ -70,7 +75,10 @@ class Components::UI::Modal < Components::Base
   end
 
   def view_template(&body)
-    div(data: {controller: "modal", modal_closable_value: @closable.to_s}) do
+    # modal_close_to_value → lets ESC + backdrop-click navigate to the
+    # close target (not just the X anchor). Empty in overlay mode, where
+    # close() toggles `hidden` instead of navigating.
+    div(data: {controller: "modal", modal_closable_value: @closable.to_s, modal_close_to_value: @close_to.to_s}) do
       backdrop
       dialog(&body)
     end

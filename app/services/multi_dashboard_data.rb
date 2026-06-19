@@ -11,12 +11,18 @@
 class MultiDashboardData
   attr_reader :range, :interval
 
-  def initialize(client, island, dashboards, range:, interval: nil)
+  def initialize(client, island, dashboards, range:, interval: nil, from: nil, until_: nil)
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
+    @from = from
+    @until_ = until_
     @sections = Array(dashboards).map do |d|
-      MetricDashboardData.new(client, island, d, range: @range, interval: @interval)
+      MetricDashboardData.new(client, island, d, range: @range, interval: @interval, from: @from, until_: @until_)
     end
+  end
+
+  def custom?
+    @from.present? && @until_.present?
   end
 
   # dashboard? — true so the views' toolbar/subtitle branch on a saved
@@ -42,6 +48,8 @@ class MultiDashboardData
   end
 
   def range_ms
+    return @sections.first.range_ms if custom? && @sections.any?
+
     MetricsPageData.range_to_ms(@range)
   end
 end

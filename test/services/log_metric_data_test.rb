@@ -66,6 +66,21 @@ class LogMetricDataTest < ActiveSupport::TestCase
     assert_includes points.map { |p| p[:value] }, 9.0
   end
 
+  test "the sparkline series zero-fills gaps between counts (no holes)" do
+    q = "@message like /INVITE/ | sum"
+    seed(q, [[5, 7], [1, 3]]) # buckets 5m + 1m ago — 3 empty minutes between
+
+    d = data(q, interval: "1m")
+
+    assert_equal 10, d.value, "headline reduces the RAW buckets (zeros don't change the sum)"
+
+    values = d.series.map { |p| p[:value] }
+    assert_operator d.series.size, :>=, 5, "the gap between the two counts is filled with zero buckets"
+    assert_includes values, 0.0, "empty intervals read as 0, not a hole"
+    assert_includes values, 7.0
+    assert_includes values, 3.0
+  end
+
   test "no samples yet → 0 (no fallback scan)" do
     assert_equal 0, data("@message like /INVITE/ | count").value
     assert_empty data("@message like /INVITE/ | count").series

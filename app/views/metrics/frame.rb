@@ -67,6 +67,7 @@ class Views::Metrics::Frame < Views::Base
         span(class: "flex-1 h-px bg-voodu-border-2 ml-1")
 
         collapse_toggle
+        edit_dashboard_link(dash)
 
         render Components::Metrics::DisplaySettingsButton.new(
           kind: sec.display_kind,
@@ -93,6 +94,19 @@ class Views::Metrics::Frame < Views::Base
       span(data: {role: "eye-open"}) { render Icon::EyeOutline.new(class: "w-3.5 h-3.5") }
       span(data: {role: "eye-closed"}, class: "hidden") { render Icon::EyeSlashOutline.new(class: "w-3.5 h-3.5") }
     end
+  end
+
+  # edit_dashboard_link — mirrors Index#edit_dashboard_link so the quick-edit
+  # pencil survives the broadcast-tick frame swap.
+  def edit_dashboard_link(dash)
+    return unless dash
+
+    a(
+      href: metric_dashboards_path(edit: dash.uuid),
+      data: {turbo_frame: "_top", tooltip: "Edit dashboard"},
+      "aria-label": "Edit dashboard",
+      class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors shrink-0"
+    ) { render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5") }
   end
 
   def grid_for(data)

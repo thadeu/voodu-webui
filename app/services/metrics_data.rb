@@ -42,10 +42,10 @@ class MetricsData
   # Returns `[]` on any failure (controller offline, metric
   # unknown, etc.) so callers' `if points.present?` guard in the
   # view degrades cleanly to "show the headline number, no chart."
-  def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
+  def points_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil, from: nil, until_: nil)
     return [] unless data_source_available?
 
-    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod)
+    payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod, from: from, until_: until_)
     return [] unless payload.is_a?(Hash)
 
     formatter = formatter_for(metric)
@@ -71,7 +71,9 @@ class MetricsData
     # or when its ts isn't newer than the last bucket point — no
     # gain from duplicating. Hover tooltip shows the unaggregated
     # value with its real timestamp.
-    if (latest_record = read_shared_latest(source, metric, scope, name, pod))
+    # Custom (fixed past) window: the series already covers it exactly, and the
+    # shared latest is "now" (outside the window) — so don't append it.
+    if from.blank? && until_.blank? && (latest_record = read_shared_latest(source, metric, scope, name, pod))
       last_bucket_ts = points.last && points.last[:ts]
 
       if last_bucket_ts.nil? || latest_record[:ts] > last_bucket_ts
@@ -106,8 +108,18 @@ class MetricsData
   # effects the shared cell, then reads it.
   #
   # Returns the raw Float or nil when there's no data.
-  def latest_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil)
+  def latest_for(source:, metric:, range: "1h", interval: "auto", scope: nil, name: nil, pod: nil, from: nil, until_: nil)
     return nil unless data_source_available?
+
+    # Custom window: the headline is the last sample INSIDE the window, not the
+    # shared "now" latest. Read it straight off the windowed payload (which
+    # doesn't touch the shared cell — see fetch).
+    if from.present? && until_.present?
+      payload = fetch(source: source, metric: metric, range: range, interval: interval, scope: scope, name: name, pod: pod, from: from, until_: until_)
+      latest = payload.is_a?(Hash) ? payload["latest"] : nil
+
+      return latest.is_a?(Hash) ? latest["value"]&.to_f : nil
+    end
 
     if (rec = read_shared_latest(source, metric, scope, name, pod))
       return rec[:value]
@@ -220,13 +232,15 @@ class MetricsData
   # backends raise different exception families (Voodu::Client::Error
   # for HTTP; ActiveRecord::StatementInvalid for SQLite) — the
   # rescue list covers both.
-  def fetch(source:, metric:, range:, interval:, scope:, name:, pod:)
+  def fetch(source:, metric:, range:, interval:, scope:, name:, pod:, from: nil, until_: nil)
     # One hash carries ALL params; the cache key digests it. Adding
     # a new param (`agg=max`, `format=json`, …) becomes a one-line
-    # change here — no separate cache_key signature to update.
+    # change here — no separate cache_key signature to update. from/until_ are
+    # in the key so each custom window caches separately.
+    custom = from.present? && until_.present?
     query = {
       source: source, metric: metric, range: range, interval: interval,
-      scope: scope, name: name, pod: pod
+      scope: scope, name: name, pod: pod, from: from, until_: until_
     }
 
     Rails.cache.fetch(cache_key(query), expires_in: CACHE_TTL) do
@@ -234,7 +248,9 @@ class MetricsData
         if warehouse_enabled?
           MetricsWarehouse.query(@island, **query)
         else
-          @client.metrics(**query)
+          # HTTP path serves range-relative only; custom windows need the
+          # warehouse. Drop from/until_ so client.metrics' signature matches.
+          @client.metrics(**query.except(:from, :until_))
         end
 
       # Side-effect: publish the latest to the SHARED cell so all
@@ -244,7 +260,10 @@ class MetricsData
       # shared latest (from another range's fetch) with our own
       # stale payload, defeating the whole point of the shared
       # cell.
-      if payload.is_a?(Hash) && (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
+      # Skip on a custom window: its `latest` is the last sample INSIDE the
+      # fixed past window, not "now" — writing it would poison the shared
+      # latest the relative-range views read for their headline + last dot.
+      if !custom && payload.is_a?(Hash) && (latest = payload["latest"]).is_a?(Hash) && latest["ts"].present?
         Rails.cache.write(
           latest_cache_key(identity_from(query)),
           {ts: latest["ts"], value: latest["value"].to_f},
