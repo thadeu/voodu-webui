@@ -95,6 +95,18 @@ class LogMetricsSyncIslandJobTest < ActiveSupport::TestCase
     assert_equal 1, count_for(INVITE), "only the fs workload's INVITE counts"
   end
 
+  test "the agg suffix doesn't change counting — the counter always tallies matches" do
+    # count vs avg of the SAME filter both store the per-bucket match count;
+    # the agg is applied at READ time, so the counter is agg-agnostic.
+    seed_running_fs_pod("fs.aaaa")
+    make_log_dashboard("@message like /INVITE/ | avg")
+    seed_logs("fs.aaaa", [[5, "INVITE a"], [4, "INVITE b"], [3, "INVITE c"]])
+
+    LogMetricsSyncIslandJob.perform_now(@island.id)
+
+    assert_equal 3, count_for("@message like /INVITE/ | avg"), "stores the match count regardless of agg"
+  end
+
   test "no log panels → fast no-op, writes nothing and does not raise" do
     seed_running_fs_pod("fs.aaaa")
     seed_logs("fs.aaaa", [[5, "INVITE a"]])
@@ -106,10 +118,12 @@ class LogMetricsSyncIslandJobTest < ActiveSupport::TestCase
   private
 
   def count_for(query)
-    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: query)
-
-    MetricSample.where(tenant_id: @island.id, source: "log", name: key)
+    MetricSample.where(tenant_id: @island.id, source: "log", name: key_for(query))
       .sum { |s| s.payload_json["log_count"].to_i }
+  end
+
+  def key_for(query)
+    LogMetric::Definition.key_for(scope: "fs", name: "fs", query: query)
   end
 
   def make_log_dashboard(query, scope: "fs", name: "fs")

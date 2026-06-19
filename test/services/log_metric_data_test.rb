@@ -2,15 +2,12 @@
 
 require "test_helper"
 
-# Exercises LogMetricData against a hand-seeded NDJSON warehouse on disk
-# (storage/logs/<island_id>/<pod>/…), the same layout LogTail::Writer
-# produces and LogSearchDataTest seeds. We assert the count semantics: the
-# LogQuery filter, the dashboard-range window, aggregation across replicas,
-# the retention clamp, and the COUNT_CAP floor.
+# Exercises LogMetricData's READ reductions over a hand-seeded warehouse count
+# series (source="log", metric="log_count", name=<def_key>). The counter writes
+# the per-bucket match count; this asserts how the `| agg` suffix reduces that
+# series to the headline: count=latest bucket, sum=total, avg=mean, min/max.
 #
-# Time is pinned just after the seeded era so the retention floor in #window
-# stays relative to the test's own clock (see LogSearchDataTest for the
-# rationale on the time-bomb this avoids).
+# Time is pinned just after the seeded buckets so they fall inside the range.
 class LogMetricDataTest < ActiveSupport::TestCase
   fixtures :islands
 
@@ -18,190 +15,114 @@ class LogMetricDataTest < ActiveSupport::TestCase
     @island = islands(:alpha)
     @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
     travel_to @base + 1.minute
-    clear_island_logs
     MetricSample.where(tenant_id: @island.id).delete_all
   end
 
-  teardown do
-    clear_island_logs
-    MetricSample.where(tenant_id: @island.id).delete_all
+  teardown { MetricSample.where(tenant_id: @island.id).delete_all }
+
+  test "count → the latest bucket (the current value)" do
+    q = "@message like /INVITE/ | count"
+    seed(q, [[3, 5], [2, 2], [1, 9]]) # newest (1 min ago) = 9
+
+    assert_equal 9, data(q).value
   end
 
-  test "counts lines matching a LogQuery regex filter over the range" do
-    seed("fs.aaaa", [
-      [@base, "INVITE sip:1001@host"],
-      [@base + 1.second, "200 OK"],
-      [@base + 2.seconds, "INVITE sip:1002@host"],
-      [@base + 3.seconds, "BYE sip:1001@host"]
-    ])
+  test "no agg suffix defaults to count" do
+    q = "@message like /INVITE/"
+    seed(q, [[3, 5], [1, 9]])
 
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", pods: ["fs.aaaa"])
-
-    assert_equal 2, data.value
-    assert_equal "2", data.formatted
-    assert_not data.truncated?
-    assert_not data.clamped?
+    assert_equal 9, data(q).value
   end
 
-  test "a bare word filter degrades to a case-insensitive substring (LogQuery fallback)" do
-    seed("fs.aaaa", [
-      [@base, "got INVITE here"],
-      [@base + 1.second, "lowercase invite too"],
-      [@base + 2.seconds, "unrelated"]
-    ])
+  test "sum → cumulative total of the buckets over the range" do
+    q = "@message like /INVITE/ | sum"
+    seed(q, [[3, 5], [2, 2], [1, 9]])
 
-    data = LogMetricData.new(@island, query: "INVITE", range: "1h", pods: ["fs.aaaa"])
-
-    assert_equal 2, data.value, "bare word matches both cases via the substring fallback"
+    assert_equal 16, data(q).value
   end
 
-  test "aggregates matches across every replica of the workload" do
-    seed("fs.aaaa", [[@base, "INVITE one"], [@base + 1.second, "INVITE two"]])
-    seed("fs.bbbb", [[@base, "INVITE three"]])
-    seed("other.cccc", [[@base, "INVITE elsewhere"]])
+  test "avg → mean of the buckets" do
+    q = "@message like /INVITE/ | avg"
+    seed(q, [[3, 4], [1, 8]]) # mean 6
 
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", pods: %w[fs.aaaa fs.bbbb])
-
-    assert_equal 3, data.value, "both fs replicas counted, the unrelated pod excluded"
+    assert_equal 6, data(q).value
   end
 
-  test "the window honours the dashboard range (5m excludes older matches)" do
-    seed("fs.aaaa", [
-      [@base - 10.minutes, "INVITE old"],
-      [@base, "INVITE recent"]
-    ])
+  test "min / max → smallest / largest bucket" do
+    seed("@message like /INVITE/ | min", [[3, 5], [2, 2], [1, 9]])
+    seed("@message like /INVITE/ | max", [[3, 5], [2, 2], [1, 9]])
 
-    # now = @base + 1.minute → a 5m window starts at @base − 4m, so the
-    # 10-minutes-ago line falls outside it.
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "5m", pods: ["fs.aaaa"])
-
-    assert_equal 1, data.value
+    assert_equal 2, data("@message like /INVITE/ | min").value
+    assert_equal 9, data("@message like /INVITE/ | max").value
   end
 
-  test "a range past retention clamps to the retention floor and flags clamped?" do
-    seed("fs.aaaa", [[@base, "INVITE recent"]])
+  test "exposes the per-bucket count series for the sparkline" do
+    q = "@message like /INVITE/ | count"
+    seed(q, [[3, 5], [2, 2], [1, 9]])
 
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "30d", pods: ["fs.aaaa"])
+    points = data(q).series
 
-    assert data.clamped?, "30d outruns the 2-day retention floor"
-    assert_equal 1, data.value, "still counts what's on disk within retention"
+    assert points.size >= 1
+    assert_includes points.map { |p| p[:value] }, 9.0
   end
 
-  test "empty replica set counts zero without scanning" do
-    seed("fs.aaaa", [[@base, "INVITE one"]])
-
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", pods: [])
-
-    assert_equal 0, data.value
-    assert_not data.truncated?
+  test "no samples yet → 0 (no fallback scan)" do
+    assert_equal 0, data("@message like /INVITE/ | count").value
+    assert_empty data("@message like /INVITE/ | count").series
   end
 
-  test "a blank query counts zero (never counts everything)" do
-    seed("fs.aaaa", [[@base, "anything"], [@base + 1.second, "more"]])
-
-    data = LogMetricData.new(@island, query: "", range: "1h", pods: ["fs.aaaa"])
-
-    assert_equal 0, data.value
+  test "meta shows the agg for non-count, nil for count" do
+    assert_equal "avg", data("@message like /x/ | avg").meta
+    assert_equal "max", data("@message like /x/ | max").meta
+    assert_nil data("@message like /x/").meta
+    assert_nil data("@message like /x/ | count").meta
   end
 
-  test "truncated? floors the count at COUNT_CAP" do
-    with_count_cap(3) do
-      seed("fs.aaaa", (0..9).map { |i| [@base + i.seconds, "INVITE #{i}"] })
+  # Regression guard for the shipped bug: the interval was hardcoded to "auto",
+  # so 10s and 1m gave the same sparkline. A coarser interval must merge buckets
+  # (SUM), which changes count's latest-bucket value.
+  test "the interval is respected — coarser buckets merge, changing count(latest)" do
+    q = "@message like /INVITE/ | count"
+    seed(q, [[3, 2], [2, 5], [1, 3]]) # three distinct minute buckets
 
-      data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", pods: ["fs.aaaa"])
+    assert_equal 3, data(q, interval: "1m").value, "1m → three buckets, latest = 3"
+    assert_equal 10, data(q, interval: "1h").value, "1h → one merged bucket (SUM), latest = 2+5+3"
 
-      assert_equal 3, data.value, "scan stops at the cap"
-      assert data.truncated?, "value is a floor — there are more matches"
-    end
+    assert_operator data(q, interval: "1m").series.size, :>, data(q, interval: "1h").series.size,
+      "finer interval → more sparkline points"
   end
 
-  test "@level filtering works through the same DSL" do
-    seed_rich("fs.aaaa", [
-      [@base, "boom", "ERROR"],
-      [@base + 1.second, "ok", "INFO"],
-      [@base + 2.seconds, "kaboom", "ERROR"]
-    ])
-
-    data = LogMetricData.new(@island, query: '@level = "ERROR"', range: "1h", pods: ["fs.aaaa"])
-
-    assert_equal 2, data.value
+  test "clamped? only when the range outruns the log retention" do
+    assert_not data("@message like /x/", range: "1h").clamped?
+    assert data("@message like /x/", range: "30d").clamped?
   end
 
-  # ── Fase 2: warehouse read path (pre-aggregated samples) ──────────────────
+  test "formats whole numbers with delimiters; avg keeps decimals" do
+    seed("@message like /a/ | sum", [[2, 1200], [1, 300]]) # 1500
+    assert_equal "1,500", data("@message like /a/ | sum").formatted
 
-  test "reads the pre-aggregated warehouse series when the def is tracked" do
-    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: "@message like /INVITE/")
-    seed_log_samples(key, [[@base - 2.minutes, 3], [@base - 1.minute, 2]])
-
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", scope: "fs", name: "fs", pods: ["fs.aaaa"])
-
-    assert_equal 5, data.value, "sum of the warehouse buckets"
-    assert data.series.any?, "history series is exposed for the sparkline"
-    assert_equal "5", data.formatted
-  end
-
-  test "a tracked def with no matches in range reads a true 0 (not a fallback)" do
-    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: "@message like /INVITE/")
-    # Tracked (a sample exists), but it's older than the 5m range window.
-    seed_log_samples(key, [[@base - 2.hours, 9]])
-    # NDJSON that WOULD live-scan to 1 — proves we trust the warehouse, not the scan.
-    seed("fs.aaaa", [[@base, "INVITE recent"]])
-
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "5m", scope: "fs", name: "fs", pods: ["fs.aaaa"])
-
-    assert_equal 0, data.value, "warehouse has no buckets in the 5m window → true 0"
-  end
-
-  test "falls back to the live scan when the def is not yet tracked" do
-    seed("fs.aaaa", [[@base, "INVITE a"], [@base + 1.second, "INVITE b"]])
-
-    data = LogMetricData.new(@island, query: "@message like /INVITE/", range: "1h", scope: "fs", name: "fs", pods: ["fs.aaaa"])
-
-    assert_equal 2, data.value, "no warehouse samples → live scan counts the NDJSON"
-    assert_empty data.series, "fallback has no history → no sparkline"
+    seed("@message like /b/ | avg", [[2, 3], [1, 4]]) # 3.5
+    assert_equal "3.5", data("@message like /b/ | avg").formatted
   end
 
   private
 
-  def seed_log_samples(key, buckets)
-    rows = buckets.map do |time, n|
-      iso = "#{time.utc.iso8601[0, 16]}:00Z"
+  def data(query, range: "1h", interval: "auto")
+    LogMetricData.new(@island, query: query, range: range, interval: interval, scope: "fs", name: "fs")
+  end
+
+  # seed — write per-bucket log_count samples under the query's def_key.
+  # counts: [[minutes_ago, count], ...].
+  def seed(query, counts)
+    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: query)
+
+    rows = counts.map do |mins, n|
+      iso = "#{(@base - mins.minutes).utc.iso8601[0, 16]}:00Z"
 
       {tenant_id: @island.id, source: "log", ts_iso: iso,
        payload: {source: "log", ts: iso, name: key, log_count: n}.to_json}
     end
 
     MetricSample.bulk_insert(rows)
-  end
-
-  def with_count_cap(cap)
-    original = LogMetricData::COUNT_CAP
-    LogMetricData.send(:remove_const, :COUNT_CAP)
-    LogMetricData.const_set(:COUNT_CAP, cap)
-    yield
-  ensure
-    LogMetricData.send(:remove_const, :COUNT_CAP)
-    LogMetricData.const_set(:COUNT_CAP, original)
-  end
-
-  # seed — plain msg lines (level nil), the common case.
-  def seed(pod, lines)
-    seed_rich(pod, lines.map { |time, msg| [time, msg, nil] })
-  end
-
-  # seed_rich — lines with an explicit level, in the on-disk shape
-  # LogTail::Writer emits.
-  def seed_rich(pod, lines)
-    lines.each do |time, msg, level|
-      path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
-      LogTail::FilePath.ensure_dir(File.dirname(path))
-      row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: level, msg: msg, raw: msg, parsed: false}
-      File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
-    end
-  end
-
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
-    FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

@@ -66,27 +66,24 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     "label" => "fs · INVITE", "color" => "var(--voodu-orange)", "chart_type" => "number"
   }.freeze
 
-  test "log panel counts matching lines across the workload's replicas as a number envelope" do
-    seed_running_fs_pod("fs.aaaa")
-    seed_running_fs_pod("fs.bbbb")
-    seed_logs("fs.aaaa", ["INVITE one", "200 OK", "INVITE two"])
-    seed_logs("fs.bbbb", ["INVITE three"])
+  test "log panel reads the pre-aggregated count series into a number envelope" do
     dash = make_dashboard([FS_CALLS])
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # latest bucket = 3 (count)
 
     charts = MetricDashboardData.new(client, @island, dash, range: "1h").charts
 
     assert_equal 1, charts.size
     c = charts.first
     assert_equal :number, c[:kind]
-    assert_equal 3, c[:value], "both fs replicas counted, the 200 OK line excluded"
-    assert_equal "3", c[:formatted]
+    assert_equal 3, c[:value], "count = latest bucket"
     assert_equal "fs · INVITE", c[:label]
     assert_equal "1h", c[:range]
     assert_equal "k0", c[:panel_key]
+    assert c[:series].any?, "series for the sparkline"
     assert c[:default_visible]
   end
 
-  test "log panel with no live replica counts zero (no logs to scan)" do
+  test "log panel with no counted data yet reads zero" do
     dash = make_dashboard([FS_CALLS])
 
     c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
@@ -136,31 +133,18 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     )
   end
 
-  def seed_running_fs_pod(container)
-    replica = container.split(".").last
+  # seed_log_samples — write the counter's per-bucket log_count rows under the
+  # query's def_key. counts: [[minutes_ago, count], ...].
+  def seed_log_samples(query, counts)
+    key = LogMetric::Definition.key_for(scope: "fs", name: "fs", query: query)
 
-    @island.pods.create!(
-      container_name: container, kind: "deployment", scope: "fs",
-      resource_name: "fs", replica_id: replica, synced_at: Time.current,
-      payload: {
-        "name" => container, "scope" => "fs", "resource_name" => "fs",
-        "replica_id" => replica, "kind" => "deployment", "status" => "running",
-        "image" => "freeswitch:1"
-      }.to_json
-    )
-  end
+    rows = counts.map do |mins, n|
+      iso = "#{(Time.current - mins.minutes).utc.iso8601[0, 16]}:00Z"
 
-  # seed_logs — write msgs into the NDJSON warehouse for `pod`, stamped a few
-  # seconds before now so they land inside any range window.
-  def seed_logs(pod, msgs)
-    now = Time.current
-
-    msgs.each_with_index do |msg, i|
-      time = now - (msgs.size - i).seconds
-      path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
-      LogTail::FilePath.ensure_dir(File.dirname(path))
-      row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
-      File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
+      {tenant_id: @island.id, source: "log", ts_iso: iso,
+       payload: {source: "log", ts: iso, name: key, log_count: n}.to_json}
     end
+
+    MetricSample.bulk_insert(rows)
   end
 end

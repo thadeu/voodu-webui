@@ -283,7 +283,8 @@ class Views::MetricDashboards::Form < Views::Base
         rows: "3",
         min_h: "min-h-[84px]",
         help_limit: false,
-        placeholder: "@message like /INVITE/",
+        show_stats: true,
+        placeholder: "@message like /INVITE/  ·  … | avg",
         input_data: {dashboard_builder_target: "logQuery"}
       )
 

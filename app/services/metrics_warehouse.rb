@@ -142,10 +142,11 @@ class MetricsWarehouse
     "latency_p99_ms" => "MAX",
     "latency_max_ms" => "MAX",
 
-    # Log-count filters (LogMetricsSyncIslandJob). Each row is a per-tick
-    # partial tally for a 60s storage bucket; SUM rolls partials into the
-    # render-bucket total, same as the ingress counters. Total over a range =
-    # sum of every series point.
+    # Log-metric filters (LogMetricsSyncIslandJob) store the match count per
+    # storage bucket. SUM rolls the per-tick partials into each render-bucket's
+    # total count. The panel's agg (count=latest / sum=total / avg=mean /
+    # min/max) is then applied OVER that per-render-bucket count series in
+    # LogMetricData — not here.
     "log_count" => "SUM"
   }.freeze
   DEFAULT_AGGREGATION = "AVG"

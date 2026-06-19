@@ -137,11 +137,10 @@ class MetricDashboardData
       default_visible: true, panel_key: key)
   end
 
-  # log_chart_for — a log-count panel: count matches of the panel's LogQuery
-  # filter over the dashboard range via LogMetricData, returned as a `number`
-  # envelope the NumberCard renders. No client round-trip — LogMetricData
-  # reads the local NDJSON warehouse; we just resolve which replica containers
-  # to scan. An empty replica set still renders (count 0).
+  # log_chart_for — a log-count panel: read the filter's pre-aggregated count
+  # series (via LogMetricData) and reduce it per the query's `| agg` suffix,
+  # returned as a `number` envelope the NumberCard renders. The series is
+  # bucketed by the dashboard interval (so the sparkline honours the picker).
   #
   # default_visible: true — the operator explicitly chose this panel, so the
   # metrics-display "hide picker-only on first run" heuristic must never hide
@@ -151,9 +150,9 @@ class MetricDashboardData
       @island,
       query: panel["query"].to_s,
       range: @range,
+      interval: @interval,
       scope: panel["scope"].to_s,
-      name: panel["name"].to_s,
-      pods: resolve_containers(panel)
+      name: panel["name"].to_s
     )
 
     {
@@ -163,26 +162,13 @@ class MetricDashboardData
       value: data.value,
       formatted: data.formatted,
       series: data.series,
-      truncated: data.truncated?,
+      meta: data.meta,
       clamped: data.clamped?,
       range: @range,
       range_ms: range_ms,
       default_visible: true,
       panel_key: key
     }
-  end
-
-  # resolve_containers — ALL live replica container names for the panel's
-  # workload (scope + name). Unlike resolve_container (which picks one replica
-  # for a metric series), a log count aggregates across EVERY replica — a
-  # request/call lands on whichever replica, so the matches are spread.
-  def resolve_containers(panel)
-    scope = panel["scope"].to_s
-    name = panel["name"].to_s
-
-    pods.select { |p| field(p, "scope") == scope && field(p, "resource_name") == name }
-      .map { |p| field(p, "name") }
-      .reject(&:blank?)
   end
 
   # resolve_container — workload (scope + resource_name) → the current

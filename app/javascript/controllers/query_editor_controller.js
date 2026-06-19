@@ -25,13 +25,15 @@ const CLOSERS = new Set(['"', ")"])
 // pipe, integers (limit arg), operators, parens. `g` to walk the line, `i`
 // so commands/keywords highlight regardless of case.
 const TOKENS =
-  /("(?:[^"\\]|\\.)*")|(\/(?:[^/\\]|\\.)*\/)|(@\w+)|\b(filter|limit)\b|\b(and|or|not|like)\b|(\|)|\b(\d+)\b|(!=|==|=)|([()])/gi
+  /("(?:[^"\\]|\\.)*")|(\/(?:[^/\\]|\\.)*\/)|(@\w+)|\b(filter|limit)\b|\b(and|or|not|like|count|sum|avg|min|max)\b|(\|)|\b(\d+)\b|(!=|==|=)|([()])/gi
 
-// Every clause must name a field (matches LogQuery's requirement). A cheap
-// "does it reference @message/@level/@stream at all" check is enough to block
-// the field-less case the operator flagged as strange; deeper parse errors
-// still degrade server-side, so results never go blank.
+// Every FILTER clause must name a field (matches LogQuery's requirement). A
+// cheap "does it reference @message/@level/@stream at all" check blocks the
+// field-less case; an agg suffix (| count / | avg / …) relaxes it (you can
+// aggregate without a filter). Deeper parse errors still degrade server-side,
+// so results never go blank.
 const HAS_FIELD = /@(message|level|stream)\b/i
+const HAS_AGG = /\b(count|sum|avg|min|max)\b/i
 
 export default class extends Controller {
   static targets = ["input", "highlight", "error"]
@@ -72,7 +74,7 @@ export default class extends Controller {
   validate() {
     const value = this.inputTarget.value.trim()
     const withoutLimit = value.replace(/\|?\s*limit\s+\d+/gi, "").trim()
-    const valid = value === "" || withoutLimit === "" || HAS_FIELD.test(value)
+    const valid = value === "" || withoutLimit === "" || HAS_FIELD.test(value) || HAS_AGG.test(value)
 
     this.shell?.classList.toggle("voodu-code--invalid", !valid)
     if (this.hasErrorTarget) this.errorTarget.classList.toggle("hidden", valid)

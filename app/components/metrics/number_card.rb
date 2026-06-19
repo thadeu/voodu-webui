@@ -29,9 +29,11 @@ class Components::Metrics::NumberCard < Components::Base
   # @param series [Array] [{ts:, value:, formatted:}] for the trend sparkline.
   #   Empty (live-scan fallback before the warehouse fills) → no sparkline.
   # @param range_ms [Integer] range width for the sparkline x-axis math.
+  # @param sub [String, nil] muted qualifier ("avg · duration_ms"); nil for a
+  #   plain count.
   # @param default_visible [Boolean]
   def initialize(label:, color:, formatted:, range:, metric: nil,
-    truncated: false, clamped: false, series: [], range_ms: nil, default_visible: true)
+    truncated: false, clamped: false, series: [], range_ms: nil, sub: nil, default_visible: true)
     @label = label
     @color = color
     @formatted = formatted
@@ -41,6 +43,7 @@ class Components::Metrics::NumberCard < Components::Base
     @clamped = clamped
     @series = Array(series)
     @range_ms = range_ms
+    @sub = sub
     @default_visible = default_visible
   end
 
@@ -74,16 +77,22 @@ class Components::Metrics::NumberCard < Components::Base
   # Named card_header (not header) — `header` is a Phlex HTML tag method;
   # method_missing would shadow the tag and break rendering.
   def card_header
-    div(class: "flex items-start justify-between gap-2") do
-      span(
-        class: "text-[11.5px] font-semibold uppercase tracking-[0.05em] min-w-0 truncate",
-        style: "color: #{@color};"
-      ) { @label }
+    div(class: "flex flex-col gap-0.5 min-w-0") do
+      div(class: "flex items-start justify-between gap-2") do
+        span(
+          class: "text-[11.5px] font-semibold uppercase tracking-[0.05em] min-w-0 truncate",
+          style: "color: #{@color};"
+        ) { @label }
 
-      span(
-        class: "inline-flex items-center px-1.5 h-[18px] text-[10.5px] font-medium rounded-voodu-sm " \
-               "border border-voodu-border text-voodu-muted shrink-0 font-voodu-mono"
-      ) { @range }
+        span(
+          class: "inline-flex items-center px-1.5 h-[18px] text-[10.5px] font-medium rounded-voodu-sm " \
+                 "border border-voodu-border text-voodu-muted shrink-0 font-voodu-mono"
+        ) { @range }
+      end
+
+      # sub — the agg + field qualifier ("avg · duration_ms"). Mono because the
+      # field is a JSON identifier; muted so it doesn't compete with the label.
+      span(class: "text-[10px] font-voodu-mono text-voodu-muted-2 truncate") { @sub } if @sub.present?
     end
   end
 

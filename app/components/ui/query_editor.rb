@@ -21,7 +21,7 @@ class Components::UI::QueryEditor < Components::Base
   def initialize(value: "", name: nil, label: nil,
     placeholder: "filter @message like /timeout/",
     rows: "4", min_h: "min-h-[120px]",
-    submits: true, show_help: true, show_error: true, help_limit: true,
+    submits: true, show_help: true, show_error: true, help_limit: true, show_stats: false,
     input_data: {})
     @value = value.to_s
     @name = name
@@ -33,6 +33,7 @@ class Components::UI::QueryEditor < Components::Base
     @show_help = show_help
     @show_error = show_error
     @help_limit = help_limit
+    @show_stats = show_stats
     @input_data = input_data
   end
 
@@ -96,14 +97,25 @@ class Components::UI::QueryEditor < Components::Base
         help_line("filter … | filter …", "chain filters — each pipe ANDs")
         help_line("| limit 1000", "cap to the newest N matches") if @help_limit
 
+        if @show_stats
+          help_line("| count", "current count (latest interval)")
+          help_line("| sum", "total over the range")
+          help_line("| avg · | min · | max", "stats over the per-interval count")
+        end
+
         div(class: "pt-1 border-t border-voodu-border text-voodu-muted-2") do
           plain "Example: "
-          code(class: "font-voodu-mono text-voodu-text-2") do
-            @help_limit ? "filter @message like /call-id/ | limit 1000" : "@message like /INVITE/"
-          end
+          code(class: "font-voodu-mono text-voodu-text-2") { example_query }
         end
       end
     end
+  end
+
+  def example_query
+    return "@message like /INVITE/ | count" if @show_stats
+    return "filter @message like /call-id/ | limit 1000" if @help_limit
+
+    "@message like /INVITE/"
   end
 
   def help_line(syntax, note)

@@ -819,6 +819,7 @@ class Views::Metrics::Index < Views::Base
       clamped: c[:clamped],
       series: c[:series] || [],
       range_ms: c[:range_ms],
+      sub: c[:meta],
       default_visible: c.fetch(:default_visible, true)
     )
   end

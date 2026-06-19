@@ -100,17 +100,22 @@ class LogMetricsSyncIslandJob < ApplicationJob
     range = (side == :live) ? (b..until_.to_i) : (from.to_i...b)
     MetricSample.where(tenant_id: island.id, source: "log", name: keys, ts_epoch: range).delete_all
 
-    rows = counts.map do |(key, bucket), n|
-      {tenant_id: island.id, source: "log", ts_iso: bucket,
-       payload: {source: "log", ts: bucket, name: key, log_count: n}.to_json}
-    end
+    rows = counts.map { |(key, bucket), count| sample_row(island, key, bucket, count) }
 
     MetricSample.bulk_insert(rows)
     rows.size
   end
 
-  # count_buckets — ONE pass over the window's lines, testing every candidate
-  # def's predicate per line. Returns { [def_key, bucket_iso] => count }.
+  # sample_row — one warehouse row per (def, bucket): the match count for that
+  # bucket. The agg (count/sum/avg/min/max) is applied at READ time over this
+  # per-bucket count series, so the counter is agg-agnostic — it just tallies.
+  def sample_row(island, key, bucket, count)
+    {tenant_id: island.id, source: "log", ts_iso: bucket,
+     payload: {source: "log", ts: bucket, name: key, log_count: count}.to_json}
+  end
+
+  # count_buckets — ONE pass over the window's lines, tallying every candidate
+  # def's matches per bucket. Returns { [def_key, bucket_iso] => count }.
   def count_buckets(island, by_workload, pod_map, from:, until_:)
     counts = Hash.new(0)
 

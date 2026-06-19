@@ -58,4 +58,9 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
   test "omits the sparkline when there is no history (live-scan fallback)" do
     assert_not_includes render_card(series: []), "<svg"
   end
+
+  test "renders the agg sub-line when given, omits it for a plain count" do
+    assert_includes render_card(sub: "avg-marker"), "avg-marker"
+    assert_not_includes render_card(sub: nil), "avg-marker"
+  end
 end

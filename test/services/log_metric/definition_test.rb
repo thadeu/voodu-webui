@@ -48,6 +48,25 @@ class LogMetric::DefinitionTest < ActiveSupport::TestCase
     assert_not d.predicate.call({msg: "200 OK", raw: "200 OK", level: "", stream: ""})
   end
 
+  test "agg defaults to count when the query has no agg stage" do
+    d = LogMetric::Definition.new(scope: "fs", name: "fs", query: "@message like /INVITE/")
+
+    assert_equal :count, d.agg
+  end
+
+  test "agg reflects the | <agg> suffix" do
+    d = LogMetric::Definition.new(scope: "fs", name: "fs", query: "@message like /Hangup/ | avg")
+
+    assert_equal :avg, d.agg
+  end
+
+  test "the agg suffix is part of the key (different agg → different series)" do
+    base = LogMetric::Definition.new(scope: "fs", name: "fs", query: "@message like /h/").key
+    avged = LogMetric::Definition.new(scope: "fs", name: "fs", query: "@message like /h/ | avg").key
+
+    assert_not_equal base, avged
+  end
+
   test "log_count is an allowed warehouse metric and aggregates with SUM" do
     assert_includes MetricsWarehouse::ALLOWED_METRICS, "log_count"
     assert_equal "SUM", MetricsWarehouse::METRIC_AGGREGATIONS["log_count"]

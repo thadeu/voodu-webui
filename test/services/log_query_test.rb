@@ -21,6 +21,47 @@ class LogQueryTest < ActiveSupport::TestCase
     assert LogQuery.compile("   ").predicate.call(rec(msg: "anything"))
   end
 
+  # ── agg suffix stage ──────────────────────────────────────────────────────
+
+  test "no agg stage → agg is nil (caller treats as count)" do
+    assert_nil LogQuery.compile("@message like /x/").agg
+  end
+
+  test "| <agg> sets the aggregation and keeps the filter predicate" do
+    {count: :count, sum: :sum, avg: :avg, min: :min, max: :max}.each do |word, sym|
+      r = LogQuery.compile("@message like /Hangup/ | #{word}")
+
+      assert r.valid?, "#{word} should be valid"
+      assert_equal sym, r.agg, "| #{word} → #{sym}"
+      assert r.predicate.call(rec(msg: "Hangup call")), "filter preserved (#{word})"
+      refute r.predicate.call(rec(msg: "Answer call")), "filter excludes non-matches (#{word})"
+    end
+  end
+
+  test "agg stage is case-insensitive and works multi-line" do
+    assert_equal :avg, LogQuery.compile("@message like /x/\n| AVG").agg
+  end
+
+  test "agg tolerates optional (...) and an 'as' alias, ignoring them" do
+    assert_equal :count, LogQuery.compile("@message like /x/ | count(*)").agg
+    assert_equal :max, LogQuery.compile("@message like /x/ | max() as peak").agg
+  end
+
+  test "a bare agg with no filter aggregates over all lines" do
+    r = LogQuery.compile("count")
+
+    assert r.valid?
+    assert_equal :count, r.agg
+    assert r.predicate.call(rec(msg: "anything")), "no filter → matches all"
+  end
+
+  test "agg composes with limit (analytics ignores agg, panels ignore limit)" do
+    r = LogQuery.compile("@message like /x/ | limit 100 | sum")
+
+    assert_equal 100, r.limit
+    assert_equal :sum, r.agg
+  end
+
   # ── the field requirement ───────────────────────────────────────────────────
 
   test "a bare regex without a field is invalid (the User-Agent case)" do

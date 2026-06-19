@@ -153,6 +153,7 @@ class Views::Metrics::Frame < Views::Base
       clamped: c[:clamped],
       series: c[:series] || [],
       range_ms: c[:range_ms],
+      sub: c[:meta],
       default_visible: c.fetch(:default_visible, true)
     )
   end

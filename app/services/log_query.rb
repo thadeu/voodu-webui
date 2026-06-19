@@ -11,7 +11,9 @@
 # Grammar (case-insensitive keywords):
 #
 #   query    := stage ( "|" stage )*                       # CloudWatch pipeline
-#   stage    := "filter" or | "limit" int | or             # bare ⇒ implicit filter
+#   stage    := "filter" or | "limit" int | agg | or       # bare ⇒ implicit filter
+#   agg      := ("count"|"sum"|"avg"|"min"|"max")           # reduces the match count
+#                 ("(" … ")")? ("as" word)?                 # optional, ignored
 #   or       := and ( "or"  and )*
 #   and      := unary ( "and" unary )*
 #   unary    := "not" unary | primary
@@ -61,13 +63,21 @@ class LogQuery
 
   # Result — `predicate` is always a callable Proc(record)->bool (never nil),
   # so callers don't branch. `limit` is the `limit N` stage value (Integer) or
-  # nil. `error` is nil on success, else a human message describing why we fell
-  # back to a literal substring match.
-  Result = Struct.new(:predicate, :limit, :error, keyword_init: true) do
+  # nil. `agg` is the trailing `| <agg>` stage as a Symbol (:count/:sum/:avg/
+  # :min/:max) or nil (no agg stage ⇒ caller treats as :count). `error` is nil
+  # on success, else a human message describing why we fell back to a literal
+  # substring match.
+  Result = Struct.new(:predicate, :limit, :error, :agg) do
     def valid?
       error.nil?
     end
   end
+
+  # The aggregation suffix stages. They reduce the per-bucket COUNT of matching
+  # lines (the value source is always the line tally) — no field extraction.
+  # The reduction itself (count=latest bucket, sum=total, avg=mean, min/max)
+  # lives in LogMetricData; here we only parse WHICH one.
+  AGG_STAGES = %w[count sum avg min max].freeze
 
   class ParseError < StandardError; end
 
@@ -77,19 +87,20 @@ class LogQuery
 
   def compile
     src = @source.strip
-    return Result.new(predicate: ->(_rec) { true }, limit: nil, error: nil) if src.empty?
+    return Result.new(predicate: ->(_rec) { true }, limit: nil, error: nil, agg: nil) if src.empty?
 
     @tokens = tokenize(src)
     @pos = 0
     @limit = nil
+    @agg = nil
     node = parse_pipeline
     raise ParseError, "unexpected '#{peek[1]}'" if peek
 
-    Result.new(predicate: node, limit: @limit, error: nil)
+    Result.new(predicate: node, limit: @limit, error: nil, agg: @agg)
   rescue ParseError, RegexpError => e
     # Degrade to a literal substring of the whole input — a malformed query
     # still searches for what was typed instead of silently matching nothing.
-    Result.new(predicate: substring_predicate(:message, src), limit: nil, error: e.message)
+    Result.new(predicate: substring_predicate(:message, src), limit: nil, error: e.message, agg: nil)
   end
 
   private
@@ -119,8 +130,12 @@ class LogQuery
         body, i = scan_delimited(src, i, '"', unescape: true)
         tokens << [:string, body]
       elsif c == "@"
+        # Keep the original case: @message/@level/@stream resolve
+        # case-insensitively (downcased at the FIELDS lookup), but a stats
+        # @field is a JSON key, which CAN be camelCase (@durationMs) — losing
+        # case here would read the wrong key.
         m = src[i..].match(/\A@\w+/) or raise ParseError, "bad field near '#{src[i..i + 6]}'"
-        tokens << [:field, m[0].downcase]
+        tokens << [:field, m[0]]
         i += m[0].length
       elsif c == "="
         step = (src[i + 1] == "=") ? 2 : 1
@@ -202,9 +217,12 @@ class LogQuery
   end
 
   # parse_stage — one pipeline stage: a `filter` (or bare) boolean expression,
-  # or a `limit N`. The limit isn't a row predicate, so it's recorded as a
-  # side effect (@limit, last-wins) and the stage contributes a pass-through
-  # predicate. (New commands — stats / fields / sort — would branch here.)
+  # a `limit N`, or an aggregation suffix (`count` / `avg` / `min` / `max` /
+  # `sum`). limit + agg aren't row predicates, so they're recorded as side
+  # effects (@limit / @agg, last-wins) and contribute a pass-through.
+  #
+  # A stage that STARTS with a bare agg word IS the agg stage — a filter clause
+  # always starts with a field (@message/@level/@stream), so there's no clash.
   def parse_stage
     if type?(:word) && current[1].casecmp?("limit")
       advance
@@ -213,9 +231,39 @@ class LogQuery
       return ->(_rec) { true }
     end
 
+    if type?(:word) && AGG_STAGES.include?(current[1].downcase)
+      @agg = current[1].downcase.to_sym
+      advance
+      skip_agg_args
+
+      return ->(_rec) { true }
+    end
+
     advance if type?(:word) && current[1].casecmp?("filter")
 
     parse_or
+  end
+
+  # skip_agg_args — the agg suffix takes no real argument (its value source IS
+  # the per-bucket match count). For paste-friendliness we tolerate and ignore
+  # an optional `(...)` (e.g. `count(*)`) and a trailing `as <name>`.
+  def skip_agg_args
+    if type?(:lparen)
+      depth = 0
+
+      loop do
+        t = peek or break
+        advance
+        depth += 1 if t[0] == :lparen
+        depth -= 1 if t[0] == :rparen
+        break if depth.zero?
+      end
+    end
+
+    return unless type?(:word) && current[1].casecmp?("as")
+
+    advance
+    advance if type?(:word) || type?(:field)
   end
 
   def parse_limit
@@ -288,7 +336,7 @@ class LogQuery
       raise ParseError, "every clause needs a field (@message, @level, @stream) — got #{got}"
     end
 
-    field = FIELDS[current[1]] or raise ParseError, "unknown field '#{current[1]}' — use @message, @level or @stream"
+    field = FIELDS[current[1].downcase] or raise ParseError, "unknown field '#{current[1]}' — use @message, @level or @stream"
     advance
 
     op = (type?(:op) || kw?("like")) ? parse_op : :like
