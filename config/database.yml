@@ -48,6 +48,14 @@ development:
     <<: *default
     database: storage/development_metrics.sqlite3
     migrations_paths: db/metrics_migrate
+  # HEP3 SIP-capture read model. The Hep3 poller tails the reader's
+  # /export NDJSON into here (one row per SIP message); call-flow +
+  # DataTable read from it. Separate file for the same reason as
+  # metrics — high-volume poller writes off the primary.
+  hep:
+    <<: *default
+    database: storage/development_hep.sqlite3
+    migrations_paths: db/hep_migrate
 
 test:
   primary:
@@ -69,6 +77,10 @@ test:
     <<: *default
     database: storage/test_metrics.sqlite3
     migrations_paths: db/metrics_migrate
+  hep:
+    <<: *default
+    database: storage/test_hep.sqlite3
+    migrations_paths: db/hep_migrate
 
 production:
   primary:
@@ -90,3 +102,7 @@ production:
     <<: *default
     database: storage/production_metrics.sqlite3
     migrations_paths: db/metrics_migrate
+  hep:
+    <<: *default
+    database: storage/production_hep.sqlite3
+    migrations_paths: db/hep_migrate

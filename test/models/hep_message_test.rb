@@ -1,0 +1,61 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# HepMessage's correlation key (corr_id) is what stitches a call together
+# for the call-flow ladder. These pin the semantics: x_cid wins so B2BUA
+# legs with DIFFERENT Call-IDs join, and a leg with no x_cid falls back
+# to its own call_id. Also covers HepCursor's upsert watermark.
+class HepMessageTest < ActiveSupport::TestCase
+  TENANT = 4242
+  SCOPE = "fsw"
+  NAME = "hep3-api"
+
+  def insert(call_id:, x_cid: "", method: "INVITE", code: 0, ts: "2026-06-30 10:00:00.000000")
+    line = {ts: ts, call_id: call_id, x_cid: x_cid, method: method, response_code: code}.to_json
+    HepMessage.bulk_insert([{tenant_id: TENANT, scope: SCOPE, name: NAME, payload: line}])
+  end
+
+  def for_call(corr_id)
+    HepMessage.for_call(tenant_id: TENANT, scope: SCOPE, name: NAME, corr_id: corr_id)
+  end
+
+  test "corr_id groups B2BUA legs that share an x_cid (different call_ids)" do
+    insert(call_id: "legA@sbc", x_cid: "shared-cid", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "legB@fsw", x_cid: "shared-cid", ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "unrelated", x_cid: "", ts: "2026-06-30 10:00:03.000000")
+
+    grouped = for_call("shared-cid")
+
+    assert_equal %w[legA@sbc legB@fsw], grouped.map(&:call_id).sort,
+      "both legs (distinct Call-IDs) must collapse under the shared x_cid"
+  end
+
+  test "corr_id falls back to call_id when x_cid is blank" do
+    insert(call_id: "solo@x", x_cid: "")
+
+    assert_equal 1, for_call("solo@x").count, "no x_cid → the call is keyed by its Call-ID"
+    assert_equal 0, for_call("").count, "blank corr_id must not match the row"
+  end
+
+  test "for_call returns the call's messages in chronological order" do
+    insert(call_id: "c", x_cid: "k", method: "BYE", code: 0, ts: "2026-06-30 10:00:05.000000")
+    insert(call_id: "c", x_cid: "k", method: "INVITE", code: 0, ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "c", x_cid: "k", method: "", code: 200, ts: "2026-06-30 10:00:03.000000")
+
+    assert_equal ["INVITE", "", "BYE"], for_call("k").map(&:sip_method),
+      "ladder order follows ts, not insertion order"
+  end
+
+  test "HepCursor.advance upserts; cursor_for reads it back" do
+    assert_equal "", HepCursor.cursor_for(TENANT, SCOPE, NAME), "empty before the first poll"
+
+    HepCursor.advance(TENANT, SCOPE, NAME, "sip-2026-06-30.ndjson:100")
+    assert_equal "sip-2026-06-30.ndjson:100", HepCursor.cursor_for(TENANT, SCOPE, NAME)
+
+    HepCursor.advance(TENANT, SCOPE, NAME, "sip-2026-06-30.ndjson:250")
+    assert_equal "sip-2026-06-30.ndjson:250", HepCursor.cursor_for(TENANT, SCOPE, NAME)
+    assert_equal 1, HepCursor.where(tenant_id: TENANT, scope: SCOPE, name: NAME).count,
+      "advance upserts the single watermark row, never appends"
+  end
+end

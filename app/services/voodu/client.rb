@@ -296,6 +296,32 @@ module Voodu
       raise TransportError, e.message
     end
 
+    # hep_export — pulls one bounded page of a voodu-hep3 reader's
+    # /export NDJSON tail for (scope, name), resuming at the `since`
+    # cursor (nil/"" = from the beginning). Returns [body, next_cursor]:
+    # the raw NDJSON string and the X-Hep-Cursor to pass on the next
+    # call. The reader caps each response (~8 MiB) and reports the resume
+    # point in the header — the Hep3 poller loops on the cursor until the
+    # body comes back empty.
+    #
+    # Routed through the controller's PAT plugin proxy:
+    #   GET /api/pat/v1/hep3/<scope>/<name>/export?since=<cursor>
+    #
+    # Uses `conn` (not streaming_conn): /export is bounded, so a normal
+    # request with the read timeout applies, and the JSON middleware is
+    # content-type-gated so it leaves the application/x-ndjson body as a
+    # raw string.
+    def hep_export(scope, name, since: nil)
+      path = "hep3/#{CGI.escape(scope)}/#{CGI.escape(name)}/export"
+      params = since.to_s.empty? ? {} : {since: since}
+      resp = conn.get("/api/pat/v1/#{path}", params)
+      raise_for_status(resp)
+
+      [resp.body.to_s, resp.headers["X-Hep-Cursor"].to_s]
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
+    end
+
     private
 
     # parse_dump_line — minimal validation of a single NDJSON line.

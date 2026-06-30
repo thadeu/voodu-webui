@@ -63,6 +63,14 @@ common: &common
     # rule duration + ~45s, fine for infra alerting.
     schedule: every 30 seconds
 
+  hep3_sync:
+    class: Hep3SyncOrchestratorJob
+    # 15s — matches the collector's write cadence. Each tick drains the
+    # /export NDJSON tail of every configured voodu-hep3 reader into the
+    # `hep` read model. No-op for islands without the plugin installed or
+    # with no reader instance configured.
+    schedule: every 15 seconds
+
   log_tail_orchestrator:
     class: LogTailOrchestratorJob
     # 1 min cadence — fast enough to recover from a crashed tail job
