@@ -58,11 +58,52 @@ class Views::Settings::Index < Views::Base
       #                        their semantic similarity)
       preferences_card
       pat_card
+      plugins_card
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5 items-start") do
         server_card
         about_card
       end
+    end
+  end
+
+  # plugins_card — installed plugins on this server, synced in the
+  # /system payload (StateSyncIslandJob, 10s). Read-only here; the
+  # same list backs feature gates (Island#plugin_installed?) so a
+  # plugin-specific UI only appears when its plugin is present.
+  def plugins_card
+    card = Components::UI::SectionCard.new(title: "Plugins")
+
+    render card do
+      list = installed_plugins
+
+      if list.empty?
+        p(class: "text-[12px] text-voodu-muted") { "No plugins installed on this server." }
+      else
+        div { list.each { |pl| plugin_row(pl) } }
+      end
+    end
+  end
+
+  def installed_plugins
+    Array(@system&.dig("plugins"))
+  end
+
+  # plugin_row — one full-width row per plugin, same chrome as a PAT row:
+  # name (bold) + aliases on the left, version on the right.
+  def plugin_row(pl)
+    name = pl["name"].to_s
+    version = pl["version"].to_s
+    aliases = Array(pl["aliases"]).map(&:to_s).reject(&:empty?)
+
+    div(class: "grid items-center gap-3 px-3.5 py-2.5 border-b border-voodu-border last:border-b-0",
+      style: "grid-template-columns: 1fr auto;") do
+      div(class: "min-w-0 flex items-baseline gap-1.5") do
+        span(class: "text-[13px] font-semibold text-voodu-text truncate") { name }
+        span(class: "text-[11.5px] text-voodu-muted shrink-0") { "(#{aliases.join(", ")})" } if aliases.any?
+      end
+
+      span(class: "font-voodu-mono text-[12px] text-voodu-text-2") { version.empty? ? "—" : "v#{version}" }
     end
   end
 

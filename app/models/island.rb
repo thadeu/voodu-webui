@@ -89,6 +89,42 @@ class Island < ApplicationRecord
     endpoint
   end
 
+  # plugin_installed? — does this island's controller have the named
+  # plugin installed (matching its canonical name or any alias)? Reads
+  # the locally-synced System row (StateSyncIslandJob, 10s), so feature
+  # gates resolve offline and free at render time. False when no system
+  # snapshot has landed yet.
+  def plugin_installed?(name)
+    system&.plugin_installed?(name) || false
+  end
+
+  # hep3_readers — voodu-hep3 reader instances on this island that the
+  # Hep3 poller should tail, as [{scope:, name:}, …]. The reader is a
+  # plain deployment after `expand`, so it can't be auto-discovered; the
+  # operator names the instances (Settings → "scope/name, scope/name").
+  # Stored in the global Setting table, namespaced by island id.
+  def hep3_readers
+    Setting.get(hep3_readers_key).to_s.split(",").filter_map do |entry|
+      scope, name = entry.strip.split("/", 2)
+      next if scope.blank? || name.blank?
+
+      {scope: scope, name: name}
+    end
+  end
+
+  # hep3_readers= — accepts an Array of "scope/name" (or a comma string)
+  # and persists the normalized list. Clearing (nil/empty) disables the
+  # poller for this island.
+  def hep3_readers=(value)
+    entries = value.is_a?(Array) ? value : value.to_s.split(",")
+    normalized = entries.map { |e| e.to_s.strip }.reject(&:empty?).join(",")
+    Setting.set(hep3_readers_key, normalized)
+  end
+
+  def hep3_readers_key
+    "hep3_readers:#{id}"
+  end
+
   # pods_count — total pod count for the sidebar's row sub-text.
   #
   # WAREHOUSE=1 → reads `pods.count` directly (SQL COUNT, sub-ms).

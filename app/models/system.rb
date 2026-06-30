@@ -110,4 +110,25 @@ class System < ApplicationRecord
   def voodu_version
     (payload_hash["voodu"] || {})["version"].to_s
   end
+
+  # plugins — installed-plugin summaries carried in the /system sync,
+  # each a Hash {"name", "version", "aliases"}. Empty when the
+  # controller predates the field or nothing is installed. The Settings
+  # page lists these; feature gates read them via plugin_installed?.
+  def plugins
+    payload_hash["plugins"] || []
+  end
+
+  # plugin_installed? — whether a plugin answering to `name` is
+  # installed, matching the canonical name OR any alias (so "hep" finds
+  # "hep3"). Reads the locally-synced row, so WebUI feature gates resolve
+  # offline and free at render time — no live controller call.
+  def plugin_installed?(name)
+    wanted = name.to_s
+    return false if wanted.empty?
+
+    plugins.any? do |p|
+      p["name"].to_s == wanted || Array(p["aliases"]).map(&:to_s).include?(wanted)
+    end
+  end
 end
