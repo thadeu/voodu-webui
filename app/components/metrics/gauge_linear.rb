@@ -8,16 +8,22 @@
 # Rendered by Components::Metrics::ChartCard when chart_type is
 # "gauge_linear". ChartCard does the formatting; this only draws.
 class Components::Metrics::GaugeLinear < Components::Base
-  def initialize(pct:, color:, value_label: nil, capacity_label: nil)
+  # percent — true (default): the headline reads the fill "%". false: it reads
+  # `center_value` (the raw value) — for a count, where "% of peak" confuses.
+  # value_label/capacity_label are the "used / total" figures under the bar
+  # (metrics); a HEP3 count has neither, so that row just doesn't render.
+  def initialize(pct:, color:, value_label: nil, capacity_label: nil, percent: true, center_value: nil)
     @pct = clamp(pct.to_f)
     @color = color
     @value_label = value_label
     @capacity_label = capacity_label
+    @percent = percent
+    @center_value = center_value
   end
 
   def view_template
     div(class: "flex flex-col justify-center gap-3 py-4 min-h-[120px]") do
-      span(class: "font-voodu-mono text-[26px] font-semibold text-voodu-text leading-none") { pct_label }
+      span(class: "font-voodu-mono text-[26px] font-semibold text-voodu-text leading-none") { headline }
 
       div(
         class: "h-3.5 w-full bg-voodu-surface-3 overflow-hidden rounded-voodu-sm"
@@ -41,6 +47,11 @@ class Components::Metrics::GaugeLinear < Components::Base
     return "var(--voodu-amber)" if @pct >= 70
 
     @color
+  end
+
+  # headline — the % fill, or the raw center value when percent: false.
+  def headline
+    (!@percent && @center_value.to_s.present?) ? @center_value.to_s : pct_label
   end
 
   def pct_label

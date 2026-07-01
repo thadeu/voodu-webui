@@ -78,14 +78,19 @@ class MetricsController < ApplicationController
           **custom_window
         )
 
-        chart = data.single_chart(
-          metric: params[:metric].to_s,
-          scale: params[:scale].presence&.to_sym,
-          label: params[:label].to_s,
-          color: params[:color].to_s,
-          unit: params[:unit].to_s,
-          chart_type: params[:chart_type].presence || :area
-        )
+        chart =
+          if params[:source].to_s == "hep3"
+            hep3_expand_chart
+          else
+            data.single_chart(
+              metric: params[:metric].to_s,
+              scale: params[:scale].presence&.to_sym,
+              label: params[:label].to_s,
+              color: params[:color].to_s,
+              unit: params[:unit].to_s,
+              chart_type: params[:chart_type].presence || :area
+            )
+          end
 
         if chart.nil?
           head :not_found
@@ -169,6 +174,23 @@ class MetricsController < ApplicationController
   end
 
   private
+
+  # hep3_expand_chart — rebuild a HEP3 count chart for the expand modal from
+  # the maximize URL's params (a synthetic one-panel dashboard → the same
+  # hep_chart_for the grid uses), so fullscreen re-aggregates the same slice.
+  def hep3_expand_chart
+    panel = {
+      "scope_kind" => "table", "chart_type" => params[:chart_type].presence || "area",
+      "source" => "hep3", "scope" => params[:scope].to_s, "name" => params[:name].to_s,
+      "view" => params[:view].presence || "messages", "filter_query" => params[:filter_query].to_s,
+      "label" => params[:label].to_s, "color" => params[:color].to_s,
+      "percent" => params[:percent].to_s == "true"
+    }
+    dashboard = current_island.metric_dashboards.new(panels: [panel])
+
+    MetricDashboardData.new(voodu_client, current_island, dashboard,
+      range: params[:range], interval: params[:interval], **custom_window).charts.first
+  end
 
   # build_metrics_data — picks the /metrics data object:
   #

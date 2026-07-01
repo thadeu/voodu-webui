@@ -34,12 +34,23 @@ class MetricDashboard < ApplicationRecord
   # LogMetricData + Components::Metrics::NumberCard.
   LOG_PANEL_KEYS = %w[scope name query label color].freeze
 
-  # Allowed panel sources. "log" joins host/pod for log-count panels.
-  SCOPE_KINDS = %w[host pod log].freeze
+  # Table panels render a generic DataTable from a registered DataSource
+  # (DataTable::Registry) for one reader pod (scope/name) + a `view`. No
+  # metric/scale — the source owns the (schema-less) columns.
+  TABLE_PANEL_KEYS = %w[source scope name view label color].freeze
+
+  # Allowed panel sources. "log" joins host/pod for log-count panels;
+  # "table" is a DataSource-backed data table.
+  SCOPE_KINDS = %w[host pod log table].freeze
 
   # Optional per-panel chart type. Absent → ChartCard defaults to "area".
-  # "number" is the log-count tile — valid only on a "log" panel.
-  CHART_TYPES = %w[area gauge_radial gauge_linear number].freeze
+  # "number" is the log-count tile (log panels only); "table" is the
+  # DataTable panel (table panels only).
+  CHART_TYPES = %w[area gauge_radial gauge_linear number table].freeze
+
+  # Chart types a "table" (DataTable-family) panel may use. The hep3 source
+  # can be a rows table OR a count viz (Number/Area/Radial/Linear); logs → table.
+  TABLE_CHART_TYPES = %w[table number area gauge_radial gauge_linear].freeze
 
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
@@ -89,6 +100,19 @@ class MetricDashboard < ApplicationRecord
     "k#{index}"
   end
 
+  # table_readers_for — distinct (scope, name) reader pods that table
+  # panels on this island reference for `source`. The Hep3 poller tails
+  # exactly these (demand-driven), so adding a Table panel IS the
+  # poller's configuration — no separate readers setting.
+  def self.table_readers_for(island, source:)
+    where(island_id: island.id)
+      .flat_map { |dash| Array(dash.panels) }
+      .select { |p| p.is_a?(Hash) && p["scope_kind"] == "table" && p["source"].to_s == source.to_s }
+      .map { |p| {scope: p["scope"].to_s, name: p["name"].to_s} }
+      .reject { |r| r[:scope].empty? || r[:name].empty? }
+      .uniq
+  end
+
   private
 
   def ensure_uuid
@@ -124,15 +148,30 @@ class MetricDashboard < ApplicationRecord
         next
       end
 
-      # Log panels carry query (not metric/scale); everyone else carries the
-      # metric layout. Pick the required-key set off the source.
-      required = (sk == "log") ? LOG_PANEL_KEYS : PANEL_KEYS
+      # Each source carries its own required-key set: log → query,
+      # table → source/view, everyone else → the metric layout.
+      required =
+        case sk
+        when "log" then LOG_PANEL_KEYS
+        when "table" then TABLE_PANEL_KEYS
+        else PANEL_KEYS
+        end
       missing = required.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "panel #{i + 1} is missing #{missing.join(", ")}") if missing.any?
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
-      errors.add(:panels, "panel #{i + 1}: the number type is only for log panels") if ct == "number" && sk != "log"
+      # `number` is the count tile — for log panels OR a hep3 count panel.
+      number_ok = sk == "log" || (sk == "table" && panel["source"].to_s == "hep3")
+      errors.add(:panels, "panel #{i + 1}: the number type needs a log or hep3 source") if ct == "number" && !number_ok
+      errors.add(:panels, "panel #{i + 1}: the table type is only for table panels") if ct == "table" && sk != "table"
+
+      # A DataTable-family ("table") panel: the logs source only tabulates,
+      # but the hep3 source can ALSO be a count chart (Area/Radial/Linear).
+      if sk == "table"
+        allowed = (panel["source"].to_s == "hep3") ? TABLE_CHART_TYPES : %w[table]
+        errors.add(:panels, "table panel #{i + 1} can't use the #{ct} chart type") unless allowed.include?(ct.presence || "table")
+      end
 
       next unless sk == "pod"
 

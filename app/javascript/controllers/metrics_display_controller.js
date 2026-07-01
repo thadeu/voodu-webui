@@ -127,12 +127,12 @@ export default class extends Controller {
 
     const visibleCount = this.cardTargets.filter(c => !c.hidden).length
 
-    // perRow → the DEFAULT cards-per-row; the default span is BASE_COLS/perRow.
-    let perRow
-
-    if (visibleCount <= 1)       perRow = 1
-    else if (visibleCount === 2) perRow = 2
-    else                         perRow = cols || 2
+    // perRow → cards-per-row; the default span is BASE_COLS/perRow. Use up to
+    // `cols` columns, but never more than there are cards. So an explicit
+    // cols=1 lays out 1-per-row even with 2 visible (the old "2 visible → 2
+    // cols" rule ignored the preference — same span for a table or a chart),
+    // and a high cols with few cards fills the row instead of leaving a gap.
+    const perRow = Math.max(1, Math.min(cols || 2, visibleCount))
 
     if (this.mediaQuery.matches) {
       this.gridTarget.style.gridTemplateColumns = `repeat(${BASE_COLS}, minmax(0, 1fr))`

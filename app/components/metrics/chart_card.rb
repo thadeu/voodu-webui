@@ -69,7 +69,7 @@ class Components::Metrics::ChartCard < Components::Base
   # Gauges need a ceiling (a percent metric, or a capacity_pct); when
   # that's missing the card silently falls back to the area chart so a
   # gauge panel on a limitless metric never renders blank.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area")
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area", percent: true)
     @label = label
     @color = color
     @unit = unit
@@ -83,6 +83,9 @@ class Components::Metrics::ChartCard < Components::Base
     @capacity_label = capacity_label
     @capacity_pct = capacity_pct
     @chart_type = chart_type
+    # percent — false makes gauges read the raw value in the center instead of
+    # the fill "%" (a count has no natural ceiling → "% of peak" confuses).
+    @percent = percent
   end
 
   def view_template
@@ -140,12 +143,14 @@ class Components::Metrics::ChartCard < Components::Base
       div(class: "flex-1 flex flex-col justify-center") do
         if gauge_radial?
           render Components::Metrics::GaugeRadial.new(
-            pct: gauge_pct, color: @color, sub_label: gauge_sub_label
+            pct: gauge_pct, color: @color, sub_label: gauge_sub_label,
+            percent: @percent, value_label: gauge_center_value
           )
         else
           render Components::Metrics::GaugeLinear.new(
             pct: gauge_pct, color: @color,
-            value_label: gauge_value_label, capacity_label: @capacity_label
+            value_label: gauge_value_label, capacity_label: @capacity_label,
+            percent: @percent, center_value: gauge_center_value
           )
         end
       end
@@ -191,6 +196,13 @@ class Components::Metrics::ChartCard < Components::Base
   def gauge_value_label
     return nil if percent_unit? || @capacity_label.nil?
 
+    v = @current || stats[:current]
+    v.nil? ? nil : "#{MetricFormat.number(v)} #{@unit}".strip
+  end
+
+  # gauge_center_value — the raw current value the radial shows in its center
+  # when percent: false (a count reads clearer than "% of peak").
+  def gauge_center_value
     v = @current || stats[:current]
     v.nil? ? nil : "#{MetricFormat.number(v)} #{@unit}".strip
   end

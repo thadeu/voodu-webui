@@ -18,11 +18,18 @@ import Sortable from "sortablejs"
 export default class extends Controller {
   static targets = ["sourceLabel", "metricLabel", "metricMenu", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
+                    "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
+                    "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
                     "idleStep", "typeStep", "metricBlock", "logBlock",
                     "metricBlockTitle", "logBlockTitle", "backLink"]
   static values  = {
-    catalog: Object,
-    panels:  Array
+    catalog:          Object,
+    logsSourceViews:  Array,
+    hep3SourceViews:  Array,
+    logsFields:       Array,
+    hep3Fields:       Array,
+    hep3Hints:        Object,
+    panels:           Array
   }
 
   connect() {
@@ -34,6 +41,12 @@ export default class extends Controller {
 
     this.currentLogSource = null
     this.currentLogColor = this.defaultLogColor()
+
+    this.currentTableSourceView = null
+    this.tableKind = "table"
+    this.currentHep3Shape = "table"
+    this.currentTableColor = this.defaultTableColor()
+
     this.addType = "metric"
     // idle → nothing selected (the resting/open state); type → the Add
     // panel chooser; config → a type's config block (new or editing).
@@ -43,6 +56,7 @@ export default class extends Controller {
 
     this.populateMetrics()
     this.highlightLogColor()
+    this.highlightTableColor()
     this.syncWizard()
     this.render()
     this.sync()
@@ -54,6 +68,11 @@ export default class extends Controller {
     if (this.hasLogQueryTarget) {
       this.onLogQueryInput = () => this.autoCommit()
       this.logQueryTarget.addEventListener("input", this.onLogQueryInput)
+    }
+
+    if (this.hasTableQueryTarget) {
+      this.onTableQueryInput = () => this.autoCommit()
+      this.tableQueryTarget.addEventListener("input", this.onTableQueryInput)
     }
 
     // The DS color picker lives in a popover that portals OUT of this form to
@@ -68,6 +87,10 @@ export default class extends Controller {
 
     if (this.hasLogQueryTarget && this.onLogQueryInput) {
       this.logQueryTarget.removeEventListener("input", this.onLogQueryInput)
+    }
+
+    if (this.hasTableQueryTarget && this.onTableQueryInput) {
+      this.tableQueryTarget.removeEventListener("input", this.onTableQueryInput)
     }
     
     document.removeEventListener("color-picker:change", this.onCustomColor)
@@ -84,10 +107,15 @@ export default class extends Controller {
 
     this.addType = type
     this.wizardStep = "config"
+
+    // Table (logs) + HEP3 share one block; activate the kind's options + the
+    // first source·view so autoCommit can create the panel immediately.
+    if (type === "table" || type === "hep3") this.activateTableKind(type)
+
     this.syncWizard()
     // Metric panels have valid defaults (host · first metric) → auto-create
-    // immediately so the operator just refines. Log panels need a query, so
-    // autoCommit no-ops here and fires on the first keystroke instead.
+    // immediately so the operator just refines. Log + table panels need a
+    // query / pod, so autoCommit no-ops here and fires on that input instead.
     this.autoCommit()
   }
 
@@ -121,15 +149,18 @@ export default class extends Controller {
     const step = this.wizardStep
     const config = step === "config"
     const isLog = this.addType === "log"
+    const isTable = this.addType === "table" || this.addType === "hep3"
     const editing = this.editingIndex != null
 
     if (this.hasIdleStepTarget) this.idleStepTarget.hidden = step !== "idle"
     if (this.hasTypeStepTarget) this.typeStepTarget.hidden = step !== "type"
-    if (this.hasMetricBlockTarget) this.metricBlockTarget.hidden = !(config && !isLog)
+    if (this.hasMetricBlockTarget) this.metricBlockTarget.hidden = !(config && this.addType === "metric")
     if (this.hasLogBlockTarget) this.logBlockTarget.hidden = !(config && isLog)
+    if (this.hasTableBlockTarget) this.tableBlockTarget.hidden = !(config && isTable)
 
     if (this.hasMetricBlockTitleTarget) this.metricBlockTitleTarget.textContent = editing ? "Edit metric panel" : "New metric panel"
     if (this.hasLogBlockTitleTarget) this.logBlockTitleTarget.textContent = editing ? "Edit log count" : "New log count"
+    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = editing ? "Edit table panel" : "New table panel"
     this.backLinkTargets.forEach((el) => { el.textContent = editing ? "Cancel" : "Change type" })
   }
 
@@ -248,6 +279,9 @@ export default class extends Controller {
     if (name === "log") {
       this.currentLogColor = color
       this.highlightLogColor()
+    } else if (name === "table") {
+      this.currentTableColor = color
+      this.highlightTableColor()
     } else {
       this.currentMetricColor = color
       this.highlightMetricColor()
@@ -358,7 +392,7 @@ export default class extends Controller {
   // first valid input, then updates it in place. Stays in the editor (never
   // deselects / closes); the dashboard only persists on Save changes.
   autoCommit() {
-    const panel = this.addType === "log" ? this.buildLogPanelSafe() : this.buildPanelSafe()
+    const panel = this.panelForType()
 
     if (!panel) return
 
@@ -373,6 +407,16 @@ export default class extends Controller {
     this.render()
     this.sync()
     this.syncWizard()
+  }
+
+  // panelForType — the in-progress panel for the active add type, or null
+  // when there isn't enough input to build one yet.
+  panelForType() {
+    if (this.addType === "log") return this.buildLogPanelSafe()
+
+    if (this.addType === "table" || this.addType === "hep3") return this.buildTablePanelSafe()
+
+    return this.buildPanelSafe()
   }
 
   // buildPanelSafe — the metric panel for the current source+metric, or null
@@ -410,14 +454,24 @@ export default class extends Controller {
 
     this.editingIndex = i
     this.selectedIndex = i
-    this.addType = panel.scope_kind === "log" ? "log" : "metric"
+    this.addType = this.typeForPanel(panel)
     this.wizardStep = "config"
     this.syncWizard()
 
     if (this.addType === "log") this.loadLogPanel(panel)
+    else if (this.addType === "table" || this.addType === "hep3") this.loadTablePanel(panel)
     else this.loadMetricPanel(panel)
 
     this.render()
+  }
+
+  // typeForPanel — the add-wizard type a saved panel edits under.
+  typeForPanel(panel) {
+    if (panel.scope_kind === "log") return "log"
+
+    if (panel.scope_kind === "table") return panel.source === "hep3" ? "hep3" : "table"
+
+    return "metric"
   }
 
   // loadMetricPanel — restore source + metric + chart type into the metric
@@ -591,6 +645,221 @@ export default class extends Controller {
     }
   }
 
+  // ── table panels (Table logs + HEP3 share this block) ───────────────
+  // Both kinds render a DataSource·view via the data-table controller and
+  // carry {source, scope, name, view} in each option. The block is one; the
+  // KIND (this.tableKind) swaps the options list, the editor's filter fields,
+  // and the title — so "Table" (logs, pod-based) and "HEP3" (reader-based)
+  // stay distinct panel types without duplicating the block.
+
+  sourceViews() {
+    const list = this.tableKind === "hep3" ? this.hep3SourceViewsValue : this.logsSourceViewsValue
+
+    return Array.isArray(list) ? list : []
+  }
+
+  // activateTableKind — switch the shared block to a kind: repopulate the
+  // option menu, swap the filter-editor's fields, retitle, and pre-pick the
+  // first option (so autoCommit can create the panel).
+  activateTableKind(kind) {
+    this.tableKind = kind === "hep3" ? "hep3" : "table"
+    this.currentTableSourceView = null
+
+    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = this.tableKind === "hep3" ? "HEP3 panel" : "Table panel"
+
+    // The HEP3 kind picks a visualization (Table rows / Area / Radial /
+    // Linear); the Table (logs) kind only tabulates. Default Table.
+    const isHep3 = this.tableKind === "hep3"
+
+    if (this.hasHep3ShapesTarget) this.hep3ShapesTarget.hidden = !isHep3
+    if (isHep3 && !this.currentHep3Shape) this.currentHep3Shape = "table"
+    if (!isHep3) this.currentHep3Shape = "table"
+    this.highlightHep3Shape()
+
+    this.rebuildSourceMenu()
+    this.setQueryEditorFields()
+
+    const list = this.sourceViews()
+
+    if (list.length) this.applySourceView(list[0])
+  }
+
+  // selectHep3Shape — a HEP3 panel's visualization (table/area/gauge_*). Drives
+  // the panel's chart_type; Table = rows, the rest = a count chart.
+  selectHep3Shape(event) {
+    const shape = event.currentTarget.dataset.chartType
+
+    if (!shape) return
+
+    this.currentHep3Shape = shape
+    this.highlightHep3Shape()
+    this.autoCommit()
+  }
+
+  highlightHep3Shape() {
+    const shape = this.currentHep3Shape || "table"
+
+    if (this.hasHep3ShapeChipTarget) {
+      this.hep3ShapeChipTargets.forEach((chip) => {
+        const active = chip.dataset.chartType === shape
+
+        chip.classList.toggle("border-voodu-accent-line", active)
+        chip.classList.toggle("ring-1", active)
+        chip.classList.toggle("ring-voodu-accent-line", active)
+      })
+    }
+
+    // The "show %" toggle only applies to gauges (Radial/Linear).
+    if (this.hasHep3PercentRowTarget) {
+      this.hep3PercentRowTarget.hidden = !(shape === "gauge_radial" || shape === "gauge_linear")
+    }
+  }
+
+  // rebuildSourceMenu — fill the dropdown with the active kind's options.
+  rebuildSourceMenu() {
+    if (!this.hasTableSourceMenuTarget) return
+
+    this.tableSourceMenuTarget.innerHTML = ""
+
+    this.sourceViews().forEach((sv) => {
+      const btn = document.createElement("button")
+
+      btn.type = "button"
+      btn.className = "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-voodu-hover"
+      btn.dataset.action = "click->dashboard-builder#selectTableSourceView click->dropdown#close"
+      btn.dataset.sourceView = JSON.stringify(sv)
+      btn.textContent = sv.label
+      this.tableSourceMenuTarget.appendChild(btn)
+    })
+  }
+
+  // setQueryEditorFields — point the filter editor's autocomplete + validation
+  // at the active kind's fields (logs vs the SIP columns). Setting the value
+  // attribute fires the query-editor's fieldsValueChanged.
+  setQueryEditorFields() {
+    if (!this.hasTableQueryTarget) return
+
+    const editor = this.tableQueryTarget.closest('[data-controller~="query-editor"]')
+
+    if (!editor) return
+
+    const fields = this.tableKind === "hep3" ? this.hep3FieldsValue : this.logsFieldsValue
+
+    editor.setAttribute("data-query-editor-fields-value", JSON.stringify(Array.isArray(fields) ? fields : []))
+
+    if (this.tableKind === "hep3") {
+      editor.setAttribute("data-query-editor-hints-value", JSON.stringify(this.hep3HintsValue || {}))
+    } else {
+      editor.setAttribute("data-query-editor-hints-value", "{}")
+    }
+  }
+
+  applySourceView(sv) {
+    this.currentTableSourceView = sv
+    if (this.hasTableSourceViewLabelTarget) this.tableSourceViewLabelTarget.textContent = sv.label
+  }
+
+  selectTableSourceView(event) {
+    const sv = this.parse(event.currentTarget.dataset.sourceView)
+
+    if (!sv) return
+
+    this.applySourceView(sv)
+    this.autoCommit()
+  }
+
+  selectTableColor(event) {
+    const color = event.currentTarget.dataset.color
+
+    if (!color) return
+
+    this.currentTableColor = color
+    this.highlightTableColor()
+    this.autoCommit()
+  }
+
+  // buildTablePanelSafe — the HEP3 panel, or null until a source·view is
+  // chosen (it defaults in, and carries the reader's scope/name).
+  buildTablePanelSafe() {
+    if (!this.currentTableSourceView) return null
+
+    return this.buildTablePanel()
+  }
+
+  buildTablePanel() {
+    const sv = this.currentTableSourceView
+    const label = (this.hasTableLabelTarget ? this.tableLabelTarget.value : "").trim()
+    const filterQuery = (this.hasTableQueryTarget ? this.tableQueryTarget.value : "").trim()
+    // HEP3 picks a visualization (table rows / area / gauge_*); logs → table.
+    const chartType = this.tableKind === "hep3" ? (this.currentHep3Shape || "table") : "table"
+    const isGauge = chartType === "gauge_radial" || chartType === "gauge_linear"
+    // Gauges default to the raw count; "show %" flips them to "% of peak".
+    const percent = isGauge && this.hasHep3PercentTarget && this.hep3PercentTarget.checked
+
+    return {
+      scope_kind:   "table",
+      chart_type:   chartType,
+      source:       sv.source,
+      scope:        sv.scope,
+      name:         sv.name,
+      view:         sv.view,
+      label:        label || sv.label,
+      color:        this.currentTableColor || this.defaultTableColor(),
+      filter_query: filterQuery,
+      percent:      percent
+    }
+  }
+
+  // loadTablePanel — restore source·view (reader + view) + label + filter +
+  // color from a saved panel (edit-in-place). Matches the reader by name so a
+  // multi-reader island restores the right one.
+  loadTablePanel(panel) {
+    // Activate the kind the panel belongs to FIRST (source=hep3 → HEP3 kind),
+    // so the options list + filter fields match before we restore.
+    this.activateTableKind(panel.source === "hep3" ? "hep3" : "table")
+
+    // Restore the HEP3 visualization (chart_type) + the gauge "show %" toggle.
+    if (panel.source === "hep3") {
+      this.currentHep3Shape = panel.chart_type || "table"
+      this.highlightHep3Shape()
+      if (this.hasHep3PercentTarget) this.hep3PercentTarget.checked = panel.percent === true
+    }
+
+    const list = this.sourceViews()
+    const sv = list.find((s) => s.source === panel.source && s.view === panel.view && s.name === panel.name) ||
+      list.find((s) => s.source === panel.source && s.view === panel.view) || list[0] || null
+
+    if (sv) this.applySourceView(sv)
+
+    if (this.hasTableLabelTarget) this.tableLabelTarget.value = panel.label || ""
+
+    if (this.hasTableQueryTarget) {
+      this.tableQueryTarget.value = panel.filter_query || ""
+      this.tableQueryTarget.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+
+    this.currentTableColor = panel.color || this.defaultTableColor()
+    this.highlightTableColor()
+    if (String(panel.color).startsWith("#")) this.applyCustomColor("table", panel.color)
+  }
+
+  defaultTableColor() {
+    if (this.hasTableSwatchTarget && this.tableSwatchTargets.length) return this.tableSwatchTargets[0].dataset.color
+
+    return "var(--voodu-teal)"
+  }
+
+  highlightTableColor() {
+    if (!this.hasTableSwatchTarget) return
+
+    this.tableSwatchTargets.forEach((el) => {
+      const active = el.dataset.color === this.currentTableColor
+
+      el.style.outline       = active ? "2px solid var(--voodu-accent)" : "none"
+      el.style.outlineOffset = active ? "1px" : "0"
+    })
+  }
+
   render() {
     if (!this.hasListTarget) return
 
@@ -675,6 +944,7 @@ export default class extends Controller {
   // count-type query); metric panels read their shape (Area is the default).
   chipTypeLabel(panel) {
     if (panel.scope_kind === "log") return "Log spark"
+    if (panel.scope_kind === "table") return "Table"
     if (panel.chart_type === "gauge_radial") return "Radial"
     if (panel.chart_type === "gauge_linear") return "Linear"
 

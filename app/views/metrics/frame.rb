@@ -130,6 +130,8 @@ class Views::Metrics::Frame < Views::Base
       charts.each do |c|
         if c[:kind] == :number
           render_number_card(c)
+        elsif c[:kind] == :table
+          render_table_card(c)
         elsif c[:missing]
           render_missing_card(c)
         else
@@ -146,7 +148,8 @@ class Views::Metrics::Frame < Views::Base
             default_visible: c.fetch(:default_visible, true),
             capacity_label: c[:capacity_label],
             capacity_pct: c[:capacity_pct],
-            chart_type: c[:chart_type]
+            chart_type: c[:chart_type],
+            percent: c.fetch(:percent, true)
           )
         end
       end
@@ -172,6 +175,41 @@ class Views::Metrics::Frame < Views::Base
     )
   end
 
+  # render_table_card — mirrors Views::Metrics::Index#render_table_card so a
+  # Table panel renders the same shell after a broadcast-tick frame swap.
+  # The card is turbo-permanent, so its live client state (rows, scroll,
+  # pause) survives the swap; this keeps the no-JS / first-paint shell in
+  # lockstep.
+  def render_table_card(c)
+    render Components::Metrics::TableCard.new(
+      label: c[:label],
+      color: c[:color],
+      source: c[:source],
+      scope: c[:scope],
+      name: c[:name],
+      view: c[:view],
+      fields: c[:fields] || [],
+      default_fields: c[:default_fields] || [],
+      filter_query: c[:filter_query],
+      rows_url: metrics_datatable_rows_path(source: c[:source]),
+      metric: c[:panel_key],
+      default_visible: c.fetch(:default_visible, true),
+      **table_window
+    )
+  end
+
+  # table_window — mirrors Views::Metrics::Index#table_window so a Table panel
+  # keeps honouring the page's time window after a broadcast-tick frame swap.
+  def table_window
+    custom = @data.respond_to?(:custom?) && @data.custom?
+
+    {
+      range: custom ? "custom" : (@data&.range || "1h"),
+      window_from: (custom ? request.query_parameters[:from] : nil),
+      window_until: (custom ? request.query_parameters[:until] : nil)
+    }
+  end
+
   # render_missing_card — mirrors Views::Metrics::Index#render_missing_card
   # so a dashboard panel with no running replica renders the same dashed
   # placeholder after a broadcast-tick frame swap.
@@ -192,6 +230,8 @@ class Views::Metrics::Frame < Views::Base
   # Drift between the two = the maximize button breaks after the
   # first broadcast tick swap.
   def expand_url_for(chart, data)
+    return hep3_expand_url(chart, data) if chart[:source] == "hep3"
+
     sk = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
     sid = chart[:scope_id] || (data.respond_to?(:scope_id) ? data.scope_id : nil)
 
@@ -210,6 +250,20 @@ class Views::Metrics::Frame < Views::Base
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
       chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
+    }.compact
+
+    "#{metrics_chart_path}?#{qp.to_query}"
+  end
+
+  # hep3_expand_url — mirrors Views::Metrics::Index#hep3_expand_url.
+  def hep3_expand_url(chart, data)
+    qp = {
+      source: "hep3", scope: chart[:scope], name: chart[:name], view: chart[:view],
+      filter_query: chart[:filter_query].presence,
+      chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
+      label: chart[:label], color: chart[:color],
+      range: data.range || "1h",
+      interval: (data.interval && data.interval != "auto") ? data.interval : nil
     }.compact
 
     "#{metrics_chart_path}?#{qp.to_query}"

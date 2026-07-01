@@ -133,6 +133,58 @@ class MetricDashboardTest < ActiveSupport::TestCase
     assert_difference("MetricDashboard.count", -1) { @island.destroy }
   end
 
+  # ── Table panels (DataSource-backed) ──────────────────────────────
+
+  def table_panel(**overrides)
+    {"scope_kind" => "table", "chart_type" => "table", "source" => "hep3",
+     "scope" => "fsw", "name" => "hep3-api", "view" => "messages",
+     "label" => "SIP", "color" => "var(--voodu-accent)"}.merge(overrides.transform_keys(&:to_s))
+  end
+
+  test "a table panel is valid with source/scope/name/view/label/color" do
+    d = @island.metric_dashboards.new(name: "sip", panels: [table_panel])
+
+    assert d.valid?, d.errors.full_messages.to_sentence
+  end
+
+  test "a table panel missing its source/view is rejected" do
+    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [table_panel(source: "")]))
+    assert bad_message(@island.metric_dashboards.new(name: "b", panels: [table_panel(view: "")]))
+  end
+
+  test "the table chart type is rejected on a non-table panel" do
+    panel = host_panel.merge("chart_type" => "table")
+
+    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [panel]))
+  end
+
+  test "a hep3 table panel may render as a count chart (Area/Radial/Linear)" do
+    %w[area gauge_radial gauge_linear].each do |ct|
+      d = @island.metric_dashboards.new(name: "a", panels: [table_panel(chart_type: ct)])
+
+      assert d.valid?, "hep3 + #{ct} should be allowed: #{d.errors.full_messages}"
+    end
+  end
+
+  test "a logs table panel must use the table chart type (logs only tabulate)" do
+    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [table_panel(source: "logs", chart_type: "area")]))
+  end
+
+  test "table_readers_for returns distinct hep3 readers across dashboards" do
+    @island.metric_dashboards.create!(name: "a", panels: [table_panel(scope: "fsw", name: "hep3-api")])
+    @island.metric_dashboards.create!(name: "b", panels: [
+      table_panel(scope: "fsw", name: "hep3-api"),    # dup → collapses
+      table_panel(scope: "ops", name: "sip"),         # distinct
+      table_panel(scope: "x", name: "y", source: "other"), # different source → excluded
+      host_panel                                       # non-table → ignored
+    ])
+
+    readers = MetricDashboard.table_readers_for(@island, source: "hep3")
+
+    assert_equal [{scope: "fsw", name: "hep3-api"}, {scope: "ops", name: "sip"}].sort_by { |r| r[:name] },
+      readers.sort_by { |r| r[:name] }
+  end
+
   private
 
   def bad_message(record)

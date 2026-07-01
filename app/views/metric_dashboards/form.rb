@@ -118,6 +118,11 @@ class Views::MetricDashboards::Form < Views::Base
         turbo_frame: "_top",
         controller: "dashboard-builder",
         dashboard_builder_catalog_value: catalog_json,
+        dashboard_builder_logs_source_views_value: logs_source_views.to_json,
+        dashboard_builder_hep3_source_views_value: hep3_source_views.to_json,
+        dashboard_builder_logs_fields_value: DataTable::LogsSource::FIELDS.to_json,
+        dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
+        dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
         dashboard_builder_panels_value: existing_panels_json,
         # DS confirm before saving (the singleton confirm-host swaps the
         # native dialog). Submit → confirm → save → reopens the modal.
@@ -241,6 +246,7 @@ class Views::MetricDashboards::Form < Views::Base
       type_step_cards
       add_panel_row
       add_log_panel_row
+      add_table_panel_row
     end
   end
 
@@ -273,6 +279,8 @@ class Views::MetricDashboards::Form < Views::Base
       div(class: "flex flex-wrap gap-3") do
         type_card("metric", "Metric", "CPU, memory, network, HTTP — chart or gauge") { metric_preview_svg }
         type_card("log", "Log count", "Count log lines matching a filter — a number") { log_preview_svg }
+        type_card("table", "Table", "Rows from a pod — logs, filter, sort, live") { table_preview_svg }
+        type_card("hep3", "HEP3", "SIP capture — Messages, Calls, Errors — filter, sort, live") { table_preview_svg } if hep3_readers.any?
       end
     end
   end
@@ -310,6 +318,184 @@ class Views::MetricDashboards::Form < Views::Base
     svg(viewBox: "0 0 200 100", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
       s.text(x: "100", y: "50", "text-anchor": "middle", "font-size": "40", "font-weight": "700", fill: "var(--voodu-text)", "font-family": "var(--voodu-font-mono, monospace)") { "1,284" }
       s.polyline(points: "40,82 80,74 120,80 160,68", stroke: "var(--voodu-orange)", "stroke-width": "3", "stroke-linecap": "round", "stroke-linejoin": "round")
+    end
+  end
+
+  # table_preview_svg — a rows-and-columns skeleton (teal accent) for the
+  # Table panel type card.
+  def table_preview_svg
+    svg(viewBox: "0 0 200 100", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.rect(x: "20", y: "18", width: "160", height: "16", fill: "var(--voodu-teal)", opacity: "0.25")
+      [40, 58, 76].each do |y|
+        s.rect(x: "20", y: y.to_s, width: "160", height: "12", fill: "var(--voodu-border-2)", opacity: "0.5")
+      end
+      [66, 112].each do |x|
+        s.line(x1: x.to_s, y1: "18", x2: x.to_s, y2: "88", stroke: "var(--voodu-border-2)", "stroke-width": "1.5")
+      end
+    end
+  end
+
+  # add_table_panel_row — the Table panel builder. Row 1 (mirrors the log
+  # block: pod narrow, label wide): the reader POD, a LABEL, and the
+  # combined SOURCE·VIEW dropdown (HEP3 — Messages / Calls / Errors). Row 2
+  # is an optional pre-filter (field + value) so the panel opens already
+  # filtered — same idea as the log block's query. Then the accent color.
+  # No Add button: edits auto-save (dashboard-builder#autoCommit).
+  def add_table_panel_row
+    div(hidden: true, data: {dashboard_builder_target: "tableBlock"}, class: "flex flex-col gap-2.5 p-3 border border-voodu-border-2 bg-voodu-surface") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(
+          data: {dashboard_builder_target: "tableBlockTitle"},
+          class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]"
+        ) { "Table panel" }
+        change_type_link
+      end
+      span(class: "text-[11px] text-voodu-muted leading-relaxed") do
+        "Live rows from the chosen data source. Columns are chosen on the panel itself."
+      end
+
+      div(class: "flex flex-col vmd:flex-row gap-2") do
+        table_label_input
+        table_source_view_picker
+      end
+
+      hep3_shape_chips
+      hep3_percent_toggle
+      table_filter_editor
+      table_color_swatches
+    end
+  end
+
+  # hep3_percent_toggle — for a HEP3 gauge (Radial/Linear): show the center as
+  # the fill "%" (of the range peak) instead of the raw count. Off by default —
+  # a count reads clearer as a number. The builder reveals it only for gauges.
+  def hep3_percent_toggle
+    label(hidden: true, data: {dashboard_builder_target: "hep3PercentRow"}, class: "flex items-center gap-2 cursor-pointer select-none") do
+      input(
+        type: "checkbox",
+        data: {dashboard_builder_target: "hep3Percent", action: "change->dashboard-builder#autoCommit"},
+        class: "w-4 h-4 shrink-0 cursor-pointer",
+        style: "accent-color: var(--voodu-accent);"
+      )
+      span(class: "text-[12px] text-voodu-text-2") { "Show as %" }
+      span(class: "text-[11px] text-voodu-muted") { "— fill % of the peak instead of the count" }
+    end
+  end
+
+  # hep3_shape_chips — the HEP3 kind's visualization picker (Table rows OR a
+  # count chart). Hidden until the builder activates the hep3 kind; the Table
+  # (logs) kind only tabulates, so it stays hidden there.
+  def hep3_shape_chips
+    div(hidden: true, data: {dashboard_builder_target: "hep3Shapes"}, class: "flex flex-wrap gap-2.5") do
+      hep3_shape_chip("table", "Table") { table_preview_svg }
+      hep3_shape_chip("number", "Number") { log_preview_svg }
+      hep3_shape_chip("area", "Area") { shape_area_svg }
+      hep3_shape_chip("gauge_radial", "Radial") { shape_radial_svg }
+      hep3_shape_chip("gauge_linear", "Linear") { shape_linear_svg }
+    end
+  end
+
+  def hep3_shape_chip(value, text)
+    button(
+      type: "button",
+      data: {action: "click->dashboard-builder#selectHep3Shape", chart_type: value, dashboard_builder_target: "hep3ShapeChip"},
+      class: "flex flex-col w-[110px] max-w-full overflow-hidden border border-voodu-border-2 bg-voodu-surface text-left hover:border-voodu-accent-line hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      div(class: "h-[52px] w-full flex items-center justify-center px-3 py-2 border-b border-voodu-border-2 bg-voodu-surface-2/40 text-voodu-muted") { yield }
+      span(class: "block text-[12px] font-medium text-voodu-text px-2.5 py-1.5") { text }
+    end
+  end
+
+  # table_filter_editor — the optional pre-filter, the SAME DSL + editor as
+  # /logs Analytics + the log panel (@to_user like /5511/, and/or/not), but
+  # validated against the table's own fields. The table opens filtered; the
+  # toolbar query is seeded from it.
+  def table_filter_editor
+    render Components::UI::QueryEditor.new(
+      value: "",
+      submits: false,
+      rows: "2",
+      min_h: "min-h-[64px]",
+      help_limit: false,
+      fields: DataTable::LogsSource::FIELDS,
+      placeholder: "filter (optional) — e.g. @message like /error/",
+      input_data: {dashboard_builder_target: "tableQuery"}
+    )
+  end
+
+  # TABLE_FILTER_HINTS — short notes shown beside each field in the `@`
+  # autocomplete. Best-effort: a field with no note still lists (name only).
+  TABLE_FILTER_HINTS = {
+    "ts" => "capture time",
+    "method" => "SIP method (INVITE, BYE…)",
+    "response_code" => "SIP response (200, 486…)",
+    "from_user" => "From user",
+    "to_user" => "To user",
+    "ruri" => "request URI",
+    "src_ip" => "source IP",
+    "src_port" => "source port",
+    "dst_ip" => "destination IP",
+    "dst_port" => "destination port",
+    "call_id" => "SIP Call-ID",
+    "corr_id" => "correlated call (x_cid ?? call_id)",
+    "x_cid" => "correlation header",
+    "user_agent" => "SIP User-Agent",
+    "cseq" => "CSeq header",
+    "node_id" => "capture node",
+    "started_at" => "first message time",
+    "last_ts" => "last message time",
+    "methods" => "methods seen in the call",
+    "messages" => "message count",
+    "last_code" => "final response code"
+  }.freeze
+
+  # hep3_filter_fields — every field any HEP3 view exposes, for the query
+  # editor's client-side "names a field?" validation (the server enforces the
+  # per-view allowlist). The Table (logs) kind uses LogsSource::FIELDS instead;
+  # the builder swaps the editor's fields when the operator picks a kind.
+  def hep3_filter_fields
+    hep3_source_views.flat_map { |sv| sv[:fields] }.uniq
+  end
+
+  def table_label_input
+    input(
+      type: "text",
+      placeholder: "Label — e.g. SIP messages",
+      autocomplete: "off",
+      data: {dashboard_builder_target: "tableLabel", action: "input->dashboard-builder#autoCommit"},
+      class: "vmd:flex-1 min-w-0 h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+    )
+  end
+
+  # table_source_view_picker — the combined source·view dropdown, one entry
+  # per (source, view): "HEP3 — Messages", "HEP3 — Calls", "HEP3 — Errors".
+  # Selecting one sets both + repopulates the filter-field options.
+  # table_source_view_picker — the kind's option dropdown. The menu is
+  # populated by the builder (dashboard-builder#activateTableKind) from the
+  # logs pods OR the hep3 readers, depending on the chosen type — so one block
+  # serves both the Table and HEP3 kinds.
+  def table_source_view_picker
+    div(class: "vmd:w-[220px] shrink-0 relative", data: {controller: "dropdown"}) do
+      picker_trigger("Select data", :tableSourceViewLabel)
+      div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "tableSourceMenu"}, class: menu_classes)
+    end
+  end
+
+  # table_color_swatches — accent for the table panel's title. Reuses the
+  # log palette (a table has no canonical per-metric color).
+  def table_color_swatches
+    div(class: "flex items-center gap-1.5 flex-wrap") do
+      LOG_COLORS.each do |c|
+        button(
+          type: "button",
+          title: c,
+          "aria-label": "Use accent #{c}",
+          data: {action: "click->dashboard-builder#selectTableColor", dashboard_builder_target: "tableSwatch", color: c},
+          class: "w-5 h-5 rounded-full border border-voodu-border shrink-0",
+          style: "background: #{c};"
+        )
+      end
+      custom_color_swatch(name: "table")
     end
   end
 
@@ -378,7 +564,7 @@ class Views::MetricDashboards::Form < Views::Base
   # `color-picker:change` event the dashboard-builder applies; `name`
   # ("log"/"metric") tells it which panel kind to colour.
   def custom_color_swatch(name:)
-    swatch_action = (name == "log") ? "selectLogColor" : "selectMetricColor"
+    swatch_action = {"log" => "selectLogColor", "table" => "selectTableColor"}.fetch(name, "selectMetricColor")
 
     div(class: "flex items-center gap-1.5") do
       # The chosen custom color, added to the row as a re-selectable swatch
@@ -692,6 +878,55 @@ class Views::MetricDashboards::Form < Views::Base
       scope_kind = (kind == "host") ? "host" : "pod"
       acc[kind] = MetricsPageData.metric_catalog_for(scope_kind, kind).map { |s| spec_json(s) }
     end.to_json
+  end
+
+  # table_sources — DataSources the island offers for Table panels
+  # ([{key:, label:, views:[…]}], from DataTable::Registry). Empty when no
+  # source applies (e.g. the hep3 plugin isn't installed) → the Table type
+  # card is hidden and the builder offers only Metric / Log count.
+  def table_sources
+    @table_sources ||= DataTable::Registry.available(@island)
+  end
+
+  # hep3_readers — the SIP-capture reader instances on this island, detected
+  # by their image (`voodu-hep3-api*`). This is what folds INTO the source·view
+  # options so a HEP3 panel needs no pod picker: each option already carries
+  # the reader's (scope, name). Empty → the HEP3 type card hides.
+  def hep3_readers
+    @hep3_readers ||= Array(@pods).filter_map { |p|
+      next unless (p["image"] || p[:image]).to_s.start_with?("voodu-hep3-api")
+
+      {scope: (p["scope"] || p[:scope]).to_s, name: (p["resource_name"] || p[:resource_name]).to_s}
+    }.reject { |r| r[:scope].empty? || r[:name].empty? }.uniq
+  end
+
+  # hep3_source_views — the HEP3 kind's picker options: one entry per
+  # (reader, view), each carrying the reader's scope/name so the HEP3 panel
+  # needs no separate pod picker. Label is "HEP3 — Messages" with a single
+  # reader, "<reader> — Messages" when there are several.
+  def hep3_source_views
+    multi = hep3_readers.size > 1
+
+    table_sources.select { |src| src[:key] == "hep3" }.flat_map do |src|
+      hep3_readers.flat_map do |reader|
+        prefix = multi ? reader[:name] : src[:short_label]
+
+        src[:views].map do |v|
+          {source: src[:key], scope: reader[:scope], name: reader[:name], view: v[:key],
+           label: "#{prefix} — #{v[:label]}", fields: v[:fields]}
+        end
+      end
+    end
+  end
+
+  # logs_source_views — the Table kind's picker options: one entry per pod
+  # (workload), each carrying the pod's scope/name. The generic Table tabulates
+  # that pod's logs (DataTable::LogsSource), so the operator picks a pod here.
+  def logs_source_views
+    workloads.map do |w|
+      {source: "logs", scope: w[:scope], name: w[:name], view: "lines",
+       label: "#{w[:label]} · #{w[:kind]}", fields: DataTable::LogsSource::FIELDS}
+    end
   end
 
   def existing_panels_json

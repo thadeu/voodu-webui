@@ -94,7 +94,7 @@ class Views::Metrics::DisplaySettings < Views::Base
   end
 
   def columns_picker
-    div(class: "flex items-center gap-2.5") do
+    div(class: "flex flex-wrap items-center gap-x-2.5 gap-y-1.5") do
       span(class: "text-[10.5px] font-semibold uppercase tracking-[0.08em] font-voodu-mono text-voodu-muted shrink-0") { "Columns" }
 
       span(class: "text-[10px] text-voodu-muted-2") { "(applies when 3+ visible)" }
@@ -103,7 +103,7 @@ class Views::Metrics::DisplaySettings < Views::Base
         data: {metrics_display_settings_target: "colsPicker"},
         class: "ml-auto inline-flex items-center gap-1"
       ) do
-        [2, 3, 4].each { |n| cols_pill(n) }
+        [1, 2, 3, 4, 5].each { |n| cols_pill(n) }
       end
     end
   end

@@ -63,6 +63,29 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_match "dashboard-builder", @response.body
   end
 
+  test "with the hep3 plugin + a reader pod, the builder offers a HEP3 type — no pod picker, reader folded into the source·view" do
+    System.create!(island: @island, synced_at: Time.current,
+      payload: {"host" => {}, "plugins" => [{"name" => "hep3", "version" => "0.5.0"}]}.to_json)
+    @island.pods.create!(
+      container_name: "hep3-api.aaaa", kind: "deployment", scope: "fsw", resource_name: "hep3-api",
+      replica_id: "aaaa", synced_at: Time.current,
+      payload: {"name" => "hep3-api.aaaa", "scope" => "fsw", "resource_name" => "hep3-api",
+                "kind" => "deployment", "status" => "running", "image" => "voodu-hep3-api:0.5.0"}.to_json
+    )
+
+    get new_metric_dashboard_path(tenant_key: @key, embed: 1)
+
+    assert_response :success
+    assert_match ">Table<", @response.body, "the generic Table type is always offered"
+    assert_match ">HEP3<", @response.body, "the HEP3 type is offered when the plugin is installed"
+    assert_not_includes @response.body, "dashboard-builder#selectTablePod", "the pod-picker action is gone"
+    # HEP3 options carry the reader's scope/name (no pod pick); the builder
+    # folds them into the source·view dropdown via this value.
+    assert_match(/hep3-source-views-value="[^"]*hep3-api/, @response.body)
+    # The generic Table kind offers the island's pods as logs sources.
+    assert_match(/logs-source-views-value="[^"]*&quot;source&quot;:&quot;logs&quot;/, @response.body)
+  end
+
   test "edit renders the builder prefilled (embed)" do
     d = @island.metric_dashboards.create!(name: "editme", panels: [HOST])
 

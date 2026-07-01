@@ -117,6 +117,12 @@ class MetricDashboardData
 
     return log_chart_for(panel, key) if panel["scope_kind"].to_s == "log"
 
+    if panel["scope_kind"].to_s == "table"
+      # A "table" panel is DataTable-family: chart_type "table" → rows;
+      # anything else (area/radial/linear) → a HEP3 count chart.
+      return (panel["chart_type"].to_s == "table") ? table_chart_for(panel, key) : hep_chart_for(panel, key)
+    end
+
     if panel["scope_kind"].to_s == "pod"
       scope_id = resolve_container(panel)
       return missing_card(panel, key) if scope_id.nil?
@@ -190,6 +196,149 @@ class MetricDashboardData
       clamped: data.clamped?,
       range: @range,
       range_ms: range_ms,
+      default_visible: true,
+      panel_key: key
+    }
+  end
+
+  # table_chart_for — a Table panel: a DataSource-backed data table. No
+  # server-side row fetch — the DataTable Stimulus controller pulls rows
+  # from /metrics/datatable/:source/rows (filter / paging / live-append
+  # cursors in the query string), so the dashboard frame reload stays
+  # cheap and the table keeps its own client state (scroll, pause). The
+  # envelope just carries what the card needs to wire that controller.
+  #
+  # default_visible: true — the operator chose this panel; panel_key → the
+  # data-metric-key the Settings/Order drawer toggles + reorders it by.
+  # hep_chart_for — a HEP3 source rendered as a chart: the per-bucket COUNT of
+  # the view (messages/calls/errors, matching the filter) becomes a sparkline.
+  #   number → a big-number tile (the range TOTAL) + sparkline [NumberCard]
+  #   area   → area chart, headline = the range TOTAL                [ChartCard]
+  #   gauge  → latest bucket against the range PEAK (Thadeu's "vs pico")
+  def hep_chart_for(panel, key)
+    source = DataTable::Registry.build(
+      panel["source"], island: @island, params: {scope: panel["scope"], name: panel["name"]}
+    )
+    chart_type = panel["chart_type"].presence || "area"
+    view = panel["view"].presence || "messages"
+    from, to = hep_window
+    bucket = hep_bucket_seconds
+
+    series = source ? source.count_series(view: view, filter_query: panel["filter_query"].to_s, ts_from: from, ts_to: to, bucket: bucket) : []
+    points = hep_points(series, from, to, bucket)
+    values = points.map { |p| p[:value] }
+    total = values.sum
+    peak = values.max.to_i
+
+    # Number tile — the TOTAL over the range + the sparkline. No confusing
+    # "vs peak %"; the natural read for a count (mirrors the log-count tile).
+    if chart_type == "number"
+      return {
+        kind: :number, label: panel["label"].to_s, color: panel["color"].to_s,
+        formatted: total.to_s, value: total, series: points,
+        range: @range, range_ms: range_ms, truncated: false, clamped: false, meta: nil,
+        default_visible: true, panel_key: key
+      }
+    end
+
+    # Gauge — the value is the range TOTAL too, so all shapes of the same panel
+    # read the SAME number (Area/Number/Gauge = 7, not "7 vs 0/1"). The arc is
+    # the average bucket relative to the peak bucket (how busy vs the busiest
+    # moment); no sub-label (the footer already carries min/avg/max).
+    gauge = %w[gauge_radial gauge_linear].include?(chart_type)
+    avg = points.empty? ? 0.0 : (total.to_f / points.size)
+    cap = if gauge
+      {label: nil, pct: (peak.positive? ? ((avg / peak) * 100).round : 0)}
+    end
+
+    {
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      unit: "",
+      points: points,
+      current: total,
+      metric: key,
+      source: "hep3",
+      section: "resource",
+      capacity_label: cap && cap[:label],
+      capacity_pct: cap && cap[:pct],
+      chart_type: chart_type,
+      # Gauges show the raw count in the center by default; the panel's "show %"
+      # toggle (off by default) flips them back to the "% of peak" reading.
+      percent: panel["percent"] == true,
+      # scope/name/view/filter_query → the maximize button reconstructs the
+      # panel in the expand modal (the HEP3 chart endpoint re-aggregates).
+      scope: panel["scope"].to_s,
+      name: panel["name"].to_s,
+      view: view,
+      filter_query: panel["filter_query"].to_s,
+      default_visible: true,
+      panel_key: key
+    }
+  end
+
+  # hep_window — [from_epoch, to_epoch] the chart aggregates over, from the
+  # dashboard's range (relative) or the custom from/until span.
+  def hep_window
+    to = custom? ? parse_epoch(@until_) : nil
+    to ||= Time.now.to_i
+    from = custom? ? parse_epoch(@from) : nil
+    from ||= to - (range_ms / 1000)
+
+    [from, to]
+  end
+
+  # hep_bucket_seconds — ~60 buckets across the range (min 30s), so the
+  # sparkline honours the picker without over-fetching.
+  def hep_bucket_seconds
+    [(range_ms / 1000) / 60, 30].max
+  end
+
+  # hep_points — densify count_series ([[bucket_epoch, count], …]) into a
+  # gap-free [{ts:, value:, formatted:}] over [from, to) so the sparkline is
+  # continuous (empty buckets = 0).
+  def hep_points(series, from, to, bucket)
+    counts = series.to_h
+    points = []
+    b = (from / bucket) * bucket
+
+    while b < to
+      c = counts[b].to_i
+      points << {ts: Time.at(b).utc.iso8601, value: c, formatted: c.to_s}
+      b += bucket
+    end
+
+    points
+  end
+
+  def parse_epoch(value)
+    Time.zone.parse(value.to_s).to_i
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  def table_chart_for(panel, key)
+    view = panel["view"].presence || "messages"
+    source = DataTable::Registry.build(
+      panel["source"], island: @island, params: {scope: panel["scope"], name: panel["name"]}
+    )
+
+    {
+      kind: :table,
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      source: panel["source"].to_s,
+      scope: panel["scope"].to_s,
+      name: panel["name"].to_s,
+      view: view,
+      # Column metadata for the toolbar (picker + filter field list),
+      # rendered server-side from the source — no rows here (the client
+      # fetches those). Empty when the source no longer resolves.
+      fields: source ? source.fields(view: view) : [],
+      default_fields: source ? source.default_fields(view: view) : [],
+      # Optional config-time pre-filter (DataTable DSL). The table opens
+      # already filtered; the toolbar query is seeded from it.
+      filter_query: panel["filter_query"].to_s,
       default_visible: true,
       panel_key: key
     }

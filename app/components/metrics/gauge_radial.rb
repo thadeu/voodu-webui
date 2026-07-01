@@ -16,11 +16,16 @@ class Components::Metrics::GaugeRadial < Components::Base
   CY = 96   # baseline y the arc springs up from
   SW = 16   # arc stroke width
 
-  def initialize(pct:, color:, sub_label: nil, max_w: 220)
+  # percent — true (default): the center reads the fill "%". false: the center
+  # reads `value_label` (the raw value) instead — for a count, where "% of the
+  # peak" is confusing, the arc still fills but the number is the count itself.
+  def initialize(pct:, color:, sub_label: nil, max_w: 220, percent: true, value_label: nil)
     @pct = clamp(pct.to_f)
     @color = color
     @sub_label = sub_label
     @max_w = max_w
+    @percent = percent
+    @value_label = value_label.to_s
   end
 
   def view_template
@@ -45,7 +50,7 @@ class Components::Metrics::GaugeRadial < Components::Base
         x: CX, y: CY - 6, "text-anchor": "middle",
         fill: "var(--voodu-text)", "font-size": "30", "font-weight": "600",
         "font-family": "var(--voodu-font-sans, system-ui, sans-serif)"
-      ) { pct_label }
+      ) { center_label }
 
       if @sub_label.present?
         s.text(
@@ -70,6 +75,11 @@ class Components::Metrics::GaugeRadial < Components::Base
     return "var(--voodu-amber)" if @pct >= 70
 
     @color
+  end
+
+  # center_label — the % fill, or the raw value when percent: false.
+  def center_label
+    (!@percent && @value_label.present?) ? @value_label : pct_label
   end
 
   def pct_label
