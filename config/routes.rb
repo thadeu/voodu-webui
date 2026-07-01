@@ -150,6 +150,12 @@ Rails.application.routes.draw do
     get "/metrics/chart", to: "metrics#chart", as: :metrics_chart
     get "/metrics/display_settings", to: "metrics#display_settings", as: :metrics_display_settings
 
+    # Rows feed for Table panels — a DataSource (DataTable::Registry) page
+    # as JSON. The DataTable Stimulus controller pulls from here (filter /
+    # paging / live-append cursors live in the query string).
+    get "/metrics/datatable/:source/rows", to: "datatable#rows", as: :metrics_datatable_rows,
+      constraints: {source: /[a-z0-9_]+/}
+
     # Saved metric dashboards — named multi-panel views the operator
     # builds in the right-drawer builder. `show` is omitted: a dashboard
     # is "viewed" via /metrics?dashboard=<id> (the existing metrics page

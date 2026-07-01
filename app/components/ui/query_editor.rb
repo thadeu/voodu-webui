@@ -15,6 +15,13 @@
 # WITHOUT submitting the host form — the builder reads the value itself via its
 # own target; only Analytics submits on run.
 #
+# `fields` drives two things at once: the client-side "every clause names a
+# field" validation AND the `@`-autocomplete — typing `@` pops a menu of the
+# host's fields (filtered as you type). It's the ONE injected list, so each
+# context self-describes: the log filter offers message/level/stream, a HEP3
+# table offers its SIP columns. `field_hints` (name → short note) is optional
+# label text shown beside each suggestion.
+#
 # input_data is merged onto the textarea's data attributes so a host controller
 # can claim it as its own target too (e.g. the builder's `logQuery`).
 class Components::UI::QueryEditor < Components::Base
@@ -22,10 +29,17 @@ class Components::UI::QueryEditor < Components::Base
     placeholder: "filter @message like /timeout/",
     rows: "4", min_h: "min-h-[120px]", grow: false,
     submits: true, show_help: true, show_error: true, help_limit: true, show_stats: false,
-    input_data: {})
+    fields: [], field_hints: {}, input_data: {})
     @value = value.to_s
     @name = name
     @label = label
+    # fields — field names a clause may reference (client validation + the
+    # `@` autocomplete). Empty → the log defaults; a data-table host passes
+    # its own columns.
+    @fields = Array(fields)
+    # field_hints — optional { "to_user" => "SIP To user" } shown as a muted
+    # note beside each autocomplete suggestion.
+    @field_hints = field_hints.to_h
     @placeholder = placeholder
     @rows = rows
     @min_h = min_h
@@ -44,6 +58,8 @@ class Components::UI::QueryEditor < Components::Base
     wrapper_data = {controller: "query-editor"}
     # Stimulus value default is true, so only emit the attribute to turn it OFF.
     wrapper_data[:query_editor_submits_value] = "false" unless @submits
+    wrapper_data[:query_editor_fields_value] = @fields.to_json if @fields.any?
+    wrapper_data[:query_editor_hints_value] = @field_hints.to_json if @field_hints.any?
 
     div(class: tokens("flex flex-col gap-2", ("flex-1 min-h-0" if @grow)), data: wrapper_data) do
       field_label(@label) if @label

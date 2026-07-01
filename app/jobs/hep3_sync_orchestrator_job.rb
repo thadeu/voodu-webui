@@ -8,8 +8,10 @@
 #
 # Gated on local state: only islands whose controller has the voodu-hep3
 # plugin installed (System#plugin_installed?, from the /system sync) AND
-# that name at least one reader instance (Island#hep3_readers) get
-# polled. Everything else is a cheap no-op.
+# that have a Table panel pointing at a hep3 reader get polled. The set
+# of readers is DEMAND-DRIVEN — derived from the dashboards' table panels
+# (MetricDashboard.table_readers_for), so adding a Table panel is what
+# turns the poller on for that reader. Everything else is a cheap no-op.
 class Hep3SyncOrchestratorJob < ApplicationJob
   queue_as :default
 
@@ -17,7 +19,7 @@ class Hep3SyncOrchestratorJob < ApplicationJob
     Island.find_each do |island|
       next unless island.plugin_installed?("hep3")
 
-      island.hep3_readers.each do |reader|
+      MetricDashboard.table_readers_for(island, source: "hep3").each do |reader|
         Hep3PollerJob.perform_later(island.id, reader[:scope], reader[:name])
       end
     end

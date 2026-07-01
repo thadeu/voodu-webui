@@ -47,6 +47,24 @@ class HepMessageTest < ActiveSupport::TestCase
       "ladder order follows ts, not insertion order"
   end
 
+  test "a `like /re/` filter runs through SQLite REGEXP — anchors work, registered lazily (no initializer)" do
+    {"12997297095" => "a", "551125019444" => "b", "998877" => "c"}.each do |from_user, cid|
+      line = {ts: "2026-06-30 10:00:00.000000", call_id: cid, from_user: from_user, method: "INVITE"}.to_json
+      HepMessage.bulk_insert([{tenant_id: TENANT, scope: SCOPE, name: NAME, payload: line}])
+    end
+
+    assert_equal %w[12997297095 551125019444].sort, matches("@from_user like /12/").sort,
+      "unanchored /12/ matches any number containing 12"
+    assert_equal ["12997297095"], matches("@from_user like /^12/"),
+      "anchored /^12/ matches only the number that STARTS with 12 — real regex, not substring"
+  end
+
+  def matches(query)
+    compiled = DataTable::Query.compile(query) { |f| HepMessage.filter_expr(f) }
+    HepMessage.page(tenant_id: TENANT, scope: SCOPE, name: NAME, where_sql: compiled.sql, where_binds: compiled.binds)
+      .map { |r| r.payload_json["from_user"] }
+  end
+
   test "HepCursor.advance upserts; cursor_for reads it back" do
     assert_equal "", HepCursor.cursor_for(TENANT, SCOPE, NAME), "empty before the first poll"
 

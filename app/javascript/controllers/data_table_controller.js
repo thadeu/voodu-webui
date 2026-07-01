@@ -1,0 +1,644 @@
+import { Controller } from "@hotwired/stimulus"
+
+// data-table — renders a DataSource page (schema-less) as a table:
+// column picker, per-field substring filter, click-to-sort, infinite
+// scroll (older pages), manual refresh, and OPT-IN live streaming.
+//
+// Live is OFF by default so the table never reorders under you while
+// reading. Refresh pulls the latest page on demand; Live (when toggled
+// on) appends new rows at the top, preserving scroll position when you're
+// reading below the fold.
+//
+// this.rows is the canonical NEWEST-FIRST list (server id-desc order);
+// sorting only reorders a render-time copy, so the id cursors stay valid:
+//   newest = rows[0].id (poll since_id) · oldest = rows[last].id (before_id)
+export default class extends Controller {
+  static targets = ["viewport", "status", "colToggle", "query", "live", "liveDot"]
+
+  static values = {
+    url: String,
+    source: String,
+    scope: String,
+    name: String,
+    view: String,
+    key: String,
+    // range/from/until — the page's time window, forwarded on every fetch so
+    // the table scopes to the same span as the charts.
+    range: String,
+    from: String,
+    until: String,
+  }
+
+  POLL_MS = 5000
+  MAX_ROWS = 2000
+
+  connect() {
+    this.rows = []
+    this.seen = new Set()
+    this.sort = null
+    this.loading = false
+    this.reloadsPaused = false
+    this.colWidths = this.readJson(this.prefKey("colw")) || {}
+
+    this.restorePrefs()
+    this.reflectLive()
+    this.bindFilterFocus()
+
+    // The toolbar filter is a live override of the panel's saved (config)
+    // filter. serverQuery is what the server rendered (the config filter);
+    // restoreQuery brings back what the operator last typed so a metrics-tick
+    // frame reload doesn't revert it. Runs BEFORE restoreState so the rows
+    // cache signature matches the restored query.
+    this.serverQuery = this.hasQueryTarget ? this.queryTarget.value : ""
+    this.restoreQuery()
+
+    // Repaint from the last snapshot across a frame reload (broadcast tick)
+    // so the table doesn't flash "Loading…" or lose scroll — the card
+    // re-renders normally (respecting the grid reorder); we just restore its
+    // state. First load (no cache) fetches.
+    const cached = this.restoreState()
+
+    if (cached) {
+      this.hydrate(cached)
+    } else {
+      this.load()
+    }
+
+    if (this.live) this.startPolling()
+  }
+
+  disconnect() {
+    this.saveState()
+    this.stopPolling()
+    this.resumeReloads()
+    this.unbindFilterFocus()
+  }
+
+  // ── filter-focus reload guard ─────────────────────────────────────
+  // While the operator is typing in the filter, suppress the metrics-tick
+  // frame reload (it swaps the whole frame and would wipe the input
+  // mid-keystroke). Uses the shared polling:pause/resume convention.
+
+  bindFilterFocus() {
+    if (!this.hasQueryTarget) return
+
+    this.onQueryFocus = () => this.pauseReloads()
+    this.onQueryBlur = () => this.resumeReloads()
+    this.queryTarget.addEventListener("focus", this.onQueryFocus)
+    this.queryTarget.addEventListener("blur", this.onQueryBlur)
+  }
+
+  unbindFilterFocus() {
+    if (!this.hasQueryTarget || !this.onQueryFocus) return
+
+    this.queryTarget.removeEventListener("focus", this.onQueryFocus)
+    this.queryTarget.removeEventListener("blur", this.onQueryBlur)
+  }
+
+  pauseReloads() {
+    if (this.reloadsPaused) return
+
+    this.reloadsPaused = true
+    window.dispatchEvent(new CustomEvent("polling:pause"))
+  }
+
+  resumeReloads() {
+    if (!this.reloadsPaused) return
+
+    this.reloadsPaused = false
+    window.dispatchEvent(new CustomEvent("polling:resume"))
+  }
+
+  hydrate({ rows, scrollTop }) {
+    this.rows = rows
+    rows.forEach((r) => this.seen.add(r.id))
+    this.render()
+
+    if (this.hasViewportTarget) this.viewportTarget.scrollTop = scrollTop || 0
+  }
+
+  // ── data loading ──────────────────────────────────────────────────
+
+  async load() {
+    this.showStatus("Loading…")
+    this.rows = []
+    this.seen.clear()
+
+    const data = await this.fetchPage()
+
+    if (!data) return
+
+    this.ingest(data.rows || [], "append")
+    this.render()
+  }
+
+  // refresh — manual catch-up: reload the latest page from the top.
+  refresh() {
+    this.load()
+  }
+
+  async loadOlder() {
+    if (this.loading || !this.rows.length) return
+
+    this.loading = true
+
+    const oldest = this.rows[this.rows.length - 1].id
+    const data = await this.fetchPage({ before_id: oldest })
+
+    this.loading = false
+
+    if (!data || !(data.rows || []).length) return
+
+    this.ingest(data.rows, "append")
+    this.render()
+  }
+
+  async poll() {
+    if (!this.live || !this.rows.length) return
+
+    const newest = this.rows[0].id
+    const data = await this.fetchPage({ since_id: newest })
+
+    if (!data) return
+
+    const fresh = (data.rows || []).filter((r) => !this.seen.has(r.id))
+
+    if (!fresh.length) return
+
+    this.prependPreservingScroll(fresh)
+  }
+
+  // prependPreservingScroll — add new rows at the top without yanking the
+  // viewport: if the operator is reading below the fold, nudge scrollTop by
+  // the height the new rows added so their row stays put.
+  prependPreservingScroll(fresh) {
+    const vp = this.viewportTarget
+    const atTop = vp.scrollTop <= 4
+    const before = vp.scrollHeight
+
+    this.ingest(fresh, "prepend")
+    this.render()
+
+    if (!atTop) vp.scrollTop += vp.scrollHeight - before
+  }
+
+  async fetchPage(extra = {}) {
+    const params = new URLSearchParams({ scope: this.scopeValue, name: this.nameValue, view: this.viewValue })
+    const query = this.currentQuery()
+
+    if (query) params.set("filter_query", query)
+
+    // Scope to the page's time window (charts + table stay in lockstep).
+    if (this.rangeValue) params.set("range", this.rangeValue)
+    if (this.fromValue) params.set("from", this.fromValue)
+    if (this.untilValue) params.set("until", this.untilValue)
+
+    Object.entries(extra).forEach(([k, v]) => params.set(k, v))
+
+    try {
+      const resp = await fetch(`${this.urlValue}?${params}`, { headers: { Accept: "application/json" } })
+      const data = await resp.json().catch(() => null)
+
+      if (!resp.ok) {
+        // A 422 carries the filter parse message — show it verbatim so the
+        // operator fixes the query instead of thinking the filter is broken.
+        this.showStatus(data?.error ? `Filter: ${data.error}` : `Couldn't load rows (${resp.status})`)
+
+        return null
+      }
+
+      return data
+    } catch (_e) {
+      this.showStatus("Couldn't load rows")
+
+      return null
+    }
+  }
+
+  // ingest — merge a page into this.rows keeping it newest-first + deduped,
+  // bounded to MAX_ROWS.
+  ingest(rows, where) {
+    const fresh = rows.filter((r) => {
+      if (this.seen.has(r.id)) return false
+
+      this.seen.add(r.id)
+
+      return true
+    })
+
+    if (!fresh.length) return
+
+    this.rows = where === "prepend" ? fresh.concat(this.rows) : this.rows.concat(fresh)
+
+    if (this.rows.length > this.MAX_ROWS) {
+      this.rows.slice(this.MAX_ROWS).forEach((r) => this.seen.delete(r.id))
+      this.rows = this.rows.slice(0, this.MAX_ROWS)
+    }
+  }
+
+  // ── toolbar actions ───────────────────────────────────────────────
+
+  applyColumns() {
+    this.persistColumns()
+    this.render()
+  }
+
+  toggleAllColumns() {
+    const allOn = this.colToggleTargets.every((c) => c.checked)
+
+    this.colToggleTargets.forEach((c) => { c.checked = !allOn })
+    this.applyColumns()
+  }
+
+  applyFilter() {
+    this.persistQuery()
+
+    if (this.filterTimer) clearTimeout(this.filterTimer)
+
+    this.filterTimer = setTimeout(() => this.load(), 250)
+  }
+
+  // persistQuery / restoreQuery — keep the runtime toolbar filter alive across
+  // a metrics-tick frame reload. Stored per panel with the config value it
+  // overrides (cfg): if a form edit later changes the config filter, the
+  // server renders a different value and the stale runtime edit is dropped.
+  persistQuery() {
+    try {
+      sessionStorage.setItem(this.prefKey("q"), JSON.stringify({ cfg: this.serverQuery, q: this.currentQuery(), ts: Date.now() }))
+    } catch (_e) {
+      // sessionStorage full / disabled — the filter just won't persist.
+    }
+  }
+
+  restoreQuery() {
+    if (!this.hasQueryTarget) return
+
+    const saved = this.readSession(this.prefKey("q"))
+
+    if (!saved || Date.now() - (saved.ts || 0) > 300000) return
+    if (saved.cfg !== this.serverQuery || typeof saved.q !== "string") return
+
+    this.queryTarget.value = saved.q
+  }
+
+  toggleLive() {
+    this.live = !this.live
+    this.persistLive()
+    this.reflectLive()
+
+    if (this.live) {
+      this.startPolling()
+      this.poll()
+    } else {
+      this.stopPolling()
+    }
+  }
+
+  startPolling() {
+    if (!this.poller) this.poller = setInterval(() => this.poll(), this.POLL_MS)
+  }
+
+  stopPolling() {
+    if (this.poller) clearInterval(this.poller)
+
+    this.poller = null
+  }
+
+  onScroll() {
+    const vp = this.viewportTarget
+
+    this.lastScrollTop = vp.scrollTop
+
+    const nearBottom = vp.scrollTop + vp.clientHeight >= vp.scrollHeight - 80
+
+    if (nearBottom) this.loadOlder()
+  }
+
+  sortBy(col) {
+    if (this.sort && this.sort.col === col) {
+      this.sort.dir = this.sort.dir === "asc" ? "desc" : "asc"
+    } else {
+      this.sort = { col, dir: "asc" }
+    }
+
+    this.render()
+  }
+
+  // startColResize — drag the header's right edge to set the column's width.
+  // Updates the <col> live (smooth), persists on release. Widths are keyed by
+  // column name per panel, so they survive reloads + the newest-first repaint.
+  startColResize(event, col, index) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const table = this.viewportTarget.querySelector("table")
+
+    if (!table) return
+
+    table.style.tableLayout = "fixed"
+
+    const colEl = table.querySelectorAll("colgroup col")[index]
+    const startX = event.clientX
+    const startW = this.colWidths[col] || (colEl ? colEl.offsetWidth : 120)
+
+    const onMove = (e) => {
+      const w = Math.max(50, startW + (e.clientX - startX))
+
+      this.colWidths[col] = w
+      if (colEl) colEl.style.width = `${w}px`
+      table.style.width = `${this.tableWidth()}px`
+    }
+
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove)
+      document.removeEventListener("pointerup", onUp)
+      this.persistColWidths()
+    }
+
+    document.addEventListener("pointermove", onMove)
+    document.addEventListener("pointerup", onUp)
+  }
+
+  persistColWidths() {
+    try {
+      localStorage.setItem(this.prefKey("colw"), JSON.stringify(this.colWidths))
+    } catch (_e) {
+      // storage full / disabled — widths just won't persist across reloads.
+    }
+  }
+
+  // ── render ────────────────────────────────────────────────────────
+
+  render() {
+    const columns = this.visibleColumns()
+
+    if (!this.rows.length) {
+      this.showStatus("No data yet")
+
+      return
+    }
+
+    if (!columns.length) {
+      this.showStatus("No columns selected")
+
+      return
+    }
+
+    const table = document.createElement("table")
+    const haveWidths = columns.every((c) => this.colWidths[c])
+
+    table.className = "text-[12px] font-voodu-mono border-collapse"
+
+    // Fixed layout once widths are known so a column keeps the width the
+    // operator dragged it to (the table grows/scrolls-x, siblings stay put).
+    // The FIRST render for a column set stays auto so captureColWidths can
+    // measure natural widths as the starting point.
+    if (haveWidths) {
+      table.style.tableLayout = "fixed"
+      // A definite table width is what makes fixed layout actually honour the
+      // per-column widths (otherwise columns snap back to content width). The
+      // table then scrolls-x inside the viewport when wider than it.
+      table.style.width = `${this.tableWidth(columns)}px`
+    }
+
+    const colgroup = document.createElement("colgroup")
+
+    columns.forEach((col) => {
+      const c = document.createElement("col")
+
+      if (this.colWidths[col]) c.style.width = `${this.colWidths[col]}px`
+
+      colgroup.appendChild(c)
+    })
+
+    table.appendChild(colgroup)
+    table.appendChild(this.buildHead(columns))
+    table.appendChild(this.buildBody(this.sortedRows(), columns))
+
+    this.viewportTarget.replaceChildren(table)
+
+    if (!haveWidths) this.captureColWidths(table, columns)
+  }
+
+  // captureColWidths — after the first (auto-layout) render, freeze each
+  // column's natural width (clamped) and switch to fixed layout so the
+  // columns are resizable from a sensible baseline.
+  captureColWidths(table, columns) {
+    const ths = table.querySelectorAll("thead th")
+    const cols = table.querySelectorAll("colgroup col")
+
+    columns.forEach((col, i) => {
+      if (!this.colWidths[col] && ths[i]) {
+        this.colWidths[col] = Math.min(420, Math.max(60, Math.round(ths[i].offsetWidth)))
+      }
+    })
+
+    table.style.tableLayout = "fixed"
+    columns.forEach((col, i) => { if (cols[i]) cols[i].style.width = `${this.colWidths[col]}px` })
+    table.style.width = `${this.tableWidth(columns)}px`
+  }
+
+  // tableWidth — the sum of the visible columns' widths (px). Feeds the
+  // table's explicit width so fixed layout honours each <col>.
+  tableWidth(columns) {
+    return (columns || this.visibleColumns()).reduce((sum, c) => sum + (this.colWidths[c] || 120), 0)
+  }
+
+  sortedRows() {
+    if (!this.sort) return this.rows
+
+    const { col, dir } = this.sort
+    const sign = dir === "asc" ? 1 : -1
+
+    return [...this.rows].sort((a, b) => {
+      const av = a[col]
+      const bv = b[col]
+      const na = Number(av)
+      const nb = Number(bv)
+      const numeric = av !== "" && bv !== "" && !Number.isNaN(na) && !Number.isNaN(nb)
+
+      if (numeric) return (na - nb) * sign
+
+      return String(av ?? "").localeCompare(String(bv ?? "")) * sign
+    })
+  }
+
+  buildHead(columns) {
+    const thead = document.createElement("thead")
+    const tr = document.createElement("tr")
+
+    columns.forEach((col, i) => {
+      const th = document.createElement("th")
+
+      th.className =
+        "sticky top-0 z-10 bg-voodu-surface-2 text-left text-voodu-muted-2 font-medium cursor-pointer select-none relative overflow-hidden " +
+        "px-2 py-1.5 border-b border-voodu-border uppercase text-[10px] tracking-[0.05em] hover:text-voodu-text"
+
+      const label = document.createElement("span")
+
+      label.className = "block truncate pr-1.5"
+      label.textContent = col + this.sortIndicator(col)
+      th.appendChild(label)
+      th.addEventListener("click", () => this.sortBy(col))
+
+      // Drag the right edge to resize the column.
+      const handle = document.createElement("div")
+
+      handle.className = "absolute top-0 right-0 h-full w-[7px] cursor-col-resize hover:bg-voodu-accent-line/60"
+      handle.addEventListener("pointerdown", (e) => this.startColResize(e, col, i))
+      handle.addEventListener("click", (e) => e.stopPropagation())
+      th.appendChild(handle)
+
+      tr.appendChild(th)
+    })
+
+    thead.appendChild(tr)
+
+    return thead
+  }
+
+  sortIndicator(col) {
+    if (!this.sort || this.sort.col !== col) return ""
+
+    return this.sort.dir === "asc" ? " ↑" : " ↓"
+  }
+
+  buildBody(rows, columns) {
+    const tbody = document.createElement("tbody")
+
+    rows.forEach((row) => {
+      const tr = document.createElement("tr")
+
+      tr.className = "border-b border-voodu-border/40 hover:bg-voodu-hover"
+
+      columns.forEach((col) => {
+        const td = document.createElement("td")
+        const value = row[col]
+
+        td.textContent = value === null || value === undefined ? "" : String(value)
+        td.title = td.textContent
+        // Width comes from the colgroup (fixed layout); truncate within it.
+        td.className = "px-2 py-1 text-voodu-text truncate"
+        tr.appendChild(td)
+      })
+
+      tbody.appendChild(tr)
+    })
+
+    return tbody
+  }
+
+  showStatus(message) {
+    const div = document.createElement("div")
+
+    div.className = "px-3 py-6 text-center text-[12px] text-voodu-muted"
+    div.textContent = message
+
+    this.viewportTarget.replaceChildren(div)
+  }
+
+  // ── helpers ───────────────────────────────────────────────────────
+
+  visibleColumns() {
+    return this.colToggleTargets.filter((c) => c.checked).map((c) => c.value)
+  }
+
+  currentQuery() {
+    return this.hasQueryTarget ? this.queryTarget.value.trim() : ""
+  }
+
+  reflectLive() {
+    if (this.hasLiveDotTarget) {
+      this.liveDotTarget.style.background = this.live ? "var(--voodu-green)" : "var(--voodu-muted-2)"
+    }
+
+    if (this.hasLiveTarget) {
+      this.liveTarget.style.borderColor = this.live ? "var(--voodu-accent-line)" : ""
+      this.liveTarget.style.background = this.live ? "var(--voodu-accent-dim)" : ""
+    }
+  }
+
+  // ── persistence (per-panel prefs) ─────────────────────────────────
+
+  restorePrefs() {
+    this.live = localStorage.getItem(this.prefKey("live")) === "1"
+
+    const saved = this.readJson(this.prefKey("cols"))
+
+    if (Array.isArray(saved) && saved.length) {
+      this.colToggleTargets.forEach((c) => { c.checked = saved.includes(c.value) })
+    }
+  }
+
+  persistColumns() {
+    localStorage.setItem(this.prefKey("cols"), JSON.stringify(this.visibleColumns()))
+  }
+
+  persistLive() {
+    localStorage.setItem(this.prefKey("live"), this.live ? "1" : "0")
+  }
+
+  // saveState — snapshot rows + scroll (bounded) so a reconnect after a
+  // frame reload repaints instantly instead of re-fetching. sessionStorage
+  // (not local) so it's per-tab and doesn't outlive the session.
+  saveState() {
+    if (!this.rows.length) return
+
+    // Prefer the scroll position captured DURING scrolling — at disconnect
+    // the viewport is already detached, so reading scrollTop there yields 0.
+    const scrollTop = this.lastScrollTop ?? (this.hasViewportTarget ? this.viewportTarget.scrollTop : 0)
+
+    const state = {
+      rows: this.rows.slice(0, 200),
+      scrollTop,
+      sig: this.signature(),
+      ts: Date.now(),
+    }
+
+    try {
+      sessionStorage.setItem(this.prefKey("state"), JSON.stringify(state))
+    } catch (_e) {
+      // sessionStorage full / disabled → fall back to a fresh load.
+    }
+  }
+
+  // restoreState — the cached snapshot if recent (< 5 min) AND still for the
+  // same view/filter (else an edit would show stale rows), else null.
+  restoreState() {
+    const raw = this.readSession(this.prefKey("state"))
+
+    if (!raw || !Array.isArray(raw.rows) || !raw.rows.length) return null
+
+    if (Date.now() - (raw.ts || 0) > 300000) return null
+
+    if (raw.sig !== this.signature()) return null
+
+    return raw
+  }
+
+  // signature — the source/view/filter the cache is valid for. A config
+  // edit (new filter or view) changes it, forcing a fresh load.
+  signature() {
+    return [this.viewValue, this.currentQuery(), this.rangeValue, this.fromValue, this.untilValue].join("|")
+  }
+
+  readSession(key) {
+    try {
+      return JSON.parse(sessionStorage.getItem(key))
+    } catch (_e) {
+      return null
+    }
+  }
+
+  prefKey(suffix) {
+    return `voodu:dt:${this.keyValue}:${suffix}`
+  }
+
+  readJson(key) {
+    try {
+      return JSON.parse(localStorage.getItem(key))
+    } catch (_e) {
+      return null
+    }
+  }
+}

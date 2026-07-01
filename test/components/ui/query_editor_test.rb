@@ -42,6 +42,21 @@ class Components::UI::QueryEditorTest < ActiveSupport::TestCase
     assert_not_includes render_editor(show_help: false), "Syntax"
   end
 
+  test "fields emit as a value the @-autocomplete + validation read; empty omits it" do
+    html = render_editor(fields: %w[to_user method])
+
+    assert_includes html, 'data-query-editor-fields-value="[&quot;to_user&quot;,&quot;method&quot;]"'
+    assert_not_includes render_editor, "fields-value"
+  end
+
+  test "field_hints emit as a value so the autocomplete can annotate; empty omits it" do
+    html = render_editor(fields: %w[to_user], field_hints: {"to_user" => "SIP To user"})
+
+    assert_includes html, "data-query-editor-hints-value="
+    assert_includes html, "SIP To user"
+    assert_not_includes render_editor(fields: %w[to_user]), "hints-value"
+  end
+
   test "label renders only when given" do
     # A distinct sentinel — "Query" would now collide with the "Query syntax"
     # popover trigger that always renders.
