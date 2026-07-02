@@ -47,11 +47,12 @@ class Components::Hep3::CallFlowModal < Components::Base
 
         div(
           tabindex: "-1",
-          data: {call_flow_target: "ladder", action: "mouseenter->call-flow#ladderEnter mouseleave->call-flow#ladderLeave"},
-          class: tokens(
-            "flex-1 min-w-0 min-h-0 overflow-auto p-3 bg-voodu-bg focus:outline-none",
-            ("pb-9" if @data.gap_media.any?)
-          )
+          data: {
+            call_flow_target: "ladder",
+            action: "mouseenter->call-flow#ladderEnter mouseleave->call-flow#ladderLeave " \
+                    "pointerdown->call-flow#panStart wheel->call-flow#onWheel"
+          },
+          class: "flex-1 min-w-0 min-h-0 overflow-hidden relative bg-voodu-bg focus:outline-none cursor-grab select-none touch-none"
         ) do
           render Components::Hep3::CallFlow.new(data: @data)
         end
@@ -63,26 +64,44 @@ class Components::Hep3::CallFlowModal < Components::Base
     end
   end
 
-  # ladder_toolbar — a non-scrolling strip above the diagram: the keyboard
-  # hint + a Refresh button (re-fetches THIS call in place, so the operator
-  # can watch a live call grow without reloading the page).
+  # ladder_toolbar — a non-scrolling strip above the diagram: a canvas hint,
+  # the zoom controls (−/fit/+), and a Refresh button (re-fetches THIS call in
+  # place so the operator can watch a live call grow without a page reload).
   def ladder_toolbar
-    div(class: "flex items-center gap-2 px-3 py-1.5 border-b border-voodu-border shrink-0") do
+    div(class: "flex items-center gap-1.5 px-3 py-1.5 border-b border-voodu-border shrink-0") do
       span(class: "text-[10.5px] text-voodu-muted-2 hidden vmd:block") do
-        "↑ / ↓ to step messages (hover the diagram)"
+        "drag to pan · scroll · ⌘/ctrl+scroll to zoom · ↑/↓ steps"
+      end
+
+      div(class: "flex items-center ml-auto") do
+        zoom_button("call-flow#zoomOut", :MagnifyingGlassMinusOutline, "Zoom out")
+        zoom_button("call-flow#fit", :ArrowsPointingOutOutline, "Fit to view")
+        zoom_button("call-flow#zoomIn", :MagnifyingGlassPlusOutline, "Zoom in")
       end
 
       button(
         type: "button",
         data: {action: "click->call-flow#refresh"},
         title: "Refresh this call", "aria-label": "Refresh this call",
-        class: "inline-flex items-center gap-1.5 px-2 h-7 ml-auto border border-voodu-border " \
+        class: "inline-flex items-center gap-1.5 px-2 h-7 border border-voodu-border " \
                "bg-voodu-surface text-voodu-text-2 text-[11.5px] hover:bg-voodu-surface-2"
       ) do
         render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
         span(class: "hidden vmd:inline") { "Refresh" }
       end
     end
+  end
+
+  # zoom_button — one segmented control in the zoom group (−/fit/+). Borders
+  # collapse into a single group via -ml-px on the middle/last.
+  def zoom_button(action, icon, title)
+    button(
+      type: "button",
+      data: {action: "click->#{action}"},
+      title: title, "aria-label": title,
+      class: "inline-flex items-center justify-center w-7 h-7 border border-voodu-border -ml-px first:ml-0 " \
+             "bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) { render Icon.const_get(icon).new(class: "w-3.5 h-3.5") }
   end
 
   # raw_panel — the SIP detail, seeded with the FOCUSED message (the clicked

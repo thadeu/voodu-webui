@@ -12,9 +12,17 @@
 # spans the full width so the whole row is a target, and a rowbg rect
 # behind it is what the controller tints on selection.
 #
-# Natural pixel size (no viewBox stretch — text would distort): the host
-# scroll container centres it and scrolls when a long call runs past the
-# modal height.
+# Pan/zoom canvas (Figma-style): the drawable (lifeline lines + arrows +
+# media) lives in a transformable <g data-call-flow-target="canvas"> that
+# call_flow_controller pans (drag/scroll) and zooms (⌘/ctrl+scroll) via a
+# matrix — SVG stays crisp at any scale. The lifeline IP headers are an HTML
+# overlay (data-call-flow-target="headerBar") pinned to the top and kept at a
+# fixed, readable size (so they don't shrink to nothing when zoomed out to fit
+# many SBC columns); the controller repositions them to x = tx + col_x*k.
+#
+# The SVG fills its container; the controller sets the viewBox to the
+# container's pixel size so 1 user unit == 1 CSS px (header math lines up).
+# The modal is JS-injected, so there's no no-JS path to preserve.
 class Components::Hep3::CallFlow < Components::Base
   GUTTER = 60      # left band for ts labels
   MARGIN = 46      # gutter/edge → first/last lifeline
@@ -42,14 +50,17 @@ class Components::Hep3::CallFlow < Components::Base
 
   def view_template
     svg(
-      width: width, height: height,
+      class: "block w-full h-full",
       viewBox: "0 0 #{width} #{height}",
-      class: "block mx-auto",
+      preserveAspectRatio: "xMinYMin meet",
+      data: {call_flow_target: "svg", cf_width: width, cf_height: height},
       xmlns: "http://www.w3.org/2000/svg"
     ) do |s|
-      render_lifelines(s)
-      messages.each { |m| render_message(s, m) }
-      inline_media.each_with_index { |stream, i| render_media_row(s, stream, messages.size + i) }
+      s.g(data: {call_flow_target: "canvas"}) do |canvas|
+        render_lifelines(canvas)
+        messages.each { |m| render_message(canvas, m) }
+        inline_media.each_with_index { |stream, i| render_media_row(canvas, stream, messages.size + i) }
+      end
     end
   end
 
@@ -94,7 +105,9 @@ class Components::Hep3::CallFlow < Components::Base
     HEADER_H + TOP + (index * ROW_H) + (ROW_H * 0.6)
   end
 
-  # render_lifelines — the vertical party lines + their IP headers at top.
+  # render_lifelines — the vertical party lines + their IP header boxes, drawn
+  # INSIDE the transformed canvas group so they pan AND scale with the flow
+  # (same size as the diagram at any zoom — no fixed-size overlay).
   def render_lifelines(s)
     lifelines.each_with_index do |ip, i|
       x = col_x(i)
@@ -105,15 +118,14 @@ class Components::Hep3::CallFlow < Components::Base
       )
 
       s.rect(
-        x: x - (col_gap.positive? ? [col_gap / 2 - 6, 70].min : 70), y: 10,
+        x: x - (col_gap.positive? ? [col_gap / 2 - 6, 70].min : 70), y: 8,
         width: (col_gap.positive? ? [col_gap - 12, 140].min : 140), height: 24,
         rx: "3", fill: "var(--voodu-surface-2)", stroke: "var(--voodu-border)", "stroke-width": "1"
       )
 
       s.text(
-        x: x, y: 26, "text-anchor": "middle",
-        "font-size": "11", "font-family": "var(--voodu-font-mono, ui-monospace, monospace)",
-        fill: "var(--voodu-text)"
+        x: x, y: 24, "text-anchor": "middle",
+        "font-size": "11", "font-family": MONO, fill: "var(--voodu-text)"
       ) { ip }
     end
   end
@@ -128,7 +140,7 @@ class Components::Hep3::CallFlow < Components::Base
     s.g(
       class: "call-flow-arrow",
       style: "cursor: pointer;",
-      data: {call_flow_target: "arrow", index: m[:index], action: "click->call-flow#select"}
+      data: {call_flow_target: "arrow", index: m[:index], cf_y: y.round, action: "click->call-flow#select"}
     ) do |g|
       g.rect(
         x: 0, y: y - (ROW_H * 0.6), width: width, height: ROW_H,

@@ -15,16 +15,22 @@ import { Controller } from "@hotwired/stimulus"
 // Selection tint uses inline style.fill (a `fill` presentation attribute
 // won't parse the CSS var).
 export default class extends Controller {
-  static targets = ["arrow", "rawLabel", "rawMeta", "rawBody", "ladder", "rawPanel", "content", "reopen", "resizeHandle", "chevron", "mediaBody", "mediaChevron"]
+  static targets = ["arrow", "rawLabel", "rawMeta", "rawBody", "ladder", "rawPanel", "content", "reopen", "resizeHandle", "chevron", "mediaBody", "mediaChevron", "svg", "canvas"]
   static values = { messages: Array, focus: Number, scope: String, name: String, corr: String }
 
   STORE_W = "voodu:cf:rawwidth"
   STORE_COLLAPSED = "voodu:cf:collapsed"
   MIN_W = 260
+  MIN_K = 0.25
+  MAX_K = 4
 
   connect() {
     this.currentIndex = this.focusValue || 0
     this.mouseInLadder = false
+    // pan/zoom state: content group transform = matrix(k,0,0,k,tx,ty).
+    this.tx = 0
+    this.ty = 0
+    this.k = 1
     this.onKey = this.onKey.bind(this)
     this.onResize = this.onResize.bind(this)
     document.addEventListener("keydown", this.onKey)
@@ -32,35 +38,208 @@ export default class extends Controller {
 
     this.restorePanel()
     this.selectIndex(this.currentIndex)
-    requestAnimationFrame(() => {
-      this.scrollIndexIntoView(this.currentIndex)
-      // Land focus on the diagram (not the modal's close button, which the
-      // shared modal_controller would otherwise grab) so ↑/↓ work at once.
-      if (this.hasLadderTarget) this.ladderTarget.focus({ preventScroll: true })
-    })
+
+    // The modal is freshly injected — its layout may not be settled on the
+    // first frame (and rAF timing is flaky here). A ResizeObserver fires the
+    // moment the ladder actually gets a size, so fit-on-open is reliable; it
+    // also doubles as the canvas resize handler.
+    this.fitted = false
+    // The modal is freshly injected: the ladder target + its layout can lag a
+    // few frames behind connect(). Poll until it's real, then observe (for
+    // resize) and fit. Robust to whatever timing the injection lands with.
+    this.setupCanvas()
+  }
+
+  setupCanvas(tries = 0) {
+    if (!this.hasLadderTarget || this.ladderTarget.getBoundingClientRect().width === 0) {
+      if (tries < 40) setTimeout(() => this.setupCanvas(tries + 1), 25)
+
+      return
+    }
+
+    if (!this.ro) {
+      this.ro = new ResizeObserver(() => this.onLadderResize())
+      this.ro.observe(this.ladderTarget)
+    }
+
+    this.onLadderResize()
+  }
+
+  onLadderResize() {
+    this.setViewport()
+
+    if (!this.cw) return
+
+    if (this.fitted) {
+      // keep pan/zoom, just resync headers + viewBox
+      this.applyTransform()
+
+      return
+    }
+
+    this.fitted = true
+    this.fitToView()
+    // If opened focused on a specific message, bring it into view (else the
+    // fit is top-aligned, which is what you want for the call's start).
+    if (this.currentIndex > 0) this.panIndexIntoView(this.currentIndex)
+    // Land focus on the diagram (not the modal's close button, which the
+    // shared modal_controller would otherwise grab) so ↑/↓ work at once.
+    if (this.hasLadderTarget) this.ladderTarget.focus({ preventScroll: true })
   }
 
   disconnect() {
     document.removeEventListener("keydown", this.onKey)
     window.removeEventListener("resize", this.onResize)
+    this.ro?.disconnect()
   }
 
-  // onResize — keep the raw panel width sane as the window changes live: in
-  // row re-clamp a dragged width (no-op if none saved — the CSS clamp() adapts
-  // on its own); dropping to column clears the inline width so it goes full.
+  // onResize — keep the raw panel width sane as the window changes live, and
+  // resync the canvas viewport (the SVG viewBox tracks the container px so the
+  // header math lines up). Keeps the current pan/zoom (no jarring re-fit).
   onResize() {
-    if (!this.hasRawPanelTarget || this.collapsed) return
-
-    if (this.isWide()) {
-      this.applySavedWidth()
-    } else {
-      this.rawPanelTarget.style.width = ""
+    if (this.hasRawPanelTarget && !this.collapsed) {
+      if (this.isWide()) this.applySavedWidth()
+      else this.rawPanelTarget.style.width = ""
     }
+
+    this.setViewport()
+    this.applyTransform()
+  }
+
+  // ── pan / zoom canvas ─────────────────────────────────────────────
+
+  // setViewport — the SVG fills the container; make 1 user unit == 1 CSS px so
+  // the HTML header chips can be placed at tx + col_x*k.
+  setViewport() {
+    if (!this.hasLadderTarget) return
+
+    const r = this.ladderTarget.getBoundingClientRect()
+
+    this.cw = r.width
+    this.ch = r.height
+    if (this.hasSvgTarget) this.svgTarget.setAttribute("viewBox", `0 0 ${this.cw} ${this.ch}`)
+  }
+
+  natW() {
+    return this.hasSvgTarget ? Number(this.svgTarget.dataset.cfWidth) : 0
+  }
+
+  natH() {
+    return this.hasSvgTarget ? Number(this.svgTarget.dataset.cfHeight) : 0
+  }
+
+  // fitToView — fit the diagram to the container WIDTH (so every SBC column is
+  // visible), top-aligned below the header bar; pan vertically for time. Caps
+  // the scale so a short/narrow call isn't blown up.
+  fitToView() {
+    this.setViewport()
+
+    const w = this.natW()
+
+    if (!w || !this.cw) return
+
+    const padX = 20
+    // small top margin; the labels ride with the block now, no fixed band
+    const top = 12
+
+    this.k = Math.min(Math.max((this.cw - padX * 2) / w, this.MIN_K), 1.25)
+    this.tx = Math.max(padX, (this.cw - w * this.k) / 2)
+    this.ty = top
+    this.applyTransform()
+  }
+
+  applyTransform() {
+    if (this.hasCanvasTarget) {
+      this.canvasTarget.setAttribute("transform", `matrix(${this.k},0,0,${this.k},${this.tx},${this.ty})`)
+    }
+  }
+
+  panStart(event) {
+    if (event.button !== 0) return
+
+    this.setViewport()
+    this.panning = true
+    this.moved = 0
+
+    const startX = event.clientX
+    const startY = event.clientY
+    const startTx = this.tx
+    const startTy = this.ty
+
+    this.ladderTarget.style.cursor = "grabbing"
+
+    const onMove = (e) => {
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+
+      this.moved = Math.max(this.moved, Math.abs(dx) + Math.abs(dy))
+      this.tx = startTx + dx
+      this.ty = startTy + dy
+      this.applyTransform()
+    }
+
+    const onUp = () => {
+      document.removeEventListener("pointermove", onMove)
+      document.removeEventListener("pointerup", onUp)
+      this.panning = false
+      this.ladderTarget.style.cursor = ""
+
+      // A real drag (not a click) must not also select an arrow underneath.
+      if (this.moved > 4) {
+        this.justDragged = true
+        setTimeout(() => { this.justDragged = false }, 0)
+      }
+    }
+
+    document.addEventListener("pointermove", onMove)
+    document.addEventListener("pointerup", onUp)
+  }
+
+  onWheel(event) {
+    event.preventDefault()
+    this.setViewport()
+
+    if (event.ctrlKey || event.metaKey) {
+      const r = this.ladderTarget.getBoundingClientRect()
+
+      this.zoomAround(event.clientX - r.left, event.clientY - r.top, Math.exp(-event.deltaY * 0.0015))
+    } else {
+      this.tx -= event.deltaX
+      this.ty -= event.deltaY
+      this.applyTransform()
+    }
+  }
+
+  // zoomAround — scale keeping the point (cx,cy) in container px fixed.
+  zoomAround(cx, cy, factor) {
+    const newK = Math.min(this.MAX_K, Math.max(this.MIN_K, this.k * factor))
+
+    this.tx = cx - (cx - this.tx) * (newK / this.k)
+    this.ty = cy - (cy - this.ty) * (newK / this.k)
+    this.k = newK
+    this.applyTransform()
+  }
+
+  zoomIn() {
+    this.setViewport()
+    this.zoomAround(this.cw / 2, this.ch / 2, 1.2)
+  }
+
+  zoomOut() {
+    this.setViewport()
+    this.zoomAround(this.cw / 2, this.ch / 2, 1 / 1.2)
+  }
+
+  fit() {
+    this.fitToView()
   }
 
   // ── selection ─────────────────────────────────────────────────────
 
   select(event) {
+    // A pan (drag) ends in a click on the arrow underneath — don't select it.
+    if (this.justDragged) return
+
     this.selectIndex(Number(event.currentTarget.dataset.index))
   }
 
@@ -136,19 +315,18 @@ export default class extends Controller {
     const next = Math.max(0, Math.min(last, this.currentIndex + delta))
 
     this.selectIndex(next)
-    this.scrollIndexIntoView(next)
+    this.panIndexIntoView(next)
   }
 
-  scrollIndexIntoView(i) {
-    if (!this.hasLadderTarget) return
-
+  // panIndexIntoView — vertically pan (keeping zoom + horizontal pan) so the
+  // arrow at index i is centred. Uses the arrow's natural y (data-cf-y).
+  panIndexIntoView(i) {
     const g = this.arrowTargets.find((a) => Number(a.dataset.index) === i)
 
-    if (!g) return
+    if (!g || !this.ch) return
 
-    const y = g.getBoundingClientRect().top - this.ladderTarget.getBoundingClientRect().top + this.ladderTarget.scrollTop
-
-    this.ladderTarget.scrollTop = Math.max(0, y - this.ladderTarget.clientHeight / 2)
+    this.ty = this.ch / 2 - Number(g.dataset.cfY) * this.k
+    this.applyTransform()
   }
 
   // ── refresh (re-fetch this call in place) ─────────────────────────
