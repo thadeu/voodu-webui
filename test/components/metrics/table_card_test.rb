@@ -61,6 +61,26 @@ class Components::Metrics::TableCardTest < ActiveSupport::TestCase
     assert_includes html, "data-data-table-target=\"live\""
   end
 
+  ROW_ACTION = {key: "corr_id", event: "callflow", title: "Open call-flow", icon: "ArrowsRightLeftOutline"}.freeze
+
+  test "a row_action wires the drill-down values + ships the icon in a template" do
+    html = render_card(row_action: ROW_ACTION)
+
+    assert_includes html, 'data-data-table-row-action-key-value="corr_id"'
+    assert_includes html, 'data-data-table-row-action-event-value="callflow"'
+    assert_includes html, 'data-data-table-row-action-title-value="Open call-flow"'
+    assert_includes html, 'data-data-table-target="rowActionIcon"'
+    assert_includes html, "<template", "the icon rides in a <template> the controller clones per row"
+    assert_includes html, "<svg", "the Heroicon is rendered into the template"
+  end
+
+  test "no row_action (e.g. logs source) renders no action wiring" do
+    html = render_card(row_action: nil)
+
+    assert_not_includes html, "row-action-key-value"
+    assert_not_includes html, 'data-data-table-target="rowActionIcon"'
+  end
+
   test "carries the grid wiring + a stable id, and is NOT turbo-permanent" do
     html = render_card
 

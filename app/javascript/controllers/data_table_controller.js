@@ -13,7 +13,7 @@ import { Controller } from "@hotwired/stimulus"
 // sorting only reorders a render-time copy, so the id cursors stay valid:
 //   newest = rows[0].id (poll since_id) · oldest = rows[last].id (before_id)
 export default class extends Controller {
-  static targets = ["viewport", "status", "colToggle", "query", "live", "liveDot"]
+  static targets = ["viewport", "status", "colToggle", "query", "live", "liveDot", "rowActionIcon"]
 
   static values = {
     url: String,
@@ -27,10 +27,17 @@ export default class extends Controller {
     range: String,
     from: String,
     until: String,
+    // rowAction — an optional per-row drill-down declared by the source. When
+    // set, a leading icon cell dispatches `datatable:rowaction` carrying the
+    // row's `key` value for a page host to act on (hep3 → call-flow).
+    rowActionKey: String,
+    rowActionEvent: String,
+    rowActionTitle: String,
   }
 
   POLL_MS = 5000
   MAX_ROWS = 2000
+  ACTION_COL_W = 34
 
   connect() {
     this.rows = []
@@ -403,6 +410,13 @@ export default class extends Controller {
 
     const colgroup = document.createElement("colgroup")
 
+    if (this.hasRowAction()) {
+      const ac = document.createElement("col")
+
+      ac.style.width = `${this.ACTION_COL_W}px`
+      colgroup.appendChild(ac)
+    }
+
     columns.forEach((col) => {
       const c = document.createElement("col")
 
@@ -424,24 +438,30 @@ export default class extends Controller {
   // column's natural width (clamped) and switch to fixed layout so the
   // columns are resizable from a sensible baseline.
   captureColWidths(table, columns) {
+    // The action column (when present) is the leading th/col, so the data
+    // columns start one slot in — offset every measurement by it.
+    const off = this.hasRowAction() ? 1 : 0
     const ths = table.querySelectorAll("thead th")
     const cols = table.querySelectorAll("colgroup col")
 
     columns.forEach((col, i) => {
-      if (!this.colWidths[col] && ths[i]) {
-        this.colWidths[col] = Math.min(420, Math.max(60, Math.round(ths[i].offsetWidth)))
+      if (!this.colWidths[col] && ths[i + off]) {
+        this.colWidths[col] = Math.min(420, Math.max(60, Math.round(ths[i + off].offsetWidth)))
       }
     })
 
     table.style.tableLayout = "fixed"
-    columns.forEach((col, i) => { if (cols[i]) cols[i].style.width = `${this.colWidths[col]}px` })
+    columns.forEach((col, i) => { if (cols[i + off]) cols[i + off].style.width = `${this.colWidths[col]}px` })
     table.style.width = `${this.tableWidth(columns)}px`
   }
 
-  // tableWidth — the sum of the visible columns' widths (px). Feeds the
-  // table's explicit width so fixed layout honours each <col>.
+  // tableWidth — the sum of the visible columns' widths (px), plus the fixed
+  // action column when present. Feeds the table's explicit width so fixed
+  // layout honours each <col>.
   tableWidth(columns) {
-    return (columns || this.visibleColumns()).reduce((sum, c) => sum + (this.colWidths[c] || 120), 0)
+    const base = (columns || this.visibleColumns()).reduce((sum, c) => sum + (this.colWidths[c] || 120), 0)
+
+    return base + (this.hasRowAction() ? this.ACTION_COL_W : 0)
   }
 
   sortedRows() {
@@ -466,6 +486,14 @@ export default class extends Controller {
   buildHead(columns) {
     const thead = document.createElement("thead")
     const tr = document.createElement("tr")
+    const off = this.hasRowAction() ? 1 : 0
+
+    if (off) {
+      const th = document.createElement("th")
+
+      th.className = "sticky top-0 z-10 bg-voodu-surface-2 border-b border-voodu-border"
+      tr.appendChild(th)
+    }
 
     columns.forEach((col, i) => {
       const th = document.createElement("th")
@@ -485,7 +513,7 @@ export default class extends Controller {
       const handle = document.createElement("div")
 
       handle.className = "absolute top-0 right-0 h-full w-[7px] cursor-col-resize hover:bg-voodu-accent-line/60"
-      handle.addEventListener("pointerdown", (e) => this.startColResize(e, col, i))
+      handle.addEventListener("pointerdown", (e) => this.startColResize(e, col, i + off))
       handle.addEventListener("click", (e) => e.stopPropagation())
       th.appendChild(handle)
 
@@ -511,6 +539,8 @@ export default class extends Controller {
 
       tr.className = "border-b border-voodu-border/40 hover:bg-voodu-hover"
 
+      if (this.hasRowAction()) tr.appendChild(this.actionCell(row))
+
       columns.forEach((col) => {
         const td = document.createElement("td")
         const value = row[col]
@@ -526,6 +556,69 @@ export default class extends Controller {
     })
 
     return tbody
+  }
+
+  // ── row action (per-row drill-down) ───────────────────────────────
+
+  hasRowAction() {
+    return Boolean(this.rowActionKeyValue && this.rowActionEventValue)
+  }
+
+  // actionCell — the leading icon cell. The button clones the icon from the
+  // server-rendered <template> and carries the row's key value (e.g.
+  // corr_id); clicking dispatches `datatable:rowaction`. A row missing the
+  // key gets an empty cell (keeps the column aligned).
+  actionCell(row) {
+    const td = document.createElement("td")
+
+    td.className = "px-1 py-0.5 text-center align-middle"
+
+    const value = row[this.rowActionKeyValue]
+
+    if (!value) return td
+
+    const btn = document.createElement("button")
+
+    btn.type = "button"
+    btn.className =
+      "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 rounded-voodu-sm"
+    btn.title = this.rowActionTitleValue || ""
+    btn.setAttribute("aria-label", this.rowActionTitleValue || "Open")
+    btn.dataset.value = value
+    // The row's own id (message id for message views) lets the drill-down
+    // pre-select THIS row's message, not just the call's first.
+    if (row.id != null) btn.dataset.rowId = row.id
+
+    if (this.hasRowActionIconTarget) btn.innerHTML = this.rowActionIconTarget.innerHTML
+
+    btn.addEventListener("click", (e) => this.onRowAction(e))
+    td.appendChild(btn)
+
+    return td
+  }
+
+  onRowAction(event) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const value = event.currentTarget.dataset.value
+
+    if (!value) return
+
+    // window-level so a page host anywhere in the DOM (outside the polling
+    // frame) catches it — mirrors the Logs "surrounding" fetch→inject.
+    window.dispatchEvent(new CustomEvent("datatable:rowaction", {
+      detail: {
+        event: this.rowActionEventValue,
+        key: this.rowActionKeyValue,
+        value,
+        rowId: event.currentTarget.dataset.rowId,
+        source: this.sourceValue,
+        scope: this.scopeValue,
+        name: this.nameValue,
+        view: this.viewValue,
+      },
+    }))
   }
 
   showStatus(message) {

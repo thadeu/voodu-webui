@@ -156,6 +156,11 @@ Rails.application.routes.draw do
     get "/metrics/datatable/:source/rows", to: "datatable#rows", as: :metrics_datatable_rows,
       constraints: {source: /[a-z0-9_]+/}
 
+    # HEP3 call-flow ladder — drill-down off a DataTable (hep3) row. Returns
+    # the overlay fragment injected by the page host (mirrors #surrounding).
+    # corr_id/scope/name ride in the query string (a SIP Call-ID has @ and .).
+    get "/metrics/hep3/call", to: "hep3#call", as: :metrics_hep3_call
+
     # Saved metric dashboards — named multi-panel views the operator
     # builds in the right-drawer builder. `show` is omitted: a dashboard
     # is "viewed" via /metrics?dashboard=<id> (the existing metrics page

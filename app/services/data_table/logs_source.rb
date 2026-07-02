@@ -60,6 +60,11 @@ module DataTable
 
     def default_view = DEFAULT_VIEW
 
+    # row_action — logs rows have no drill-down (yet); the DataTable renders
+    # no action column. Part of the Registry contract so every source
+    # answers it explicitly.
+    def row_action = nil
+
     def fields(view: DEFAULT_VIEW) = FIELDS
 
     def default_fields(view: DEFAULT_VIEW) = DEFAULT_FIELDS

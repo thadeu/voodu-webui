@@ -35,6 +35,16 @@ class Views::Metrics::Index < Views::Base
     # this modal's slots (chart-modal-title / chart-modal-body) +
     # the chart_modal_open custom action.
     render Components::Metrics::ChartModal.new if @current_island
+
+    # Call-flow overlay host — rendered ONCE outside the polling frame (like
+    # ChartModal) so an open SIP ladder survives a broadcast-tick reload. The
+    # DataTable's per-row call-flow icon fetches into it. Gated: only when the
+    # island has voodu-hep3 (else the listener is dead weight).
+    if @current_island&.plugin_installed?("hep3")
+      render Components::Hep3::CallFlowHost.new(
+        call_url: metrics_hep3_call_path(tenant_key: @current_island.key)
+      )
+    end
   end
 
   private
@@ -874,6 +884,7 @@ class Views::Metrics::Index < Views::Base
       rows_url: metrics_datatable_rows_path(source: c[:source]),
       metric: c[:panel_key],
       default_visible: c.fetch(:default_visible, true),
+      row_action: c[:row_action],
       **table_window
     )
   end

@@ -47,6 +47,18 @@ class HepMessageTest < ActiveSupport::TestCase
       "ladder order follows ts, not insertion order"
   end
 
+  test "for_call orders by SUB-SECOND ts, not arrival id, when ts_epoch ties" do
+    # A whole dialog lands in the same second. The 100 Trying is INSERTED
+    # first (lower id) but happened AFTER the INVITE in microseconds — the
+    # ladder must still start at the INVITE. ts_epoch (seconds) would tie and
+    # fall back to id, drawing the 100 first (the bug this pins).
+    insert(call_id: "d", x_cid: "z", method: "", code: 100, ts: "2026-06-30 10:00:01.500000")
+    insert(call_id: "d", x_cid: "z", method: "INVITE", code: 0, ts: "2026-06-30 10:00:01.100000")
+
+    assert_equal ["INVITE", ""], for_call("z").map(&:sip_method),
+      "same second → earlier microsecond ts wins over later arrival id"
+  end
+
   test "a `like /re/` filter runs through SQLite REGEXP — anchors work, registered lazily (no initializer)" do
     {"12997297095" => "a", "551125019444" => "b", "998877" => "c"}.each do |from_user, cid|
       line = {ts: "2026-06-30 10:00:00.000000", call_id: cid, from_user: from_user, method: "INVITE"}.to_json

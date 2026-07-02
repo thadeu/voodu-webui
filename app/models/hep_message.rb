@@ -128,9 +128,15 @@ class HepMessage < HepRecord
   # for_call — every message of one call (by the correlation key), in
   # chronological order. Backs the call-flow ladder. corr_id already
   # folds x_cid → call_id, so this joins B2BUA legs that share an x_cid.
+  #
+  # Orders by `ts` (the full MICROSECOND timestamp), NOT `ts_epoch` (which
+  # is truncated to seconds): a whole SIP dialog lands in the same second,
+  # so ts_epoch ties and the fallback to arrival `id` reorders the ladder
+  # (a 100 Trying that the poller inserted before its INVITE would render
+  # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
   scope :for_call, ->(tenant_id:, scope:, name:, corr_id:) {
     for_instance(tenant_id: tenant_id, scope: scope, name: name)
-      .where(corr_id: corr_id).order(:ts_epoch, :id)
+      .where(corr_id: corr_id).order(:ts, :id)
   }
 
   # payload_json — parsed view of the raw NDJSON line, for single-row

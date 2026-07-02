@@ -20,7 +20,7 @@
 class Components::Metrics::TableCard < Components::Base
   def initialize(label:, color:, source:, scope:, name:, view:, rows_url:,
     fields: [], default_fields: [], filter_query: "", metric: nil, default_visible: true,
-    range: "1h", window_from: nil, window_until: nil)
+    row_action: nil, range: "1h", window_from: nil, window_until: nil)
     @label = label
     @color = color
     @source = source
@@ -33,6 +33,10 @@ class Components::Metrics::TableCard < Components::Base
     @filter_query = filter_query.to_s
     @metric = metric
     @default_visible = default_visible
+    # row_action — optional per-row drill-down declared by the source
+    # ({key:, event:, title:, icon:}). Renders a leading icon cell that
+    # dispatches `datatable:rowaction` for a page host to act on.
+    @row_action = row_action
     # range/window — the page's time picker, so the table honours the same
     # window as the charts (relative token, or the custom from/until span).
     @range = range.to_s
@@ -74,6 +78,15 @@ class Components::Metrics::TableCard < Components::Base
     @metric ? "dt-#{@metric}" : nil
   end
 
+  # row_action_icon_template — the drill-down icon, rendered once as a
+  # <template> the data_table controller clones into each row's action
+  # cell. A <template> ships SVG markup to JS without attribute-encoding it.
+  def row_action_icon_template
+    template(data: {data_table_target: "rowActionIcon"}) do
+      render Icon.const_get(@row_action[:icon]).new(class: "w-3.5 h-3.5")
+    end
+  end
+
   def card_header
     div(class: "flex items-start justify-between gap-2 min-w-0") do
       span(
@@ -102,10 +115,14 @@ class Components::Metrics::TableCard < Components::Base
         data_table_key_value: @metric.to_s,
         data_table_range_value: @range,
         data_table_from_value: @window_from,
-        data_table_until_value: @window_until
+        data_table_until_value: @window_until,
+        data_table_row_action_key_value: @row_action&.dig(:key),
+        data_table_row_action_event_value: @row_action&.dig(:event),
+        data_table_row_action_title_value: @row_action&.dig(:title)
       }.compact,
       class: "flex flex-col gap-2 min-w-0"
     ) do
+      row_action_icon_template if @row_action
       toolbar
       div(
         data: {data_table_target: "viewport", action: "scroll->data-table#onScroll"},

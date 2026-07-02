@@ -339,6 +339,9 @@ class MetricDashboardData
       # Optional config-time pre-filter (DataTable DSL). The table opens
       # already filtered; the toolbar query is seeded from it.
       filter_query: panel["filter_query"].to_s,
+      # row_action — the source's per-row drill-down (hep3 → call-flow;
+      # nil for logs). Rendered as a leading icon by the DataTable.
+      row_action: (source.respond_to?(:row_action) ? source.row_action : nil),
       default_visible: true,
       panel_key: key
     }

@@ -194,6 +194,7 @@ class Views::Metrics::Frame < Views::Base
       rows_url: metrics_datatable_rows_path(source: c[:source]),
       metric: c[:panel_key],
       default_visible: c.fetch(:default_visible, true),
+      row_action: c[:row_action],
       **table_window
     )
   end

@@ -83,6 +83,15 @@ module DataTable
 
     def default_view = DEFAULT_VIEW
 
+    # row_action — the per-row drill-down the DataTable renders as a leading
+    # icon: opens the SIP call-flow ladder for the row's corr_id (works in
+    # every view — messages/calls/errors all carry corr_id). `key` is the
+    # row field the value comes from; `event` is the CustomEvent the page
+    # host listens for; `icon` is the Heroicon const the cell shows.
+    def row_action
+      {key: "corr_id", event: "callflow", title: "Open call-flow", icon: "ArrowsRightLeftOutline"}
+    end
+
     def fields(view: DEFAULT_VIEW)
       self.class.fields_for(view)
     end
