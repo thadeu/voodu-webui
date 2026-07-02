@@ -1,5 +1,11 @@
 import { Controller } from "@hotwired/stimulus"
 
+// panStash — carries the canvas pan/zoom across an in-place Refresh (which
+// re-injects the modal → a fresh controller). Module-scoped so it survives the
+// old controller disconnecting and the new one connecting. A fresh open / F5
+// reloads the module → null → fits normally.
+let panStash = null
+
 // call-flow — companion to Components::Hep3::CallFlowModal.
 //
 // Jobs:
@@ -51,8 +57,13 @@ export default class extends Controller {
   }
 
   setupCanvas(tries = 0) {
-    if (!this.hasLadderTarget || this.ladderTarget.getBoundingClientRect().width === 0) {
-      if (tries < 40) setTimeout(() => this.setupCanvas(tries + 1), 25)
+    // Wait only for the ladder ELEMENT to exist (fast), then observe it. The
+    // ResizeObserver fires whenever it actually gets a size — no time limit —
+    // so fit happens however late the injected layout settles (fresh open OR
+    // re-inject on Refresh). Gating setup on width>0 could time out and never
+    // observe; this doesn't.
+    if (!this.hasLadderTarget) {
+      if (tries < 60) setTimeout(() => this.setupCanvas(tries + 1), 25)
 
       return
     }
@@ -78,10 +89,21 @@ export default class extends Controller {
     }
 
     this.fitted = true
-    this.fitToView()
-    // If opened focused on a specific message, bring it into view (else the
-    // fit is top-aligned, which is what you want for the call's start).
-    if (this.currentIndex > 0) this.panIndexIntoView(this.currentIndex)
+
+    if (panStash && panStash.corr === this.corrValue && Date.now() - panStash.ts < 5000) {
+      // in-place Refresh: keep the pan/zoom the operator had.
+      this.tx = panStash.tx
+      this.ty = panStash.ty
+      this.k = panStash.k
+      panStash = null
+      this.applyTransform()
+    } else {
+      this.fitToView()
+      // If opened focused on a specific message, bring it into view (else the
+      // fit is top-aligned, which is what you want for the call's start).
+      if (this.currentIndex > 0) this.panIndexIntoView(this.currentIndex)
+    }
+
     // Land focus on the diagram (not the modal's close button, which the
     // shared modal_controller would otherwise grab) so ↑/↓ work at once.
     if (this.hasLadderTarget) this.ladderTarget.focus({ preventScroll: true })
@@ -314,8 +336,9 @@ export default class extends Controller {
 
     const next = Math.max(0, Math.min(last, this.currentIndex + delta))
 
+    // Keyboard just SELECTS (highlight + raw panel); it must not move the
+    // canvas — the operator pans/zooms themselves.
     this.selectIndex(next)
-    this.panIndexIntoView(next)
   }
 
   // panIndexIntoView — vertically pan (keeping zoom + horizontal pan) so the
@@ -333,6 +356,10 @@ export default class extends Controller {
 
   refresh() {
     const cur = this.messagesValue[this.currentIndex]
+
+    // Stash the pan/zoom so the re-injected modal restores it instead of
+    // re-fitting (watching a live call shouldn't reset your view).
+    panStash = { corr: this.corrValue, tx: this.tx, ty: this.ty, k: this.k, ts: Date.now() }
 
     // Re-dispatch to the page host, which re-fetches + re-injects. Passing the
     // current message id as focus keeps the selection across the refresh.
