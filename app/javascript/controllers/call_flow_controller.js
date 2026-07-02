@@ -150,23 +150,29 @@ export default class extends Controller {
     return this.hasSvgTarget ? Number(this.svgTarget.dataset.cfHeight) : 0
   }
 
-  // fitToView — fit the diagram to the container WIDTH (so every SBC column is
-  // visible), top-aligned below the header bar; pan vertically for time. Caps
-  // the scale so a short/narrow call isn't blown up.
+  // fitToView — fit the WHOLE diagram (width AND height, like object-fit:
+  // contain) so a call opens fully visible instead of width-filled and clipped
+  // tall — the operator had to zoom out on every open. The smaller of the two
+  // scales binds; floor at MIN_K (a very long call stays pannable) and cap at
+  // 1.25 so a short call isn't blown up. Centred when it fits; when the content
+  // still overflows (a long call at MIN_K) it pins to the top-left pad, so the
+  // call starts at the INVITE.
   fitToView() {
     this.setViewport()
 
     const w = this.natW()
+    const h = this.natH()
 
-    if (!w || !this.cw) return
+    if (!w || !h || !this.cw || !this.ch) return
 
     const padX = 20
-    // small top margin; the labels ride with the block now, no fixed band
-    const top = 12
+    const padY = 16
 
-    this.k = Math.min(Math.max((this.cw - padX * 2) / w, this.MIN_K), 1.25)
+    const kFit = Math.min((this.cw - padX * 2) / w, (this.ch - padY * 2) / h)
+
+    this.k = Math.min(Math.max(kFit, this.MIN_K), 1.25)
     this.tx = Math.max(padX, (this.cw - w * this.k) / 2)
-    this.ty = top
+    this.ty = Math.max(padY, (this.ch - h * this.k) / 2)
     this.applyTransform()
   }
 

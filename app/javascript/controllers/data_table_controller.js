@@ -374,6 +374,58 @@ export default class extends Controller {
     }
   }
 
+  // autoFitColumn — double-click the resize handle to size a column to its
+  // content (spreadsheet "auto-fit"): the widest of the header label + every
+  // loaded cell, plus padding. Applied + persisted the same way a drag is.
+  autoFitColumn(col, index) {
+    const table = this.viewportTarget.querySelector("table")
+
+    if (!table) return
+
+    table.style.tableLayout = "fixed"
+
+    const colEl = table.querySelectorAll("colgroup col")[index]
+    const w = this.measureColumnWidth(table, index)
+
+    this.colWidths[col] = w
+    if (colEl) colEl.style.width = `${w}px`
+    table.style.width = `${this.tableWidth()}px`
+    this.persistColWidths()
+  }
+
+  // measureColumnWidth — the natural px width for the column at `index`: the
+  // widest rendered text across the header label + every body cell, measured
+  // with each element's OWN font (the header is uppercase/tracked, the body a
+  // plain cell), plus padding. Clamped to [60, 640] so a single very long
+  // value can't blow the table out — generously, since the operator asked to
+  // see it. Only the loaded rows are measured, so it stays instant.
+  measureColumnWidth(table, index) {
+    const th = table.querySelectorAll("thead th")[index]
+    const label = th && th.querySelector("span")
+    const cells = table.querySelectorAll(`tbody tr td:nth-child(${index + 1})`)
+    const pad = 22
+
+    let max = 0
+
+    if (label && label.textContent) max = this.textWidth(label.textContent, label)
+    cells.forEach((td) => {
+      if (td.textContent) max = Math.max(max, this.textWidth(td.textContent, td))
+    })
+
+    return Math.min(640, Math.max(60, Math.ceil(max + pad)))
+  }
+
+  // textWidth — width of `text` in `el`'s computed font via a shared canvas 2D
+  // context. Exact per-element font, no DOM reflow.
+  textWidth(text, el) {
+    this.measureCtx ||= document.createElement("canvas").getContext("2d")
+    const cs = getComputedStyle(el)
+
+    this.measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+
+    return this.measureCtx.measureText(text).width
+  }
+
   // ── render ────────────────────────────────────────────────────────
 
   render() {
@@ -513,7 +565,9 @@ export default class extends Controller {
       const handle = document.createElement("div")
 
       handle.className = "absolute top-0 right-0 h-full w-[7px] cursor-col-resize hover:bg-voodu-accent-line/60"
+      handle.title = "Drag to resize · double-click to fit"
       handle.addEventListener("pointerdown", (e) => this.startColResize(e, col, i + off))
+      handle.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopPropagation(); this.autoFitColumn(col, i + off) })
       handle.addEventListener("click", (e) => e.stopPropagation())
       th.appendChild(handle)
 
