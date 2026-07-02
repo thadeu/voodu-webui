@@ -27,6 +27,17 @@ class Views::LogsAnalytics::Index < Views::Base
         render Components::UI::NoIslandState.new
       else
         render Components::LogAnalytics::Page.new(data: @data, pods: @pods)
+
+        # Call-flow overlay host — the Logs→HEP3 bridge. Rendered once at the
+        # page level (sibling of the log-analytics root) so the per-row chip's
+        # `callflow` row-action has a host to inject the SIP ladder into. Same
+        # placement + gating as Metrics; only when the island runs voodu-hep3
+        # (else the chip never renders and this listener is dead weight).
+        if @current_island.plugin_installed?("hep3")
+          render Components::Hep3::CallFlowHost.new(
+            call_url: metrics_hep3_call_path(tenant_key: @current_island.key)
+          )
+        end
       end
     end
   end

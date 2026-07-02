@@ -302,13 +302,36 @@ export default class extends Controller {
     hidden.value = isNaN(d.getTime()) ? "" : d.toISOString()
   }
 
-  // clear — wipe the current results buffer (rows + summary) so the
-  // operator can tweak the filter and Run fresh. Client-side only; the
-  // filter inputs are left intact, and the next Run re-renders the
-  // frame from the server.
+  // clear — wipe the current results (rows + load-more + empty state) so the
+  // operator can tweak the filter and Run fresh. Client-side only; the filter
+  // inputs are left intact, and the next Run re-renders the frame from the
+  // server.
+  //
+  // Keep the sticky column header (`.log-header`): it carries BOTH the TIME/
+  // POD/MESSAGE labels AND the results toolbar — Refresh, filter, columns,
+  // Export, and Clear ITSELF. Wiping the whole scroller (the old
+  // `innerHTML = ""`) took the header down with the rows, so the toolbar and
+  // the Clear button vanished until the next full Run.
   clear(event) {
     event.preventDefault()
-    if (this.hasScrollerTarget) this.scrollerTarget.innerHTML = ""
+
+    if (this.hasScrollerTarget) {
+      const list = this.scrollerTarget.querySelector(".log-list")
+
+      // Drop the data rows + load-more page frames; keep only the header.
+      if (list) {
+        for (const child of Array.from(list.children)) {
+          if (!child.classList.contains("log-header")) child.remove()
+        }
+      }
+
+      // Drop a lingering empty-state panel (sibling of `.log-list`, no
+      // dedicated class) so a prior "no matches" note doesn't stay behind.
+      for (const child of Array.from(this.scrollerTarget.children)) {
+        if (!child.classList.contains("log-list")) child.remove()
+      }
+    }
+
     if (this.hasSummaryTarget) this.summaryTarget.textContent = "Cleared — Run to search again."
   }
 
@@ -625,6 +648,25 @@ export default class extends Controller {
     } catch (_e) {
       // Network/teardown — leave the host untouched; the operator can retry.
     }
+  }
+
+  // openCallFlow — the Logs→HEP3 bridge. Reads the line's Call-ID off the
+  // clicked chip (per-row) or the surrounding modal's button and re-emits it
+  // as a `callflow` row-action on the window. The page's hep3-call-flow host
+  // catches it, fetches the SIP ladder for the captured call this id folds
+  // into, and injects it — the SAME event + host the DataTable's call-flow
+  // icon uses, so both entry points share one overlay.
+  openCallFlow(event) {
+    event.preventDefault()
+    const callId = event.currentTarget.dataset.callId || ""
+
+    if (!callId) return
+
+    window.dispatchEvent(
+      new CustomEvent("datatable:rowaction", {
+        detail: { event: "callflow", callId }
+      })
+    )
   }
 
   closeSurrounding() {

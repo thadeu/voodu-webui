@@ -18,6 +18,7 @@
 # inside it, not on the backdrop).
 class Components::LogAnalytics::SurroundingModal < Components::Base
   include Components::LogAnalytics::ColumnChrome
+  include Components::LogAnalytics::CallId
 
   def initialize(data:)
     @data = data
@@ -60,10 +61,43 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
       end
 
       div(class: "flex items-center gap-2") do
+        call_flow_button if call_flow_available?
         export_cluster
         scope_toggle
       end
     end
+  end
+
+  # call_flow_button — the Logs→HEP3 bridge for the whole window: opens the
+  # SIP ladder for the ANCHOR line's Call-ID, without closing the surrounding
+  # context (the ladder is a separate overlay on top). Shown only when the
+  # anchor carries a Call-ID and the island runs voodu-hep3 — the per-row
+  # chips still cover any other captured line in the window.
+  def call_flow_button
+    button(
+      type: "button",
+      title: "Open the SIP call-flow for this call",
+      data: {action: "click->log-analytics#openCallFlow", call_id: anchor_call_id},
+      class: "inline-flex items-center gap-1 px-2 h-6 border border-voodu-accent-line bg-voodu-accent-dim text-[11px] font-medium text-voodu-accent-2 hover:text-voodu-text transition-colors"
+    ) do
+      render Icon::ArrowsRightLeftOutline.new(class: "w-3 h-3")
+      span { "Call-flow" }
+    end
+  end
+
+  def call_flow_available?
+    anchor_call_id.present? && current_island&.plugin_installed?("hep3")
+  end
+
+  # anchor_call_id — the Call-ID of the line the modal is anchored on (nil
+  # when the anchor wasn't located, or the line has no Call-ID). Precise to
+  # the anchor: the button opens the call the operator drilled into, not some
+  # other line that happens to share the window.
+  def anchor_call_id
+    return @anchor_call_id if defined?(@anchor_call_id)
+
+    idx = @data.anchor_index
+    @anchor_call_id = idx && sip_call_id_from(@data.rows[idx][:raw])
   end
 
   # export_cluster — export THIS batch (the exact window shown, same

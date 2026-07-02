@@ -22,6 +22,8 @@
 #   anchor:       mark this row as the surrounding-modal anchor (highlight
 #                 + scroll-into-view).
 class Components::LogAnalytics::Row < Components::Base
+  include Components::LogAnalytics::CallId
+
   def initialize(row:, surroundable: true, anchor: false)
     @row = row
     @surroundable = surroundable
@@ -110,9 +112,45 @@ class Components::LogAnalytics::Row < Components::Base
   def body_cell
     span(class: "log-body") do
       span(class: "log-msg") { @row[:msg].presence || @row[:raw] }
+      call_flow_chip if call_flow_available?
       surrounding_chip if @surroundable
       wrap_chip
       copy_chip
+    end
+  end
+
+  # call_flow_available? — show the SIP-bridge chip only when this line
+  # carries a Call-ID AND the island runs voodu-hep3. Both gates matter:
+  # without a Call-ID there's nothing to open, and without hep3 the page
+  # has no call-flow host to catch the click (a dead affordance). Cheap —
+  # the island/System/plugins are all memoised, so the per-row check is free.
+  def call_flow_available?
+    sip_call_id.present? && current_island&.plugin_installed?("hep3")
+  end
+
+  # sip_call_id — the SIP Call-ID embedded in the raw line (FreeSWITCH prints
+  # `Call-ID: <id>`), or nil. The chip hands this id to the bridge, which
+  # resolves it to the captured call (folding x_cid) in the read model, so a
+  # log line jumps straight to its SIP ladder without the operator copying ids.
+  def sip_call_id
+    return @sip_call_id if defined?(@sip_call_id)
+
+    @sip_call_id = sip_call_id_from(@row[:raw])
+  end
+
+  # call_flow_chip — the Logs→HEP3 bridge (leftmost chip, right: 76px).
+  # Carries the Call-ID; clicking dispatches a `callflow` row-action that the
+  # page's hep3-call-flow host catches → fetches + injects the ladder for the
+  # captured call this id folds into (same fetch→inject as the DataTable).
+  def call_flow_chip
+    button(
+      type: "button",
+      class: "log-callflow",
+      title: "Open SIP call-flow",
+      "aria-label": "Open the SIP call-flow for this line's Call-ID",
+      data: {action: "click->log-analytics#openCallFlow", call_id: sip_call_id}
+    ) do
+      render Icon::ArrowsRightLeftOutline.new
     end
   end
 

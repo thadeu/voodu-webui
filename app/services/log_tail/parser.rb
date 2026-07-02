@@ -33,6 +33,14 @@ module LogTail
     # per-pod open failures) stays verbatim in the body.
     PREFIX_RE = /\A\[([^\]]+)\]\s(.*)\z/
 
+    # strip_ansi — drop ANSI colour escapes at INGESTION so the warehouse (and
+    # DSL search, which matches the STORED text) is clean going forward. See
+    # LogTail::Ansi for the shared definition; LogTail::Reader strips the same
+    # on READ so lines captured before this fix still come back clean.
+    def strip_ansi(str)
+      LogTail::Ansi.strip(str)
+    end
+
     # parse — turns one raw chunk-line into a persistable hash.
     #
     # @param raw_line [String]   one line of the stream (no \n)
@@ -42,7 +50,11 @@ module LogTail
     # @return [Hash]             { ts:, pod:, stream:, level:, msg:,
     #                              raw:, parsed: }
     def parse(raw_line, pod_hint: nil)
-      stripped = raw_line.to_s.chomp
+      # Strip ANSI up-front: `raw` (= stripped) and `body` (→ `msg` for plain
+      # text) come out clean, and the JSON detection sees a `{`-leading line
+      # even when the app prefixes a colour reset. The controller's `[pod] `
+      # prefix carries no escapes, so split_prefix is unaffected.
+      stripped = strip_ansi(raw_line.to_s.chomp)
 
       pod, body = split_prefix(stripped, pod_hint)
       parsed = try_json(body)
@@ -52,7 +64,10 @@ module LogTail
         pod: pod.presence || "unknown",
         stream: parsed.fetch(:stream, "stdout"),
         level: parsed.fetch(:level, nil),
-        msg: parsed.fetch(:msg, body),
+        # A JSON log can carry ANSI inside its msg value (JSON-escaped, so
+        # it survives the line-level strip until JSON.parse decodes it back
+        # to a real ESC) — clean the extracted message too.
+        msg: strip_ansi(parsed.fetch(:msg, body)),
         raw: stripped,
         parsed: parsed[:parsed] == true
       }

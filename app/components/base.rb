@@ -43,6 +43,12 @@ class Components::Base < Phlex::HTML
   # helpers need explicit registration:
   register_value_helper :form_authenticity_token
   register_value_helper :recent_islands
+  # current_island — the focused server, for components that gate an
+  # affordance on a plugin (e.g. the Logs→HEP3 call-flow chip only shows
+  # when `current_island.plugin_installed?("hep3")`). Cheap: the island +
+  # its System row + parsed payload are all memoised, so a per-row check
+  # stays free.
+  register_value_helper :current_island
 
   Icon = PhlexIcons::Hero
 

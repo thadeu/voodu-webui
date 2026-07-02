@@ -142,10 +142,95 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_match "line-3", @response.body
   end
 
+  # ── Logs → HEP3 call-flow bridge ────────────────────────────────────
+  # A FreeSWITCH log line carries `Call-ID: <id>`. When the island runs
+  # voodu-hep3, each such line gets a bridge chip (and the surrounding modal
+  # a button) that opens the SIP ladder for that call — gated so a non-hep3
+  # island never shows a dead affordance.
+
+  CALLID_LINE = "INVITE sip:bob@10.0.0.2 SIP/2.0 Call-ID: 16948251_133420118@10.1.0.182"
+  CALLID_VALUE = "16948251_133420118@10.1.0.182"
+
+  test "bridge: a Call-ID line gets the chip + a host to open it (hep3 installed)" do
+    install_hep3!
+    seed("fsw", [[@base, CALLID_LINE]])
+
+    get logs_analytics_path(tenant_key: @key), params: analytics_window
+
+    assert_response :success
+    assert_match "log-callflow", @response.body, "the bridge chip renders on a Call-ID line"
+    assert_match %(data-call-id="#{CALLID_VALUE}"), @response.body, "the chip carries the SIP Call-ID"
+    assert_match "log-analytics#openCallFlow", @response.body
+    assert_match 'data-controller="hep3-call-flow"', @response.body,
+      "the page hosts the overlay so the click has somewhere to land"
+  end
+
+  test "bridge: no chip and no host when hep3 is not installed (no dead click)" do
+    seed("fsw", [[@base, CALLID_LINE]])
+
+    get logs_analytics_path(tenant_key: @key), params: analytics_window
+
+    assert_response :success
+    assert_match CALLID_LINE, @response.body, "the line still renders — only the bridge is gated"
+    assert_no_match "log-callflow", @response.body
+    assert_no_match 'data-controller="hep3-call-flow"', @response.body
+  end
+
+  test "bridge: a line with no Call-ID gets no chip (hep3 installed)" do
+    install_hep3!
+    seed("web", [[@base, "GET /health 200"]])
+
+    get logs_analytics_path(tenant_key: @key), params: analytics_window
+
+    assert_response :success
+    assert_match "GET /health 200", @response.body
+    assert_no_match "log-callflow", @response.body, "nothing to open without a Call-ID"
+  end
+
+  test "bridge: the surrounding modal offers a call-flow button for the anchor's Call-ID" do
+    install_hep3!
+    seed("fsw", [[@base, "before"], [@base + 1.second, CALLID_LINE], [@base + 2.seconds, "after"]])
+
+    get logs_analytics_surrounding_path(tenant_key: @key),
+      params: {pod: "fsw", ts: iso(@base + 1.second)}
+
+    assert_response :success
+    assert_match "Call-flow", @response.body, "the modal offers a call-flow button for the anchor"
+    assert_match %(data-call-id="#{CALLID_VALUE}"), @response.body
+    assert_match "log-analytics#openCallFlow", @response.body
+  end
+
+  test "bridge: the surrounding call-flow button is gated off without hep3" do
+    seed("fsw", [[@base, "before"], [@base + 1.second, CALLID_LINE], [@base + 2.seconds, "after"]])
+
+    get logs_analytics_surrounding_path(tenant_key: @key),
+      params: {pod: "fsw", ts: iso(@base + 1.second)}
+
+    assert_response :success
+    assert_match CALLID_LINE, @response.body
+    assert_no_match "log-analytics#openCallFlow", @response.body, "no bridge without hep3"
+  end
+
   private
 
   def iso(time)
     time.iso8601(3)
+  end
+
+  # install_hep3! — attach a locally-synced System row advertising voodu-hep3,
+  # so plugin_installed?("hep3") gates the bridge ON (mirrors the sync path).
+  def install_hep3!
+    System.create!(
+      island: @island,
+      payload: {"host" => {}, "plugins" => [{"name" => "hep3"}]}.to_json,
+      synced_at: Time.current
+    )
+  end
+
+  # analytics_window — a custom range bracketing the seeded @base, so the
+  # full-page render actually lists the seeded rows (not an empty window).
+  def analytics_window(**extra)
+    {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds)}.merge(extra)
   end
 
   def seed(pod, lines)

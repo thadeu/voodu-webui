@@ -15,7 +15,7 @@ export default class extends Controller {
   static targets = ["host"]
   static values = { url: String }
 
-  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus"]
+  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus", "cf_callid"]
 
   connect() {
     this.onAction = this.onAction.bind(this)
@@ -41,8 +41,18 @@ export default class extends Controller {
   }
 
   // openFromUrl — reopen the call encoded in the URL after a full reload.
+  // Two shapes: the Logs bridge (cf_callid → resolved server-side) and the
+  // DataTable drill-down (cf_scope/cf_name/cf_corr [+cf_focus]).
   openFromUrl() {
     const p = new URLSearchParams(window.location.search)
+    const callId = p.get("cf_callid")
+
+    if (callId) {
+      this.fetchInto({ callId })
+
+      return
+    }
+
     const corr = p.get("cf_corr")
 
     if (!corr) return
@@ -56,13 +66,19 @@ export default class extends Controller {
   }
 
   async fetchInto(detail) {
-    const params = new URLSearchParams({
-      scope: detail.scope || "",
-      name: detail.name || "",
-      corr_id: detail.value || "",
-    })
+    const params = new URLSearchParams()
 
-    if (detail.rowId) params.set("focus", detail.rowId)
+    if (detail.callId) {
+      // Logs bridge: hand the server just the SIP Call-ID; it resolves the
+      // reader instance + corr_id (folding x_cid) from the read model.
+      params.set("call_id", detail.callId)
+    } else {
+      params.set("scope", detail.scope || "")
+      params.set("name", detail.name || "")
+      params.set("corr_id", detail.value || "")
+
+      if (detail.rowId) params.set("focus", detail.rowId)
+    }
 
     try {
       const resp = await fetch(`${this.urlValue}?${params}`, { headers: { Accept: "text/html" } })
@@ -85,14 +101,18 @@ export default class extends Controller {
   syncUrl(detail) {
     const url = new URL(window.location.href)
 
-    url.searchParams.set("cf_scope", detail.scope || "")
-    url.searchParams.set("cf_name", detail.name || "")
-    url.searchParams.set("cf_corr", detail.value || "")
+    // Clear every cf_* first so switching between the two shapes (Logs
+    // bridge ↔ DataTable drill-down) never leaves a stale key behind.
+    this.PARAMS.forEach((k) => url.searchParams.delete(k))
 
-    if (detail.rowId) {
-      url.searchParams.set("cf_focus", detail.rowId)
+    if (detail.callId) {
+      url.searchParams.set("cf_callid", detail.callId)
     } else {
-      url.searchParams.delete("cf_focus")
+      url.searchParams.set("cf_scope", detail.scope || "")
+      url.searchParams.set("cf_name", detail.name || "")
+      url.searchParams.set("cf_corr", detail.value || "")
+
+      if (detail.rowId) url.searchParams.set("cf_focus", detail.rowId)
     }
 
     window.history.replaceState(window.history.state, "", url)

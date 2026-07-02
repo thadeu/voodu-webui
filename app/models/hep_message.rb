@@ -125,6 +125,15 @@ class HepMessage < HepRecord
       .pluck(Arel.sql(bucket_sql), Arel.sql(count_sql))
   end
 
+  # locate_by_call_id — the most recent captured message whose SIP Call-ID is
+  # `call_id`, across ALL reader instances of the tenant. Backs the Logs →
+  # call-flow bridge: a FreeSWITCH log line carries a `Call-ID:`, and this
+  # resolves which reader has it + the corr_id (which folds x_cid → call_id).
+  # nil when the call wasn't captured.
+  def self.locate_by_call_id(tenant_id, call_id)
+    where(tenant_id: tenant_id, call_id: call_id.to_s).order(id: :desc).first
+  end
+
   # for_call — every message of one call (by the correlation key), in
   # chronological order. Backs the call-flow ladder. corr_id already
   # folds x_cid → call_id, so this joins B2BUA legs that share an x_cid.

@@ -1199,8 +1199,25 @@ const IPV4_RE       = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/
 // the right pod color + the body stays readable.
 const POD_PREFIX_RE = /^\[([^\]]+)\] (.*)$/
 
+// ANSI_RE / stripAnsi — drop the SGR/CSI colour escapes a TTY app (FreeSWITCH's
+// SIP trace, a colourised logger) prints to its console: ESC `[`, params,
+// intermediates, a final byte. The invisible ESC renders to nothing in the
+// browser and leaves the litter (`[m`, `[32m`) inline. The warehouse ingestion
+// path already scrubs these server-side (LogTail::Parser); this covers the LIVE
+// docker proxy (stream / stream_all) that bypasses the warehouse, so EVERY line
+// the viewer shows is clean regardless of transport. Stripped BEFORE the pod /
+// ISO / level heuristics so an escape never blocks a match.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g
+
+function stripAnsi(s) {
+  if (typeof s !== "string") return s
+
+  return s.replace(ANSI_RE, "")
+}
+
 function parseLogLine(raw, fallbackPod) {
-  let line = raw
+  let line = stripAnsi(raw)
   let ts = new Date()
   let pod = fallbackPod
 

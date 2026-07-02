@@ -90,6 +90,19 @@ module LogTail
             # Then content filter
             next unless content_match?(hash)
 
+            # Scrub ANSI colour escapes on the way out so any line captured
+            # before the ingestion-side fix (LogTail::Parser) — or by a path
+            # that skipped it — still renders/exports clean. No-op on already-
+            # clean lines. Only matched lines pay it, not the whole scan.
+            hash["msg"] = LogTail::Ansi.strip(hash["msg"]) if hash["msg"]
+            hash["raw"] = LogTail::Ansi.strip(hash["raw"]) if hash["raw"]
+
+            # Drop content-less orphan rows — a lone docker timestamp on a blank
+            # source line (or a line that was nothing but colour escapes, now
+            # scrubbed to empty above). They'd render as a bare timestamp and
+            # only litter the table/export. Checked AFTER the ANSI scrub.
+            next if LogTail::BlankLine.blank?(hash["msg"], hash["raw"])
+
             yield(pod, hash)
             yielded += 1
           end

@@ -93,6 +93,38 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
     assert_match "RTP PCMA", @response.body
   end
 
+  test "Logs bridge: a SIP call_id resolves to the folded call (x_cid), any reader" do
+    # Two B2BUA legs share x_cid "shared" but have DIFFERENT Call-IDs; a log
+    # line only ever carries one leg's Call-ID. Opening by it must resolve the
+    # reader instance + corr_id (= shared) and show the WHOLE call.
+    HepMessage.bulk_insert([
+      {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: {
+        ts: "2026-06-30 10:00:01.000000", call_id: "legA@sbc", x_cid: "shared",
+        method: "INVITE", response_code: 0, src_ip: "1.1.1.1", dst_ip: "2.2.2.2", from_user: "a", to_user: "b"
+      }.to_json},
+      {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: {
+        ts: "2026-06-30 10:00:02.000000", call_id: "legB@fsw", x_cid: "shared",
+        method: "", response_code: 200, src_ip: "2.2.2.2", dst_ip: "1.1.1.1", from_user: "a", to_user: "b"
+      }.to_json}
+    ])
+
+    get metrics_hep3_call_path(tenant_key: @key, call_id: "legA@sbc")
+
+    assert_response :success
+    assert_match(/<svg/, @response.body)
+    assert_match "INVITE", @response.body
+    assert_match "200 OK", @response.body, "both legs (folded by x_cid) render, not just leg A"
+    assert_no_match(/Call not found/, @response.body)
+  end
+
+  test "Logs bridge: an uncaptured call_id renders the empty state carrying the id" do
+    get metrics_hep3_call_path(tenant_key: @key, call_id: "never-captured@10.0.0.9")
+
+    assert_response :success
+    assert_match "Call not found", @response.body
+    assert_match "never-captured@10.0.0.9", @response.body
+  end
+
   test "an unknown call renders the in-overlay empty state, not a 404" do
     get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "ghost")
 
