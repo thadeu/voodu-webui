@@ -1313,6 +1313,12 @@ html[data-theme="light"] .voodu-dark {
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  /* Purely decorative — it mirrors the textarea's glyphs behind it. It must
+   * never take a selection of its own: a document-level select-all (or any
+   * stray range) would otherwise paint the global ::selection over this layer,
+   * a green block layered on top of the colored tokens that reads as a broken
+   * highlight. Only the real textarea's selection should ever show. */
+  user-select: none;
   color: var(--voodu-text-2);
   background: transparent;
 }
@@ -1367,8 +1373,15 @@ html[data-theme="light"] .voodu-dark {
   color: var(--voodu-muted-2);
 }
 
+/* Selection wash for the code editor. A DIRECT rgba — never color-mix(): the
+ * build (LightningCSS) can't fold a color-mix() over a CSS var at compile time,
+ * so it emits an OPAQUE `var(--voodu-accent)` fallback, and that bright-green
+ * fallback was painting SOLID green blocks over the code whenever you selected
+ * text. A plain rgba has no fallback split, and a NEUTRAL slate never smears the
+ * green string tokens (green-on-green read as broken). Works on both the dark
+ * and light editor surface. */
 .voodu-code__input::selection {
-  background: color-mix(in srgb, var(--voodu-accent) 32%, transparent);
+  background: rgba(120, 140, 172, 0.45);
 }
 
 /* Brief red flag when Format hits invalid JSON. */

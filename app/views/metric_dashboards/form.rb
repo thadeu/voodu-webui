@@ -123,6 +123,7 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_logs_fields_value: DataTable::LogsSource::FIELDS.to_json,
         dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
         dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
+        dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
         dashboard_builder_panels_value: existing_panels_json,
         # DS confirm before saving (the singleton confirm-host swaps the
         # native dialog). Submit → confirm → save → reopens the modal.
@@ -247,6 +248,7 @@ class Views::MetricDashboards::Form < Views::Base
       add_panel_row
       add_log_panel_row
       add_table_panel_row
+      add_http_panel_row
     end
   end
 
@@ -281,6 +283,7 @@ class Views::MetricDashboards::Form < Views::Base
         type_card("log", "Log count", "Count log lines matching a filter — a number") { log_preview_svg }
         type_card("table", "Table", "Rows from a pod — logs, filter, sort, live") { table_preview_svg }
         type_card("hep3", "HEP3", "SIP capture — Messages, Calls, Errors — filter, sort, live") { table_preview_svg } if hep3_readers.any?
+        type_card("http", "HTTP / external API", "Fetch JSON from any URL — table or chart") { metric_preview_svg }
       end
     end
   end
@@ -363,6 +366,317 @@ class Views::MetricDashboards::Form < Views::Base
       hep3_percent_toggle
       table_filter_editor
       table_color_swatches
+    end
+  end
+
+  # add_http_panel_row — the external-API panel builder. Request config up top
+  # (method + URL, headers, body, interval), then Table/Chart, then the JSON
+  # mapping (the json-editor — same code shell as the query editor), then the
+  # Test loop (raw response × parsed output). Functional MVP; polish later.
+  # add_http_panel_row — the external-API panel builder, Postman-shaped: a
+  # panel-identity row (label + visualization + accent), a URL bar (method +
+  # URL + Test), request tabs (Mapping / Headers / Body), and the response ×
+  # parsed split. The mapping is the star, so its tab opens active.
+  def add_http_panel_row
+    div(hidden: true, data: {dashboard_builder_target: "httpBlock"}, class: "flex flex-col gap-3 p-3 border border-voodu-border-2 bg-voodu-surface") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(data: {dashboard_builder_target: "httpBlockTitle"}, class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "HTTP panel" }
+        change_type_link
+      end
+
+      http_identity_row
+      http_viz_chips
+      http_url_bar
+      http_tabs
+      http_tab_panels
+      http_test_result
+      http_color_footer
+    end
+  end
+
+  # http_identity_row — just the panel label. The interval isn't a per-panel
+  # field: the request follows the page's active range/interval (the source
+  # resolves the outbound window from it). Styled like every other panel's label
+  # field (h-9, prose font) — NOT the mono URL-bar input — so it matches the
+  # table/log/hep3 forms.
+  def http_identity_row
+    input(
+      type: "text", placeholder: "Panel label — e.g. Active calls",
+      autocomplete: "off", spellcheck: "false",
+      data: {dashboard_builder_target: "httpLabel", action: "input->dashboard-builder#autoCommit"},
+      class: "w-full h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] " \
+             "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+    )
+  end
+
+  # http_viz_chips — the visualization picker as preview cards (Table / Area /
+  # Number), same idiom as the HEP3 shape chips + the panel-type chooser.
+  def http_viz_chips
+    div(class: "flex flex-wrap gap-2.5") do
+      http_viz_chip("table", "Table") { table_preview_svg }
+      http_viz_chip("area", "Area") { shape_area_svg }
+      http_viz_chip("number", "Number") { log_preview_svg }
+    end
+  end
+
+  def http_viz_chip(value, text)
+    button(
+      type: "button",
+      data: {dashboard_builder_target: "httpChartChip", chart_type: value, action: "click->dashboard-builder#selectHttpChartType"},
+      class: "flex flex-col w-[110px] max-w-full overflow-hidden border border-voodu-border-2 bg-voodu-surface text-left transition-colors " \
+             "hover:border-voodu-accent-line hover:bg-voodu-surface-2 text-voodu-muted " \
+             "data-[active=true]:border-voodu-accent-line data-[active=true]:text-voodu-accent-2"
+    ) do
+      div(class: "h-[52px] w-full flex items-center justify-center px-3 py-2 border-b border-voodu-border-2 bg-voodu-surface-2/40") { yield }
+      span(class: "block text-[12px] font-medium text-voodu-text px-2.5 py-1.5") { text }
+    end
+  end
+
+  # http_url_bar — the request line: method (our dropdown) + URL + Test.
+  def http_url_bar
+    div(class: "flex items-stretch gap-0 border border-voodu-border bg-voodu-bg-2") do
+      http_method_dropdown
+      http_input("httpUrl", "https://api.example.com/todos", flex: true, bare: true)
+      button(
+        type: "button",
+        data: {action: "click->dashboard-builder#testHttp"},
+        class: "shrink-0 inline-flex items-center px-3 text-[12px] font-medium border-l border-voodu-border bg-voodu-surface-2 text-voodu-accent-2 hover:bg-voodu-accent-dim"
+      ) { "Test" }
+    end
+  end
+
+  # http_method_dropdown — the HTTP verb via our dropdown (not a native select).
+  # A hidden input carries the value (httpMethod target); the label shows it.
+  HTTP_METHODS = %w[GET POST PUT PATCH DELETE HEAD OPTIONS].freeze
+
+  def http_method_dropdown
+    div(class: "relative shrink-0 border-r border-voodu-border", data: {controller: "dropdown"}) do
+      input(type: "hidden", value: "GET", data: {dashboard_builder_target: "httpMethod"})
+      button(
+        type: "button",
+        data: {action: "click->dropdown#toggle"},
+        class: "inline-flex items-center gap-1.5 h-8 px-2.5 bg-voodu-surface-2 text-voodu-text-2 text-[12px] font-voodu-mono font-medium hover:bg-voodu-surface"
+      ) do
+        span(data: {dashboard_builder_target: "httpMethodLabel"}) { "GET" }
+        render Icon::ChevronDownOutline.new(class: "w-2.5 h-2.5 opacity-70")
+      end
+      div(
+        hidden: true,
+        data: {dropdown_target: "menu"},
+        class: "absolute left-0 top-[calc(100%+4px)] z-40 min-w-[120px] border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+      ) do
+        HTTP_METHODS.each do |m|
+          button(
+            type: "button",
+            data: {method: m, action: "click->dashboard-builder#selectHttpMethod click->dropdown#close"},
+            class: "flex w-full items-center px-3 py-1.5 text-left text-[12px] font-voodu-mono text-voodu-text hover:bg-voodu-hover"
+          ) { m }
+        end
+      end
+    end
+  end
+
+  def http_color_footer
+    div(class: "flex items-center gap-2 pt-2.5 border-t border-voodu-border") do
+      span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted-2") { "Accent" }
+      http_color_swatches
+    end
+  end
+
+  def http_tabs
+    div(class: "flex items-center gap-4 border-b border-voodu-border") do
+      [%w[mapping Mapping], %w[headers Headers], %w[body Body]].each_with_index do |(name, text), i|
+        button(
+          type: "button",
+          data: {dashboard_builder_target: "httpTab", http_tab: name, action: "click->dashboard-builder#switchHttpTab"},
+          "aria-selected": (i.zero? ? "true" : "false"),
+          class: "pb-1.5 -mb-px text-[12px] border-b-2 border-transparent text-voodu-muted hover:text-voodu-text " \
+                 "aria-selected:border-voodu-accent-line aria-selected:text-voodu-text"
+        ) { text }
+      end
+    end
+  end
+
+  def http_tab_panels
+    div do
+      div(data: {dashboard_builder_target: "httpTabPanel", http_tab: "mapping"}) { http_mapping_editor }
+      div(hidden: true, data: {dashboard_builder_target: "httpTabPanel", http_tab: "headers"}) { http_headers_editor }
+      div(hidden: true, data: {dashboard_builder_target: "httpTabPanel", http_tab: "body"}) { http_body_editor }
+    end
+  end
+
+  def http_input(target, placeholder, flex: false, bare: false, width: nil)
+    base = "h-8 px-2 text-voodu-text text-[12px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none"
+    chrome = bare ? "bg-transparent border-0 focus:ring-0" : "border border-voodu-border bg-voodu-surface focus:border-voodu-accent-line"
+    input(
+      type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
+      data: {dashboard_builder_target: target, action: "input->dashboard-builder#autoCommit"},
+      class: tokens(base, chrome, (flex ? "flex-1 min-w-0" : nil), width)
+    )
+  end
+
+  # http_headers_editor — add-row key/value pairs (Postman-style), plus a
+  # <template> row the controller clones for "+ Add". Each row's key/value are
+  # httpHeaderKey/httpHeaderValue targets; buildHttpPanel zips them into a hash.
+  def http_headers_editor
+    div(class: "flex flex-col gap-1.5 pt-2") do
+      div(data: {dashboard_builder_target: "httpHeadersRows"}, class: "flex flex-col gap-1.5") { http_header_row }
+      template(data: {dashboard_builder_target: "httpHeaderTemplate"}) { http_header_row }
+      button(
+        type: "button",
+        data: {action: "click->dashboard-builder#addHttpHeader"},
+        class: "self-start inline-flex items-center gap-1 px-2 h-6 text-[11px] border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2"
+      ) { "+ Add header" }
+    end
+  end
+
+  def http_header_row
+    div(class: "flex items-center gap-1.5") do
+      input(
+        type: "text", placeholder: "Key", autocomplete: "off", spellcheck: "false",
+        data: {dashboard_builder_target: "httpHeaderKey", action: "input->dashboard-builder#autoCommit"},
+        class: "w-1/3 h-7 px-2 border border-voodu-border bg-voodu-surface text-voodu-text text-[12px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+      input(
+        type: "text", placeholder: "Value", autocomplete: "off", spellcheck: "false",
+        data: {dashboard_builder_target: "httpHeaderValue", action: "input->dashboard-builder#autoCommit"},
+        class: "flex-1 min-w-0 h-7 px-2 border border-voodu-border bg-voodu-surface text-voodu-text text-[12px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+      button(
+        type: "button", "aria-label": "Remove header",
+        data: {action: "click->dashboard-builder#removeHttpHeader"},
+        class: "shrink-0 inline-flex items-center justify-center w-7 h-7 border border-voodu-border bg-voodu-surface text-voodu-muted hover:text-voodu-red"
+      ) { "×" }
+    end
+  end
+
+  def http_body_editor
+    div(class: "flex flex-col gap-1 pt-2") do
+      http_json_editor("httpBody", 'Body — raw JSON, e.g. { "name": "cpf" }')
+    end
+  end
+
+  # http_mapping_editor — the JSON mapping via the shared json-editor, with a
+  # `?` popover cheatsheet (same idiom as the QueryEditor's Syntax help).
+  def http_mapping_editor
+    div(class: "flex flex-col gap-1.5 pt-2") do
+      http_json_editor("httpMapping", '{ "root": "series", "ts": "t", "value": "v" }')
+      http_mapping_help
+    end
+  end
+
+  # http_mapping_help — a peek-and-dismiss popover documenting the mapping
+  # shapes; portaled to the dialog by the popover controller (escapes the
+  # modal's overflow), mirroring the query editor's Syntax reference.
+  def http_mapping_help
+    div(class: "relative self-start", data: {controller: "popover"}) do
+      button(
+        type: "button",
+        "aria-label": "Mapping reference",
+        data: {action: "click->popover#toggle", popover_target: "trigger", tooltip: "Mapping help"},
+        class: "inline-flex items-center gap-1 text-[11.5px] text-voodu-text-2 hover:text-voodu-text"
+      ) do
+        render Icon::QuestionMarkCircleOutline.new(class: "w-3.5 h-3.5")
+        span { "Mapping" }
+      end
+
+      div(
+        hidden: true,
+        data: {popover_target: "menu"},
+        class: "w-[380px] max-w-[calc(100vw-32px)] border border-voodu-border-2 bg-voodu-surface shadow-2xl p-3.5 flex flex-col gap-2 text-[11.5px] text-voodu-muted leading-relaxed"
+      ) do
+        http_help_line("root", "path to the array in the response (blank = the response IS the array)")
+        http_help_line("path", "dot path into each item — e.g. data.user.name or items[0].id")
+        div(class: "pt-1.5 border-t border-voodu-border flex flex-col gap-1.5") do
+          http_help_block("Table", '{ "root": "items", "columns": [{ "field": "name", "path": "name" }] }')
+          http_help_block("Chart", '{ "root": "series", "ts": "t", "value": "v" }')
+        end
+        div(class: "pt-1.5 border-t border-voodu-border text-voodu-muted-2") do
+          plain "The active range, interval, scope and label ride the request as query params."
+        end
+      end
+    end
+  end
+
+  def http_help_line(label, note)
+    div(class: "flex items-baseline gap-2") do
+      code(class: "font-voodu-mono text-voodu-text-2 shrink-0") { label }
+      span { note }
+    end
+  end
+
+  def http_help_block(label, example)
+    div(class: "flex flex-col gap-0.5") do
+      span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted-2") { label }
+      code(class: "font-voodu-mono text-[11px] text-voodu-text-2 break-all") { example }
+    end
+  end
+
+  # http_json_editor — the shared code editor shell (gutter line numbers +
+  # highlight + Format), the SAME json-editor the alerts destination form uses.
+  # The textarea doubles as `target` (dashboard-builder) so its value drives
+  # autoCommit + the Test.
+  def http_json_editor(target, placeholder)
+    div(class: "voodu-code relative overflow-hidden resize-y border border-voodu-border bg-voodu-surface min-h-[150px]", data: {controller: "json-editor"}) do
+      pre(class: "voodu-code__hl", "aria-hidden": "true", data: {json_editor_target: "highlight"})
+      div(class: "voodu-code__gutter", "aria-hidden": "true", data: {json_editor_target: "gutter"})
+      textarea(
+        rows: "7", spellcheck: "false", autocapitalize: "off", autocomplete: "off",
+        placeholder: placeholder,
+        class: "voodu-code__input",
+        data: {
+          json_editor_target: "input",
+          dashboard_builder_target: target,
+          action: "input->json-editor#render input->dashboard-builder#autoCommit keydown->json-editor#keydown"
+        }
+      ) { "" }
+      button(
+        type: "button", title: "Format JSON",
+        data: {action: "click->json-editor#format"},
+        class: "absolute top-1.5 right-1.5 z-10 inline-flex items-center gap-1 px-1.5 h-5 text-[10px] font-medium " \
+               "border border-voodu-border-2 bg-voodu-surface-2 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface"
+      ) { "Format" }
+    end
+  end
+
+  # http_test_result — the response × parsed split the Test fills, so the
+  # operator sees the shape they're mapping against and confirms it resolves.
+  def http_test_result
+    div(class: "flex flex-col gap-1.5") do
+      span(data: {dashboard_builder_target: "httpTestStatus"}, class: "text-[11px] text-voodu-muted min-w-0 truncate")
+      div(hidden: true, data: {dashboard_builder_target: "httpTestResult"}, class: "grid grid-cols-2 gap-2") do
+        http_test_pane("Response", "httpTestRaw")
+        http_test_pane("Parsed", "httpTestParsed")
+      end
+    end
+  end
+
+  def http_test_pane(title, target)
+    div(class: "flex flex-col gap-1 min-w-0") do
+      span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted-2") { title }
+      # `voodu-code` scopes the .tok-* color rules so the controller can paint
+      # JSON tokens into this pane (renderHttpTest sets innerHTML on a hit).
+      pre(
+        data: {dashboard_builder_target: target},
+        class: "voodu-code max-h-[180px] overflow-auto text-[11px] font-voodu-mono text-voodu-text-2 bg-voodu-bg-2 border border-voodu-border p-2 whitespace-pre-wrap break-all"
+      )
+    end
+  end
+
+  # http_color_swatches — mirrors the table swatches so http panels get a
+  # distinct accent. Reuses the same selectHttpColor handler + httpSwatch target.
+  def http_color_swatches
+    div(class: "flex items-center gap-1.5 flex-wrap shrink-0") do
+      LOG_COLORS.each do |c|
+        button(
+          type: "button",
+          title: c,
+          "aria-label": "Use accent #{c}",
+          data: {dashboard_builder_target: "httpSwatch", color: c, action: "click->dashboard-builder#selectHttpColor"},
+          class: "w-5 h-5 rounded-full border border-voodu-border shrink-0 data-[active=true]:ring-2 data-[active=true]:ring-voodu-accent-line",
+          style: "background: #{c};"
+        )
+      end
     end
   end
 
@@ -724,12 +1038,16 @@ class Views::MetricDashboards::Form < Views::Base
       # Shared LogQuery editor (highlight + field validation + cheatsheet).
       # submits:false → Cmd+Enter validates but never POSTs the dashboard form
       # mid-edit; the builder reads the value via the logQuery target.
+      #
+      # grow:false (NOT flex-fill) so `resize-y` actually works — a flex-1 shell
+      # has its height recomputed by the flex layout every frame, which stomps
+      # the height the operator drags the resize handle to (the editor reads as
+      # "stuck"). A comfortable min height + manual resize is the right model.
       render Components::UI::QueryEditor.new(
         value: "",
         submits: false,
         rows: "3",
-        min_h: "min-h-[120px]",
-        grow: true,
+        min_h: "min-h-[240px]",
         help_limit: false,
         show_stats: true,
         placeholder: "@message like /INVITE/  ·  … | avg",

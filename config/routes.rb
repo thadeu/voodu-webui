@@ -156,6 +156,10 @@ Rails.application.routes.draw do
     get "/metrics/datatable/:source/rows", to: "datatable#rows", as: :metrics_datatable_rows,
       constraints: {source: /[a-z0-9_]+/}
 
+    # Builder "Test request" — fire an in-progress http panel config server-side
+    # and return the raw response + the mapped output (the mapping preview loop).
+    post "/metrics/datatable/http/test", to: "datatable#test", as: :metrics_datatable_http_test
+
     # HEP3 call-flow ladder — drill-down off a DataTable (hep3) row. Returns
     # the overlay fragment injected by the page host (mirrors #surrounding).
     # corr_id/scope/name ride in the query string (a SIP Call-ID has @ and .).

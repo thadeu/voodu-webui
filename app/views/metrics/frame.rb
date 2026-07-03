@@ -195,6 +195,7 @@ class Views::Metrics::Frame < Views::Base
       metric: c[:panel_key],
       default_visible: c.fetch(:default_visible, true),
       row_action: c[:row_action],
+      dashboard_uuid: c[:dashboard_uuid],
       **table_window
     )
   end

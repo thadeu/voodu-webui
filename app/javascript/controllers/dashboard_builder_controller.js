@@ -20,6 +20,10 @@ export default class extends Controller {
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
                     "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
+                    "httpBlock", "httpBlockTitle", "httpUrl", "httpMethod", "httpMethodLabel", "httpBody",
+                    "httpInterval", "httpMapping", "httpChartChip", "httpLabel", "httpSwatch",
+                    "httpTab", "httpTabPanel", "httpHeadersRows", "httpHeaderTemplate", "httpHeaderKey", "httpHeaderValue",
+                    "httpTestStatus", "httpTestResult", "httpTestRaw", "httpTestParsed",
                     "idleStep", "typeStep", "metricBlock", "logBlock",
                     "metricBlockTitle", "logBlockTitle", "backLink"]
   static values  = {
@@ -29,6 +33,7 @@ export default class extends Controller {
     logsFields:       Array,
     hep3Fields:       Array,
     hep3Hints:        Object,
+    httpTestUrl:      String,
     panels:           Array
   }
 
@@ -46,6 +51,9 @@ export default class extends Controller {
     this.tableKind = "table"
     this.currentHep3Shape = "table"
     this.currentTableColor = this.defaultTableColor()
+
+    this.currentHttpChartType = "table"
+    this.currentHttpColor = "var(--voodu-cyan)"
 
     this.addType = "metric"
     // idle → nothing selected (the resting/open state); type → the Add
@@ -111,6 +119,7 @@ export default class extends Controller {
     // Table (logs) + HEP3 share one block; activate the kind's options + the
     // first source·view so autoCommit can create the panel immediately.
     if (type === "table" || type === "hep3") this.activateTableKind(type)
+    if (type === "http") { this.highlightHttpChart(); this.highlightHttpColor() }
 
     this.syncWizard()
     // Metric panels have valid defaults (host · first metric) → auto-create
@@ -150,6 +159,7 @@ export default class extends Controller {
     const config = step === "config"
     const isLog = this.addType === "log"
     const isTable = this.addType === "table" || this.addType === "hep3"
+    const isHttp = this.addType === "http"
     const editing = this.editingIndex != null
 
     if (this.hasIdleStepTarget) this.idleStepTarget.hidden = step !== "idle"
@@ -157,10 +167,12 @@ export default class extends Controller {
     if (this.hasMetricBlockTarget) this.metricBlockTarget.hidden = !(config && this.addType === "metric")
     if (this.hasLogBlockTarget) this.logBlockTarget.hidden = !(config && isLog)
     if (this.hasTableBlockTarget) this.tableBlockTarget.hidden = !(config && isTable)
+    if (this.hasHttpBlockTarget) this.httpBlockTarget.hidden = !(config && isHttp)
 
     if (this.hasMetricBlockTitleTarget) this.metricBlockTitleTarget.textContent = editing ? "Edit metric panel" : "New metric panel"
     if (this.hasLogBlockTitleTarget) this.logBlockTitleTarget.textContent = editing ? "Edit log count" : "New log count"
     if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = editing ? "Edit table panel" : "New table panel"
+    if (this.hasHttpBlockTitleTarget) this.httpBlockTitleTarget.textContent = editing ? "Edit HTTP panel" : "New HTTP panel"
     this.backLinkTargets.forEach((el) => { el.textContent = editing ? "Cancel" : "Change type" })
   }
 
@@ -416,6 +428,8 @@ export default class extends Controller {
 
     if (this.addType === "table" || this.addType === "hep3") return this.buildTablePanelSafe()
 
+    if (this.addType === "http") return this.buildHttpPanelSafe()
+
     return this.buildPanelSafe()
   }
 
@@ -460,6 +474,7 @@ export default class extends Controller {
 
     if (this.addType === "log") this.loadLogPanel(panel)
     else if (this.addType === "table" || this.addType === "hep3") this.loadTablePanel(panel)
+    else if (this.addType === "http") this.loadHttpPanel(panel)
     else this.loadMetricPanel(panel)
 
     this.render()
@@ -469,7 +484,12 @@ export default class extends Controller {
   typeForPanel(panel) {
     if (panel.scope_kind === "log") return "log"
 
-    if (panel.scope_kind === "table") return panel.source === "hep3" ? "hep3" : "table"
+    if (panel.scope_kind === "table") {
+      if (panel.source === "hep3") return "hep3"
+      if (panel.source === "http") return "http"
+
+      return "table"
+    }
 
     return "metric"
   }
@@ -808,6 +828,264 @@ export default class extends Controller {
       filter_query: filterQuery,
       percent:      percent
     }
+  }
+
+  // ── http (external API) panel ──────────────────────────────────────
+
+  buildHttpPanelSafe() {
+    const url = this.httpFieldValue("httpUrl")
+
+    return url ? this.buildHttpPanel(url) : null
+  }
+
+  buildHttpPanel(url) {
+    return {
+      scope_kind: "table",
+      source:     "http",
+      chart_type: this.currentHttpChartType || "table",
+      url,
+      method:     this.hasHttpMethodTarget ? this.httpMethodTarget.value : "GET",
+      headers:    this.parseHttpHeaders(),
+      body:       this.httpFieldValue("httpBody"),
+      interval:   this.httpFieldValue("httpInterval") || "auto",
+      view:       "response",
+      label:      this.httpFieldValue("httpLabel") || "External API",
+      color:      this.currentHttpColor || "var(--voodu-cyan)",
+      mapping:    this.parseHttpMapping()
+    }
+  }
+
+  httpFieldValue(target) {
+    const key = `has${target[0].toUpperCase()}${target.slice(1)}Target`
+
+    return this[key] ? this[`${target}Target`].value.trim() : ""
+  }
+
+  // parseHttpHeaders — the add-row key/value pairs → object. Keys + values are
+  // parallel target lists in DOM order, so index i pairs one row. Blank keys
+  // (an empty row the operator hasn't filled) are skipped.
+  parseHttpHeaders() {
+    const keys = this.httpHeaderKeyTargets
+    const values = this.httpHeaderValueTargets
+    const out = {}
+
+    keys.forEach((keyEl, i) => {
+      const k = keyEl.value.trim()
+
+      if (k) out[k] = (values[i]?.value || "").trim()
+    })
+
+    return out
+  }
+
+  // switchHttpTab — Postman-style tabs: reveal the clicked tab's panel, hide
+  // the rest, and mark the tab selected.
+  switchHttpTab(event) {
+    const name = event.currentTarget.dataset.httpTab
+
+    this.httpTabTargets.forEach((t) => t.setAttribute("aria-selected", t.dataset.httpTab === name ? "true" : "false"))
+    this.httpTabPanelTargets.forEach((p) => { p.hidden = p.dataset.httpTab !== name })
+  }
+
+  // selectHttpMethod — the method dropdown: store the verb in the hidden input
+  // + reflect it in the trigger label, then rebuild the panel.
+  selectHttpMethod(event) {
+    const method = event.currentTarget.dataset.method
+
+    if (this.hasHttpMethodTarget) this.httpMethodTarget.value = method
+    if (this.hasHttpMethodLabelTarget) this.httpMethodLabelTarget.textContent = method
+    this.autoCommit()
+  }
+
+  addHttpHeader() {
+    if (!this.hasHttpHeaderTemplateTarget || !this.hasHttpHeadersRowsTarget) return
+
+    this.httpHeadersRowsTarget.appendChild(this.httpHeaderTemplateTarget.content.cloneNode(true))
+  }
+
+  removeHttpHeader(event) {
+    event.currentTarget.closest("div").remove()
+    this.autoCommit()
+  }
+
+  parseHttpMapping() {
+    if (!this.hasHttpMappingTarget) return {}
+
+    try {
+      return JSON.parse(this.httpMappingTarget.value || "{}")
+    } catch (_e) {
+      return {}
+    }
+  }
+
+  selectHttpChartType(event) {
+    this.currentHttpChartType = event.currentTarget.dataset.chartType || "table"
+    this.highlightHttpChart()
+    this.autoCommit()
+  }
+
+  highlightHttpChart() {
+    this.httpChartChipTargets.forEach((el) => {
+      el.dataset.active = el.dataset.chartType === this.currentHttpChartType ? "true" : "false"
+    })
+  }
+
+  selectHttpColor(event) {
+    this.currentHttpColor = event.currentTarget.dataset.color
+    this.highlightHttpColor()
+    this.autoCommit()
+  }
+
+  highlightHttpColor() {
+    this.httpSwatchTargets.forEach((el) => {
+      el.dataset.active = el.dataset.color === this.currentHttpColor ? "true" : "false"
+    })
+  }
+
+  // testHttp — fire the in-progress config server-side; show raw × parsed so
+  // the operator discovers the response shape and confirms the mapping.
+  async testHttp() {
+    const url = this.httpFieldValue("httpUrl")
+    const status = this.hasHttpTestStatusTarget ? this.httpTestStatusTarget : null
+
+    if (!url) { if (status) status.textContent = "Enter a URL first"; return }
+    if (status) status.textContent = "Testing…"
+
+    const payload = {
+      url,
+      method: this.hasHttpMethodTarget ? this.httpMethodTarget.value : "GET",
+      headers: this.parseHttpHeaders(),
+      body: this.httpFieldValue("httpBody"),
+      interval: this.httpFieldValue("httpInterval") || "auto",
+      mapping: this.hasHttpMappingTarget ? this.httpMappingTarget.value : "{}",
+      chart_type: this.currentHttpChartType || "table",
+      label: this.httpFieldValue("httpLabel"), scope: "", range: "1h"
+    }
+
+    try {
+      const token = document.querySelector('meta[name="csrf-token"]')?.content
+      const resp = await fetch(this.httpTestUrlValue, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token, Accept: "application/json" },
+        body: JSON.stringify(payload)
+      })
+      const data = await resp.json().catch(() => null)
+
+      this.renderHttpTest(data, status)
+    } catch (_e) {
+      if (status) status.textContent = "Request failed"
+    }
+  }
+
+  renderHttpTest(data, status) {
+    if (this.hasHttpTestResultTarget) this.httpTestResultTarget.hidden = false
+
+    if (!data || data.ok === false) {
+      if (status) status.textContent = data?.error || "Failed"
+      if (this.hasHttpTestRawTarget) this.httpTestRawTarget.textContent = data?.error || ""
+      if (this.hasHttpTestParsedTarget) this.httpTestParsedTarget.textContent = ""
+
+      return
+    }
+
+    const parsed = data.series || data.rows || []
+
+    if (status) status.textContent = `✓ ${parsed.length} ${data.series ? "points" : "rows"}`
+
+    if (this.hasHttpTestRawTarget) {
+      const raw = JSON.stringify(data.raw, null, 2)
+      const shown = raw.length > 4000 ? `${raw.slice(0, 4000)}\n  … (truncated)` : raw
+
+      this.fillJson(this.httpTestRawTarget, shown)
+    }
+
+    if (this.hasHttpTestParsedTarget) this.fillJson(this.httpTestParsedTarget, JSON.stringify(parsed.slice(0, 20), null, 2))
+  }
+
+  // fillJson — paint a pane with syntax-highlighted JSON. highlightJson is a
+  // lexical tokenizer (regex, not a parser), so it colours a truncated tail just
+  // fine — NO JSON.parse guard, which would reject the 4k-clipped RESPONSE (cut
+  // mid-token → invalid) and silently drop the whole pane to plain text.
+  fillJson(el, str) {
+    el.innerHTML = this.highlightJson(str)
+  }
+
+  // highlightJson — tokenize a JSON string into tok-* spans (same palette as the
+  // json-editor). HTML is escaped FIRST — the payload is an untrusted external
+  // response — so only our static span markup is ever added.
+  highlightJson(str) {
+    const esc = str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+    return esc.replace(
+      /("(?:[^"\\]|\\.)*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|([{}[\],])/g,
+      (match, string, colon, lit, num, punc) => {
+        if (string !== undefined) {
+          const cls = colon ? "tok-key" : "tok-str"
+          const tail = colon ? `<span class="tok-punc">${colon}</span>` : ""
+
+          return `<span class="${cls}">${string}</span>${tail}`
+        }
+
+        if (lit !== undefined) return `<span class="tok-lit">${lit}</span>`
+        if (num !== undefined) return `<span class="tok-num">${num}</span>`
+        if (punc !== undefined) return `<span class="tok-punc">${punc}</span>`
+
+        return match
+      }
+    )
+  }
+
+  // loadHttpPanel — restore the config into the block for edit-in-place.
+  loadHttpPanel(panel) {
+    const set = (target, value) => { if (this[`has${target[0].toUpperCase()}${target.slice(1)}Target`]) this[`${target}Target`].value = value ?? "" }
+
+    set("httpUrl", panel.url)
+    set("httpLabel", panel.label)
+    set("httpInterval", panel.interval || "auto")
+    const method = panel.method || "GET"
+
+    if (this.hasHttpMethodTarget) this.httpMethodTarget.value = method
+    if (this.hasHttpMethodLabelTarget) this.httpMethodLabelTarget.textContent = method
+    this.loadHttpHeaders(panel.headers || {})
+
+    // Body + Mapping are json-editors: setting .value alone does NOT repaint the
+    // highlight layer (json-editor paints on connect + on `input`). By load time
+    // the controller has already connected on the empty field, so we fire `input`
+    // to trigger a re-render — otherwise the restored JSON shows uncoloured until
+    // the operator edits it.
+    if (this.hasHttpBodyTarget) {
+      this.httpBodyTarget.value = panel.body ?? ""
+      this.httpBodyTarget.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+
+    if (this.hasHttpMappingTarget) {
+      this.httpMappingTarget.value = JSON.stringify(panel.mapping || {}, null, 2)
+      this.httpMappingTarget.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    this.currentHttpChartType = panel.chart_type || "table"
+    this.currentHttpColor = panel.color || "var(--voodu-cyan)"
+    this.highlightHttpChart()
+    this.highlightHttpColor()
+  }
+
+  // loadHttpHeaders — rebuild the add-row list from a saved headers object: one
+  // row per header (or a single blank row when there are none).
+  loadHttpHeaders(headers) {
+    if (!this.hasHttpHeadersRowsTarget) return
+
+    this.httpHeadersRowsTarget.replaceChildren()
+    const entries = Object.entries(headers)
+    const rows = entries.length ? entries : [["", ""]]
+
+    rows.forEach(([k, v]) => {
+      this.httpHeadersRowsTarget.appendChild(this.httpHeaderTemplateTarget.content.cloneNode(true))
+      const row = this.httpHeadersRowsTarget.lastElementChild
+      const key = row.querySelector('[data-dashboard-builder-target="httpHeaderKey"]')
+      const val = row.querySelector('[data-dashboard-builder-target="httpHeaderValue"]')
+
+      if (key) key.value = k
+      if (val) val.value = v
+    })
   }
 
   // loadTablePanel — restore source·view (reader + view) + label + filter +

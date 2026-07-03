@@ -29,7 +29,8 @@ module DataTable
     # this file doesn't force the source classes to load at boot).
     SOURCES = {
       "hep3" => "DataTable::Hep3Source",
-      "logs" => "DataTable::LogsSource"
+      "logs" => "DataTable::LogsSource",
+      "http" => "DataTable::HttpSource"
     }.freeze
 
     # build — instantiate the source for `key` from request params, or

@@ -119,8 +119,12 @@ class MetricDashboardData
 
     if panel["scope_kind"].to_s == "table"
       # A "table" panel is DataTable-family: chart_type "table" → rows;
-      # anything else (area/radial/linear) → a HEP3 count chart.
-      return (panel["chart_type"].to_s == "table") ? table_chart_for(panel, key) : hep_chart_for(panel, key)
+      # anything else (area/number/gauge) → a count/timeseries chart. The http
+      # source maps the response's own points into the series; hep3 counts.
+      return table_chart_for(panel, key) if panel["chart_type"].to_s == "table"
+      return http_chart_for(panel, key) if panel["source"].to_s == "http"
+
+      return hep_chart_for(panel, key)
     end
 
     if panel["scope_kind"].to_s == "pod"
@@ -277,6 +281,54 @@ class MetricDashboardData
     }
   end
 
+  # http_chart_for — an external-API source rendered as a chart. Unlike hep3
+  # (which COUNTS warehouse rows into buckets), the response carries its OWN
+  # timeline: the mapping's ts + value paths pull [{ts, value}] straight out,
+  # so 1 returned point → 1 dot, 500 → a full timeline. The request fires HERE,
+  # at render (the chart is server-side SVG); a fetch failure → an empty chart,
+  # never a broken page. The headline is the latest point (a live reading),
+  # not a sum — summing arbitrary external values (CPU %, temperatures) is
+  # meaningless. Gauges read avg-vs-peak of the returned values.
+  def http_chart_for(panel, key)
+    source = DataTable::Registry.build(panel["source"], island: @island, params: {panel: panel})
+    chart_type = panel["chart_type"].presence || "area"
+    from, to = hep_window
+
+    points = source ? source.series(ts_from: from, ts_to: to) : []
+    values = points.map { |p| p[:value] }
+    latest = values.last.to_f
+    formatted = format_http_value(latest)
+
+    if chart_type == "number"
+      return {
+        kind: :number, label: panel["label"].to_s, color: panel["color"].to_s,
+        formatted: formatted, value: latest, series: points,
+        range: @range, range_ms: range_ms, truncated: false, clamped: false, meta: nil,
+        default_visible: true, panel_key: key
+      }
+    end
+
+    gauge = %w[gauge_radial gauge_linear].include?(chart_type)
+    peak = values.max.to_f
+    avg = points.empty? ? 0.0 : (values.sum.to_f / points.size)
+    cap = if gauge
+      {label: nil, pct: (peak.positive? ? ((avg / peak) * 100).round : 0)}
+    end
+
+    {
+      label: panel["label"].to_s, color: panel["color"].to_s, unit: "",
+      points: points, current: latest, metric: key,
+      source: "http", section: "resource",
+      capacity_label: cap && cap[:label], capacity_pct: cap && cap[:pct],
+      chart_type: chart_type, percent: panel["percent"] == true,
+      default_visible: true, panel_key: key
+    }
+  end
+
+  def format_http_value(value)
+    (value == value.to_i) ? value.to_i.to_s : value.round(2).to_s
+  end
+
   # hep_window — [from_epoch, to_epoch] the chart aggregates over, from the
   # dashboard's range (relative) or the custom from/until span.
   def hep_window
@@ -318,9 +370,13 @@ class MetricDashboardData
   end
 
   def table_chart_for(panel, key)
-    view = panel["view"].presence || "messages"
+    view = panel["view"].presence || ((panel["source"].to_s == "http") ? "response" : "messages")
+    # Pass the panel itself so an http source resolves its request config from
+    # it directly (no dashboard/panel_key round-trip on the render path); hep3/
+    # logs ignore it and read scope/name.
     source = DataTable::Registry.build(
-      panel["source"], island: @island, params: {scope: panel["scope"], name: panel["name"]}
+      panel["source"], island: @island,
+      params: {scope: panel["scope"], name: panel["name"], panel: panel}
     )
 
     {
@@ -331,6 +387,9 @@ class MetricDashboardData
       scope: panel["scope"].to_s,
       name: panel["name"].to_s,
       view: view,
+      # dashboard_uuid + panel_key let the client's rows fetch re-resolve an
+      # http panel's config server-side (secrets never ride the query string).
+      dashboard_uuid: @dashboard&.uuid,
       # Column metadata for the toolbar (picker + filter field list),
       # rendered server-side from the source — no rows here (the client
       # fetches those). Empty when the source no longer resolves.

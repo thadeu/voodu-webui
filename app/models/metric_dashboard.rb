@@ -39,6 +39,11 @@ class MetricDashboard < ApplicationRecord
   # metric/scale — the source owns the (schema-less) columns.
   TABLE_PANEL_KEYS = %w[source scope name view label color].freeze
 
+  # HTTP (external-API) table panels have no local reader pod — they carry the
+  # request config (url + mapping) instead of scope/name. Same DataTable family
+  # (source "http"), different required keys.
+  HTTP_PANEL_KEYS = %w[source url label color].freeze
+
   # Allowed panel sources. "log" joins host/pod for log-count panels;
   # "table" is a DataSource-backed data table.
   SCOPE_KINDS = %w[host pod log table].freeze
@@ -150,10 +155,12 @@ class MetricDashboard < ApplicationRecord
 
       # Each source carries its own required-key set: log → query,
       # table → source/view, everyone else → the metric layout.
+      http = sk == "table" && panel["source"].to_s == "http"
+
       required =
         case sk
         when "log" then LOG_PANEL_KEYS
-        when "table" then TABLE_PANEL_KEYS
+        when "table" then http ? HTTP_PANEL_KEYS : TABLE_PANEL_KEYS
         else PANEL_KEYS
         end
       missing = required.reject { |k| panel[k].to_s.present? }
@@ -161,15 +168,15 @@ class MetricDashboard < ApplicationRecord
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
-      # `number` is the count tile — for log panels OR a hep3 count panel.
-      number_ok = sk == "log" || (sk == "table" && panel["source"].to_s == "hep3")
-      errors.add(:panels, "panel #{i + 1}: the number type needs a log or hep3 source") if ct == "number" && !number_ok
+      # `number` is the count tile — for log panels OR a hep3/http count panel.
+      number_ok = sk == "log" || (sk == "table" && %w[hep3 http].include?(panel["source"].to_s))
+      errors.add(:panels, "panel #{i + 1}: the number type needs a log, hep3, or http source") if ct == "number" && !number_ok
       errors.add(:panels, "panel #{i + 1}: the table type is only for table panels") if ct == "table" && sk != "table"
 
-      # A DataTable-family ("table") panel: the logs source only tabulates,
-      # but the hep3 source can ALSO be a count chart (Area/Radial/Linear).
+      # A DataTable-family ("table") panel: the logs source only tabulates, but
+      # the hep3 + http sources can ALSO be a count/timeseries chart.
       if sk == "table"
-        allowed = (panel["source"].to_s == "hep3") ? TABLE_CHART_TYPES : %w[table]
+        allowed = %w[hep3 http].include?(panel["source"].to_s) ? TABLE_CHART_TYPES : %w[table]
         errors.add(:panels, "table panel #{i + 1} can't use the #{ct} chart type") unless allowed.include?(ct.presence || "table")
       end
 

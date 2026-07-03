@@ -37,16 +37,17 @@ class Views::MetricDashboards::Manage < Views::Base
       title: "Dashboards",
       subtitle: "Build and organise your metric dashboards",
       icon: :Squares2x2Outline,
-      size: :wide,
+      size: :xl,
       close_to: metrics_path
     )
   end
 
   # body — master-detail: rail + editor frame. Column on mobile (rail strip on
-  # top), row at vmd+. A usable min-height on mobile; a fixed height at vmd+ so
-  # the editor scrolls inside the modal rather than growing it.
+  # top), row at vmd+. A usable min-height on mobile; a tall fixed height at vmd+
+  # (matching the call-flow modal's 82vh) so the editor scrolls inside the modal
+  # rather than growing it, and the panel list gets real vertical room.
   def body
-    div(class: "flex flex-col vmd:flex-row min-h-[440px] vmd:min-h-0 vmd:h-[min(640px,calc(100vh-160px))]") do
+    div(class: "flex flex-col vmd:flex-row min-h-[440px] vmd:min-h-0 vmd:h-[82vh] vmd:max-h-[calc(100vh-104px)]") do
       rail
       editor_frame
     end

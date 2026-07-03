@@ -22,6 +22,10 @@ export default class extends Controller {
     name: String,
     view: String,
     key: String,
+    // dashboard — the dashboard uuid; with `key` (the panel_key) it lets the
+    // rows endpoint re-resolve an http panel's stored request config server-
+    // side (the URL + auth headers never ride the query string).
+    dashboard: String,
     // range/from/until — the page's time window, forwarded on every fetch so
     // the table scopes to the same span as the charts.
     range: String,
@@ -200,6 +204,13 @@ export default class extends Controller {
     if (this.fromValue) params.set("from", this.fromValue)
     if (this.untilValue) params.set("until", this.untilValue)
 
+    // An http source resolves its config from the panel; hand the endpoint the
+    // reference so it can look it up (harmless no-op for hep3/logs).
+    if (this.dashboardValue) {
+      params.set("dashboard", this.dashboardValue)
+      params.set("panel_key", this.keyValue)
+    }
+
     Object.entries(extra).forEach(([k, v]) => params.set(k, v))
 
     try {
@@ -207,9 +218,14 @@ export default class extends Controller {
       const data = await resp.json().catch(() => null)
 
       if (!resp.ok) {
-        // A 422 carries the filter parse message — show it verbatim so the
-        // operator fixes the query instead of thinking the filter is broken.
-        this.showStatus(data?.error ? `Filter: ${data.error}` : `Couldn't load rows (${resp.status})`)
+        // 422 carries a filter parse message (prefix it so the operator fixes
+        // the query); a 502 carries an external-API error (timeout / HTTP 5xx /
+        // bad JSON) — show that verbatim. Otherwise a generic fallback.
+        const msg = data?.error
+          ? (resp.status === 422 ? `Filter: ${data.error}` : data.error)
+          : `Couldn't load rows (${resp.status})`
+
+        this.showStatus(msg)
 
         return null
       }
@@ -777,8 +793,16 @@ export default class extends Controller {
     }
   }
 
+  // prefKey — per-panel localStorage namespace for column visibility / widths /
+  // live. Scoped by DASHBOARD too (not just the panel_key): panel_key is
+  // index-based ("k0"), so without the dashboard uuid every dashboard's first
+  // panel shared one key — a stale column set from another dashboard's k0 would
+  // hide a new panel's columns (an empty table until you re-check them). Scope
+  // pages have no dashboard, so they fall back to the panel_key alone.
   prefKey(suffix) {
-    return `voodu:dt:${this.keyValue}:${suffix}`
+    const ns = this.dashboardValue ? `${this.dashboardValue}:` : ""
+
+    return `voodu:dt:${ns}${this.keyValue}:${suffix}`
   }
 
   readJson(key) {

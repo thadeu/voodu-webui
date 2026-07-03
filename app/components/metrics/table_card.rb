@@ -20,7 +20,7 @@
 class Components::Metrics::TableCard < Components::Base
   def initialize(label:, color:, source:, scope:, name:, view:, rows_url:,
     fields: [], default_fields: [], filter_query: "", metric: nil, default_visible: true,
-    row_action: nil, range: "1h", window_from: nil, window_until: nil)
+    row_action: nil, dashboard_uuid: nil, range: "1h", window_from: nil, window_until: nil)
     @label = label
     @color = color
     @source = source
@@ -33,6 +33,9 @@ class Components::Metrics::TableCard < Components::Base
     @filter_query = filter_query.to_s
     @metric = metric
     @default_visible = default_visible
+    # dashboard_uuid — with the panel_key (== @metric) it lets the client's
+    # rows fetch re-resolve an http panel's stored request config server-side.
+    @dashboard_uuid = dashboard_uuid
     # row_action — optional per-row drill-down declared by the source
     # ({key:, event:, title:, icon:}). Renders a leading icon cell that
     # dispatches `datatable:rowaction` for a page host to act on.
@@ -113,6 +116,7 @@ class Components::Metrics::TableCard < Components::Base
         data_table_name_value: @name,
         data_table_view_value: @view,
         data_table_key_value: @metric.to_s,
+        data_table_dashboard_value: @dashboard_uuid,
         data_table_range_value: @range,
         data_table_from_value: @window_from,
         data_table_until_value: @window_until,
