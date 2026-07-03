@@ -723,18 +723,30 @@ export default class extends Controller {
 
   // ── persistence (per-panel prefs) ─────────────────────────────────
 
+  // restorePrefs — reapply saved column visibility, keyed by field NAME. Because
+  // field names are user-editable (rename in the panel mapping), we store the
+  // full SCHEMA alongside the visible set: `{ v: [visible], s: [all-at-save] }`.
+  // On restore, a column that WAS in the saved schema keeps its saved shown/hidden
+  // state; a column that WASN'T (renamed or newly added) defaults to VISIBLE — so
+  // renaming a field never silently unchecks it. Legacy array prefs are ignored
+  // (→ server defaults, all shown), and get rewritten in the new shape on the
+  // next toggle.
   restorePrefs() {
     this.live = localStorage.getItem(this.prefKey("live")) === "1"
 
     const saved = this.readJson(this.prefKey("cols"))
 
-    if (Array.isArray(saved) && saved.length) {
-      this.colToggleTargets.forEach((c) => { c.checked = saved.includes(c.value) })
-    }
+    if (!saved || !Array.isArray(saved.v) || !Array.isArray(saved.s)) return
+
+    this.colToggleTargets.forEach((c) => {
+      c.checked = saved.s.includes(c.value) ? saved.v.includes(c.value) : true
+    })
   }
 
   persistColumns() {
-    localStorage.setItem(this.prefKey("cols"), JSON.stringify(this.visibleColumns()))
+    const schema = this.colToggleTargets.map((c) => c.value)
+
+    localStorage.setItem(this.prefKey("cols"), JSON.stringify({ v: this.visibleColumns(), s: schema }))
   }
 
   persistLive() {
@@ -779,10 +791,17 @@ export default class extends Controller {
     return raw
   }
 
-  // signature — the source/view/filter the cache is valid for. A config
-  // edit (new filter or view) changes it, forcing a fresh load.
+  // signature — the source/view/filter/SCHEMA the cache is valid for. A config
+  // edit (new filter, view, or renamed/re-mapped columns) changes it, forcing a
+  // fresh load. The column schema matters because rows are keyed by field name:
+  // renaming a field (e.g. `id` → `ID1`) would otherwise restore cached rows
+  // under the OLD keys, so every cell reads `row[newName]` === undefined and the
+  // table fills with blank rows. Sorted so a mere column REORDER (same keys)
+  // keeps the cache valid.
   signature() {
-    return [this.viewValue, this.currentQuery(), this.rangeValue, this.fromValue, this.untilValue].join("|")
+    const schema = this.colToggleTargets.map((c) => c.value).sort().join(",")
+
+    return [this.viewValue, this.currentQuery(), this.rangeValue, this.fromValue, this.untilValue, schema].join("|")
   }
 
   readSession(key) {

@@ -11,6 +11,8 @@ operator commands without SSHing in for every check.
 - **Live pods / logs / metrics.** Drawer-mode log following, sparklines + range pills
   on charts, current values stable across time ranges.
 - **⌘K command palette.** Global across every registered island, cached client-side.
+- **External API dashboards.** Build a Table or Area/Number chart from any HTTP endpoint
+  with a small JSON mapping — see [docs/http-source-mapping.md](docs/http-source-mapping.md).
 - **PAT auth, encrypted at rest.** Each island stores a personal access token used to
   talk to its `voodu` controller; tokens live in SQLite as `pat_ciphertext` and are
   encrypted via ActiveRecord Encryption.

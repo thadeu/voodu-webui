@@ -1217,16 +1217,36 @@ export default class extends Controller {
     return row
   }
 
-  // chipTypeLabel — the chart-type line under each panel's label. Log panels
-  // render a number + sparkline → "Log spark" (not "Count", which read as a
-  // count-type query); metric panels read their shape (Area is the default).
+  // chipTypeLabel — the type line under each panel's label (CSS-uppercased).
+  // Log panels render a number + sparkline → "Log spark". Metric panels read as
+  // just their shape (Area / Radial / Linear). Table-kind panels share one
+  // "Table" viz across DIFFERENT SOURCES (HEP3 vs an external API) and http can
+  // also be a chart (Area / Number) — so they carry a "<source> · <viz>" label
+  // ("HEP3 · Table", "API · Area") to disambiguate what was otherwise all "Table".
   chipTypeLabel(panel) {
     if (panel.scope_kind === "log") return "Log spark"
-    if (panel.scope_kind === "table") return "Table"
-    if (panel.chart_type === "gauge_radial") return "Radial"
-    if (panel.chart_type === "gauge_linear") return "Linear"
 
-    return "Area"
+    const viz = this.vizLabel(panel.chart_type)
+
+    if (panel.scope_kind === "table") {
+      const src = { hep3: "HEP3", http: "API" }[panel.source] || (panel.source || "").toUpperCase()
+
+      return src ? `${src} · ${viz}` : viz
+    }
+
+    return viz
+  }
+
+  // vizLabel — the visualization shape as a word. Default "Area" (the metric
+  // panel default + the http chart default).
+  vizLabel(chartType) {
+    switch (chartType) {
+      case "table": return "Table"
+      case "number": return "Number"
+      case "gauge_radial": return "Radial"
+      case "gauge_linear": return "Linear"
+      default: return "Area"
+    }
   }
 
   sync() {
