@@ -21,7 +21,7 @@ class Views::AlertRules::Form < Views::Base
     @targets = targets
     # servers — the org's servers (M3): feeds BOTH the layout sidebar list and
     # the Target select (a Host per server + that server's pods). A rule targets
-    # exactly one (server, host|pod). (Pre-rename this was two params — islands
+    # exactly one (server, host|pod). (Pre-rename this was two params — servers
     # for the layout + servers for the picker — but they carry the same data.)
     @servers = servers
     @destinations = destinations
