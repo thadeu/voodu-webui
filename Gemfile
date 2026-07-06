@@ -24,7 +24,7 @@ gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"
 gem "csv", "~> 3.3", require: false
 
-# poller — Go-based NDJSON poller for voodu islands. Ships a
+# poller — Go-based NDJSON poller for voodu servers. Ships a
 # compiled binary that the Puma plugin (config/puma.rb) spawns when
 # `POLLER_SPAWN=1`. Path-resolved local gem; no rubygems.org publish.
 gem "poller", path: "gems/poller"

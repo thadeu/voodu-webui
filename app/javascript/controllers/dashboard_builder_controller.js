@@ -34,16 +34,16 @@ export default class extends Controller {
     hep3Fields:       Array,
     hep3Hints:        Object,
     httpTestUrl:      String,
-    defaultIsland:    String,
+    defaultServer:    String,
     servers:          Object,
     panels:           Array
   }
 
   connect() {
     this.panels = Array.isArray(this.panelsValue) ? this.panelsValue.map((p) => ({ ...p })) : []
-    // island_id — the server a fresh host panel binds to before a source is
-    // picked. Every source option overrides it with its own island_id (M2).
-    this.currentSource = { scope_kind: "host", label: "host", island_id: this.defaultIslandValue }
+    // server_id — the server a fresh host panel binds to before a source is
+    // picked. Every source option overrides it with its own server_id (M2).
+    this.currentSource = { scope_kind: "host", label: "host", server_id: this.defaultServerValue }
     this.currentMetric = null
     this.currentMetricColor = null
     this.currentChartType = "area"
@@ -498,18 +498,18 @@ export default class extends Controller {
     return "metric"
   }
 
-  // serverName — a server's display name by island_id (from the servers map).
-  serverName(islandId) {
+  // serverName — a server's display name by server_id (from the servers map).
+  serverName(serverId) {
     const map = this.serversValue || {}
 
-    return map[islandId] || map[String(islandId)] || ""
+    return map[serverId] || map[String(serverId)] || ""
   }
 
   // sourceTriggerLabel — prefix a source label with its server when the org has
   // more than one server (mirrors the form's source_text).
-  sourceTriggerLabel(islandId, base) {
+  sourceTriggerLabel(serverId, base) {
     const multi = Object.keys(this.serversValue || {}).length > 1
-    const name = this.serverName(islandId)
+    const name = this.serverName(serverId)
 
     return (multi && name) ? `${name} · ${base}` : base
   }
@@ -520,13 +520,13 @@ export default class extends Controller {
     const host = panel.scope_kind === "host"
 
     this.currentSource = host
-      ? { scope_kind: "host", label: "host", island_id: panel.island_id }
-      : { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: panel.kind || "pod", label: panel.name, island_id: panel.island_id }
+      ? { scope_kind: "host", label: "host", server_id: panel.server_id }
+      : { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: panel.kind || "pod", label: panel.name, server_id: panel.server_id }
 
     if (this.hasSourceLabelTarget) {
       const base = host ? "Host (system)" : `${panel.name} · ${panel.kind || "pod"}`
 
-      this.sourceLabelTarget.textContent = this.sourceTriggerLabel(panel.island_id, base)
+      this.sourceLabelTarget.textContent = this.sourceTriggerLabel(panel.server_id, base)
     }
 
     this.populateMetrics()
@@ -551,8 +551,8 @@ export default class extends Controller {
 
   // loadLogPanel — restore pod + label + query + color into the log block.
   loadLogPanel(panel) {
-    this.currentLogSource = { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: panel.kind || "pod", label: panel.name, island_id: panel.island_id }
-    if (this.hasLogSourceLabelTarget) this.logSourceLabelTarget.textContent = this.sourceTriggerLabel(panel.island_id, `${panel.name} · ${panel.kind || "pod"}`)
+    this.currentLogSource = { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: panel.kind || "pod", label: panel.name, server_id: panel.server_id }
+    if (this.hasLogSourceLabelTarget) this.logSourceLabelTarget.textContent = this.sourceTriggerLabel(panel.server_id, `${panel.name} · ${panel.kind || "pod"}`)
     if (this.hasLogLabelTarget) this.logLabelTarget.value = panel.label || ""
 
     if (this.hasLogQueryTarget) {
@@ -597,9 +597,9 @@ export default class extends Controller {
 
     const panel = {
       scope_kind: source.scope_kind,
-      // island_id — the server this panel reads from (M2). Rides in every
-      // source option; the model rejects a panel whose island_id isn't in the org.
-      island_id:  source.island_id,
+      // server_id — the server this panel reads from (M2). Rides in every
+      // source option; the model rejects a panel whose server_id isn't in the org.
+      server_id:  source.server_id,
       metric:     spec.metric,
       scale:      spec.scale,
       label:      `${srcLabel} · ${spec.label}`,
@@ -678,7 +678,7 @@ export default class extends Controller {
 
     return {
       scope_kind: "log",
-      island_id:  src.island_id,
+      server_id:  src.server_id,
       scope:      src.scope,
       name:       src.name,
       kind:       src.kind,
@@ -846,9 +846,9 @@ export default class extends Controller {
       scope_kind:   "table",
       chart_type:   chartType,
       source:       sv.source,
-      // island_id — the server this reader lives on (M2). hep3/logs source-views
+      // server_id — the server this reader lives on (M2). hep3/logs source-views
       // carry it; an http panel has no server so it stays undefined.
-      island_id:    sv.island_id,
+      server_id:    sv.server_id,
       scope:        sv.scope,
       name:         sv.name,
       view:         sv.view,
@@ -1119,7 +1119,7 @@ export default class extends Controller {
 
   // loadTablePanel — restore source·view (reader + view) + label + filter +
   // color from a saved panel (edit-in-place). Matches the reader by name so a
-  // multi-reader island restores the right one.
+  // multi-reader server restores the right one.
   loadTablePanel(panel) {
     // Activate the kind the panel belongs to FIRST (source=hep3 → HEP3 kind),
     // so the options list + filter fields match before we restore.
@@ -1133,9 +1133,9 @@ export default class extends Controller {
     }
 
     const list = this.sourceViews()
-    // Match the reader by island_id + name first (the same reader name can live
+    // Match the reader by server_id + name first (the same reader name can live
     // on two servers in the org — M2), then loosen to name-only, then any.
-    const sv = list.find((s) => s.source === panel.source && s.view === panel.view && s.name === panel.name && String(s.island_id) === String(panel.island_id)) ||
+    const sv = list.find((s) => s.source === panel.source && s.view === panel.view && s.name === panel.name && String(s.server_id) === String(panel.server_id)) ||
       list.find((s) => s.source === panel.source && s.view === panel.view && s.name === panel.name) ||
       list.find((s) => s.source === panel.source && s.view === panel.view) || list[0] || null
 

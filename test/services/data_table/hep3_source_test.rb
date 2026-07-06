@@ -7,18 +7,18 @@ require "test_helper"
 # (id + corr_id, no raw_sip), errors = only 4xx/5xx, calls = one grouped
 # row per corr_id with a message count.
 class DataTable::Hep3SourceTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @scope = "fsw"
     @name = "hep3-api"
-    @src = DataTable::Hep3Source.new(island: @island, scope: @scope, name: @name)
+    @src = DataTable::Hep3Source.new(server: @server, scope: @scope, name: @name)
   end
 
   def insert(call_id:, x_cid: "", meth: "INVITE", code: 0, ts: "2026-06-30 10:00:00.000000", raw: "X sip:y")
     payload = {ts: ts, call_id: call_id, x_cid: x_cid, method: meth, response_code: code, raw_sip: raw}.to_json
-    HepMessage.bulk_insert([{tenant_id: @island.id, scope: @scope, name: @name, payload: payload}])
+    HepMessage.bulk_insert([{server_id: @server.id, scope: @scope, name: @name, payload: payload}])
   end
 
   test "views lists messages, calls and errors" do
@@ -66,7 +66,7 @@ class DataTable::Hep3SourceTest < ActiveSupport::TestCase
   end
 
   test "from_params requires a scope and name" do
-    assert_nil DataTable::Hep3Source.from_params(island: @island, params: {scope: "fsw"})
-    assert DataTable::Hep3Source.from_params(island: @island, params: {scope: "fsw", name: "hep3-api"})
+    assert_nil DataTable::Hep3Source.from_params(server: @server, params: {scope: "fsw"})
+    assert DataTable::Hep3Source.from_params(server: @server, params: {scope: "fsw", name: "hep3-api"})
   end
 end

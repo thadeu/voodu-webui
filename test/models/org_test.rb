@@ -2,11 +2,11 @@
 
 require "test_helper"
 
-# Org — the tenant/grouping layer. Scenarios: identity (uuidv7 + short_id),
+# Org — the server/grouping layer. Scenarios: identity (uuidv7 + short_id),
 # name required/unique, the delete guard (can't orphan servers), and that a
 # server must belong to an org.
 class OrgTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   test "a new org gets a uuidv7 id and an 8-char base62 short_id used as the param" do
     org = Org.create!(name: "New Co")
@@ -32,7 +32,7 @@ class OrgTest < ActiveSupport::TestCase
     org = orgs(:acme) # owns alpha + beta
 
     assert_not org.destroy
-    assert_includes org.errors[:base].join, "islands"
+    assert_includes org.errors[:base].join, "servers"
     assert Org.exists?(org.id)
   end
 
@@ -44,9 +44,9 @@ class OrgTest < ActiveSupport::TestCase
   end
 
   test "a server must belong to an org" do
-    island = Island.new(name: "orphan", endpoint: "http://10.0.0.9:8687", pat: "x")
+    server = Server.new(name: "orphan", endpoint: "http://10.0.0.9:8687", pat: "x")
 
-    assert island.invalid?
-    assert_includes island.errors[:org].join, "must exist"
+    assert server.invalid?
+    assert_includes server.errors[:org].join, "must exist"
   end
 end

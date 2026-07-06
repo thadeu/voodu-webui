@@ -107,9 +107,9 @@ class Components::Alerts::RulesTable < Components::Base
   def metrics_link(rule)
     render Components::UI::Button.new(
       variant: :ghost, size: :sm, tag: :a,
-      # tenant_key → the TARGET server's /metrics (M3: a rule may watch a server
+      # server_key → the TARGET server's /metrics (M3: a rule may watch a server
       # other than the one whose /alerts URL we're on).
-      href: metrics_path(rule.metrics_link_params.merge(tenant_key: rule.island.key)),
+      href: metrics_path(rule.metrics_link_params.merge(server_key: rule.server.key)),
       title: "Open metrics for #{rule.target_label}"
     ) do
       render Icon::ChartBarOutline.new(class: "w-3.5 h-3.5")

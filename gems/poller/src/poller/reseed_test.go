@@ -21,12 +21,12 @@ func (nopMetrics) WatermarkAge(string, time.Duration) {}
 func (nopMetrics) CapHitIncr(string, string)          {}
 func (nopMetrics) SetLastPoll(time.Time)              {}
 
-// applyLines mirrors the per-line core of IslandPoller.tick (parse →
+// applyLines mirrors the per-line core of ServerPoller.tick (parse →
 // hash → ring dedup → append). It deliberately omits the HTTP fetch and
 // watermark bump, which are irrelevant to dedup, so the test can drive
 // the real lineHash + ringFor (disk-seeded) + Writer.Append seam.
 // Returns the number of lines actually written to disk.
-func applyLines(t *testing.T, p *IslandPoller, rawLines [][]byte) int {
+func applyLines(t *testing.T, p *ServerPoller, rawLines [][]byte) int {
 	t.Helper()
 
 	written := 0
@@ -53,7 +53,7 @@ func applyLines(t *testing.T, p *IslandPoller, rawLines [][]byte) int {
 		ring.Record(h)
 
 		rec := Record{Pod: pod, TS: ts, Msg: msg, Raw: string(raw)}
-		if err := p.Writer.Append(p.Island.ID, pod, rec); err != nil {
+		if err := p.Writer.Append(p.Server.ID, pod, rec); err != nil {
 			t.Fatalf("append: %v", err)
 		}
 
@@ -89,7 +89,7 @@ func countLines(t *testing.T, path string) int {
 func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 	root := t.TempDir()
 	w := NewWriter(root, nil)
-	island := client.Island{ID: "isl-1"}
+	server := client.Server{ID: "isl-1"}
 	pod := "fsw-adapter.9031"
 
 	// Build a batch of distinct lines stamped "today" (UTC) so seedRing,
@@ -104,7 +104,7 @@ func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 	}
 
 	// Process A: cold ring, everything is new and gets written.
-	pA := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
+	pA := NewServerPoller(server, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pA, lines); got != len(lines) {
 		t.Fatalf("first pass wrote %d lines, want %d", got, len(lines))
 	}
@@ -112,13 +112,13 @@ func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 	// Process B: fresh poller (restart) re-fetches the SAME lines (the
 	// since=oldestWatermark overlap). With disk-seeding, none are
 	// re-written.
-	pB := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
+	pB := NewServerPoller(server, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pB, lines); got != 0 {
 		t.Fatalf("re-tail after restart wrote %d duplicate lines, want 0", got)
 	}
 
 	// And the day file holds exactly one copy of each line.
-	path := w.DailyFile(island.ID, pod, base)
+	path := w.DailyFile(server.ID, pod, base)
 	if got := countLines(t, path); got != len(lines) {
 		t.Fatalf("day file has %d lines, want %d (duplicates persisted)", got, len(lines))
 	}
@@ -131,7 +131,7 @@ func TestSeedRing_DedupesReTailAcrossRestart(t *testing.T) {
 func TestSeedRing_DedupesAcrossDayFiles(t *testing.T) {
 	root := t.TempDir()
 	w := NewWriter(root, nil)
-	island := client.Island{ID: "isl-1"}
+	server := client.Server{ID: "isl-1"}
 	pod := "fsw-events.48b6"
 
 	// Lines on three consecutive UTC days.
@@ -147,18 +147,18 @@ func TestSeedRing_DedupesAcrossDayFiles(t *testing.T) {
 		}
 	}
 
-	pA := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
+	pA := NewServerPoller(server, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pA, lines); got != len(lines) {
 		t.Fatalf("first pass wrote %d, want %d", got, len(lines))
 	}
 
-	pB := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
+	pB := NewServerPoller(server, root, time.Minute, time.Hour, w, nopMetrics{})
 	if got := applyLines(t, pB, lines); got != 0 {
 		t.Fatalf("multi-day re-tail wrote %d duplicates, want 0", got)
 	}
 
 	for d, day := range days {
-		path := w.DailyFile(island.ID, pod, day)
+		path := w.DailyFile(server.ID, pod, day)
 		if got := countLines(t, path); got != 5 {
 			t.Fatalf("day %d file has %d lines, want 5 (duplicates persisted)", d, got)
 		}
@@ -172,18 +172,18 @@ func TestSeedRing_DedupesAcrossDayFiles(t *testing.T) {
 func TestSeedRing_HashRoundTripsThroughNDJSON(t *testing.T) {
 	root := t.TempDir()
 	w := NewWriter(root, nil)
-	island := client.Island{ID: "isl-1"}
+	server := client.Server{ID: "isl-1"}
 	pod := "fsw-controller.e1e1"
 
 	ts := time.Now().UTC()
 	msg := `{"level":"INFO","msg":"record-to-s3 ok"}`
 	wantHash := lineHash(pod, ts, msg)
 
-	if err := w.Append(island.ID, pod, Record{Pod: pod, TS: ts, Msg: msg, Raw: "raw"}); err != nil {
+	if err := w.Append(server.ID, pod, Record{Pod: pod, TS: ts, Msg: msg, Raw: "raw"}); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
-	p := NewIslandPoller(island, root, time.Minute, time.Hour, w, nopMetrics{})
+	p := NewServerPoller(server, root, time.Minute, time.Hour, w, nopMetrics{})
 	ring := p.ringFor(pod) // lazily created → seeded from disk
 
 	if !ring.Seen(wantHash) {

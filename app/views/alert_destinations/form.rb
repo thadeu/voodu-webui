@@ -22,7 +22,7 @@ class Views::AlertDestinations::Form < Views::Base
     ["{{threshold}}", "configured threshold"],
     ["{{peak}}", "peak value in the window"],
     ["{{unit}}", %(% or "req/s")],
-    ["{{island}}", "island name"],
+    ["{{server}}", "server name"],
     ["{{started_at}}", "fired at (your timezone)"],
     ["{{resolved_at}}", "resolved at (blank while firing)"],
     ["{{url}}", "link to /alerts (needs APP_BASE_URL)"],
@@ -47,16 +47,16 @@ class Views::AlertDestinations::Form < Views::Base
     '"summary": "{{rule | truncate: 60}}"'
   ].freeze
 
-  def initialize(current_path:, destination:, islands: [], current_island: nil)
+  def initialize(current_path:, destination:, servers: [], current_server: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @destination = destination
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island,
+      current_path: @current_path, servers: @servers, current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
       render(modal) { form_body }
@@ -414,7 +414,7 @@ class Views::AlertDestinations::Form < Views::Base
         "payload": {
           "summary": "{{rule}} {{state}} — {{target}} at {{value}}{{unit}}",
           "severity": "critical",
-          "source": "{{island}}",
+          "source": "{{server}}",
           "custom_details": { "metric": "{{metric}}", "value": "{{value}}{{unit}}", "threshold": "{{threshold}}{{unit}}" }
         }
       }
@@ -428,7 +428,7 @@ class Views::AlertDestinations::Form < Views::Base
         "value": "{{value}}",
         "unit": "{{unit}}",
         "threshold": "{{threshold}}",
-        "island": "{{island}}",
+        "server": "{{server}}",
         "started_at": "{{started_at}}"
       }
     JSON

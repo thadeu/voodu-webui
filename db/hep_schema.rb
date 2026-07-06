@@ -16,9 +16,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_30_120100) do
     t.string "cursor", default: "", null: false
     t.string "name", null: false
     t.string "scope", null: false
-    t.integer "tenant_id", null: false
+    t.integer "server_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["tenant_id", "scope", "name"], name: "idx_hep_cursors_instance", unique: true
+    t.index ["server_id", "scope", "name"], name: "idx_hep_cursors_instance", unique: true
   end
 
   create_table "hep_messages", force: :cascade do |t|
@@ -28,13 +28,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_30_120100) do
     t.text "payload", null: false
     t.virtual "response_code", type: :integer, as: "json_extract(payload, '$.response_code')", stored: false
     t.string "scope", null: false
+    t.integer "server_id", null: false
     t.virtual "sip_method", type: :string, as: "json_extract(payload, '$.method')", stored: false
-    t.integer "tenant_id", null: false
     t.virtual "ts", type: :string, as: "json_extract(payload, '$.ts')", stored: false
     t.virtual "ts_epoch", type: :integer, as: "CAST(strftime('%s', json_extract(payload, '$.ts')) AS INTEGER)", stored: true
     t.virtual "x_cid", type: :string, as: "json_extract(payload, '$.x_cid')", stored: false
-    t.index ["tenant_id", "call_id"], name: "idx_hep_messages_call_id"
-    t.index ["tenant_id", "scope", "name", "corr_id", "ts_epoch"], name: "idx_hep_messages_call"
-    t.index ["tenant_id", "scope", "name", "ts_epoch"], name: "idx_hep_messages_recent"
+    t.index ["server_id", "call_id"], name: "idx_hep_messages_call_id"
+    t.index ["server_id", "scope", "name", "corr_id", "ts_epoch"], name: "idx_hep_messages_call"
+    t.index ["server_id", "scope", "name", "ts_epoch"], name: "idx_hep_messages_recent"
   end
 end

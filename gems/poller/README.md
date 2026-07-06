@@ -1,20 +1,20 @@
 # poller
 
-Go-based log NDJSON poller for voodu islands. Mirrors the `solid_queue` gem
+Go-based log NDJSON poller for voodu servers. Mirrors the `solid_queue` gem
 pattern: ships a binary, plugs into Puma, and writes durable per-pod NDJSON
-files under `storage/logs/<island>/<pod>/YYYY-MM-DD.ndjson`.
+files under `storage/logs/<server>/<pod>/YYYY-MM-DD.ndjson`.
 
 ## What it does
 
-For every island registered in the Rails app, the binary opens a long-lived
+For every server registered in the Rails app, the binary opens a long-lived
 goroutine that:
 
-1. Takes an exclusive file lock on `storage/logs/<island>/.writer.lock` so
-   only one process can write a given island's tree at once.
+1. Takes an exclusive file lock on `storage/logs/<server>/.writer.lock` so
+   only one process can write a given server's tree at once.
 2. Reads a watermark sidecar (`.watermark` per pod) that records the
    timestamp of the last persisted line.
 3. Polls `GET /api/pat/v1/logs?follow=false&tail=500&since=<watermark>&timestamps=true`
-   on the island's voodu controller using its PAT.
+   on the server's voodu controller using its PAT.
 4. Parses each `[pod] <ts> <body>` line, dedups via an xxhash64 sliding
    ring (5000 entries / pod), appends to today's NDJSON file, and bumps
    the watermark via atomic rename.
@@ -31,10 +31,10 @@ exactly `"1"`, they exit 0 immediately so Puma will not restart-storm.
 | `POLLER_SPAWN`                 | unset (disabled)            | Set to `1` to enable               |
 | `POLLER_TOKEN`      | required                    | Auth to Rails internal endpoint    |
 | `RAILS_INTERNAL_URL`             | `http://127.0.0.1:3000`     | Rails app base URL                 |
-| `POLLER_INTERVAL_SECONDS`    | `15` (min `5`)              | Per-island poll cadence            |
+| `POLLER_INTERVAL_SECONDS`    | `15` (min `5`)              | Per-server poll cadence            |
 | `POLLER_STORAGE_DIR`         | `./storage/logs`            | NDJSON output root                 |
 | `POLLER_OBSERVABILITY_ADDR`  | `:9999`                     | Bind for `/healthz` + `/metrics`   |
-| `POLLER_VERBOSE`             | unset (silent)              | Set to `1` to log one summary line per island per tick (pods/scanned/written/deduped/elapsed/wm_lag) |
+| `POLLER_VERBOSE`             | unset (silent)              | Set to `1` to log one summary line per server per tick (pods/scanned/written/deduped/elapsed/wm_lag) |
 
 ## Building the binary
 

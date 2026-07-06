@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   # ActionCable WebSocket endpoint.
   #
   # Required so `turbo_stream_from` subscribers in any view (currently
-  # Views::Metrics::Index for live chart updates after MetricsSyncIslandJob
+  # Views::Metrics::Index for live chart updates after MetricsSyncServerJob
   # broadcasts) can actually establish a WebSocket connection. Without
   # this mount, Rails generates the right
   # `<turbo-cable-stream-source>` HTML but the browser hits 404 on
@@ -34,25 +34,25 @@ Rails.application.routes.draw do
   get "manifest" => "rails/pwa#manifest", :as => :pwa_manifest
   get "service-worker" => "rails/pwa#service_worker", :as => :pwa_service_worker
 
-  # Island registry — operator-facing CRUD lives at the TENANT-LESS
-  # root because it's the bootstrapping surface ("I have no islands
-  # yet, how do I add one?"). Once an island exists, every other
-  # route lives under /:tenant_key/.
-  resources :islands, only: [:index, :new, :create, :edit, :update, :destroy]
+  # Server registry — operator-facing CRUD lives at the SERVER-LESS
+  # root because it's the bootstrapping surface ("I have no servers
+  # yet, how do I add one?"). Once an server exists, every other
+  # route lives under /:server_key/.
+  resources :servers, only: [:index, :new, :create, :edit, :update, :destroy]
 
-  # Org registry — the tenant/grouping layer above servers. Also TENANT-LESS
-  # (an org is created from the server-registration form, before any tenant
+  # Org registry — the server/grouping layer above servers. Also SERVER-LESS
+  # (an org is created from the server-registration form, before any server
   # scope exists). CRUD returns turbo_stream so the org dropdown + manager
   # list update in place, no reload. M1 puts the org's short_id in the path.
   resources :orgs, only: [:create, :update, :destroy]
 
   # Internal-only API for the out-of-process log poller binary.
-  # Deliberately OUTSIDE the `:tenant_key` scope — the binary is
-  # global and wants every island in one shot. Auth + loopback/
+  # Deliberately OUTSIDE the `:server_key` scope — the binary is
+  # global and wants every server in one shot. Auth + loopback/
   # private-IP guards live in the controller itself (see
   # Internal::PollerController).
   namespace :internal do
-    get "poller/islands", to: "poller#islands", as: :poller_islands
+    get "poller/servers", to: "poller#servers", as: :poller_servers
     # Cold-start resume point for the Go binary's metrics stream. The
     # poller's per-source watermark is in-memory (lost on restart), so
     # on boot it asks for the newest ts we've already warehoused and
@@ -65,48 +65,48 @@ Rails.application.routes.draw do
     post "poller/digest", to: "poller_digest#create", as: :poller_digest
   end
 
-  # Bare root — if any islands exist, ApplicationController redirects
-  # to /<first-island-key>/; otherwise lands on /islands/new.
+  # Bare root — if any servers exist, ApplicationController redirects
+  # to /<first-server-key>/; otherwise lands on /servers/new.
   root "dashboard#redirect_to_default"
 
   get "/styleguide", to: "styleguide#index"
 
-  # ⌘K palette feed — GLOBAL, not tenant-scoped. The JS controller
+  # ⌘K palette feed — GLOBAL, not server-scoped. The JS controller
   # fetches this once per session (with a 30s sessionStorage TTL)
-  # and uses it to render commands for every island, not just the
+  # and uses it to render commands for every server, not just the
   # one the operator is currently viewing. Lives at the top level
-  # because there's no single tenant_key that owns it.
+  # because there's no single server_key that owns it.
   get "/command_palette.json", to: "command_palette#commands", as: :command_palette
 
   # Org root — /<org8>/ (no server) bounces to a server's overview within
-  # the org. 8-char constraint so it never shadows /islands, /orgs, etc.
+  # the org. 8-char constraint so it never shadows /servers, /orgs, etc.
   get ":org_id", to: "dashboard#org_root", as: :org_root, constraints: {org_id: /[a-zA-Z0-9]{8}/}
 
-  # Tenant-scoped routes. Every navigation surface (overview, pods,
+  # Server-scoped routes. Every navigation surface (overview, pods,
   # logs, metrics, alerts, settings) hangs off /<key>/ so:
   #
-  #   - Switching island is a URL swap, not a server-side session
+  #   - Switching server is a URL swap, not a server-side session
   #     mutation — bookmarks and cross-tab navigation Just Work.
-  #   - Two browser tabs on different islands don't fight over
-  #     session[:current_island_id].
-  #   - The current island is encoded in the URL itself; no
+  #   - Two browser tabs on different servers don't fight over
+  #     session[:current_server_id].
+  #   - The current server is encoded in the URL itself; no
   #     out-of-band state needed.
   #
   # Container/pod names contain dots ("clowk-web.a3f9"), so we relax
   # the path constraint that would otherwise treat the trailing token
   # as a format extension.
   #
-  # Tenant key is exactly 6 base62 chars — matches Island::KEY_*
+  # Server key is exactly 6 base62 chars — matches Server::KEY_*
   # constants. The constraint here prevents the route from
-  # accidentally matching /islands/new etc.
+  # accidentally matching /servers/new etc.
   #
   # M1: the Org (short_id, 8 base62 chars) is the OUTER segment; the server
-  # (tenant_key, 6 chars) nests under it — every per-server route becomes
+  # (server_key, 6 chars) nests under it — every per-server route becomes
   # /<org8>/<server6>/…. A single 2-segment scope (not nested blocks) keeps
   # the whole route table un-reindented. Metrics + Alerts stay per-server here
   # (M1 is pure routing plumbing); M2/M3 promote them to org-level.
-  scope ":org_id/:tenant_key", constraints: {org_id: /[a-zA-Z0-9]{8}/, tenant_key: /[a-zA-Z0-9]{6}/} do
-    root "dashboard#index", as: :tenant_root
+  scope ":org_id/:server_key", constraints: {org_id: /[a-zA-Z0-9]{8}/, server_key: /[a-zA-Z0-9]{6}/} do
+    root "dashboard#index", as: :server_root
 
     get "/pods", to: "pods#index", as: :pods
     get "/pods/:name", to: "pods#show", as: :pod, constraints: {name: %r{[^/]+}}
@@ -120,7 +120,7 @@ Rails.application.routes.draw do
     get "/logs", to: "logs#index", as: :logs
     get "/logs/stream", to: "logs#stream_all", as: :logs_stream
 
-    # Warehouse-fed log endpoint: reads from storage/logs/<island_id>/
+    # Warehouse-fed log endpoint: reads from storage/logs/<server_id>/
     # NDJSON files instead of opening a `docker logs -f` SSE through the
     # controller. Accepts ?pod=<name>&since=<iso>. Returns text/plain
     # with `[pod-name] <raw line>\n` per row (compatible with
@@ -129,8 +129,8 @@ Rails.application.routes.draw do
     #
     # Trade-off vs the SSE endpoints above: ~2s of latency between
     # log emission and visible-in-tab, but ZERO additional `docker
-    # logs -f` connections on the controller (the LogTailIslandJob
-    # already maintains one per island for the warehouse).
+    # logs -f` connections on the controller (the LogTailServerJob
+    # already maintains one per server for the warehouse).
     get "/logs/warehouse_stream", to: "logs#warehouse_stream", as: :logs_warehouse_stream
 
     # Pods picker drawer body. MUST live BEFORE `/logs/:name` —
@@ -185,7 +185,7 @@ Rails.application.routes.draw do
     # builds in the right-drawer builder. `show` is omitted: a dashboard
     # is "viewed" via /metrics?dashboard=<id> (the existing metrics page
     # renders its panels), not a standalone page. pin/unpin set the
-    # single per-island default that /metrics opens to.
+    # single per-server default that /metrics opens to.
     resources :metric_dashboards, path: "metrics/dashboards", except: [:show] do
       member do
         post :pin
@@ -198,7 +198,7 @@ Rails.application.routes.draw do
     # Alert rules — operator-defined thresholds over the metrics
     # warehouse (CRUD + pause/resume). `show` is omitted: a rule is
     # "viewed" on /alerts itself. `defaults` seeds the host-level
-    # starter pack (disk/cpu/mem) for a zero-rules island.
+    # starter pack (disk/cpu/mem) for a zero-rules server.
     resources :alert_rules, path: "alerts/rules", only: [:new, :create, :edit, :update, :destroy] do
       member { post :toggle }
       collection { post :defaults }
@@ -211,8 +211,8 @@ Rails.application.routes.draw do
       member { post :test }
     end
     get "/settings", to: "settings#index", as: :settings
-    # Settings actions stay under the same tenant scope so the
-    # per-server context (current_island) flows through naturally.
+    # Settings actions stay under the same server scope so the
+    # per-server context (current_server) flows through naturally.
     post "/settings/reconnect", to: "settings#reconnect", as: :reconnect_settings
     delete "/settings/pats/:pat_id", to: "settings#revoke_pat", as: :revoke_pat_settings
     # Operator-global display prefs (timezone today; refresh

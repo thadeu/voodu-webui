@@ -16,7 +16,7 @@
 #   :flat    — sits flush with surrounding surface (when stacking
 #              cards inside cards reads cleaner as one panel)
 #   :accent  — purple-tinted edge for the "highlighted / live" card
-#              (e.g. the currently-selected island)
+#              (e.g. the currently-selected server)
 class Components::UI::Card < Components::Base
   VARIANTS = {
     default: {

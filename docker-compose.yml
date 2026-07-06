@@ -18,7 +18,7 @@ services:
     extra_hosts:
       # Makes `host.docker.internal` resolve to the Docker host gateway on
       # Linux too (Docker Desktop on macOS/Windows handles this natively).
-      # Use it as the address when registering an island that lives on the
+      # Use it as the address when registering an server that lives on the
       # host or on a sibling VM (Lima, OrbStack, UTM, multipass).
       - "host.docker.internal:host-gateway"
 

@@ -75,9 +75,9 @@ class MetricsPageData
     false
   end
 
-  def initialize(client, island, scope_kind:, scope_id:, range:, interval: nil, from: nil, until_: nil)
+  def initialize(client, server, scope_kind:, scope_id:, range:, interval: nil, from: nil, until_: nil)
     @client = client
-    @island = island
+    @server = server
     @scope_kind = (scope_kind == "pod") ? "pod" : "host"
     @scope_id = scope_id
     @range = RANGES.key?(range) ? range : DEFAULT_RANGE
@@ -85,7 +85,7 @@ class MetricsPageData
     @from = from
     @until_ = until_
 
-    @metrics = MetricsData.new(client, island)
+    @metrics = MetricsData.new(client, server)
   end
 
   # custom? — a valid explicit from/until window is in play (overrides the
@@ -95,7 +95,7 @@ class MetricsPageData
   end
 
   # charts — array of `{label, color, unit, points}` ready for
-  # ChartCard. Empty array when client is nil (no island selected).
+  # ChartCard. Empty array when client is nil (no server selected).
   def charts
     return [] if @client.nil?
 
@@ -250,7 +250,7 @@ class MetricsPageData
   # so we don't pay the inspect cost for the scope picker). Cached
   # by Rails.cache via the wrapper.
   def all_pods
-    @all_pods ||= IslandPods.compact(@client, @island)
+    @all_pods ||= ServerPods.compact(@client, @server)
   end
 
   # ── Class-level spec accessors (used by /metrics/display_settings) ──
@@ -654,17 +654,17 @@ class MetricsPageData
     format("%.1f", n)
   end
 
-  # host_system_payload — system info for the current island. In
+  # host_system_payload — system info for the current server. In
   # warehouse mode this is a sub-millisecond local read off the
-  # latest StateSyncIslandJob snapshot; in HTTP mode it falls back
+  # latest StateSyncServerJob snapshot; in HTTP mode it falls back
   # to a live /system call. Memoised per-instance so multiple
   # capacity lookups don't re-hit the source.
   def host_system_payload
     return @host_system_payload if defined?(@host_system_payload)
 
     @host_system_payload =
-      if defined?(IslandState) && IslandState.warehouse?
-        IslandState.for(@island)&.system
+      if defined?(ServerState) && ServerState.warehouse?
+        ServerState.for(@server)&.system
       else
         @client&.system
       end

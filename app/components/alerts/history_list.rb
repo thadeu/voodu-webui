@@ -71,7 +71,7 @@ class Components::Alerts::HistoryList < Components::Base
             span(class: "text-[11px] font-voodu-mono text-voodu-muted truncate") { event.target_label }
           end
           span(class: "text-[11px] text-voodu-muted") do
-            "peak #{event.format_value(event.peak_value)} vs #{event.format_value(event.threshold)} · lasted #{Island.humanize_uptime(event.duration_seconds)}"
+            "peak #{event.format_value(event.peak_value)} vs #{event.format_value(event.threshold)} · lasted #{Server.humanize_uptime(event.duration_seconds)}"
           end
         end
       end

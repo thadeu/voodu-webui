@@ -13,12 +13,12 @@ class DatatableController < ApplicationController
   MAX_LIMIT = 500
 
   def rows
-    island = panel_island
-    return head(:not_found) unless island
+    server = panel_server
+    return head(:not_found) unless server
 
     source = DataTable::Registry.build(
       params[:source],
-      island: island,
+      server: server,
       # scope/name identify a warehouse source (hep3/logs); dashboard/panel_key
       # let an http source re-resolve its stored request config (url + mapping)
       # server-side — the client never carries the URL or auth headers.
@@ -64,8 +64,8 @@ class DatatableController < ApplicationController
   # mapping against) and the mapped output (rows or series, so they confirm the
   # paths resolve). The config isn't saved yet — it rides the POST body.
   def test
-    island = current_island
-    return head(:not_found) unless island
+    server = current_server
+    return head(:not_found) unless server
 
     mapping = parse_mapping(params[:mapping])
     return render(json: {ok: false, error: "the mapping isn't valid JSON"}) if mapping.nil?
@@ -77,7 +77,7 @@ class DatatableController < ApplicationController
       "label" => params[:label].to_s, "mapping" => mapping
     }
 
-    source = DataTable::HttpSource.new(island: island, panel: panel)
+    source = DataTable::HttpSource.new(server: server, panel: panel)
     chart = params[:chart_type].to_s.present? && params[:chart_type].to_s != "table"
     window = time_window
     preview = source.preview(chart: chart, ts_from: window[:from], ts_to: window[:to])
@@ -90,16 +90,16 @@ class DatatableController < ApplicationController
 
   private
 
-  # panel_island — the server a Table panel reads from. A cross-server dashboard
-  # panel passes ?island_id=… (M2); resolve it WITHIN current_org (the isolation
+  # panel_server — the server a Table panel reads from. A cross-server dashboard
+  # panel passes ?server_id=… (M2); resolve it WITHIN current_org (the isolation
   # guard) so a forged / cross-org / deleted id never reaches another org's
-  # warehouse tenant — it falls back to the URL's server. No island_id → the
+  # warehouse — it falls back to the URL's server. No server_id → the
   # URL's server (single-server / http panels).
-  def panel_island
-    if params[:island_id].present? && current_org
-      current_org.islands.find_by(id: params[:island_id]) || current_island
+  def panel_server
+    if params[:server_id].present? && current_org
+      current_org.servers.find_by(id: params[:server_id]) || current_server
     else
-      current_island
+      current_server
     end
   end
 

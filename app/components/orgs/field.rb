@@ -43,7 +43,7 @@ class Components::Orgs::Field < Components::Base
   def picker
     div(class: "relative flex-1 min-w-0", data: {controller: "dropdown"}) do
       input(
-        type: "hidden", name: "island[org_id]", value: @selected_id,
+        type: "hidden", name: "server[org_id]", value: @selected_id,
         data: {org_select_target: "input"}
       )
       trigger

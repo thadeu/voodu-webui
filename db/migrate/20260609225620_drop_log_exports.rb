@@ -13,7 +13,7 @@ class DropLogExports < ActiveRecord::Migration[8.1]
 
   def down
     create_table :log_exports do |t|
-      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.references :server, null: false, foreign_key: {on_delete: :cascade}
       t.text :params, null: false
       t.string :status, null: false, default: "queued"
       t.string :file_path
@@ -26,7 +26,7 @@ class DropLogExports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :log_exports, [:island_id, :created_at]
+    add_index :log_exports, [:server_id, :created_at]
     add_index :log_exports, :expires_at
   end
 end

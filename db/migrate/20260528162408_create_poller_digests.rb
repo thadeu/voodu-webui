@@ -7,16 +7,16 @@
 #
 #   Go binary writes storage/poller/<type>/<sync_hash>/ (NDJSON +
 #   JSON files), then POSTs /internal/poller/digest with the
-#   {type, tenant_id, sync_hash, ts, size} body. Rails inserts a
+#   {type, server_id, sync_hash, ts, size} body. Rails inserts a
 #   row here in `status=queued` and enqueues PollerDigestJob, which
 #   walks the folder + persists snapshots/metrics + broadcasts.
 #
-# Note: this migration creates the column as `island_id`; a sibling
-# migration (`20260528170000_rename_poller_digests_island_id_to_tenant_id.rb`)
-# renames it to `tenant_id`. The runtime model/controller/services
-# use `tenant_id` end-to-end — the naming follows the
-# platform-internal "tenant" vocabulary (sibling of `tenant_key` in
-# the URL routing) rather than the storage-side `island_id` used on
+# Note: this migration creates the column as `server_id`; a sibling
+# migration (`20260528170000_rename_poller_digests_server_id_to_server_id.rb`)
+# renames it to `server_id`. The runtime model/controller/services
+# use `server_id` end-to-end — the naming follows the
+# platform-internal "server" vocabulary (sibling of `server_key` in
+# the URL routing) rather than the storage-side `server_id` used on
 # pods/systems/log_exports.
 #
 # Why xxhash64 (16-hex) as the primary key:
@@ -37,19 +37,19 @@ class CreatePollerDigests < ActiveRecord::Migration[8.1]
     create_table :poller_digests, id: false do |t|
       t.string :sync_hash, primary_key: true
       t.string :type, null: false
-      t.integer :island_id, null: false
+      t.integer :server_id, null: false
       t.string :status, null: false, default: "queued"
       t.text :error_message
       t.datetime :processed_at
       t.datetime :created_at, null: false
     end
 
-    # Per-tenant recent-digest browsing (operator dashboard, debug
+    # Per-server recent-digest browsing (operator dashboard, debug
     # tooling). Composite index covers the most natural query —
-    # "what did this tenant ship lately?" — without forcing a
+    # "what did this server ship lately?" — without forcing a
     # full table scan as the table grows. (Column gets renamed to
-    # `tenant_id` by the next migration; index is renamed alongside.)
-    add_index :poller_digests, [:island_id, :type, :created_at]
+    # `server_id` by the next migration; index is renamed alongside.)
+    add_index :poller_digests, [:server_id, :type, :created_at]
 
     # Global age sweep — periodic cleanup of processed/failed digests
     # older than the retention window.

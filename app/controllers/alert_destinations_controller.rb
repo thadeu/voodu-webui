@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 # AlertDestinationsController — CRUD for shared notification targets,
-# plus a synchronous `test` probe. Tenant-scoped; same full-page
+# plus a synchronous `test` probe. Server-scoped; same full-page
 # modal-form pattern as AlertRulesController (data-turbo:false POST,
 # redirect on success / 422 re-render on validation error).
 #
 # Secrets (endpoint URL, secret) are encrypted. On edit, a blank
-# field KEEPS the stored value — same convention as the island PAT in
-# IslandsController#update, so the operator never has to re-paste a
+# field KEEPS the stored value — same convention as the server PAT in
+# ServersController#update, so the operator never has to re-paste a
 # webhook URL to change a toggle.
 class AlertDestinationsController < ApplicationController
   before_action :set_destination, only: [:edit, :update, :destroy, :test]
@@ -98,13 +98,13 @@ class AlertDestinationsController < ApplicationController
   def sample_event
     AlertEvent.new(
       org: current_org,
-      island: current_island,
+      server: current_server,
       state: "firing",
       started_at: Time.current,
       threshold: 90,
       rule_name: "Test alert",
       metric_kind: "cpu",
-      target_label: "host #{current_island.name}",
+      target_label: "host #{current_server.name}",
       peak_value: 95.0,
       last_value: 95.0
     )

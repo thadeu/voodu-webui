@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # PodDetailData — `/pods/:name` data assembler. Same cache contract
-# as OverviewData (10s TTL per [island, pod_name]; ?refresh=1
+# as OverviewData (10s TTL per [server, pod_name]; ?refresh=1
 # bypasses). The raw pod hash from the PAT plane is exposed verbatim
 # via `raw` so Spec/Network/Env/Labels cards can render bypass — no
 # field renaming, no curated subsets, no surprises.
@@ -23,16 +23,16 @@ class PodDetailData
 
   attr_reader :error, :updated_at, :raw, :name
 
-  def initialize(client, island, name, force_refresh: false)
+  def initialize(client, server, name, force_refresh: false)
     @client = client
-    @island = island
+    @server = server
     @name = name
     @force = force_refresh
 
     @raw = nil
     @error = nil
     @updated_at = Time.current
-    @metrics = MetricsData.new(client, island)
+    @metrics = MetricsData.new(client, server)
 
     fetch!
   end
@@ -298,26 +298,26 @@ class PodDetailData
   def fetch!
     return if @client.nil?
 
-    return fetch_from_warehouse! if IslandState.warehouse?
+    return fetch_from_warehouse! if ServerState.warehouse?
 
     fetch_from_http!
   end
 
   # fetch_from_warehouse! — read the pod's snapshot from the local
-  # `pods` table populated by StateSyncIslandJob. Sub-millisecond.
+  # `pods` table populated by StateSyncServerJob. Sub-millisecond.
   # When the pod isn't in the snapshot (sync hasn't run yet, or it
   # was just deleted), @raw stays nil and the view renders the
   # "—" sentinels — same as a 404 from the HTTP path, no error.
   def fetch_from_warehouse!
-    pod_row = @island.pods.find_by(container_name: @name)
+    pod_row = @server.pods.find_by(container_name: @name)
     @raw = pod_row&.payload_hash
-    @updated_at = @island.last_synced_at || Time.current
+    @updated_at = @server.last_synced_at || Time.current
 
     # Mark stale when the controller isn't CONFIRMED online — :offline
     # OR :unknown (cold health cache). Mirrors OverviewData. Drives the
     # yellow banner + forces status_sym to :offline via PodStatus.
-    # Trust IslandHealth as the single source of truth for agent health.
-    @stale = @island.status != :online && @updated_at.present?
+    # Trust ServerHealth as the single source of truth for agent health.
+    @stale = @server.status != :online && @updated_at.present?
   end
 
   # fetch_from_http! — legacy path: single HTTP fetch + Rails.cache.
@@ -346,7 +346,7 @@ class PodDetailData
   end
 
   def cache_key
-    "voodu:pod_detail:v1:island:#{@island.id}:pod:#{@name}"
+    "voodu:pod_detail:v1:server:#{@server.id}:pod:#{@name}"
   end
 
   # stat_card — series is now an Array of real Float values from

@@ -6,9 +6,9 @@
 # Lifecycle:
 #
 #   1. Go binary fetches /pods + /system (or /metrics/dump) for one
-#      tenant, writes the parsed bytes into the folder, computes the
+#      server, writes the parsed bytes into the folder, computes the
 #      xxhash64 of the canonical contents, POSTs `/internal/poller/
-#      digest` with {type, tenant_id, sync_hash, ts, size}.
+#      digest` with {type, server_id, sync_hash, ts, size}.
 #   2. Rails inserts this row in status=queued + enqueues
 #      `PollerDigestJob.perform_later(sync_hash)`.
 #   3. The job swings to `status=processing`, dispatches to the
@@ -20,9 +20,9 @@
 # side). That makes the duplicate-delivery path a free PK conflict
 # instead of a separate "have I seen this hash?" lookup.
 #
-# No FK back to Island — soft-deleting an island still leaves the
-# audit row in place. `belongs_to :island` without `optional: true`
-# would otherwise raise on read if the island row was purged.
+# No FK back to Server — soft-deleting an server still leaves the
+# audit row in place. `belongs_to :server` without `optional: true`
+# would otherwise raise on read if the server row was purged.
 class PollerDigest < ApplicationRecord
   self.primary_key = :sync_hash
 
@@ -40,12 +40,12 @@ class PollerDigest < ApplicationRecord
   TYPES = %w[metrics state].freeze
   STATUSES = %w[queued processing processed failed].freeze
 
-  # No `belongs_to :island` validation — keep the receipt intact even
-  # after the island row is destroyed (forensic value > referential
-  # integrity for this audit table). The column is `tenant_id` (the
+  # No `belongs_to :server` validation — keep the receipt intact even
+  # after the server row is destroyed (forensic value > referential
+  # integrity for this audit table). The column is `server_id` (the
   # poller feature's internal naming); the association still points
-  # at the `islands` table because that IS the tenant registry.
-  belongs_to :island, foreign_key: :tenant_id, optional: true
+  # at the `servers` table because that IS the server registry.
+  belongs_to :server, foreign_key: :server_id, optional: true
 
   validates :type, presence: true, inclusion: {in: TYPES}
   validates :sync_hash, presence: true, uniqueness: true

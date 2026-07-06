@@ -6,7 +6,7 @@
 # instantly even with the controller offline.
 #
 # M3: alerts are ORG-level. Data (rules / events / destinations / targets) spans
-# every server in the org; `island` is only the CURRENT server the /alerts URL
+# every server in the org; `server` is only the CURRENT server the /alerts URL
 # is under — the default target when adding a rule and the "add to this server"
 # context. A rule/event carries the server it targets/fired on.
 class AlertsPageData
@@ -15,16 +15,16 @@ class AlertsPageData
   # MAX_HISTORY and notes the truncation.
   MAX_HISTORY = 200
 
-  attr_reader :org, :island, :history_filter
+  attr_reader :org, :server, :history_filter
 
-  def initialize(org, island = nil, history_filter: AlertHistoryFilter.new)
+  def initialize(org, server = nil, history_filter: AlertHistoryFilter.new)
     @org = org
-    @island = island
+    @server = server
     @history_filter = history_filter
   end
 
   def rules
-    @rules ||= org.alert_rules.includes(:island).order(:name).to_a
+    @rules ||= org.alert_rules.includes(:server).order(:name).to_a
   end
 
   # Open episodes, newest first — the red cards at the top.
@@ -38,7 +38,7 @@ class AlertsPageData
   def firing_events
     @firing_events ||= org.alert_events.firing
       .joins(:alert_rule).where(alert_rules: {enabled: true})
-      .includes(:alert_rule, :island)
+      .includes(:alert_rule, :server)
       .order(started_at: :desc).to_a
   end
 
@@ -89,22 +89,22 @@ class AlertsPageData
   end
 
   # Form targets — distinct workloads across EVERY server in the org (M3), each
-  # carrying its island_id + server name so the rule form's server-picker offers
+  # carrying its server_id + server name so the rule form's server-picker offers
   # a host + that server's pods. Same (scope, resource_name) addressing the
   # /metrics PodPicker uses; `kind` rides along so the form can keep req/s rules
   # on deployments (the only workloads ingress samples carry).
   def targets
-    @targets ||= org.islands.order(:name).flat_map do |isl|
+    @targets ||= org.servers.order(:name).flat_map do |isl|
       isl.pods.distinct.pluck(:scope, :resource_name, :kind)
         .reject { |scope, name, _kind| scope.blank? || name.blank? }
-        .map { |scope, name, kind| {island_id: isl.id, server: isl.name, scope: scope, name: name, kind: kind.to_s} }
+        .map { |scope, name, kind| {server_id: isl.id, server: isl.name, scope: scope, name: name, kind: kind.to_s} }
     end.sort_by { |t| [t[:server], t[:scope], t[:name]] }
   end
 
   # servers — the org's servers, for the rule form's server-picker (host target
   # per server) + labelling which server each rule watches.
   def servers
-    @servers ||= org.islands.order(:name).to_a
+    @servers ||= org.servers.order(:name).to_a
   end
 
   private

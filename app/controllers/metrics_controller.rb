@@ -70,7 +70,7 @@ class MetricsController < ApplicationController
 
         data = MetricsPageData.new(
           expand_client,
-          expand_island,
+          expand_server,
           scope_kind: params[:scope_kind],
           scope_id: params[:scope_id],
           range: params[:range],
@@ -108,7 +108,7 @@ class MetricsController < ApplicationController
           # list so the operator can drill from host into a pod
           # without closing the modal first.
           pods: data.all_pods,
-          current_island: expand_island,
+          current_server: expand_server,
           # Available metrics for the in-modal MetricPicker. Grouped
           # RESOURCE / HTTP. Pod-scope + ingress-eligible exposes
           # the full set (8 metrics); host gives 3; non-ingress pods
@@ -185,9 +185,9 @@ class MetricsController < ApplicationController
       "view" => params[:view].presence || "messages", "filter_query" => params[:filter_query].to_s,
       "label" => params[:label].to_s, "color" => params[:color].to_s,
       "percent" => params[:percent].to_s == "true",
-      # island_id → the panel re-aggregates against its OWN server (resolved
+      # server_id → the panel re-aggregates against its OWN server (resolved
       # within the org by MetricDashboardData). Falls back to the URL's server.
-      "island_id" => expand_island&.id
+      "server_id" => expand_server&.id
     }
     dashboard = current_org.metric_dashboards.new(panels: [panel])
 
@@ -195,29 +195,29 @@ class MetricsController < ApplicationController
       range: params[:range], interval: params[:interval], **custom_window).charts.first
   end
 
-  # expand_island — the server the chart-expand modal drills into. A dashboard
-  # panel carries its own island_id (?island_id=…, cross-server dashboards), so
+  # expand_server — the server the chart-expand modal drills into. A dashboard
+  # panel carries its own server_id (?server_id=…, cross-server dashboards), so
   # the expand must hit THAT server, not the URL's. Resolved WITHIN current_org
   # (the isolation guard): a forged / cross-org / deleted id falls back to the
-  # URL's current_island, never leaks another org's server. Scope-mode charts
-  # (a pod's "View metrics") carry no island_id → current_island.
-  def expand_island
-    return @expand_island if defined?(@expand_island)
+  # URL's current_server, never leaks another org's server. Scope-mode charts
+  # (a pod's "View metrics") carry no server_id → current_server.
+  def expand_server
+    return @expand_server if defined?(@expand_server)
 
-    @expand_island =
-      if params[:island_id].present? && current_org
-        current_org.islands.find_by(id: params[:island_id]) || current_island
+    @expand_server =
+      if params[:server_id].present? && current_org
+        current_org.servers.find_by(id: params[:server_id]) || current_server
       else
-        current_island
+        current_server
       end
   end
 
-  # expand_client — the PAT client for expand_island. nil when no server
+  # expand_client — the PAT client for expand_server. nil when no server
   # resolves (the endpoint heads :not_found).
   def expand_client
-    return nil if expand_island.nil?
+    return nil if expand_server.nil?
 
-    @expand_client ||= Voodu::Client.new(expand_island)
+    @expand_client ||= Voodu::Client.new(expand_server)
   end
 
   # build_metrics_data — picks the /metrics data object:
@@ -241,7 +241,7 @@ class MetricsController < ApplicationController
     end
 
     if params[:scope_kind].present? || params[:scope_id].present?
-      return MetricsPageData.new(voodu_client, current_island,
+      return MetricsPageData.new(voodu_client, current_server,
         scope_kind: params[:scope_kind], scope_id: params[:scope_id],
         range: params[:range], interval: params[:interval], **custom_window)
     end
@@ -294,7 +294,7 @@ class MetricsController < ApplicationController
   end
 
   # ── Last-view memory ──────────────────────────────────────────────
-  # Remember the operator's last ?pid selection per session + island so
+  # Remember the operator's last ?pid selection per session + server so
   # a bare /metrics reopens it. Cached (not stored in the URL) with a 1h
   # TTL — leave for a while and the landing falls back to pinned/empty.
 
@@ -327,15 +327,15 @@ class MetricsController < ApplicationController
     Rails.cache.write(key, params[:pid].to_s, expires_in: 1.hour)
   end
 
-  # Stable per-session token (kept in the session cookie) + island id.
-  # No `current_user` here — the WebUI is tenant-by-URL — so the session
+  # Stable per-session token (kept in the session cookie) + server id.
+  # No `current_user` here — the WebUI is server-by-URL — so the session
   # IS the "user" scope.
   def metrics_last_view_key
-    return nil if current_island.nil?
+    return nil if current_server.nil?
 
     sid = (session[:metrics_sid] ||= SecureRandom.hex(8))
 
-    "metrics:last_view:#{sid}:#{current_island.id}"
+    "metrics:last_view:#{sid}:#{current_server.id}"
   end
 
   # dashboard_display_items — one Settings/Order card per dashboard

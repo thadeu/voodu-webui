@@ -6,15 +6,15 @@ require "test_helper"
 # explicit from/until_ pin an absolute window; without them the query falls
 # back to `range` relative to now.
 class MetricsWarehouseTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @base = Time.zone.local(2026, 6, 19, 12, 0, 0)
-    MetricSample.where(tenant_id: @island.id).delete_all
+    MetricSample.where(server_id: @server.id).delete_all
   end
 
-  teardown { MetricSample.where(tenant_id: @island.id).delete_all }
+  teardown { MetricSample.where(server_id: @server.id).delete_all }
 
   test "from/until_ pin an absolute window, excluding samples outside it" do
     seed(@base - 2.hours, 10)    # before from
@@ -23,7 +23,7 @@ class MetricsWarehouseTest < ActiveSupport::TestCase
     seed(@base + 2.hours, 99)    # after until
 
     env = MetricsWarehouse.query(
-      @island, source: "system", metric: "cpu_percent",
+      @server, source: "system", metric: "cpu_percent",
       range: "1h", interval: "1m",
       from: @base - 1.minute, until_: @base + 10.minutes
     )
@@ -42,7 +42,7 @@ class MetricsWarehouseTest < ActiveSupport::TestCase
     seed(@base - 30.minutes, 42) # within last 1h
     seed(@base - 3.hours, 7)     # outside last 1h
 
-    env = MetricsWarehouse.query(@island, source: "system", metric: "cpu_percent", range: "1h", interval: "1m")
+    env = MetricsWarehouse.query(@server, source: "system", metric: "cpu_percent", range: "1h", interval: "1m")
     values = env["series"].map { |p| p["value"] }
 
     assert_includes values, 42.0
@@ -55,7 +55,7 @@ class MetricsWarehouseTest < ActiveSupport::TestCase
     travel_to @base
     seed(@base - 10.minutes, 21)
 
-    env = MetricsWarehouse.query(@island, source: "system", metric: "cpu_percent",
+    env = MetricsWarehouse.query(@server, source: "system", metric: "cpu_percent",
       range: "1h", interval: "1m", from: @base - 5.minutes, until_: nil)
 
     assert_includes env["series"].map { |p| p["value"] }, 21.0, "half window → range fallback (last 1h)"
@@ -69,7 +69,7 @@ class MetricsWarehouseTest < ActiveSupport::TestCase
     iso = time.utc.iso8601
 
     MetricSample.bulk_insert([{
-      tenant_id: @island.id, source: "system", ts_iso: iso,
+      server_id: @server.id, source: "system", ts_iso: iso,
       payload: {source: "system", ts: iso, name: "host", cpu_percent: cpu}.to_json
     }])
   end

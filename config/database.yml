@@ -43,7 +43,7 @@ development:
     database: storage/development_cable.sqlite3
     migrations_paths: db/cable_migrate
   # Metrics warehouse. High-volume background-job writes (every 30s,
-  # per-tenant) live in their own file to keep the primary lean.
+  # per-server) live in their own file to keep the primary lean.
   metrics:
     <<: *default
     database: storage/development_metrics.sqlite3

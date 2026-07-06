@@ -7,11 +7,11 @@ require "test_helper"
 # (errors filters to 4xx/5xx), raw_sip exclusion, and the 404 for an
 # unknown source.
 class DatatableControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @key = @island.key
+    @server = servers(:alpha)
+    @key = @server.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
 
@@ -26,11 +26,11 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
 
   def row(call_id:, meth:, code:, ts:)
     payload = {ts: ts, call_id: call_id, x_cid: "", method: meth, response_code: code, from_user: "a", raw_sip: "RAW #{call_id}"}.to_json
-    {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: payload}
+    {server_id: @server.id, scope: "fsw", name: "hep3-api", payload: payload}
   end
 
   test "returns rows + fields + default_fields for the messages view" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api", view: "messages")
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api", view: "messages")
 
     assert_response :success
     body = JSON.parse(@response.body)
@@ -42,7 +42,7 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "the errors view filters to 4xx/5xx" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api", view: "errors")
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api", view: "errors")
 
     assert_response :success
     codes = JSON.parse(@response.body)["rows"].map { |r| r["response_code"] }
@@ -51,7 +51,7 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a DSL filter query narrows the rows" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
       view: "messages", filter_query: "@method like /INVITE/")
 
     assert_response :success
@@ -61,7 +61,7 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a leading `filter` keyword is accepted (LogQuery parity)" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
       view: "messages", filter_query: "filter @method like /INVITE/")
 
     assert_response :success
@@ -71,7 +71,7 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "an unparseable filter returns 422 + the error, NOT unfiltered rows" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
       view: "messages", filter_query: "@method like")
 
     assert_response :unprocessable_entity
@@ -88,7 +88,7 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
       at(now - (3 * 3600), "old")
     ])
 
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
       view: "messages", range: "1h")
 
     assert_response :success
@@ -102,45 +102,45 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   def at(time, from_user)
     ts = time.strftime("%Y-%m-%d %H:%M:%S.%6N")
     payload = {ts: ts, call_id: "w", x_cid: "", method: "INVITE", response_code: 0, from_user: from_user}.to_json
-    {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: payload}
+    {server_id: @server.id, scope: "fsw", name: "hep3-api", payload: payload}
   end
 
-  test "island_id routes rows to THAT server's tenant — a cross-server table in the org reads the right data" do
-    beta = islands(:beta) # same org (acme) as alpha
+  test "server_id routes rows to THAT server's server — a cross-server table in the org reads the right data" do
+    beta = servers(:beta) # same org (acme) as alpha
     HepMessage.bulk_insert([reader_row(beta, from_user: "beta-only")])
 
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
-      view: "messages", island_id: beta.id)
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+      view: "messages", server_id: beta.id)
 
     assert_response :success
     froms = JSON.parse(@response.body)["rows"].map { |r| r["from_user"] }
 
-    assert_includes froms, "beta-only", "island_id=beta reads beta's tenant even though the URL server is alpha"
+    assert_includes froms, "beta-only", "server_id=beta reads beta's server even though the URL server is alpha"
     assert_not_includes froms, "a", "alpha's own rows must NOT appear when the panel targets beta"
   end
 
-  test "a forged island_id for a server OUTSIDE the org falls back to the URL's server (cross-org guard)" do
-    gamma = islands(:gamma) # globex — a DIFFERENT org
+  test "a forged server_id for a server OUTSIDE the org falls back to the URL's server (cross-org guard)" do
+    gamma = servers(:gamma) # globex — a DIFFERENT org
     HepMessage.bulk_insert([reader_row(gamma, from_user: "gamma-secret")])
 
-    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
-      view: "messages", island_id: gamma.id)
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+      view: "messages", server_id: gamma.id)
 
     assert_response :success
     froms = JSON.parse(@response.body)["rows"].map { |r| r["from_user"] }
 
-    assert_not_includes froms, "gamma-secret", "a cross-org island_id must NEVER leak another org's tenant"
+    assert_not_includes froms, "gamma-secret", "a cross-org server_id must NEVER leak another org's server"
   end
 
-  # reader_row — a hep3 message under `island`'s tenant, tagged via from_user.
-  def reader_row(island, from_user:)
+  # reader_row — a hep3 message under `server`'s server, tagged via from_user.
+  def reader_row(server, from_user:)
     payload = {ts: "2026-06-30 10:00:05.000000", call_id: "x", x_cid: "", method: "INVITE",
                response_code: 0, from_user: from_user, raw_sip: "R"}.to_json
-    {tenant_id: island.id, scope: "fsw", name: "hep3-api", payload: payload}
+    {server_id: server.id, scope: "fsw", name: "hep3-api", payload: payload}
   end
 
   test "404 for an unknown source" do
-    get metrics_datatable_rows_path(tenant_key: @key, source: "nope", scope: "x", name: "y")
+    get metrics_datatable_rows_path(server_key: @key, source: "nope", scope: "x", name: "y")
 
     assert_response :not_found
   end

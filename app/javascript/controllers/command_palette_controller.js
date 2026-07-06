@@ -18,8 +18,8 @@ import { Controller } from "@hotwired/stimulus"
 //     network, zero loading state.
 //
 // Commands come from CommandPaletteController#commands — one global
-// JSON feed covering EVERY island, not the page's current island. The
-// operator can ⌘K from /pods on island A and restart a pod on island B
+// JSON feed covering EVERY server, not the page's current server. The
+// operator can ⌘K from /pods on server A and restart a pod on server B
 // without switching first.
 //
 // Caching layers:
@@ -28,7 +28,7 @@ import { Controller } from "@hotwired/stimulus"
 //     decides whether to revalidate.
 //   - Browser HTTP cache (Cache-Control: private, max-age=30) — across
 //     tabs / fresh sessionStorage.
-//   - IslandPods 30s Rails.cache — controller-side, shared with
+//   - ServerPods 30s Rails.cache — controller-side, shared with
 //     /pods + /logs + /metrics pickers.
 //
 // LRU suggestions live in localStorage[LRU_KEY] (cap 8). Surviving a
@@ -45,11 +45,11 @@ const CACHE_KEY      = "voodu:cmd-palette:v2"
 const CACHE_TTL_MS   = 30_000
 const LRU_KEY        = "voodu:cmd-palette:recent"
 const LRU_CAP        = 8
-// URLs are /:org_id(8)/:tenant_key(6)/… — the org short_id is the FIRST
-// segment, the server key the SECOND. (Pre-org URLs were /:tenant_key(6)/…;
+// URLs are /:org_id(8)/:server_key(6)/… — the org short_id is the FIRST
+// segment, the server key the SECOND. (Pre-org URLs were /:server_key(6)/…;
 // reading the first segment as the key is the bug that emptied the palette.)
 const ORG_ID_RE      = /^\/([A-Za-z0-9]{8})(?:\/|$)/
-const TENANT_KEY_RE  = /^\/[A-Za-z0-9]{8}\/([A-Za-z0-9]{6})(?:\/|$)/
+const SERVER_KEY_RE  = /^\/[A-Za-z0-9]{8}\/([A-Za-z0-9]{6})(?:\/|$)/
 
 const GROUP_BOOST = {
   Navigate: 5,
@@ -321,11 +321,11 @@ export default class extends Controller {
   // typed query. Two sections:
   //
   //   1. Suggestions — recent LRU resolved against the current
-  //      command list. Drops dead ids (pod renamed, island deleted)
+  //      command list. Drops dead ids (pod renamed, server deleted)
   //      silently rather than rendering a broken row.
-  //   2. Navigate — the 6 nav items for the CURRENT island, picked
-  //      from the URL prefix. If we're on a tenant-less page (eg
-  //      /islands), there's no current island so we skip Navigate
+  //   2. Navigate — the 6 nav items for the CURRENT server, picked
+  //      from the URL prefix. If we're on a server-less page (eg
+  //      /servers), there's no current server so we skip Navigate
   //      and just show Suggestions.
   renderDefault() {
     if (!this.loaded) {
@@ -334,7 +334,7 @@ export default class extends Controller {
       return
     }
 
-    const currentKey = detectCurrentTenantKey()
+    const currentKey = detectCurrentServerKey()
     const recentIds  = readLRU()
     const byId       = new Map(this.commands.map(c => [c.id, c]))
 
@@ -349,7 +349,7 @@ export default class extends Controller {
       .slice(0, LRU_CAP)
 
     const navigate = currentKey
-      ? this.commands.filter(c => c.group === "Navigate" && c.island_key === currentKey)
+      ? this.commands.filter(c => c.group === "Navigate" && c.server_key === currentKey)
       : []
 
     const sections = []
@@ -358,7 +358,7 @@ export default class extends Controller {
     if (navigate.length)    sections.push({ label: "Navigate", items: navigate })
 
     if (sections.length === 0) {
-      // Tenant-less surface with no LRU history — render a friendly
+      // Server-less surface with no LRU history — render a friendly
       // hint instead of the generic "no matches" empty state.
       this.resultsTarget.innerHTML = `
         <div class="px-4 py-10 text-center text-voodu-muted">
@@ -603,19 +603,19 @@ function detectCurrentOrgId() {
   return m ? m[1] : null
 }
 
-function detectCurrentTenantKey() {
-  const m = location.pathname.match(TENANT_KEY_RE)
+function detectCurrentServerKey() {
+  const m = location.pathname.match(SERVER_KEY_RE)
 
   return m ? m[1] : null
 }
 
-// appendCurrent — tell the (tenant-less) endpoint which org to scope the feed
+// appendCurrent — tell the (server-less) endpoint which org to scope the feed
 // to (`org`, required to list anything) and which server the operator is on
 // (`current`, to exclude it from the switcher). Both come from the URL.
 function appendCurrent(endpoint) {
   const params = new URLSearchParams()
   const org = detectCurrentOrgId()
-  const cur = detectCurrentTenantKey()
+  const cur = detectCurrentServerKey()
 
   if (org) params.set("org", org)
   if (cur) params.set("current", cur)

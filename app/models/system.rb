@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# System — local snapshot of `/api/pat/v1/system` for one island.
-# Exactly one row per island, kept in lockstep with the controller by
-# `StateSyncIslandJob` (every 10s). Topbar uptime chip + Overview
+# System — local snapshot of `/api/pat/v1/system` for one server.
+# Exactly one row per server, kept in lockstep with the controller by
+# `StateSyncServerJob` (every 10s). Topbar uptime chip + Overview
 # host CPU/Mem cards read from this row instead of making a fresh
 # HTTP call per page render.
 #
@@ -13,9 +13,9 @@
 # Don't add validations or callbacks; the upsert path skips them.
 #
 # Schema (see db/migrate/<ts>_create_systems.rb):
-#   id, island_id (unique), payload (JSON text), synced_at, timestamps
+#   id, server_id (unique), payload (JSON text), synced_at, timestamps
 class System < ApplicationRecord
-  belongs_to :island
+  belongs_to :server
 
   # payload_hash — lazy-parsed view of the `payload` JSON column.
   # Same memoisation idiom as Pod#payload_hash so callers can read
@@ -50,14 +50,14 @@ class System < ApplicationRecord
   end
 
   # hostname — what the controller reports as the kernel hostname.
-  # Distinct from `island.host` (which is the URL the WebUI uses to
+  # Distinct from `server.host` (which is the URL the WebUI uses to
   # REACH the controller).
   def hostname
     host_block["hostname"].to_s
   end
 
   # uptime_seconds — host uptime in seconds. Topbar humanises this
-  # into "Nd Nh" via Island#uptime; keep the raw number here so
+  # into "Nd Nh" via Server#uptime; keep the raw number here so
   # other surfaces (charts, alerts) can derive their own format.
   def uptime_seconds
     host_block["uptime_seconds"].to_i
@@ -76,7 +76,7 @@ class System < ApplicationRecord
   end
 
   # booted_at — boot_time parsed to a Time, or nil when absent/garbage.
-  # Island#uptime derives live uptime as `now - booted_at` so the chip
+  # Server#uptime derives live uptime as `now - booted_at` so the chip
   # ticks up BETWEEN syncs (instead of freezing on the snapshot's
   # uptime_seconds) and reads identically on every page.
   def booted_at

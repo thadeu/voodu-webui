@@ -8,8 +8,8 @@
 # default range pill, etc. A single table with one row per key
 # avoids a migration each time a new pref shows up.
 #
-# Scope is operator-wide (NOT per-island) — Voodu webui is a
-# single-tenant operator console, so global prefs make sense
+# Scope is operator-wide (NOT per-server) — Voodu webui is a
+# single-server operator console, so global prefs make sense
 # anchored to the install rather than to one of N managed servers.
 class CreateSettings < ActiveRecord::Migration[8.1]
   def change

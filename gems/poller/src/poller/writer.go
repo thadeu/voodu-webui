@@ -23,24 +23,24 @@ type Record struct {
 	Raw string    `json:"raw"`
 }
 
-// Writer serialises appends per (island, pod, day) tuple. Lock
-// granularity is per pod because two pods on the same island write to
+// Writer serialises appends per (server, pod, day) tuple. Lock
+// granularity is per pod because two pods on the same server write to
 // different files, so they never contend.
 //
 // Acquisition order: caller -> Writer.mu (cheap, just protects the map)
 // -> per-pod mutex (held only during the actual write).
 type Writer struct {
 	Root     string
-	OnCapHit func(islandID, pod string)
+	OnCapHit func(serverID, pod string)
 
 	mu    sync.Mutex
-	locks map[string]*sync.Mutex // key = islandID + "|" + pod
+	locks map[string]*sync.Mutex // key = serverID + "|" + pod
 }
 
 // NewWriter returns a Writer rooted at `root`. The cap-hit callback is
-// invoked once per (island, pod) write that finds the file already
+// invoked once per (server, pod) write that finds the file already
 // over PerFileCapBytes; main.go wires this to a Prometheus counter.
-func NewWriter(root string, onCapHit func(islandID, pod string)) *Writer {
+func NewWriter(root string, onCapHit func(serverID, pod string)) *Writer {
 	return &Writer{
 		Root:     root,
 		OnCapHit: onCapHit,
@@ -48,8 +48,8 @@ func NewWriter(root string, onCapHit func(islandID, pod string)) *Writer {
 	}
 }
 
-func (w *Writer) podMutex(islandID, pod string) *sync.Mutex {
-	key := islandID + "|" + pod
+func (w *Writer) podMutex(serverID, pod string) *sync.Mutex {
+	key := serverID + "|" + pod
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -65,11 +65,11 @@ func (w *Writer) podMutex(islandID, pod string) *sync.Mutex {
 }
 
 // DailyFile returns the absolute path the writer would target for a
-// (island, pod, ts) triple. Exported for use by the reader / cleanup.
-func (w *Writer) DailyFile(islandID, pod string, ts time.Time) string {
+// (server, pod, ts) triple. Exported for use by the reader / cleanup.
+func (w *Writer) DailyFile(serverID, pod string, ts time.Time) string {
 	day := ts.UTC().Format("2006-01-02")
 
-	return filepath.Join(w.Root, islandID, safePodName(pod), day+".ndjson")
+	return filepath.Join(w.Root, serverID, safePodName(pod), day+".ndjson")
 }
 
 // Append writes one Record as an NDJSON line. Idempotent for the
@@ -81,20 +81,20 @@ func (w *Writer) DailyFile(islandID, pod string, ts time.Time) string {
 // and closed per call. Per-pod traffic is modest (≤ ~tens of
 // lines/sec); a long-lived handle would complicate rotation across
 // the UTC midnight boundary.
-func (w *Writer) Append(islandID, pod string, rec Record) error {
-	path := w.DailyFile(islandID, pod, rec.TS)
+func (w *Writer) Append(serverID, pod string, rec Record) error {
+	path := w.DailyFile(serverID, pod, rec.TS)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("mkdir pod dir: %w", err)
 	}
 
-	mu := w.podMutex(islandID, pod)
+	mu := w.podMutex(serverID, pod)
 	mu.Lock()
 	defer mu.Unlock()
 
 	if info, err := os.Stat(path); err == nil && info.Size() >= PerFileCapBytes {
 		if w.OnCapHit != nil {
-			w.OnCapHit(islandID, pod)
+			w.OnCapHit(serverID, pod)
 		}
 		// Cap is a SOFT warning — we still write. Operator decides.
 	}

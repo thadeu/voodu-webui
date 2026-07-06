@@ -120,12 +120,12 @@ class Components::LogAnalytics::Row < Components::Base
   end
 
   # call_flow_available? — show the SIP-bridge chip only when this line
-  # carries a Call-ID AND the island runs voodu-hep3. Both gates matter:
+  # carries a Call-ID AND the server runs voodu-hep3. Both gates matter:
   # without a Call-ID there's nothing to open, and without hep3 the page
   # has no call-flow host to catch the click (a dead affordance). Cheap —
-  # the island/System/plugins are all memoised, so the per-row check is free.
+  # the server/System/plugins are all memoised, so the per-row check is free.
   def call_flow_available?
-    sip_call_id.present? && current_island&.plugin_installed?("hep3")
+    sip_call_id.present? && current_server&.plugin_installed?("hep3")
   end
 
   # sip_call_id — the SIP Call-ID embedded in the raw line (FreeSWITCH prints

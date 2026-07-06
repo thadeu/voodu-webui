@@ -2,7 +2,7 @@
 
 # DataTable::Hep3Source — the HEP3 SIP-capture source for the generic
 # DataTable. Reads the local read model (HepMessage) for one reader pod
-# (scope, name) of an island, and offers three VIEWS the operator picks
+# (scope, name) of an server, and offers three VIEWS the operator picks
 # in the panel's second dropdown:
 #
 #   messages — one row per SIP message (the raw tail).      [live-append]
@@ -35,9 +35,9 @@ module DataTable
 
     def self.short_label = SHORT_LABEL
 
-    # available_for? — only offer this source when the island's controller
+    # available_for? — only offer this source when the server's controller
     # has the voodu-hep3 plugin installed (same gate as everything hep3).
-    def self.available_for?(island) = island.plugin_installed?("hep3")
+    def self.available_for?(server) = server.plugin_installed?("hep3")
 
     # view_options — each view's {key, label, fields} for the builder. The
     # field list drives the panel's filter-field dropdown (which fields the
@@ -65,16 +65,16 @@ module DataTable
 
     ERROR_THRESHOLD = 400
 
-    def self.from_params(island:, params:)
+    def self.from_params(server:, params:)
       scope = params[:scope].to_s
       name = params[:name].to_s
       return nil if scope.empty? || name.empty?
 
-      new(island: island, scope: scope, name: name)
+      new(server: server, scope: scope, name: name)
     end
 
-    def initialize(island:, scope:, name:)
-      @island = island
+    def initialize(server:, scope:, name:)
+      @server = server
       @scope = scope
       @name = name
     end
@@ -129,7 +129,7 @@ module DataTable
       where_sql, where_binds = compile_filter(filter_query)
 
       HepMessage.count_series(
-        tenant_id: @island.id, scope: @scope, name: @name,
+        server_id: @server.id, scope: @scope, name: @name,
         ts_from: ts_from, ts_to: ts_to, bucket: bucket,
         where_sql: where_sql, where_binds: where_binds,
         distinct_corr: calls?(view), min_code: errors?(view) ? ERROR_THRESHOLD : nil
@@ -140,11 +140,11 @@ module DataTable
     # after inserting new rows for this instance (view-agnostic; the table
     # appends or refreshes per the view's realtime mode).
     def live_stream
-      self.class.stream_name(@island.id, @scope, @name)
+      self.class.stream_name(@server.id, @scope, @name)
     end
 
-    def self.stream_name(island_id, scope, name)
-      "hep3-rows:#{island_id}:#{scope}:#{name}"
+    def self.stream_name(server_id, scope, name)
+      "hep3-rows:#{server_id}:#{scope}:#{name}"
     end
 
     private
@@ -166,7 +166,7 @@ module DataTable
 
     def message_rows(where_sql:, where_binds:, limit:, before_id:, since_id:, min_code:, ts_from: nil, ts_to: nil)
       HepMessage.page(
-        tenant_id: @island.id, scope: @scope, name: @name,
+        server_id: @server.id, scope: @scope, name: @name,
         where_sql: where_sql, where_binds: where_binds,
         limit: limit, before_id: before_id, since_id: since_id, min_code: min_code,
         ts_from: ts_from, ts_to: ts_to
@@ -181,7 +181,7 @@ module DataTable
 
     def call_rows(where_sql:, where_binds:, limit:, before_id:, ts_from: nil, ts_to: nil)
       HepMessage.calls_page(
-        tenant_id: @island.id, scope: @scope, name: @name,
+        server_id: @server.id, scope: @scope, name: @name,
         where_sql: where_sql, where_binds: where_binds,
         limit: limit, before_epoch: before_id, ts_from: ts_from, ts_to: ts_to
       ).map { |row| call_row(row) }

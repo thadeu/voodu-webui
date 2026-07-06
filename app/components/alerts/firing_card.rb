@@ -29,7 +29,7 @@ class Components::Alerts::FiringCard < Components::Base
         div(class: "text-[13px] font-semibold text-voodu-text") { @event.rule_name }
         div(class: "text-[11.5px] font-voodu-mono text-voodu-text-2 truncate") { @event.target_label }
         div(class: "text-[11.5px] text-voodu-muted") do
-          plain "firing for #{Island.humanize_uptime(@event.duration_seconds)}"
+          plain "firing for #{Server.humanize_uptime(@event.duration_seconds)}"
           plain " · started #{ago(@event.started_at)}"
         end
         action_links

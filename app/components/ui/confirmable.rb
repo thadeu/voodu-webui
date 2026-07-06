@@ -33,13 +33,13 @@
 #     danger:        true,
 #     icon:          :TrashOutline,
 #     form: {
-#       action: island_path(island),
+#       action: server_path(server),
 #       method: :delete
 #     },
 #     trigger: {
 #       class: "<button classes>",
 #       title: "Remove server",
-#       "aria-label": "Remove #{island.name}"
+#       "aria-label": "Remove #{server.name}"
 #     }
 #   ) do
 #     render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
@@ -64,7 +64,7 @@ class Components::UI::Confirmable < Components::Base
   # the submit navigates the whole page (data-turbo:false is ignored
   # for a submit inside a frame → "Content missing" on the redirect).
   # Default nil keeps the native (data-turbo:false) submit used by
-  # top-level confirmables (e.g. the Islands delete).
+  # top-level confirmables (e.g. the Servers delete).
   def initialize(title:, message:, form:, trigger: {},
     id: nil,
     confirm_label: "Confirm", cancel_label: "Cancel",

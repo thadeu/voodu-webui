@@ -12,7 +12,7 @@ default: &default
       polling_interval: 0.1
 
     # Dedicated `:log_tail` pool for the long-running SSE consumer
-    # (`LogTailIslandJob`). Threads = 4 supports up to 4 islands
+    # (`LogTailServerJob`). Threads = 4 supports up to 4 servers
     # tailing concurrently without competing with the short-running
     # jobs on `:default`. Each tail job self-terminates after 1h
     # so the workers cycle naturally; the orchestrator re-spawns.

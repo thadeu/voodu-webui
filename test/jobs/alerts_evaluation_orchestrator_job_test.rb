@@ -3,16 +3,16 @@
 require "test_helper"
 
 class AlertsEvaluationOrchestratorJobTest < ActiveJob::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
-  test "fans out only to islands with enabled rules" do
-    with_rule = islands(:alpha)
+  test "fans out only to servers with enabled rules" do
+    with_rule = servers(:alpha)
     with_rule.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
 
-    paused = islands(:beta)
+    paused = servers(:beta)
     paused.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300,
@@ -21,13 +21,13 @@ class AlertsEvaluationOrchestratorJobTest < ActiveJob::TestCase
 
     AlertsEvaluationOrchestratorJob.perform_now
 
-    assert_enqueued_with(job: AlertsEvaluationIslandJob, args: [with_rule.id])
-    assert_enqueued_jobs 1, only: AlertsEvaluationIslandJob
+    assert_enqueued_with(job: AlertsEvaluationServerJob, args: [with_rule.id])
+    assert_enqueued_jobs 1, only: AlertsEvaluationServerJob
   end
 
-  test "island job tolerates a deleted island" do
+  test "server job tolerates a deleted server" do
     assert_nothing_raised do
-      AlertsEvaluationIslandJob.perform_now(-1)
+      AlertsEvaluationServerJob.perform_now(-1)
     end
   end
 end

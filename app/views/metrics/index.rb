@@ -7,22 +7,22 @@
 # Logs/Open pod/Refresh actions, toolbar (scope picker + range
 # pills), optional replica chips, 2x2 grid of chart cards.
 class Views::Metrics::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil)
+  def initialize(current_path:, servers: [], current_server: nil, data: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @data = data
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path,
-      islands: @islands,
-      current_island: @current_island,
+      servers: @servers,
+      current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Metrics"})
     ) do
-      if @current_island.nil?
-        render Components::UI::NoIslandState.new
+      if @current_server.nil?
+        render Components::UI::NoServerState.new
       else
         body
       end
@@ -34,15 +34,15 @@ class Views::Metrics::Index < Views::Base
     # trigger /metrics/chart, which returns a turbo_stream targeting
     # this modal's slots (chart-modal-title / chart-modal-body) +
     # the chart_modal_open custom action.
-    render Components::Metrics::ChartModal.new if @current_island
+    render Components::Metrics::ChartModal.new if @current_server
 
     # Call-flow overlay host — rendered ONCE outside the polling frame (like
     # ChartModal) so an open SIP ladder survives a broadcast-tick reload. The
     # DataTable's per-row call-flow icon fetches into it. Gated: only when the
-    # island has voodu-hep3 (else the listener is dead weight).
-    if @current_island&.plugin_installed?("hep3")
+    # server has voodu-hep3 (else the listener is dead weight).
+    if @current_server&.plugin_installed?("hep3")
       render Components::Hep3::CallFlowHost.new(
-        call_url: metrics_hep3_call_path(tenant_key: @current_island.key)
+        call_url: metrics_hep3_call_path(server_key: @current_server.key)
       )
     end
   end
@@ -55,17 +55,17 @@ class Views::Metrics::Index < Views::Base
     # auto-refresh controller owns the WHOLE page body so both the
     # cable source (the wrapped <turbo-cable-stream-source>) and the
     # subtitle button (data-action="click->auto-refresh#toggle")
-    # share its scope. Storage key is per-island so toggling
+    # share its scope. Storage key is per-server so toggling
     # auto-refresh on one server doesn't bleed into another.
     div(
       class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5",
       data: {
         controller: "auto-refresh fullscreen",
-        auto_refresh_storage_key_value: "voodu:auto-refresh:#{@current_island.id}"
+        auto_refresh_storage_key_value: "voodu:auto-refresh:#{@current_server.id}"
       }
     ) do
-      # Subscribe to live ticks broadcast by MetricsSyncIslandJob
-      # whenever new samples land in the warehouse for this island.
+      # Subscribe to live ticks broadcast by MetricsSyncServerJob
+      # whenever new samples land in the warehouse for this server.
       # The custom `metrics_tick` Turbo Stream action (see
       # turbo_actions/metrics.js) calls `frame.reload()` on the
       # metrics-charts frame — same refetch the 30s polling tick
@@ -90,7 +90,7 @@ class Views::Metrics::Index < Views::Base
       # target (every leg guards on hasSourceTarget).
       unless custom_window?
         span(class: "hidden", data: {auto_refresh_target: "source"}) do
-          turbo_stream_from "metrics-#{@current_island.id}"
+          turbo_stream_from "metrics-#{@current_server.id}"
         end
       end
 
@@ -108,12 +108,12 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
-  # empty_state — shown when the island has zero dashboards (and no
+  # empty_state — shown when the server has zero dashboards (and no
   # scope drill-down). Metrics are dashboard-driven: prompt the operator
   # to build their first one. Host lives as a panel SOURCE inside the
   # builder, so there's no separate "host scope" landing anymore.
   # empty_state — nothing is being shown: no dashboard pinned/picked, or
-  # the island has none. Dashboards EXIST → prompt to PICK one (the menu
+  # the server has none. Dashboards EXIST → prompt to PICK one (the menu
   # does it); NONE → prompt to CREATE. Host is a panel source inside the
   # builder, so there's no standalone host landing anymore.
   def empty_state
@@ -466,7 +466,7 @@ class Views::Metrics::Index < Views::Base
     else
       span do
         plain "host "
-        span(class: "font-voodu-mono text-voodu-text-2") { @current_island.name }
+        span(class: "font-voodu-mono text-voodu-text-2") { @current_server.name }
       end
     end
   end
@@ -475,7 +475,7 @@ class Views::Metrics::Index < Views::Base
   # subscription. Default ON (green pulsing dot + "auto-refresh");
   # operator click flips to OFF (red static dot + "paused") and
   # detaches the <turbo-cable-stream-source> so the broadcast tick
-  # stops reloading the chart frame. State persists per-island via
+  # stops reloading the chart frame. State persists per-server via
   # localStorage in auto_refresh_controller.js — operator pauses
   # once during a long debugging session and the page stays paused
   # across reloads / navigations until they un-pause.
@@ -544,7 +544,7 @@ class Views::Metrics::Index < Views::Base
           render Components::Metrics::PodPicker.new(
             scope_kind: @data&.scope_kind || "host",
             scope_id: @data&.scope_id,
-            current_island: @current_island,
+            current_server: @current_server,
             pods: @data&.all_pods || []
           )
         end
@@ -596,8 +596,8 @@ class Views::Metrics::Index < Views::Base
   # cleanly either way.
   #
   # Update strategy: ActionCable broadcast over Solid Cable. The
-  # MetricsSyncIslandJob fires `metrics_tick` after inserting new
-  # samples, every page subscribed to `metrics-#{island.id}`
+  # MetricsSyncServerJob fires `metrics_tick` after inserting new
+  # samples, every page subscribed to `metrics-#{server.id}`
   # reloads its per-card frames in place (see
   # turbo_actions/metrics.js). Polling tick was removed: with
   # lazy-loaded sub-frames, reloading the parent caused skeleton
@@ -886,7 +886,7 @@ class Views::Metrics::Index < Views::Base
       default_visible: c.fetch(:default_visible, true),
       row_action: c[:row_action],
       dashboard_uuid: c[:dashboard_uuid],
-      island_id: c[:island_id],
+      server_id: c[:server_id],
       **table_window
     )
   end
@@ -953,10 +953,10 @@ class Views::Metrics::Index < Views::Base
       label: chart[:label],
       color: chart[:color],
       unit: chart[:unit],
-      # island_id → the expand modal drills into the SAME server this panel
+      # server_id → the expand modal drills into the SAME server this panel
       # reads from (a cross-server dashboard panel expands its own server, not
-      # the URL's). Omitted on scope-mode charts (they inherit current_island).
-      island_id: chart[:island_id],
+      # the URL's). Omitted on scope-mode charts (they inherit current_server).
+      server_id: chart[:server_id],
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
       chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
@@ -974,8 +974,8 @@ class Views::Metrics::Index < Views::Base
       filter_query: chart[:filter_query].presence,
       chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
       label: chart[:label], color: chart[:color],
-      # island_id → re-aggregate against the panel's own server in the modal.
-      island_id: chart[:island_id],
+      # server_id → re-aggregate against the panel's own server in the modal.
+      server_id: chart[:server_id],
       range: custom_window? ? "custom" : (data&.range || "1h"),
       from: custom_window? ? request.query_parameters[:from] : nil,
       until: custom_window? ? request.query_parameters[:until] : nil,

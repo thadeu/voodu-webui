@@ -21,10 +21,10 @@
 # the sidebar + backdrop + hamburger button all hang off one
 # coordinated controller (see mobile_nav_controller.js).
 class Components::Layouts::Dashboard < Components::Base
-  def initialize(current_path: "/", islands: [], current_island: nil, updated_at: nil, uptime: nil, breadcrumb: nil)
+  def initialize(current_path: "/", servers: [], current_server: nil, updated_at: nil, uptime: nil, breadcrumb: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @updated_at = updated_at
     @uptime = uptime
     @breadcrumb = breadcrumb
@@ -37,14 +37,14 @@ class Components::Layouts::Dashboard < Components::Base
     ) do
       render Components::Layouts::Sidebar.new(
         current_path: @current_path,
-        islands: @islands,
-        current_island: @current_island
+        servers: @servers,
+        current_server: @current_server
       )
       mobile_backdrop
       div(class: "flex flex-1 flex-col overflow-hidden min-w-0") do
         render Components::Layouts::Topbar.new(
-          current_island: @current_island,
-          islands: @islands,
+          current_server: @current_server,
+          servers: @servers,
           updated_at: @updated_at,
           uptime: @uptime
         )

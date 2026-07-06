@@ -3,7 +3,7 @@
 // delete of a firing rule).
 //
 // The badge spans update via plain Turbo `update` broadcasts on the
-// island-state channel — no JS needed. This action covers the /alerts
+// server-state channel — no JS needed. This action covers the /alerts
 // page itself: reload the `alerts-live` frame so firing cards, the
 // rules table, and history reflect the transition without a refresh.
 

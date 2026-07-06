@@ -51,9 +51,9 @@ class PollerDigestJob < ApplicationJob
 
     case digest.type
     when "metrics"
-      MetricsDigestService.from_folder(folder_path: folder_path, tenant_id: digest.tenant_id)
+      MetricsDigestService.from_folder(folder_path: folder_path, server_id: digest.server_id)
     when "state"
-      StateDigestService.from_folder(folder_path: folder_path, tenant_id: digest.tenant_id)
+      StateDigestService.from_folder(folder_path: folder_path, server_id: digest.server_id)
     else
       raise "unsupported digest type: #{digest.type.inspect}"
     end

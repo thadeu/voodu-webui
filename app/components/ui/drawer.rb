@@ -57,7 +57,7 @@ class Components::UI::Drawer < Components::Base
   # compact settings card grid shouldn't inherit the 60vw width an
   # operator set for the logs viewer.
   # id — stable identifier for the Turbo "permanent" wrapping. When
-  # this drawer's host frame is re-rendered (e.g. StateSyncIslandJob's
+  # this drawer's host frame is re-rendered (e.g. StateSyncServerJob's
   # state_tick reloading the pod show frame), Turbo matches the
   # before/after nodes by id and KEEPS the current one — preserving
   # the Stimulus controller instance, the `data-open` state, the

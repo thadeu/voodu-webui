@@ -2,7 +2,7 @@
 
 Operator dashboard for the [voodu](https://github.com/thadeu/clowk-voodu)
 self-hosted PaaS controller. One Rails app, one SQLite volume, talks to
-N voodu controllers (called "islands") over their PAT plane.
+N voodu controllers (called "servers") over their PAT plane.
 
 ## Stack at a glance
 
@@ -17,14 +17,14 @@ N voodu controllers (called "islands") over their PAT plane.
 - **Faraday** for HTTP to controllers (`app/services/voodu/client.rb`)
 - **PhlexIcons::Hero** aliased as `Icon` (so `Icon::ChartBarOutline.new(...)`)
 
-## Mental model: islands + tenant routing
+## Mental model: servers + server routing
 
-Every page hangs off `/<tenant_key>/...`. Switching islands = swapping
-the URL segment. The `tenant_key` resolves to an `Island` model holding
+Every page hangs off `/<server_key>/...`. Switching servers = swapping
+the URL segment. The `server_key` resolves to a `Server` model holding
 `endpoint + pat_ciphertext`. Bookmarks and parallel tabs Just Work.
 
-Routes (`config/routes.rb`): `/<tenant_key>/{overview,pods,logs,metrics,alerts,settings}`
-plus management at `/islands` (no tenant prefix).
+Routes (`config/routes.rb`): `/<server_key>/{overview,pods,logs,metrics,alerts,settings}`
+plus management at `/servers` (no server prefix).
 
 The PAT lives encrypted at rest (ActiveRecord Encryption); the WebUI
 proxies to `<endpoint>/api/pat/v1/<path>` with `Authorization: Bearer <pat>`.
@@ -49,9 +49,9 @@ app/
   javascript/
     controllers/      # Stimulus — one file per behavior
   jobs/               # solid_queue (MetricsSync* etc.)
-  models/             # ActiveRecord (Island, MetricSample, ...)
+  models/             # ActiveRecord (Server, MetricSample, ...)
 config/
-  routes.rb           # tenant-scoped + management routes
+  routes.rb           # server-scoped + management routes
   database.yml        # 5-DB layout
   recurring.yml       # solid_queue recurring tasks (metrics sync etc.)
 db/
@@ -73,7 +73,7 @@ db/
   and will be removed. Routes, flash, request, link_to, etc. are already
   exposed directly via the includes in `Components::Base`. Call
   `metrics_path`, `flash`, `request` straight up. Custom controller helpers
-  (`form_authenticity_token`, `recent_islands`) are registered there via
+  (`form_authenticity_token`, `recent_servers`) are registered there via
   `register_value_helper :name` — add new ones to that list as needed
 - **HTML tag name collision**: `header`, `footer`, `section`, `article`,
   `main`, `aside`, `nav`, `figure` are Phlex HTML tag methods. Never name
@@ -155,7 +155,7 @@ Never reuse a color for a different signal.
 `MetricSample` ActiveRecord lives in a dedicated SQLite DB
 (`storage/*_metrics.sqlite3`). Schema in `db/metrics_schema.rb`,
 migrations in `db/metrics_migrate/`. Rows are written by
-`MetricsSyncIslandJob` (solid_queue recurring) and read by
+`MetricsSyncServerJob` (solid_queue recurring) and read by
 `MetricsWarehouse` + `MetricsData` / `MetricsPageData`.
 
 Per-metric aggregation matters: counters (`req_count`, `req_2xx..5xx`,

@@ -39,7 +39,7 @@ class OverviewData
     @stale == true
   end
 
-  # Cache TTL for one island's overview snapshot. Short enough that
+  # Cache TTL for one server's overview snapshot. Short enough that
   # the operator's view is "live-ish" (≤ this many seconds stale), long
   # enough that browsing — opening the dashboard, flipping pod-status
   # filters, glancing at the table — doesn't fan out into N HTTP calls
@@ -51,23 +51,23 @@ class OverviewData
   # the cache.
   CACHE_TTL = 10.seconds
 
-  def initialize(client, island, force_refresh: false)
+  def initialize(client, server, force_refresh: false)
     @client = client
-    @island = island
+    @server = server
     @force = force_refresh
     @system = nil
     @pods_raw = []
     @updated_at = Time.current
     @error = nil
     @cache_hit = false
-    @metrics = MetricsData.new(client, island)
+    @metrics = MetricsData.new(client, server)
     fetch!
   end
 
   # Summary line under the H1 — "prod-edge-01 · 11 of 14 pods running
   # · load avg 3.41 / 2.86 / 2.41".
   def summary_line
-    parts = [@island.name]
+    parts = [@server.name]
     parts << "#{pods_running_count} of #{pods_total} pods running"
     parts << "load avg #{load_1} / #{load_5} / #{load_15}"
     parts.join(" · ")
@@ -100,13 +100,13 @@ class OverviewData
     @system&.dig("host", "uptime_seconds").to_i
   end
 
-  # uptime_label — delegates to Island#uptime so /overview, /metrics,
+  # uptime_label — delegates to Server#uptime so /overview, /metrics,
   # and the topbar chip on every page share ONE source, format, and
   # freshness guard (boot-time derived, blanks when the snapshot is
   # stale). Kept as a method because the dashboard view threads
   # @data&.uptime_label into the layout.
   def uptime_label
-    @island.uptime
+    @server.uptime
   end
 
   # boot_time — ISO timestamp the host booted at. Used as a tooltip
@@ -177,7 +177,7 @@ class OverviewData
   #                  freshness, not page render time.
   #   - Cache MISS → one /system + one /pods?detail=true call to the
   #                  PAT plane. Both responses cached under a
-  #                  per-island key.
+  #                  per-server key.
   #   - force_refresh → cache invalidated up front (the "Refresh all"
   #                  button passes `?refresh=1`).
   #   - Voodu::Client::Error → stored on @error and NOT cached. The
@@ -195,21 +195,21 @@ class OverviewData
   def fetch!
     return if @client.nil?
 
-    return fetch_from_warehouse! if IslandState.warehouse?
+    return fetch_from_warehouse! if ServerState.warehouse?
 
     fetch_from_http!
   end
 
   # fetch_from_warehouse! — read the local snapshot tables populated
-  # by `StateSyncIslandJob` (every 10s). Sub-millisecond, no HTTP, no
+  # by `StateSyncServerJob` (every 10s). Sub-millisecond, no HTTP, no
   # error paths to handle — the sync job is the only thing that can
   # fail, and we accept whatever it last wrote.
   #
-  # @updated_at carries `island.last_synced_at` so the topbar's
+  # @updated_at carries `server.last_synced_at` so the topbar's
   # "updated Ns ago" chip reflects DATA freshness rather than this
   # page-render moment.
   def fetch_from_warehouse!
-    state = IslandState.for(@island)
+    state = ServerState.for(@server)
 
     @system = state.system || {}
     @pods_raw = state.pods
@@ -221,8 +221,8 @@ class OverviewData
     # pipeline behind). Both mean "we can't vouch these pods are running
     # right now", so the banner shows + per-pod status is forced to
     # :offline (see `stale?` doc above + `prepare_pod` below). We trust
-    # IslandHealth as the single source of truth for agent health.
-    @stale = @island.status != :online && state.synced_at.present?
+    # ServerHealth as the single source of truth for agent health.
+    @stale = @server.status != :online && state.synced_at.present?
   end
 
   # fetch_from_http! — the legacy path. Direct controller call per
@@ -256,41 +256,41 @@ class OverviewData
     )
 
     # Successful fetch == controller is reachable + PAT is valid +
-    # process is alive. Warm the IslandHealth cache so the sidebar
+    # process is alive. Warm the ServerHealth cache so the sidebar
     # and topbar render :online without spending their own probe.
-    IslandHealth.warm(@island, online: true)
+    ServerHealth.warm(@server, online: true)
 
     # Warm the sidebar's pods-count badge ("0 pods" → real count).
     # TTL slightly longer than the snapshot's 10s so the sidebar
     # doesn't briefly blank out between page renders within the
     # same browsing session. Stale-after-expiry behaviour is OK
     # because the next overview render rewrites it.
-    Island.write_pods_count(@island, @pods_raw.size)
+    Server.write_pods_count(@server, @pods_raw.size)
 
     # Warm the topbar's uptime chip. Same cache pattern — every
     # page (Pods, Logs, pod show, …) reads from this key without
     # needing to fetch /system itself. Without this warm, the
     # topbar uptime would show "—" on every non-Overview page.
-    Island.write_uptime_seconds(@island, uptime_seconds)
+    Server.write_uptime_seconds(@server, uptime_seconds)
   rescue Voodu::Client::Error => e
     # Don't poison the cache with a failure — let the next request
     # retry. Operators iterating on a misconfigured PAT shouldn't have
     # to wait TTL seconds to see their fix take effect.
     @error = e
 
-    # The error still tells us something: this island isn't reachable
+    # The error still tells us something: this server isn't reachable
     # right now. Flip the health cache to :offline so the sidebar /
     # topbar reflects the symptom without triggering a redundant
     # probe of their own.
-    IslandHealth.warm(@island, online: false)
+    ServerHealth.warm(@server, online: false)
   end
 
-  # cache_key — namespaced per-island so two islands don't clobber
+  # cache_key — namespaced per-server so two servers don't clobber
   # each other's snapshot. Bumped (`:v1`) so a schema change in the
   # cached hash (e.g. adding a `:degraded` key) won't read garbage from
   # old entries — change the suffix and old keys auto-expire on TTL.
   def cache_key
-    "voodu:overview:v1:island:#{@island.id}"
+    "voodu:overview:v1:server:#{@server.id}"
   end
 
   # ── Stat cards ──────────────────────────────────────────────────

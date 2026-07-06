@@ -17,10 +17,10 @@ class Views::Pods::Show < Views::Base
   # Skips the Dashboard chrome (sidebar/topbar) so the drawer's body
   # gets just the pod detail surface, and tells Pods::Header to drop
   # its "All pods" back link (the drawer's own close X covers that).
-  def initialize(current_path:, islands: [], current_island: nil, data: nil, updated_at: nil, drawer: false)
+  def initialize(current_path:, servers: [], current_server: nil, data: nil, updated_at: nil, drawer: false)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @data = data
     @updated_at = updated_at
     @drawer = drawer
@@ -31,15 +31,15 @@ class Views::Pods::Show < Views::Base
       drawer_body
     else
       render Components::Layouts::Dashboard.new(
-        current_path: @current_path, islands: @islands,
-        current_island: @current_island, updated_at: @updated_at,
-        breadcrumb: @current_island && overview_crumbs(
-          {label: "Pods", href: pods_path(tenant_key: @current_island.key)},
+        current_path: @current_path, servers: @servers,
+        current_server: @current_server, updated_at: @updated_at,
+        breadcrumb: @current_server && overview_crumbs(
+          {label: "Pods", href: pods_path(server_key: @current_server.key)},
           {label: @data&.name}
         )
       ) do
-        if @current_island.nil?
-          render Components::UI::NoIslandState.new
+        if @current_server.nil?
+          render Components::UI::NoServerState.new
         else
           framed_body
         end
@@ -50,7 +50,7 @@ class Views::Pods::Show < Views::Base
   private
 
   # framed_body — wraps the page body in a Turbo Frame so the
-  # state-tick broadcast from StateSyncIslandJob can refresh it
+  # state-tick broadcast from StateSyncServerJob can refresh it
   # without a manual reload. Same pattern as Dashboard + Pods::Index:
   # no `src=` on the frame (the JS handler sets it to
   # `window.location.href` right before reload(), preserving the
@@ -68,7 +68,7 @@ class Views::Pods::Show < Views::Base
   # sync — operator doesn't have to manually refresh after a pod
   # creation.
   def framed_body
-    # `refresh="morph"` — when StateSyncIslandJob's state_tick triggers
+    # `refresh="morph"` — when StateSyncServerJob's state_tick triggers
     # frame.reload(), Turbo 8 uses Idiomorph to diff the response
     # against the current DOM instead of replacing the frame body
     # wholesale. Two big wins:
@@ -86,7 +86,7 @@ class Views::Pods::Show < Views::Base
     # frame body. Even `[data-turbo-permanent]` is ignored (that
     # attribute is a Turbo Drive feature, not Turbo Frames).
     turbo_frame_tag(
-      "island-#{@current_island.id}-state",
+      "server-#{@current_server.id}-state",
       target: "_top",
       refresh: "morph",
       data: {state_frame: true}

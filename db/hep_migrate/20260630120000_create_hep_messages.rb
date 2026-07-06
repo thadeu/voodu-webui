@@ -7,7 +7,7 @@
 #
 # Real columns vs generated:
 #
-#   - tenant_id / scope / name are REAL columns: they identify the
+#   - server_id / scope / name are REAL columns: they identify the
 #     reader INSTANCE the line came from and are NOT present in the
 #     NDJSON (the collector doesn't know which voodu resource serves
 #     it) — the poller stamps them at insert.
@@ -21,7 +21,7 @@
 class CreateHepMessages < ActiveRecord::Migration[8.1]
   def change
     create_table :hep_messages do |t|
-      t.integer :tenant_id, null: false
+      t.integer :server_id, null: false
       t.string :scope, null: false
       t.string :name, null: false
       t.text :payload, null: false
@@ -49,18 +49,18 @@ class CreateHepMessages < ActiveRecord::Migration[8.1]
     end
 
     # Hot path #1 — a call's full timeline (ladder), ordered.
-    # Covers: WHERE tenant_id=? AND scope=? AND name=? AND corr_id=?
+    # Covers: WHERE server_id=? AND scope=? AND name=? AND corr_id=?
     #         ORDER BY ts_epoch
-    add_index :hep_messages, [:tenant_id, :scope, :name, :corr_id, :ts_epoch],
+    add_index :hep_messages, [:server_id, :scope, :name, :corr_id, :ts_epoch],
       name: "idx_hep_messages_call"
 
     # Hot path #2 — recent messages for an instance (DataTable feed).
-    # Covers: WHERE tenant_id=? AND scope=? AND name=? ORDER BY ts_epoch DESC
-    add_index :hep_messages, [:tenant_id, :scope, :name, :ts_epoch],
+    # Covers: WHERE server_id=? AND scope=? AND name=? ORDER BY ts_epoch DESC
+    add_index :hep_messages, [:server_id, :scope, :name, :ts_epoch],
       name: "idx_hep_messages_recent"
 
     # Hot path #3 — the logs bridge: an app-log Call-ID → its SIP flow.
-    add_index :hep_messages, [:tenant_id, :call_id],
+    add_index :hep_messages, [:server_id, :call_id],
       name: "idx_hep_messages_call_id"
   end
 end

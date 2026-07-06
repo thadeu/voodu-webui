@@ -4,20 +4,20 @@
 #
 # Two execution modes:
 #
-#   - Per-island (`CommandSet.for(island:, ...)`): builds Navigate
-#     + Pods + Logs/Metrics/Restart for ONE island. Used by the
+#   - Per-server (`CommandSet.for(server:, ...)`): builds Navigate
+#     + Pods + Logs/Metrics/Restart for ONE server. Used by the
 #     /command_palette.json endpoint, which loops every registered
-#     island + concatenates the results.
+#     server + concatenates the results.
 #
-#   - Global tail (`CommandSet.globals(islands:, helpers:)`):
+#   - Global tail (`CommandSet.globals(servers:, helpers:)`):
 #     builds Server-switch + Global actions (Add server, Manage
-#     servers). Independent of any single island. Endpoint appends
-#     these once after the per-island loop.
+#     servers). Independent of any single server. Endpoint appends
+#     these once after the per-server loop.
 #
-# Every href is built with EXPLICIT `org_id: island.org.short_id` +
-# `tenant_key: island.key` (see #loc) — the palette is a tenant-LESS
+# Every href is built with EXPLICIT `org_id: server.org.short_id` +
+# `server_key: server.key` (see #loc) — the palette is a server-LESS
 # endpoint (no default_url_options injection) and a multi-server surface,
-# so each command must fully name the org + island it points at.
+# so each command must fully name the org + server it points at.
 #
 # Subtitle convention: pod-bound commands include the SERVER name
 # (e.g. "data · postgres:16 · @debian"). Lets the operator scan
@@ -33,26 +33,26 @@ class CommandSet
 
   # ── public entrypoints ──────────────────────────────────────────
 
-  def self.for(island:, helpers:, pods: [])
-    new(island: island, pods: Array(pods), helpers: helpers).build_per_island
+  def self.for(server:, helpers:, pods: [])
+    new(server: server, pods: Array(pods), helpers: helpers).build_per_server
   end
 
-  def self.globals(islands:, helpers:, current_island: nil)
-    new(island: nil, pods: [], helpers: helpers)
-      .build_globals(islands: Array(islands), current_island: current_island)
+  def self.globals(servers:, helpers:, current_server: nil)
+    new(server: nil, pods: [], helpers: helpers)
+      .build_globals(servers: Array(servers), current_server: current_server)
   end
 
-  def initialize(island:, pods:, helpers:)
-    @island = island
+  def initialize(server:, pods:, helpers:)
+    @server = server
     @pods = pods
     @h = helpers
   end
 
-  # build_per_island — commands scoped to one specific island.
-  # Tagged with `island_key` so the client can filter the default
-  # view to the current page's island; search shows all islands.
-  def build_per_island
-    return [] if @island.nil?
+  # build_per_server — commands scoped to one specific server.
+  # Tagged with `server_key` so the client can filter the default
+  # view to the current page's server; search shows all servers.
+  def build_per_server
+    return [] if @server.nil?
 
     [
       *navigate_commands,
@@ -64,29 +64,29 @@ class CommandSet
     ]
   end
 
-  def build_globals(islands:, current_island:)
+  def build_globals(servers:, current_server:)
     [
-      *server_switch_commands(islands, current_island),
+      *server_switch_commands(servers, current_server),
       *global_commands
     ]
   end
 
   private
 
-  # loc — a route's path for `island`, carrying org_id + tenant_key
-  # EXPLICITLY. The palette endpoint is tenant-less (no org/tenant in its
+  # loc — a route's path for `server`, carrying org_id + server_key
+  # EXPLICITLY. The palette endpoint is server-less (no org/server in its
   # URL → default_url_options injects nothing) and cross-server (each row
-  # targets its own island), so every href must name both. `island.org` is
-  # free here — islands come from `org.islands`, so the inverse is preloaded.
-  def loc(route, island, **extra)
-    @h.public_send("#{route}_path", org_id: island.org.short_id, tenant_key: island.key, **extra)
+  # targets its own server), so every href must name both. `server.org` is
+  # free here — servers come from `org.servers`, so the inverse is preloaded.
+  def loc(route, server, **extra)
+    @h.public_send("#{route}_path", org_id: server.org.short_id, server_key: server.key, **extra)
   end
 
-  # ── Navigate (6 per island) ─────────────────────────────────────
+  # ── Navigate (6 per server) ─────────────────────────────────────
 
   def navigate_commands
     [
-      nav(:tenant_root, "Overview", :Squares2x2Outline, "home dashboard overview"),
+      nav(:server_root, "Overview", :Squares2x2Outline, "home dashboard overview"),
       nav(:pods, "Pods", :CubeOutline, "pods list services replicas"),
       nav(:logs, "Logs", :DocumentTextOutline, "logs stdout tail stream live"),
       nav(:metrics, "Metrics", :ChartBarOutline, "metrics charts graphs time range"),
@@ -103,14 +103,14 @@ class CommandSet
   # two-key sequence becomes real.
   def nav(route, label, icon, match)
     {
-      id: "nav-#{route}-#{@island.key}",
+      id: "nav-#{route}-#{@server.key}",
       group: "Navigate",
-      island_key: @island.key,
+      server_key: @server.key,
       title: "Go to #{label}",
-      subtitle: "@ #{@island.name}",
+      subtitle: "@ #{@server.name}",
       icon: icon.to_s,
-      match: "#{match} #{@island.name}",
-      href: loc(route, @island)
+      match: "#{match} #{@server.name}",
+      href: loc(route, @server)
     }
   end
 
@@ -119,14 +119,14 @@ class CommandSet
   def pod_jump_commands
     @pods.map do |p|
       {
-        id: "pod:#{@island.key}:#{p["name"]}",
+        id: "pod:#{@server.key}:#{p["name"]}",
         group: "Pods",
-        island_key: @island.key,
+        server_key: @server.key,
         title: pod_title(p),
-        subtitle: "#{p["scope"]} · #{p["image"]} · @#{@island.name}",
-        match: "#{pod_match_corpus(p)} #{@island.name}",
+        subtitle: "#{p["scope"]} · #{p["image"]} · @#{@server.name}",
+        match: "#{pod_match_corpus(p)} #{@server.name}",
         status: normalised_status(p),
-        href: loc(:pod, @island, name: p["name"])
+        href: loc(:pod, @server, name: p["name"])
       }
     end
   end
@@ -136,14 +136,14 @@ class CommandSet
   def per_pod_log_commands
     @pods.map do |p|
       {
-        id: "logs:#{@island.key}:#{p["name"]}",
+        id: "logs:#{@server.key}:#{p["name"]}",
         group: "Logs",
-        island_key: @island.key,
+        server_key: @server.key,
         title: "Logs for #{pod_title(p)}",
-        subtitle: "live tail · #{p["scope"]} · @#{@island.name}",
+        subtitle: "live tail · #{p["scope"]} · @#{@server.name}",
         icon: "DocumentTextOutline",
-        match: "logs tail stream #{pod_match_corpus(p)} #{@island.name}",
-        href: loc(:pod_logs, @island, name: p["name"])
+        match: "logs tail stream #{pod_match_corpus(p)} #{@server.name}",
+        href: loc(:pod_logs, @server, name: p["name"])
       }
     end
   end
@@ -153,14 +153,14 @@ class CommandSet
   def per_pod_metric_commands
     @pods.map do |p|
       {
-        id: "metrics:#{@island.key}:#{p["name"]}",
+        id: "metrics:#{@server.key}:#{p["name"]}",
         group: "Metrics",
-        island_key: @island.key,
+        server_key: @server.key,
         title: "Metrics for #{pod_title(p)}",
-        subtitle: "last 1h · #{p["scope"]} · @#{@island.name}",
+        subtitle: "last 1h · #{p["scope"]} · @#{@server.name}",
         icon: "ChartBarOutline",
-        match: "metrics charts #{pod_match_corpus(p)} #{@island.name}",
-        href: "#{loc(:metrics, @island)}?scope_kind=pod&scope_id=#{CGI.escape(p["name"])}"
+        match: "metrics charts #{pod_match_corpus(p)} #{@server.name}",
+        href: "#{loc(:metrics, @server)}?scope_kind=pod&scope_id=#{CGI.escape(p["name"])}"
       }
     end
   end
@@ -170,14 +170,14 @@ class CommandSet
   def saved_log_queries
     LOG_QUERIES.map do |q|
       {
-        id: "#{q[:id]}-#{@island.key}",
+        id: "#{q[:id]}-#{@server.key}",
         group: "Logs",
-        island_key: @island.key,
+        server_key: @server.key,
         title: q[:title],
-        subtitle: "saved query · @#{@island.name}",
+        subtitle: "saved query · @#{@server.name}",
         icon: "DocumentTextOutline",
-        match: "#{q[:match]} #{@island.name}",
-        href: loc(:logs, @island)
+        match: "#{q[:match]} #{@server.name}",
+        href: loc(:logs, @server)
       }
     end
   end
@@ -189,26 +189,26 @@ class CommandSet
       next unless p["running"] == true
 
       {
-        id: "restart:#{@island.key}:#{p["name"]}",
+        id: "restart:#{@server.key}:#{p["name"]}",
         group: "Actions",
-        island_key: @island.key,
+        server_key: @server.key,
         title: "Restart #{pod_title(p)}",
-        subtitle: "#{p["image"]} · #{p["scope"]} · @#{@island.name}",
+        subtitle: "#{p["image"]} · #{p["scope"]} · @#{@server.name}",
         icon: "ArrowPathOutline",
-        match: "restart kill cycle bounce #{pod_match_corpus(p)} #{@island.name}",
+        match: "restart kill cycle bounce #{pod_match_corpus(p)} #{@server.name}",
         destructive: true,
-        href: loc(:restart_pod, @island, name: p["name"]),
+        href: loc(:restart_pod, @server, name: p["name"]),
         method: "POST",
-        confirm: "Restart #{pod_title(p)} on #{@island.name}?"
+        confirm: "Restart #{pod_title(p)} on #{@server.name}?"
       }
     end
   end
 
   # ── Server switching (global) ────────────────────────────────────
 
-  def server_switch_commands(islands, current_island)
-    islands.filter_map do |s|
-      next if current_island && s.id == current_island.id
+  def server_switch_commands(servers, current_server)
+    servers.filter_map do |s|
+      next if current_server && s.id == current_server.id
 
       {
         id: "server:#{s.id}",
@@ -217,7 +217,7 @@ class CommandSet
         subtitle: s.host.to_s,
         status: (s.status || :unknown).to_s,
         match: "server host switch select #{s.name} #{s.host}",
-        href: loc(:tenant_root, s)
+        href: loc(:server_root, s)
       }
     end
   end
@@ -232,7 +232,7 @@ class CommandSet
         title: "Add new server",
         icon: "PlusOutline",
         match: "add new server host connect setup register",
-        href: @h.new_island_path
+        href: @h.new_server_path
       },
       {
         id: "act-manage-servers",
@@ -240,7 +240,7 @@ class CommandSet
         title: "Manage servers",
         icon: "ServerStackOutline",
         match: "manage servers list edit remove registry",
-        href: @h.islands_path
+        href: @h.servers_path
       }
     ]
   end

@@ -16,12 +16,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_25_004500) do
     t.text "payload", null: false
     t.virtual "pod", type: :string, as: "json_extract(payload, '$.container')", stored: false
     t.virtual "scope", type: :string, as: "json_extract(payload, '$.scope')", stored: false
+    t.integer "server_id", null: false
     t.string "source", null: false
-    t.integer "tenant_id", null: false
     t.virtual "ts_epoch", type: :integer, as: "CAST(strftime('%s', ts_iso) AS INTEGER)", stored: true
     t.string "ts_iso", null: false
-    t.index ["tenant_id", "source", "scope", "name", "pod", "ts_epoch"], name: "idx_metric_samples_pod", where: "source = 'pod'"
-    t.index ["tenant_id", "source", "ts_epoch"], name: "idx_metric_samples_system", where: "source = 'system'"
-    t.index ["tenant_id", "ts_epoch"], name: "idx_metric_samples_watermark"
+    t.index ["server_id", "source", "scope", "name", "pod", "ts_epoch"], name: "idx_metric_samples_pod", where: "source = 'pod'"
+    t.index ["server_id", "source", "ts_epoch"], name: "idx_metric_samples_system", where: "source = 'system'"
+    t.index ["server_id", "ts_epoch"], name: "idx_metric_samples_watermark"
   end
 end

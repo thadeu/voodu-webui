@@ -8,11 +8,11 @@ require "test_helper"
 # keeps pod-picker resolution off the network; the log lines come from a
 # hand-seeded NDJSON warehouse on disk.
 class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @key = @island.key
+    @server = servers(:alpha)
+    @key = @server.key
     @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
@@ -24,16 +24,16 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     # LogSearchDataTest. Auto-reset at teardown by TimeHelpers.
     travel_to @base + 1.minute
 
-    clear_island_logs
+    clear_server_logs
   end
 
   teardown do
     ENV["WAREHOUSE"] = @prev_wh
-    clear_island_logs
+    clear_server_logs
   end
 
   test "index renders the analytics page with the filter bar" do
-    get logs_analytics_path(tenant_key: @key)
+    get logs_analytics_path(server_key: @key)
 
     assert_response :success
     assert_match 'aria-label="Logs view"', @response.body, "the Analytics/Follow switcher renders in the header"
@@ -50,7 +50,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
       [@base + 1.second, "callid=8342416038 finished"]
     ])
 
-    get logs_analytics_path(tenant_key: @key),
+    get logs_analytics_path(server_key: @key),
       params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid"},
       headers: {"Turbo-Frame" => "logs-analytics-results"}
 
@@ -62,7 +62,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "empty result set renders the empty state" do
-    get logs_analytics_path(tenant_key: @key),
+    get logs_analytics_path(server_key: @key),
       params: {range: "custom", from: iso(@base), until: iso(@base + 1.second), q: "nothing-matches-this"},
       headers: {"Turbo-Frame" => "logs-analytics-results"}
 
@@ -74,7 +74,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     with_page_size(3) do
       seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
 
-      get logs_analytics_path(tenant_key: @key),
+      get logs_analytics_path(server_key: @key),
         params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds), page: 2},
         headers: {"Turbo-Frame" => "la-page-2"}
 
@@ -93,7 +93,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     window = {from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid"}
 
     # NDJSON — full records, only the matching line, as an attachment.
-    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "ndjson")
+    get logs_analytics_export_path(server_key: @key), params: window.merge(fmt: "ndjson")
     assert_response :success
     assert_match %r{application/x-ndjson}, @response.media_type
     assert_match(/attachment; filename=.*\.ndjson/, @response.headers["Content-Disposition"])
@@ -101,13 +101,13 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_no_match "GET /health 200", @response.body
 
     # CSV — column header present.
-    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "csv")
+    get logs_analytics_export_path(server_key: @key), params: window.merge(fmt: "csv")
     assert_response :success
     assert_match "text/csv", @response.media_type
     assert @response.body.start_with?("ts,pod,stream,level,msg\n"), "csv header"
 
     # JSON — a parseable array of the matched rows.
-    get logs_analytics_export_path(tenant_key: @key), params: window.merge(fmt: "json")
+    get logs_analytics_export_path(server_key: @key), params: window.merge(fmt: "json")
     assert_response :success
     rows = JSON.parse(@response.body)
     assert_equal 1, rows.size
@@ -118,7 +118,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   test "surrounding exports the shown batch as a download" do
     seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
 
-    get logs_analytics_surrounding_path(tenant_key: @key),
+    get logs_analytics_surrounding_path(server_key: @key),
       params: {pod: "web", ts: iso(@base + 3.seconds), fmt: "csv"}
 
     assert_response :success
@@ -132,7 +132,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     lines = (0..6).map { |i| [@base + i.seconds, "line-#{i}"] }
     seed("web", lines)
 
-    get logs_analytics_surrounding_path(tenant_key: @key),
+    get logs_analytics_surrounding_path(server_key: @key),
       params: {pod: "web", ts: iso(@base + 3.seconds), before: 2, after: 2}
 
     assert_response :success
@@ -143,10 +143,10 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   end
 
   # ── Logs → HEP3 call-flow bridge ────────────────────────────────────
-  # A FreeSWITCH log line carries `Call-ID: <id>`. When the island runs
+  # A FreeSWITCH log line carries `Call-ID: <id>`. When the server runs
   # voodu-hep3, each such line gets a bridge chip (and the surrounding modal
   # a button) that opens the SIP ladder for that call — gated so a non-hep3
-  # island never shows a dead affordance.
+  # server never shows a dead affordance.
 
   CALLID_LINE = "INVITE sip:bob@10.0.0.2 SIP/2.0 Call-ID: 16948251_133420118@10.1.0.182"
   CALLID_VALUE = "16948251_133420118@10.1.0.182"
@@ -155,7 +155,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     install_hep3!
     seed("fsw", [[@base, CALLID_LINE]])
 
-    get logs_analytics_path(tenant_key: @key), params: analytics_window
+    get logs_analytics_path(server_key: @key), params: analytics_window
 
     assert_response :success
     assert_match "log-callflow", @response.body, "the bridge chip renders on a Call-ID line"
@@ -168,7 +168,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   test "bridge: no chip and no host when hep3 is not installed (no dead click)" do
     seed("fsw", [[@base, CALLID_LINE]])
 
-    get logs_analytics_path(tenant_key: @key), params: analytics_window
+    get logs_analytics_path(server_key: @key), params: analytics_window
 
     assert_response :success
     assert_match CALLID_LINE, @response.body, "the line still renders — only the bridge is gated"
@@ -180,7 +180,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     install_hep3!
     seed("web", [[@base, "GET /health 200"]])
 
-    get logs_analytics_path(tenant_key: @key), params: analytics_window
+    get logs_analytics_path(server_key: @key), params: analytics_window
 
     assert_response :success
     assert_match "GET /health 200", @response.body
@@ -191,7 +191,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     install_hep3!
     seed("fsw", [[@base, "before"], [@base + 1.second, CALLID_LINE], [@base + 2.seconds, "after"]])
 
-    get logs_analytics_surrounding_path(tenant_key: @key),
+    get logs_analytics_surrounding_path(server_key: @key),
       params: {pod: "fsw", ts: iso(@base + 1.second)}
 
     assert_response :success
@@ -203,7 +203,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   test "bridge: the surrounding call-flow button is gated off without hep3" do
     seed("fsw", [[@base, "before"], [@base + 1.second, CALLID_LINE], [@base + 2.seconds, "after"]])
 
-    get logs_analytics_surrounding_path(tenant_key: @key),
+    get logs_analytics_surrounding_path(server_key: @key),
       params: {pod: "fsw", ts: iso(@base + 1.second)}
 
     assert_response :success
@@ -221,7 +221,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   # so plugin_installed?("hep3") gates the bridge ON (mirrors the sync path).
   def install_hep3!
     System.create!(
-      island: @island,
+      server: @server,
       payload: {"host" => {}, "plugins" => [{"name" => "hep3"}]}.to_json,
       synced_at: Time.current
     )
@@ -235,15 +235,15 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
 
   def seed(pod, lines)
     lines.each do |time, msg|
-      path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
+      path = LogTail::FilePath.daily_file(@server.id, pod, time.to_date)
       LogTail::FilePath.ensure_dir(File.dirname(path))
       row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
       File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
     end
   end
 
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 

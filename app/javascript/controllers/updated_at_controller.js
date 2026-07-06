@@ -20,7 +20,7 @@ import { Controller } from "@hotwired/stimulus"
 // Click behaviour:
 //   `click->updated-at#refresh` navigates to `?refresh=1` so the
 //   page rebuilds with a cache bypass. The Rails OverviewData hook
-//   on `?refresh=1` deletes the per-island snapshot cache; the next
+//   on `?refresh=1` deletes the per-server snapshot cache; the next
 //   render fetches fresh /system + /pods. Replaces the old "Refresh
 //   all" button — the updated chip IS the refresh affordance now.
 //

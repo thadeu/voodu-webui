@@ -1,19 +1,19 @@
 # frozen_string_literal: true
 
-# Org — the tenant/grouping layer above servers (islands). One Org groups
-# N servers; from M1 on, Metrics + Alerts become org-level (a panel/alert
-# can target any server in the org). Today there's no login — the Org IS
-# the future tenant boundary, so the SaaS upgrade (subdomain + user↔org)
-# stays additive, no remodel.
+# Org — the account/grouping layer above servers. One Org groups N servers;
+# from M1 on, Metrics + Alerts become org-level (a panel/alert can target any
+# server in the org). Today there's no login — the Org is the isolation
+# boundary, and a future Tenant layer (subdomain → N orgs) stays additive
+# above it, no remodel.
 #
 # Identity: a UUIDv7 string PK (HasUuidV7) for global uniqueness + time
 # ordering, plus a `short_id` (8-char base62) as the opaque URL handle used
-# from M1 on. A server always belongs to exactly one Org (Island belongs_to
+# from M1 on. A server always belongs to exactly one Org (Server belongs_to
 # :org, org_id null:false) — no orphan servers, no default org.
 class Org < ApplicationRecord
   include HasUuidV7
 
-  # 8-char base62 handle for URLs (M1). Same rationale as Island::KEY —
+  # 8-char base62 handle for URLs (M1). Same rationale as Server::KEY —
   # base62 is URL-clean + hand-typeable; 8 chars (~48 bits) so it's
   # non-guessable at SaaS scale.
   SHORT_ID_ALPHABET = (("0".."9").to_a + ("A".."Z").to_a + ("a".."z").to_a).freeze
@@ -22,7 +22,7 @@ class Org < ApplicationRecord
   # restrict_with_error: deleting an Org that still owns servers is blocked
   # with a friendly error (mirrors the DB FK restrict) — the operator moves
   # or removes the servers first, so no server is left orphaned.
-  has_many :islands, dependent: :restrict_with_error
+  has_many :servers, dependent: :restrict_with_error
 
   # Metric dashboards live at the org level (M2) — a dashboard's panels can
   # pull from any of the org's servers. Reaped with the org.

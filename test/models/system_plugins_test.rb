@@ -2,68 +2,68 @@
 
 require "test_helper"
 
-# System#plugin_installed? (and Island's delegation) is the gate every
+# System#plugin_installed? (and Server's delegation) is the gate every
 # plugin-specific WebUI feature reads. These pin the behaviour that
 # matters: a plugin is found by canonical name OR alias, unknown names
 # and old controllers (no `plugins` key) gate OFF, and the gate resolves
 # off the locally-synced row with no live call.
 class SystemPluginsTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
-  setup { @island = islands(:alpha) }
+  setup { @server = servers(:alpha) }
 
   def attach_system(plugins:)
     payload = {"host" => {}, "plugins" => plugins}
-    System.create!(island: @island, payload: payload.to_json, synced_at: Time.current)
-    @island.reload
+    System.create!(server: @server, payload: payload.to_json, synced_at: Time.current)
+    @server.reload
   end
 
   test "plugin_installed? matches by canonical name" do
     attach_system(plugins: [{"name" => "hep3", "version" => "0.5.0", "aliases" => ["hep"]}])
 
-    assert @island.system.plugin_installed?("hep3")
-    assert @island.plugin_installed?("hep3")
+    assert @server.system.plugin_installed?("hep3")
+    assert @server.plugin_installed?("hep3")
   end
 
   test "plugin_installed? matches by alias" do
     attach_system(plugins: [{"name" => "hep3", "aliases" => ["hep"]}])
 
-    assert @island.plugin_installed?("hep"), "alias should resolve to the plugin"
+    assert @server.plugin_installed?("hep"), "alias should resolve to the plugin"
   end
 
   test "plugin_installed? is false for an uninstalled plugin" do
     attach_system(plugins: [{"name" => "postgres", "aliases" => ["pg"]}])
 
-    refute @island.plugin_installed?("hep3")
-    refute @island.plugin_installed?("hep")
+    refute @server.plugin_installed?("hep3")
+    refute @server.plugin_installed?("hep")
   end
 
   test "plugin_installed? is false when the controller predates the plugins field" do
-    System.create!(island: @island, payload: {"host" => {}}.to_json, synced_at: Time.current)
-    @island.reload
+    System.create!(server: @server, payload: {"host" => {}}.to_json, synced_at: Time.current)
+    @server.reload
 
-    assert_equal [], @island.system.plugins
-    refute @island.plugin_installed?("hep3")
+    assert_equal [], @server.system.plugins
+    refute @server.plugin_installed?("hep3")
   end
 
   test "plugin_installed? is false when no system snapshot has synced yet" do
-    @island.system&.destroy
-    @island.reload
+    @server.system&.destroy
+    @server.reload
 
-    refute @island.plugin_installed?("hep3")
+    refute @server.plugin_installed?("hep3")
   end
 
   test "plugin_installed? is false for a blank name" do
     attach_system(plugins: [{"name" => "hep3"}])
 
-    refute @island.plugin_installed?("")
-    refute @island.plugin_installed?(nil)
+    refute @server.plugin_installed?("")
+    refute @server.plugin_installed?(nil)
   end
 
   test "plugins exposes the synced summaries verbatim" do
     attach_system(plugins: [{"name" => "hep3", "version" => "0.5.0", "aliases" => ["hep"]}])
 
-    assert_equal 1, @island.system.plugins.size
-    assert_equal "0.5.0", @island.system.plugins.first["version"]
+    assert_equal 1, @server.system.plugins.size
+    assert_equal "0.5.0", @server.system.plugins.first["version"]
   end
 end

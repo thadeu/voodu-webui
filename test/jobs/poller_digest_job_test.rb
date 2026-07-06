@@ -3,7 +3,7 @@
 require "test_helper"
 
 class PollerDigestJobTest < ActiveJob::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
     @sync_hash = "abcdef0123456789"
@@ -21,7 +21,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
     digest = PollerDigest.create!(
       sync_hash: @sync_hash,
       type: "state",
-      tenant_id: islands(:alpha).id,
+      server_id: servers(:alpha).id,
       status: "queued"
     )
 
@@ -31,8 +31,8 @@ class PollerDigestJobTest < ActiveJob::TestCase
     File.write(folder.join("system.json"), {}.to_json)
 
     called_with = []
-    stub_class_method(StateDigestService, :from_folder) do |folder_path:, tenant_id:|
-      called_with << {folder_path: folder_path.to_s, tenant_id: tenant_id}
+    stub_class_method(StateDigestService, :from_folder) do |folder_path:, server_id:|
+      called_with << {folder_path: folder_path.to_s, server_id: server_id}
     end
 
     PollerDigestJob.new.perform(@sync_hash)
@@ -43,7 +43,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
 
     assert_equal 1, called_with.size
     assert_equal folder.to_s, called_with.first[:folder_path]
-    assert_equal islands(:alpha).id, called_with.first[:tenant_id]
+    assert_equal servers(:alpha).id, called_with.first[:server_id]
 
     refute File.exist?(folder), "expected folder cleanup after success"
   end
@@ -52,7 +52,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
     PollerDigest.create!(
       sync_hash: @sync_hash,
       type: "metrics",
-      tenant_id: islands(:alpha).id,
+      server_id: servers(:alpha).id,
       status: "queued"
     )
 
@@ -61,7 +61,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
     File.write(folder.join("data.ndjson"), "")
 
     called = false
-    stub_class_method(MetricsDigestService, :from_folder) do |folder_path:, tenant_id:|
+    stub_class_method(MetricsDigestService, :from_folder) do |folder_path:, server_id:|
       called = true
       0
     end
@@ -75,7 +75,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
     PollerDigest.create!(
       sync_hash: @sync_hash,
       type: "state",
-      tenant_id: islands(:alpha).id,
+      server_id: servers(:alpha).id,
       status: "processed",
       processed_at: Time.current
     )
@@ -89,7 +89,7 @@ class PollerDigestJobTest < ActiveJob::TestCase
     digest = PollerDigest.create!(
       sync_hash: @sync_hash,
       type: "state",
-      tenant_id: islands(:alpha).id,
+      server_id: servers(:alpha).id,
       status: "queued"
     )
 

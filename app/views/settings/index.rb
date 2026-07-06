@@ -4,7 +4,7 @@
 #
 # Two cards:
 #
-#   - Server  → Island record fields the WebUI knows locally
+#   - Server  → Server record fields the WebUI knows locally
 #               (name, key, endpoint, region, infra, registered_at,
 #               status). Edit / Remove links point at the existing
 #               registry surfaces so we don't duplicate forms.
@@ -15,23 +15,23 @@
 #
 # Global webui prefs (refresh cadence, theme, log buffer cap, …)
 # are deliberately OUT — they're not per-server. Those land later
-# in a tenant-LESS /settings/global page.
+# in a server-LESS /settings/global page.
 class Views::Settings::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, system: nil, pats: nil)
+  def initialize(current_path:, servers: [], current_server: nil, system: nil, pats: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @system = system
-    @pats = pats  # IslandPats::Result or nil
+    @pats = pats  # ServerPats::Result or nil
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island,
+      current_path: @current_path, servers: @servers, current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Settings"})
     ) do
-      if @current_island.nil?
-        render Components::UI::NoIslandState.new
+      if @current_server.nil?
+        render Components::UI::NoServerState.new
       else
         body
       end
@@ -68,8 +68,8 @@ class Views::Settings::Index < Views::Base
   end
 
   # plugins_card — installed plugins on this server, synced in the
-  # /system payload (StateSyncIslandJob, 10s). Read-only here; the
-  # same list backs feature gates (Island#plugin_installed?) so a
+  # /system payload (StateSyncServerJob, 10s). Read-only here; the
+  # same list backs feature gates (Server#plugin_installed?) so a
   # plugin-specific UI only appears when its plugin is present.
   def plugins_card
     card = Components::UI::SectionCard.new(title: "Plugins")
@@ -177,7 +177,7 @@ class Views::Settings::Index < Views::Base
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
       span do
         plain "connected to "
-        span(class: "font-voodu-mono text-voodu-text-2") { @current_island.name }
+        span(class: "font-voodu-mono text-voodu-text-2") { @current_server.name }
       end
 
       if (v = controller_version)
@@ -190,7 +190,7 @@ class Views::Settings::Index < Views::Base
 
       dot_sep
       span(class: "inline-flex items-center gap-1.5") do
-        render Components::UI::StatusDot.new(status: @current_island.status || :stopped)
+        render Components::UI::StatusDot.new(status: @current_server.status || :stopped)
         span { status_label }
       end
     end
@@ -206,7 +206,7 @@ class Views::Settings::Index < Views::Base
   end
 
   def status_label
-    case @current_island.status
+    case @current_server.status
     when :online then "agent online"
     when :offline then "agent offline"
     else "agent status unknown"
@@ -219,7 +219,7 @@ class Views::Settings::Index < Views::Base
   # affordance for both.
   def header_actions
     a(
-      href: edit_island_path(@current_island, return_to: settings_path),
+      href: edit_server_path(@current_server, return_to: settings_path),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5")
@@ -231,17 +231,17 @@ class Views::Settings::Index < Views::Base
   def header_remove_form
     render(Components::UI::Confirmable.new(
       title: "Remove server",
-      message: %(Permanently remove "#{@current_island.name}" from the registry? You can re-add it later.),
+      message: %(Permanently remove "#{@current_server.name}" from the registry? You can re-add it later.),
       confirm_label: "Remove",
       danger: true,
       icon: :TrashOutline,
       form: {
-        action: island_path(@current_island),
+        action: server_path(@current_server),
         method: :delete
       },
       trigger: {
         title: "Remove server",
-        "aria-label": "Remove #{@current_island.name}",
+        "aria-label": "Remove #{@current_server.name}",
         class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-red/30 text-voodu-red text-[12.5px] font-medium hover:bg-voodu-red-dim"
       }
     )) do
@@ -255,11 +255,11 @@ class Views::Settings::Index < Views::Base
   def server_card
     render(Components::UI::SectionCard.new(title: "Server")) do
       div do
-        render(Components::UI::KvRow.new(key: "Name", copy: true, copy_value: @current_island.name)) { plain @current_island.name }
-        render(Components::UI::KvRow.new(key: "Key", copy: true, copy_value: @current_island.key)) { plain @current_island.key }
-        render(Components::UI::KvRow.new(key: "Endpoint", copy: true, copy_value: @current_island.endpoint)) { plain @current_island.endpoint }
-        render(Components::UI::KvRow.new(key: "Region")) { meta_value(@current_island.region) }
-        render(Components::UI::KvRow.new(key: "Infra")) { meta_value(@current_island.infra) }
+        render(Components::UI::KvRow.new(key: "Name", copy: true, copy_value: @current_server.name)) { plain @current_server.name }
+        render(Components::UI::KvRow.new(key: "Key", copy: true, copy_value: @current_server.key)) { plain @current_server.key }
+        render(Components::UI::KvRow.new(key: "Endpoint", copy: true, copy_value: @current_server.endpoint)) { plain @current_server.endpoint }
+        render(Components::UI::KvRow.new(key: "Region")) { meta_value(@current_server.region) }
+        render(Components::UI::KvRow.new(key: "Infra")) { meta_value(@current_server.infra) }
         render(Components::UI::KvRow.new(key: "Registered")) { registered_value }
         render(Components::UI::KvRow.new(key: "Status")) { status_value }
       end
@@ -275,17 +275,17 @@ class Views::Settings::Index < Views::Base
   end
 
   def registered_value
-    age_secs = (Time.current - @current_island.created_at).to_i
+    age_secs = (Time.current - @current_server.created_at).to_i
     span do
-      plain WebTime.strftime(@current_island.created_at, "%Y-%m-%d %H:%M")
+      plain WebTime.strftime(@current_server.created_at, "%Y-%m-%d %H:%M")
       span(class: "text-voodu-muted ml-2") { "· #{age_label(age_secs)} ago" }
     end
   end
 
   def status_value
     span(class: "inline-flex items-center gap-2 flex-wrap") do
-      render Components::UI::StatusPill.new(status: @current_island.status || :stopped)
-      if @current_island.status == :offline
+      render Components::UI::StatusPill.new(status: @current_server.status || :stopped)
+      if @current_server.status == :offline
         span(class: "text-voodu-muted text-[11.5px]") do
           plain "Try Reconnect below."
         end

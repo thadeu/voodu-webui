@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 // org-select — turns the org dropdown menu into a form field. A picked row sets
-// the hidden input (submitted as island[org_id]) + the trigger label. It also
+// the hidden input (submitted as server[org_id]) + the trigger label. It also
 // keeps the field honest as OrgsController mutates #org-options via
 // turbo_stream:
 //

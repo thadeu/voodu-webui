@@ -1,4 +1,4 @@
-// Package poller is the heart of the log poller: per-island
+// Package poller is the heart of the log poller: per-server
 // goroutines, watermark sidecars, NDJSON writers, and the dedup ring.
 package poller
 

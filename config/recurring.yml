@@ -48,7 +48,7 @@ common: &common
   log_metrics_sync:
     class: LogMetricsSyncOrchestratorJob
     # 15s — matches the log-tail poll cadence (no point counting faster than
-    # logs land). Each per-island tick recomputes only the live 10-min window
+    # logs land). Each per-server tick recomputes only the live 10-min window
     # (cheap) + a one-time deep backfill per newly-pinned filter. Reads the
     # local NDJSON warehouse, so it runs in BOTH Ruby-tail and Go-poller modes
     # (no POLLER_SPAWN guard) — it's the only thing turning logs into counts
@@ -67,15 +67,15 @@ common: &common
     class: Hep3SyncOrchestratorJob
     # 15s — matches the collector's write cadence. Each tick drains the
     # /export NDJSON tail of every configured voodu-hep3 reader into the
-    # `hep` read model. No-op for islands without the plugin installed or
+    # `hep` read model. No-op for servers without the plugin installed or
     # with no reader instance configured.
     schedule: every 15 seconds
 
   log_tail_orchestrator:
     class: LogTailOrchestratorJob
     # 1 min cadence — fast enough to recover from a crashed tail job
-    # in under a minute, slow enough that the per-island TailLock
-    # check overhead is negligible. Per-island work is dropped at
+    # in under a minute, slow enough that the per-server TailLock
+    # check overhead is negligible. Per-server work is dropped at
     # this tick if a tail is already in flight (TailLock guard).
     schedule: every 1 minute
 

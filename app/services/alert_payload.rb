@@ -29,7 +29,7 @@ class AlertPayload
     {
       event: @transition,
       state: state_word,
-      island: @event.island&.name,
+      server: @event.server&.name,
       rule: @event.rule_name,
       target: @event.target_label,
       metric: @event.metric_kind,
@@ -57,7 +57,7 @@ class AlertPayload
       "value" => AlertRule.format_metric_number(@event.last_value),
       "threshold" => AlertRule.format_metric_number(@event.threshold),
       "peak" => AlertRule.format_metric_number(@event.peak_value),
-      "island" => @event.island&.name,
+      "server" => @event.server&.name,
       "started_at" => human_time(@event.started_at),
       "resolved_at" => human_time(@event.resolved_at),
       "url" => link,
@@ -91,8 +91,8 @@ class AlertPayload
   # build *_url without a host). Returns nil otherwise.
   def link
     base = ENV["APP_BASE_URL"].presence
-    return nil if base.nil? || @event.island.nil?
+    return nil if base.nil? || @event.server.nil?
 
-    "#{base.chomp("/")}/#{@event.island.key}/alerts"
+    "#{base.chomp("/")}/#{@event.server.key}/alerts"
   end
 end

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-# IslandHealth — answers "is this controller reachable right now?"
+# ServerHealth — answers "is this controller reachable right now?"
 # with a cached probe.
 #
 # Why a separate service, not on the model?
-#   - Reachability is I/O-bound. Putting it directly on Island#status
-#     would mean any page rendering N islands triggers N synchronous
+#   - Reachability is I/O-bound. Putting it directly on Server#status
+#     would mean any page rendering N servers triggers N synchronous
 #     HTTP calls on cold cache. Pulling it out makes the cost
 #     explicit and lets callers batch/warm/skip on their own terms.
 #   - Caching policy lives in one place. TTL changes don't sprawl.
@@ -22,11 +22,11 @@
 #
 # Side-effect coupling with OverviewData:
 #   OverviewData's fetch! already calls /system as part of its
-#   normal data load. After fetch! it calls IslandHealth.warm to
+#   normal data load. After fetch! it calls ServerHealth.warm to
 #   write the cached status without spending another HTTP call.
-#   Pages that render multiple islands (sidebar, /islands) then
+#   Pages that render multiple servers (sidebar, /servers) then
 #   read the warmed value for free.
-class IslandHealth
+class ServerHealth
   # 30s = sidebar updates within half a minute of a controller flap.
   # Long enough that flipping between dashboard tabs doesn't refire
   # probes, short enough that a real outage shows up before the
@@ -37,7 +37,7 @@ class IslandHealth
 
   # status_for — READ-ONLY. Returns the cached status (:online |
   # :offline) or :unknown on a cold miss. NEVER probes synchronously:
-  # rendering N islands is N cache reads, never N blocking HTTP calls.
+  # rendering N servers is N cache reads, never N blocking HTTP calls.
   # A cold render shows :unknown for the few seconds until the next warm
   # tick, then the Turbo Stream broadcast flips the pill live.
   #
@@ -46,23 +46,23 @@ class IslandHealth
   #   WAREHOUSE=0 — `OverviewData.fetch_from_http!` warms after its
   #                 /system call (success → :online, failure → :offline).
   #
-  #   WAREHOUSE=1 — `StateSyncIslandJob` warms every ~10s after its fetch
-  #                 + broadcasts to `island-state-#{id}`. 3× per TTL → the
+  #   WAREHOUSE=1 — `StateSyncServerJob` warms every ~10s after its fetch
+  #                 + broadcasts to `server-state-#{id}`. 3× per TTL → the
   #                 cache is always warm, status flips within ~10s of a
   #                 `systemctl stop`. This IS the only probe path.
   #
   # For a user-triggered "check the connection right now" (Settings
   # reconnect), call #refresh! — the only place that probes on demand.
-  def self.status_for(island)
-    Rails.cache.read(cache_key(island)) || :unknown
+  def self.status_for(server)
+    Rails.cache.read(cache_key(server)) || :unknown
   end
 
   # refresh! — the intentional, synchronous probe: hit the controller
   # now, warm the cache with the result, and return it (:online |
   # :offline). For user-triggered reconnect flows, NEVER the render path.
-  def self.refresh!(island, client: nil)
-    online = probe(island, client)
-    warm(island, online: online)
+  def self.refresh!(server, client: nil)
+    online = probe(server, client)
+    warm(server, online: online)
 
     online ? :online : :offline
   end
@@ -71,9 +71,9 @@ class IslandHealth
   # Called by OverviewData after its /system fetch succeeds or
   # raises, so the next render of the sidebar reflects the result
   # of that fetch instead of triggering its own probe.
-  def self.warm(island, online:)
+  def self.warm(server, online:)
     Rails.cache.write(
-      cache_key(island),
+      cache_key(server),
       online ? :online : :offline,
       expires_in: TTL
     )
@@ -82,12 +82,12 @@ class IslandHealth
   # invalidate — drop the cached status. The next status_for read then
   # returns :unknown until a warm tick refills it (it no longer probes).
   # For an immediate re-probe, use #refresh! instead.
-  def self.invalidate(island)
-    Rails.cache.delete(cache_key(island))
+  def self.invalidate(server)
+    Rails.cache.delete(cache_key(server))
   end
 
-  def self.cache_key(island)
-    "voodu:health:v1:island:#{island.id}"
+  def self.cache_key(server)
+    "voodu:health:v1:server:#{server.id}"
   end
 
   # probe — the one HTTP call. Any error class counts as offline;
@@ -95,8 +95,8 @@ class IslandHealth
   # rejected" and "ECONNREFUSED" — both mean the WebUI can't show
   # live data. Surface the specific error elsewhere (toast on
   # action, error banner on overview) when it matters.
-  def self.probe(island, client)
-    client ||= Voodu::Client.new(island)
+  def self.probe(server, client)
+    client ||= Voodu::Client.new(server)
     client.system
     true
   rescue
@@ -106,7 +106,7 @@ class IslandHealth
   private_class_method :probe
 
   # probe! — uncached, error-preserving preflight check used by
-  # IslandsController#create. Returns nil on success; on failure
+  # ServersController#create. Returns nil on success; on failure
   # returns a SHORT human string ("Unauthorized — token rejected",
   # "Connection refused", "Timed out", …) suitable for the modal's
   # "Connection failed" banner.
@@ -114,14 +114,14 @@ class IslandHealth
   # Why not just call `probe` + look up the cached :offline?
   #   - probe caches; the registration form needs an answer for THIS
   #     specific (endpoint, PAT) combination right now, not a stale
-  #     read for some other island that happens to share the same id.
+  #     read for some other server that happens to share the same id.
   #   - The form wants the REAL error class to render a useful
   #     message; probe collapses everything to a boolean.
   #
-  # The island doesn't need to be persisted; we synthesize a
+  # The server doesn't need to be persisted; we synthesize a
   # Voodu::Client directly.
-  def self.probe!(island)
-    Voodu::Client.new(island).system
+  def self.probe!(server)
+    Voodu::Client.new(server).system
     nil
   rescue Voodu::Client::Error => e
     humanize_error(e)

@@ -7,17 +7,17 @@ require "test_helper"
 # legs with DIFFERENT Call-IDs join, and a leg with no x_cid falls back
 # to its own call_id. Also covers HepCursor's upsert watermark.
 class HepMessageTest < ActiveSupport::TestCase
-  TENANT = 4242
+  SERVER = 4242
   SCOPE = "fsw"
   NAME = "hep3-api"
 
   def insert(call_id:, x_cid: "", method: "INVITE", code: 0, ts: "2026-06-30 10:00:00.000000")
     line = {ts: ts, call_id: call_id, x_cid: x_cid, method: method, response_code: code}.to_json
-    HepMessage.bulk_insert([{tenant_id: TENANT, scope: SCOPE, name: NAME, payload: line}])
+    HepMessage.bulk_insert([{server_id: SERVER, scope: SCOPE, name: NAME, payload: line}])
   end
 
   def for_call(corr_id)
-    HepMessage.for_call(tenant_id: TENANT, scope: SCOPE, name: NAME, corr_id: corr_id)
+    HepMessage.for_call(server_id: SERVER, scope: SCOPE, name: NAME, corr_id: corr_id)
   end
 
   test "corr_id groups B2BUA legs that share an x_cid (different call_ids)" do
@@ -62,7 +62,7 @@ class HepMessageTest < ActiveSupport::TestCase
   test "a `like /re/` filter runs through SQLite REGEXP — anchors work, registered lazily (no initializer)" do
     {"12997297095" => "a", "551125019444" => "b", "998877" => "c"}.each do |from_user, cid|
       line = {ts: "2026-06-30 10:00:00.000000", call_id: cid, from_user: from_user, method: "INVITE"}.to_json
-      HepMessage.bulk_insert([{tenant_id: TENANT, scope: SCOPE, name: NAME, payload: line}])
+      HepMessage.bulk_insert([{server_id: SERVER, scope: SCOPE, name: NAME, payload: line}])
     end
 
     assert_equal %w[12997297095 551125019444].sort, matches("@from_user like /12/").sort,
@@ -73,19 +73,19 @@ class HepMessageTest < ActiveSupport::TestCase
 
   def matches(query)
     compiled = DataTable::Query.compile(query) { |f| HepMessage.filter_expr(f) }
-    HepMessage.page(tenant_id: TENANT, scope: SCOPE, name: NAME, where_sql: compiled.sql, where_binds: compiled.binds)
+    HepMessage.page(server_id: SERVER, scope: SCOPE, name: NAME, where_sql: compiled.sql, where_binds: compiled.binds)
       .map { |r| r.payload_json["from_user"] }
   end
 
   test "HepCursor.advance upserts; cursor_for reads it back" do
-    assert_equal "", HepCursor.cursor_for(TENANT, SCOPE, NAME), "empty before the first poll"
+    assert_equal "", HepCursor.cursor_for(SERVER, SCOPE, NAME), "empty before the first poll"
 
-    HepCursor.advance(TENANT, SCOPE, NAME, "sip-2026-06-30.ndjson:100")
-    assert_equal "sip-2026-06-30.ndjson:100", HepCursor.cursor_for(TENANT, SCOPE, NAME)
+    HepCursor.advance(SERVER, SCOPE, NAME, "sip-2026-06-30.ndjson:100")
+    assert_equal "sip-2026-06-30.ndjson:100", HepCursor.cursor_for(SERVER, SCOPE, NAME)
 
-    HepCursor.advance(TENANT, SCOPE, NAME, "sip-2026-06-30.ndjson:250")
-    assert_equal "sip-2026-06-30.ndjson:250", HepCursor.cursor_for(TENANT, SCOPE, NAME)
-    assert_equal 1, HepCursor.where(tenant_id: TENANT, scope: SCOPE, name: NAME).count,
+    HepCursor.advance(SERVER, SCOPE, NAME, "sip-2026-06-30.ndjson:250")
+    assert_equal "sip-2026-06-30.ndjson:250", HepCursor.cursor_for(SERVER, SCOPE, NAME)
+    assert_equal 1, HepCursor.where(server_id: SERVER, scope: SCOPE, name: NAME).count,
       "advance upserts the single watermark row, never appends"
   end
 end

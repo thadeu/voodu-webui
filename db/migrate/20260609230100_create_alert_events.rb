@@ -3,14 +3,14 @@
 # Alert events — one row per firing episode (fire → resolve). Rule
 # attributes are snapshotted at fire time (rule_name, metric_kind,
 # target_label, threshold) so history rows render without joins and
-# stay truthful after the rule is edited. island_id is denormalized
+# stay truthful after the rule is edited. server_id is denormalized
 # for the same reason: badge counts and the history list never need
 # the rules table.
 class CreateAlertEvents < ActiveRecord::Migration[8.1]
   def change
     create_table :alert_events do |t|
       t.references :alert_rule, null: false, foreign_key: {on_delete: :cascade}
-      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.references :server, null: false, foreign_key: {on_delete: :cascade}
       t.string :state, null: false, default: "firing"
       t.datetime :started_at, null: false
       t.datetime :resolved_at
@@ -24,8 +24,8 @@ class CreateAlertEvents < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :alert_events, [:island_id, :state]
-    add_index :alert_events, [:island_id, :started_at]
+    add_index :alert_events, [:server_id, :state]
+    add_index :alert_events, [:server_id, :started_at]
 
     # At most ONE open episode per rule. The evaluator checks
     # rule.firing first, but if two evaluation jobs ever overlap the

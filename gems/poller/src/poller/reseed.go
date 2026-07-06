@@ -39,7 +39,7 @@ const seedReadMaxBytes = 8 * 1024 * 1024
 // lines the previous process already persisted.
 //
 // Why this is needed: `since` is the OLDEST watermark across the
-// island's pods (oldestWatermark), so the first tick after a restart
+// server's pods (oldestWatermark), so the first tick after a restart
 // re-fetches lines that are already on disk. The in-memory ring is
 // empty on a fresh process and would re-admit — and the writer would
 // re-append — every one of them, producing the duplicate "blocks" we
@@ -56,8 +56,8 @@ const seedReadMaxBytes = 8 * 1024 * 1024
 // Best-effort: any read/parse error is skipped silently — a missing or
 // partially-seeded ring only costs a few duplicate lines on the first
 // tick, never correctness of the live stream.
-func (p *IslandPoller) seedRing(pod string, ring *DedupRing) {
-	dir := filepath.Join(p.Root, p.Island.ID, safePodName(pod))
+func (p *ServerPoller) seedRing(pod string, ring *DedupRing) {
+	dir := filepath.Join(p.Root, p.Server.ID, safePodName(pod))
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -112,8 +112,8 @@ func (p *IslandPoller) seedRing(pod string, ring *DedupRing) {
 // can slip a duplicate past it. The ring then only disambiguates the single
 // boundary instant. Zero when nothing is on disk (brand-new pod). Reads only
 // the tail of the newest day file.
-func (p *IslandPoller) latestPersistedTS(pod string) time.Time {
-	dir := filepath.Join(p.Root, p.Island.ID, safePodName(pod))
+func (p *ServerPoller) latestPersistedTS(pod string) time.Time {
+	dir := filepath.Join(p.Root, p.Server.ID, safePodName(pod))
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {

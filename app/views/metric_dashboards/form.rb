@@ -35,33 +35,33 @@ class Views::MetricDashboards::Form < Views::Base
     var(--voodu-pink) var(--voodu-red)
   ].freeze
 
-  def initialize(island:, dashboard:, island_pods: nil, embed: true,
-    current_path: nil, islands: [], current_island: nil,
+  def initialize(server:, dashboard:, server_pods: nil, embed: true,
+    current_path: nil, servers: [], current_server: nil,
     return_to: nil)
-    @island = island
+    @server = server
     @dashboard = dashboard
-    # island_pods — [[island, [compact pods]], …] for EVERY server in the org
+    # server_pods — [[server, [compact pods]], …] for EVERY server in the org
     # (M2). Every source / log / table / hep3 option enumerates across ALL of
-    # them and carries its island_id, so a panel can read from any server. Falls
-    # back to the single default island for a lone-server org / legacy caller.
-    @island_pods = Array(island_pods).presence || [[island, []]]
+    # them and carries its server_id, so a panel can read from any server. Falls
+    # back to the single default server for a lone-server org / legacy caller.
+    @server_pods = Array(server_pods).presence || [[server, []]]
     @embed = embed
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @return_to = return_to
   end
 
   # multi_server? — the org has more than one server, so source labels get a
   # "<server> · …" prefix to disambiguate (single-server orgs stay terse).
   def multi_server?
-    @island_pods.size > 1
+    @server_pods.size > 1
   end
 
-  # servers_json — { island_id => name } for every org server. The builder uses
+  # servers_json — { server_id => name } for every org server. The builder uses
   # it to prefix a re-edited panel's source label with the right server.
   def servers_json
-    @island_pods.to_h { |island, _| [island.id.to_s, island.name.to_s] }.to_json
+    @server_pods.to_h { |server, _| [server.id.to_s, server.name.to_s] }.to_json
   end
 
   def view_template
@@ -69,7 +69,7 @@ class Views::MetricDashboards::Form < Views::Base
       builder_panel
     else
       render Components::Layouts::Dashboard.new(
-        current_path: @current_path, islands: @islands, current_island: @current_island,
+        current_path: @current_path, servers: @servers, current_server: @current_server,
         breadcrumb: overview_crumbs({label: "Metrics"})
       ) do
         div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 max-w-[720px]") { builder_panel }
@@ -140,11 +140,11 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
         dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
         dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
-        # default_island — the server a fresh (host) panel binds to before the
-        # operator picks a source. current_island, so single-server behaviour is
-        # unchanged; a picked source overrides it with its own island_id.
-        dashboard_builder_default_island_value: @island&.id.to_s,
-        # servers — { island_id => name } for every org server, so re-editing a
+        # default_server — the server a fresh (host) panel binds to before the
+        # operator picks a source. current_server, so single-server behaviour is
+        # unchanged; a picked source overrides it with its own server_id.
+        dashboard_builder_default_server_value: @server&.id.to_s,
+        # servers — { server_id => name } for every org server, so re-editing a
         # saved panel can label its source trigger with the right server prefix.
         dashboard_builder_servers_value: servers_json,
         dashboard_builder_panels_value: existing_panels_json,
@@ -934,7 +934,7 @@ class Views::MetricDashboards::Form < Views::Base
 
   # source_picker — static menu (Host + each workload), rendered server side,
   # enumerated across EVERY server in the org (M2). Selecting one updates the
-  # trigger label, stamps the panel's island_id (it rides in the option), and
+  # trigger label, stamps the panel's server_id (it rides in the option), and
   # repopulates the metric picker for that source's kind.
   def source_picker
     sources_count = host_sources.size + workloads.size
@@ -975,10 +975,10 @@ class Views::MetricDashboards::Form < Views::Base
   end
 
   # host_sources — one Host (system) row per server; a host panel binds to that
-  # server's node metrics. island_id rides in the option so buildPanel stamps it.
+  # server's node metrics. server_id rides in the option so buildPanel stamps it.
   def host_sources
-    @island_pods.map do |island, _|
-      {scope_kind: "host", island_id: island.id.to_s, server: island.name.to_s, label: "host"}
+    @server_pods.map do |server, _|
+      {scope_kind: "host", server_id: server.id.to_s, server: server.name.to_s, label: "host"}
     end
   end
 
@@ -994,7 +994,7 @@ class Views::MetricDashboards::Form < Views::Base
   # default_source_label — the source trigger's resting label before a pick:
   # the default server's host (matches the JS default currentSource).
   def default_source_label
-    multi_server? ? "#{@island&.name} · Host (system)" : "Host (system)"
+    multi_server? ? "#{@server&.name} · Host (system)" : "Host (system)"
   end
 
   # metric_picker — menu filled by the builder controller from the
@@ -1246,25 +1246,25 @@ class Views::MetricDashboards::Form < Views::Base
     @dashboard.persisted? ? metric_dashboard_path(@dashboard) : metric_dashboards_path
   end
 
-  # workloads — unique (island_id, scope, resource_name, kind) tuples across
+  # workloads — unique (server_id, scope, resource_name, kind) tuples across
   # EVERY server in the org (M2). Panels bind to the WORKLOAD, not a replica, so
   # the picker offers one row per workload regardless of replica count; each
-  # row carries the island_id it lives on (the same workload name on two servers
+  # row carries the server_id it lives on (the same workload name on two servers
   # stays two distinct rows). `server` labels it when the org is multi-server.
   def workloads
-    @workloads ||= @island_pods.flat_map do |island, pods|
+    @workloads ||= @server_pods.flat_map do |server, pods|
       Array(pods).map do |p|
         {
           scope_kind: "pod",
-          island_id: island.id.to_s,
-          server: island.name.to_s,
+          server_id: server.id.to_s,
+          server: server.name.to_s,
           scope: (p["scope"] || p[:scope]).to_s,
           name: (p["resource_name"] || p[:resource_name]).to_s,
           kind: (p["kind"] || p[:kind]).to_s.presence || "pod",
           label: (p["resource_name"] || p[:resource_name]).to_s
         }
       end.reject { |w| w[:scope].empty? || w[:name].empty? }
-        .uniq { |w| [w[:island_id], w[:scope], w[:name], w[:kind]] }
+        .uniq { |w| [w[:server_id], w[:scope], w[:name], w[:kind]] }
     end.sort_by { |w| [w[:server], w[:scope], w[:name]] }
   end
 
@@ -1285,28 +1285,28 @@ class Views::MetricDashboards::Form < Views::Base
   # key (a source's shape is server-independent; only availability varies). The
   # Table/HEP3/HTTP type card shows when ANY server offers that source.
   def table_sources
-    @table_sources ||= @island_pods
-      .flat_map { |island, _| DataTable::Registry.available(island) }
+    @table_sources ||= @server_pods
+      .flat_map { |server, _| DataTable::Registry.available(server) }
       .uniq { |s| s[:key] }
   end
 
   # hep3_readers — the SIP-capture reader instances across EVERY server in the
   # org (M2), detected by image (`voodu-hep3-api*`). Each folds INTO the
-  # source·view options carrying its island_id + (scope, name), so a HEP3 panel
+  # source·view options carrying its server_id + (scope, name), so a HEP3 panel
   # needs no pod picker. Empty → the HEP3 type card hides.
   def hep3_readers
-    @hep3_readers ||= @island_pods.flat_map { |island, pods|
+    @hep3_readers ||= @server_pods.flat_map { |server, pods|
       Array(pods).filter_map do |p|
         next unless (p["image"] || p[:image]).to_s.start_with?("voodu-hep3-api")
 
-        {island_id: island.id.to_s, server: island.name.to_s,
+        {server_id: server.id.to_s, server: server.name.to_s,
          scope: (p["scope"] || p[:scope]).to_s, name: (p["resource_name"] || p[:resource_name]).to_s}
       end.reject { |r| r[:scope].empty? || r[:name].empty? }
-    }.uniq { |r| [r[:island_id], r[:scope], r[:name]] }
+    }.uniq { |r| [r[:server_id], r[:scope], r[:name]] }
   end
 
   # hep3_source_views — the HEP3 kind's picker options: one entry per
-  # (reader, view), each carrying the reader's island_id + scope/name so the
+  # (reader, view), each carrying the reader's server_id + scope/name so the
   # HEP3 panel needs no separate pod picker. Label prefixes the server (multi-
   # server) or reader name (several readers) so options stay distinguishable.
   def hep3_source_views
@@ -1318,7 +1318,7 @@ class Views::MetricDashboards::Form < Views::Base
         prefix = multi_server? ? "#{reader[:server]} · #{base}" : base
 
         src[:views].map do |v|
-          {source: src[:key], island_id: reader[:island_id], scope: reader[:scope], name: reader[:name],
+          {source: src[:key], server_id: reader[:server_id], scope: reader[:scope], name: reader[:name],
            view: v[:key], label: "#{prefix} — #{v[:label]}", fields: v[:fields]}
         end
       end
@@ -1326,11 +1326,11 @@ class Views::MetricDashboards::Form < Views::Base
   end
 
   # logs_source_views — the Table kind's picker options: one entry per pod
-  # (workload) across the org, each carrying its island_id + scope/name. The
+  # (workload) across the org, each carrying its server_id + scope/name. The
   # generic Table tabulates that pod's logs (DataTable::LogsSource).
   def logs_source_views
     workloads.map do |w|
-      {source: "logs", island_id: w[:island_id], scope: w[:scope], name: w[:name], view: "lines",
+      {source: "logs", server_id: w[:server_id], scope: w[:scope], name: w[:name], view: "lines",
        label: source_text(w), fields: DataTable::LogsSource::FIELDS}
     end
   end

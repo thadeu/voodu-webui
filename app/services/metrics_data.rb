@@ -2,21 +2,21 @@
 
 # MetricsData — chart-ready time-series fetcher with per-card cache.
 #
-# OverviewData and PodDetailData call MetricsData.new(client, island)
+# OverviewData and PodDetailData call MetricsData.new(client, server)
 # once per request, then ask for `series_for(...)` per StatCard.
 # Misses go to the controller's /metrics endpoint; hits return
 # instantly from Rails.cache (60s TTL — charts rarely move that fast).
 #
 # Cache TTL is intentionally LONGER than the sampler's 15s cadence:
 # operators looking at a 1h chart don't notice the difference between
-# 60s-old and live data, and the per-island request volume drops by
+# 60s-old and live data, and the per-server request volume drops by
 # ~4× on a busy session.
 #
 # Per-card / per-pod cache keys mean two operators (or two browser
 # tabs) hitting the same chart share the cached fetch — same pattern
-# as IslandHealth + pods_count.
+# as ServerHealth + pods_count.
 class MetricsData
-  # Pinned 4s SHORTER than MetricsSyncIslandJob's 14s recurring
+  # Pinned 4s SHORTER than MetricsSyncServerJob's 14s recurring
   # cadence (see config/recurring.yml). The gap guarantees: whenever
   # the job ticks at T and broadcasts metrics_tick, the cache cell
   # populated at the previous tick (T−14s) has already expired
@@ -26,9 +26,9 @@ class MetricsData
   # atualizar."
   CACHE_TTL = 10.seconds
 
-  def initialize(client, island)
+  def initialize(client, server)
     @client = client
-    @island = island
+    @server = server
   end
 
   # points_for — returns rich points `[{ts:, value:, formatted:}]`
@@ -246,7 +246,7 @@ class MetricsData
     Rails.cache.fetch(cache_key(query), expires_in: CACHE_TTL) do
       payload =
         if warehouse_enabled?
-          MetricsWarehouse.query(@island, **query)
+          MetricsWarehouse.query(@server, **query)
         else
           # HTTP path serves range-relative only; custom windows need the
           # warehouse. Drop from/until_ so client.metrics' signature matches.
@@ -292,16 +292,16 @@ class MetricsData
   # data_source_available? — guards the public methods against the
   # "neither backend usable" case:
   #
-  #   - HTTP path needs @client (built from @island.endpoint+pat).
-  #   - Warehouse path needs only @island (used as tenant_id key)
+  #   - HTTP path needs @client (built from @server.endpoint+pat).
+  #   - Warehouse path needs only @server (used as server_id key)
   #     because reads hit local SQLite, not the network.
   #
-  # When the warehouse is enabled but @island is also nil (would
-  # only happen on tenant-less routes that build MetricsData wrong),
+  # When the warehouse is enabled but @server is also nil (would
+  # only happen on server-less routes that build MetricsData wrong),
   # we still short-circuit — there's nothing to query against.
   def data_source_available?
     if warehouse_enabled?
-      !@island.nil?
+      !@server.nil?
     else
       !@client.nil?
     end
@@ -321,7 +321,7 @@ class MetricsData
   # ── Cache keys (content-addressed) ─────────────────────────────
   #
   # Both keys are SHA256(sorted query) prefixed with a namespace +
-  # island id. Two requests with the SAME params (regardless of
+  # server id. Two requests with the SAME params (regardless of
   # hash order) hit the same cell; ANY param change invalidates
   # cleanly. Adding a new query param requires zero changes here.
 
@@ -331,11 +331,11 @@ class MetricsData
   # debug confusing — separate cells keep the A/B clean).
   def cache_key(query)
     backend = warehouse_enabled? ? "wh" : "http"
-    "voodu:metrics:v1:#{backend}:island:#{@island.id}:#{digest(query)}"
+    "voodu:metrics:v1:#{backend}:server:#{@server.id}:#{digest(query)}"
   end
 
   def latest_cache_key(identity)
-    "voodu:metrics_latest:v1:island:#{@island.id}:#{digest(identity)}"
+    "voodu:metrics_latest:v1:server:#{@server.id}:#{digest(identity)}"
   end
 
   # identity_from — strips the range/interval (and any future

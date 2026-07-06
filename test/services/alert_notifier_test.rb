@@ -3,24 +3,24 @@
 require "test_helper"
 
 class AlertNotifierTest < ActiveJob::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @rule = @island.alert_rules.create!(
+    @server = servers(:alpha)
+    @rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
     @event = @rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 1.minute.ago,
+      server: @server, state: "firing", started_at: 1.minute.ago,
       threshold: 90, rule_name: @rule.name, metric_kind: "cpu",
       target_label: @rule.target_label
     )
-    @firing_only = @island.org.alert_destinations.create!(
+    @firing_only = @server.org.alert_destinations.create!(
       name: "pager", kind: "webhook", endpoint: "https://a.example/h",
       on_firing: true, on_resolved: false
     )
-    @both = @island.org.alert_destinations.create!(
+    @both = @server.org.alert_destinations.create!(
       name: "slack", kind: "webhook", endpoint: "https://hooks.slack.com/services/T/B/X",
       on_firing: true, on_resolved: true
     )

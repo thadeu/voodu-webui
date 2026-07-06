@@ -181,10 +181,10 @@ func envIntSeconds(name string, def, floor int) int {
 	return n
 }
 
-// IslandRefreshInterval is how often main.go re-fetches the island
-// list from Rails. New islands get a goroutine, removed islands have
+// ServerRefreshInterval is how often main.go re-fetches the server
+// list from Rails. New servers get a goroutine, removed servers have
 // their goroutine cancelled (next refresh tick).
-const IslandRefreshInterval = 5 * time.Minute
+const ServerRefreshInterval = 5 * time.Minute
 
 // DrainBudget is how long we wait for in-flight ticks to finish on
 // SIGTERM before yanking the rug.
@@ -218,9 +218,9 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
-	// Track per-(island, stream) goroutines so we can reap removed
-	// islands and wait on them at shutdown. The key is
-	// "<stream>|<islandID>".
+	// Track per-(server, stream) goroutines so we can reap removed
+	// servers and wait on them at shutdown. The key is
+	// "<stream>|<serverID>".
 	type runningStream struct {
 		cancel context.CancelFunc
 		done   chan struct{}
@@ -233,8 +233,8 @@ func main() {
 	metricsInterval := time.Duration(cfg.MetricsIntervalSeconds) * time.Second
 	stateInterval := time.Duration(cfg.StateIntervalSeconds) * time.Second
 
-	spawn := func(stream, islandID string, run func(context.Context)) {
-		key := stream + "|" + islandID
+	spawn := func(stream, serverID string, run func(context.Context)) {
+		key := stream + "|" + serverID
 		if _, ok := running[key]; ok {
 			return
 		}
@@ -247,31 +247,31 @@ func main() {
 			defer wg.Done()
 			defer close(done)
 			run(ictx)
-			log.Printf("[poller] %s %s: goroutine exited", stream, islandID)
+			log.Printf("[poller] %s %s: goroutine exited", stream, serverID)
 		}()
 
 		running[key] = runningStream{cancel: icancel, done: done}
-		log.Printf("[poller] %s %s: spawned", stream, islandID)
+		log.Printf("[poller] %s %s: spawned", stream, serverID)
 	}
 
 	refresh := func() {
-		islands, err := railsClient.FetchIslands()
+		servers, err := railsClient.FetchServers()
 		if err != nil {
 			log.Printf("[poller] refresh: %v", err)
 
 			return
 		}
 
-		state.SetIslandCount(len(islands))
+		state.SetServerCount(len(servers))
 
-		seen := map[string]bool{} // key = "<stream>|<islandID>"
+		seen := map[string]bool{} // key = "<stream>|<serverID>"
 
-		for _, isl := range islands {
+		for _, isl := range servers {
 			isl := isl // capture for closures
 
 			if cfg.LogsEnabled {
 				seen["logs|"+isl.ID] = true
-				p := poller.NewIslandPoller(isl, cfg.StorageDir, logsInterval, logBackfill, writer, state)
+				p := poller.NewServerPoller(isl, cfg.StorageDir, logsInterval, logBackfill, writer, state)
 				p.Verbose = cfg.Verbose
 				spawn("logs", isl.ID, p.Run)
 			}
@@ -319,7 +319,7 @@ func main() {
 
 	refresh()
 
-	refreshTicker := time.NewTicker(IslandRefreshInterval)
+	refreshTicker := time.NewTicker(ServerRefreshInterval)
 	defer refreshTicker.Stop()
 
 	for {

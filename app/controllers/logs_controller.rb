@@ -50,7 +50,7 @@ class LogsController < ApplicationController
   # event to log-stream so the live tail filters in lockstep.
   def pods_picker
     view = Views::Logs::PodsPicker.new(
-      island_key: current_island.key,
+      server_key: current_server.key,
       pods: pods_for_picker
     )
     render view, layout: false
@@ -83,7 +83,7 @@ class LogsController < ApplicationController
   #   broke" toast + offering to reconnect; that's the right UX
   #   layer for connection failures, not the log buffer itself.
   def stream
-    return write_no_island if voodu_client.nil?
+    return write_no_server if voodu_client.nil?
 
     set_stream_headers
 
@@ -112,11 +112,11 @@ class LogsController < ApplicationController
   end
 
   # warehouse_stream — reads from the local warehouse (NDJSON files
-  # populated by LogTailIslandJob) instead of opening yet another
+  # populated by LogTailServerJob) instead of opening yet another
   # `docker logs -f` SSE through the controller.
   #
   # The tail job already maintains ONE multi-pod connection per
-  # island that polls every 5s and writes to disk. This endpoint
+  # server that polls every 5s and writes to disk. This endpoint
   # serves the /logs page from those files — the operator's tab
   # adds ZERO extra load on the controller (modulo the 2s polling
   # cadence the client uses to re-fetch this endpoint).
@@ -131,7 +131,7 @@ class LogsController < ApplicationController
   # Client polls with an advancing `since` watermark; ~2s latency
   # end-to-end (5s tail-job poll + 2s client poll, averaging ~3.5s).
   def warehouse_stream
-    return write_no_island if current_island.nil?
+    return write_no_server if current_server.nil?
 
     pod = params[:pod].presence
     since = parse_since(params[:since])
@@ -142,7 +142,7 @@ class LogsController < ApplicationController
 
     count = 0
     LogTail::Reader.each_line(
-      island_id: current_island.id,
+      server_id: current_server.id,
       pods: pod ? [pod] : nil,
       from: since,
       until_: 1.day.from_now,
@@ -165,7 +165,7 @@ class LogsController < ApplicationController
       count += 1
     end
 
-    Rails.logger.debug { "warehouse_stream island=#{current_island.id} pod=#{pod || "*"} since=#{since.iso8601} → #{count} lines" }
+    Rails.logger.debug { "warehouse_stream server=#{current_server.id} pod=#{pod || "*"} since=#{since.iso8601} → #{count} lines" }
   rescue ActionController::Live::ClientDisconnected
     # Browser closed tab / aborted — normal teardown.
   ensure
@@ -176,7 +176,7 @@ class LogsController < ApplicationController
   # fan-out). Optional scope/kind/name query params filter the pool
   # the same way they do on /pods.
   def stream_all
-    return write_no_island if voodu_client.nil?
+    return write_no_server if voodu_client.nil?
 
     set_stream_headers
 
@@ -205,11 +205,11 @@ class LogsController < ApplicationController
   private
 
   # pods_for_picker — compact pod list for the PodPicker dropdown.
-  # Delegates to IslandPods.compact so Metrics + Logs share one
+  # Delegates to ServerPods.compact so Metrics + Logs share one
   # cache cell (avoids double round-trips when the operator
   # bounces between the two surfaces).
   def pods_for_picker
-    IslandPods.compact(voodu_client, current_island)
+    ServerPods.compact(voodu_client, current_server)
   end
 
   # came_from_pod_page? — true when the Referer header points at the
@@ -270,10 +270,10 @@ class LogsController < ApplicationController
     WAREHOUSE_DEFAULT_LOOKBACK.ago
   end
 
-  def write_no_island
+  def write_no_server
     response.headers["Content-Type"] = "text/plain"
     response.status = 503
-    response.stream.write("no island selected\n")
+    response.stream.write("no server selected\n")
     response.stream.close
   end
 

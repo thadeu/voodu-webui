@@ -12,7 +12,7 @@ import (
 // Watermark — per-pod sidecar file recording the timestamp of the
 // last line persisted to NDJSON for that pod.
 //
-// File path: storage/logs/<island>/<pod>/.watermark
+// File path: storage/logs/<server>/<pod>/.watermark
 // Wire format: a single RFC3339Nano string, no trailing newline.
 //
 // We write via temp + atomic rename to avoid torn reads if the binary
@@ -26,17 +26,17 @@ import (
 const ColdStartLookback = 5 * time.Minute
 
 // watermarkPath returns the absolute path of the sidecar file for the
-// given (root, island, pod). Caller is responsible for ensuring the
+// given (root, server, pod). Caller is responsible for ensuring the
 // pod directory exists before calling WriteWatermark.
-func watermarkPath(root, islandID, pod string) string {
-	return filepath.Join(root, islandID, safePodName(pod), ".watermark")
+func watermarkPath(root, serverID, pod string) string {
+	return filepath.Join(root, serverID, safePodName(pod), ".watermark")
 }
 
 // ReadWatermark loads the timestamp from disk. Missing file is NOT an
 // error — we return `time.Now().Add(-ColdStartLookback)` instead, so
 // the caller does not have to special-case cold starts.
-func ReadWatermark(root, islandID, pod string) (time.Time, error) {
-	path := watermarkPath(root, islandID, pod)
+func ReadWatermark(root, serverID, pod string) (time.Time, error) {
+	path := watermarkPath(root, serverID, pod)
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -63,8 +63,8 @@ func ReadWatermark(root, islandID, pod string) (time.Time, error) {
 //
 // The pod directory must exist; the writer.go path ensures this on the
 // hot path (it mkdirs before opening the NDJSON file).
-func WriteWatermark(root, islandID, pod string, t time.Time) error {
-	dir := filepath.Join(root, islandID, safePodName(pod))
+func WriteWatermark(root, serverID, pod string, t time.Time) error {
+	dir := filepath.Join(root, serverID, safePodName(pod))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir watermark dir: %w", err)
 	}

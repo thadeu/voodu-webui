@@ -1,8 +1,8 @@
-// Custom Turbo Stream actions broadcast from MetricsSyncIslandJob
+// Custom Turbo Stream actions broadcast from MetricsSyncServerJob
 // over ActionCable.
 //
 // metrics_tick fires whenever the job inserts new samples for an
-// island. Two effects every tick:
+// server. Two effects every tick:
 //
 //   1. Reload the single `metrics-charts` parent turbo-frame.
 //      Server (MetricsController#index, Turbo-Frame branch)

@@ -35,7 +35,7 @@ module DataTable
     # (URL + mapping), not one of the generic Table sources (logs/hep3) the
     # Registry.available dropdown lists. It stays registered so Registry.build
     # can still resolve it for the rows endpoint + the render envelope.
-    def self.available_for?(_island) = false
+    def self.available_for?(_server) = false
 
     def self.view_options
       VIEWS.map { |v| {key: v[:key], label: v[:label], fields: []} }
@@ -45,26 +45,26 @@ module DataTable
     #   • server render (envelope) hands the panel directly (`params[:panel]`)
     #   • the rows endpoint hands (dashboard uuid, panel_key) → we load it
     # nil (→ 404) when neither yields a panel carrying a url.
-    def self.from_params(island:, params:)
-      panel = params[:panel] || locate_panel(island, params[:dashboard], params[:panel_key])
+    def self.from_params(server:, params:)
+      panel = params[:panel] || locate_panel(server, params[:dashboard], params[:panel_key])
       return nil unless panel.is_a?(Hash) && panel["url"].to_s.present?
 
-      new(island: island, panel: panel)
+      new(server: server, panel: panel)
     end
 
-    def self.locate_panel(island, dashboard_uuid, panel_key)
+    def self.locate_panel(server, dashboard_uuid, panel_key)
       return nil if dashboard_uuid.blank? || panel_key.blank?
 
-      # Dashboards are org-level now (M2); look up via the island's org so an
+      # Dashboards are org-level now (M2); look up via the server's org so an
       # http panel's stored config still re-resolves server-side.
-      dash = island.org.metric_dashboards.find_by(uuid: dashboard_uuid.to_s)
+      dash = server.org.metric_dashboards.find_by(uuid: dashboard_uuid.to_s)
       return nil unless dash
 
       Array(dash.panels)[panel_key.to_s.delete_prefix("k").to_i]
     end
 
-    def initialize(island:, panel:)
-      @island = island
+    def initialize(server:, panel:)
+      @server = server
       @panel = panel
     end
 

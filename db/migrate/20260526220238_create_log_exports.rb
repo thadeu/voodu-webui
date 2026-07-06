@@ -10,7 +10,7 @@
 class CreateLogExports < ActiveRecord::Migration[8.1]
   def change
     create_table :log_exports do |t|
-      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.references :server, null: false, foreign_key: {on_delete: :cascade}
 
       # JSON blob: { from, until, pods, content_search, regex,
       # group_by_pod, format }. Stored as text for SQLite portability
@@ -52,9 +52,9 @@ class CreateLogExports < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    # Index on (island_id, created_at) for "recent exports for this
-    # island" listings + the cleanup scan filtered by expires_at.
-    add_index :log_exports, [:island_id, :created_at]
+    # Index on (server_id, created_at) for "recent exports for this
+    # server" listings + the cleanup scan filtered by expires_at.
+    add_index :log_exports, [:server_id, :created_at]
     add_index :log_exports, :expires_at
   end
 end

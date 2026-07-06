@@ -16,30 +16,30 @@ import (
 	"github.com/voodu/poller/client"
 )
 
-// Metrics is the callback bundle main.go hands to each island poller.
+// Metrics is the callback bundle main.go hands to each server poller.
 // Implementations live in observability/server.go.
 //
 // All callbacks must be safe for concurrent use — the poller calls
-// them from per-island goroutines.
+// them from per-server goroutines.
 type Metrics interface {
-	LinesIncr(islandID string, n int)
-	PollIncr(islandID string)
-	ErrorIncr(islandID string)
-	WatermarkAge(islandID string, age time.Duration)
-	CapHitIncr(islandID, pod string)
+	LinesIncr(serverID string, n int)
+	PollIncr(serverID string)
+	ErrorIncr(serverID string)
+	WatermarkAge(serverID string, age time.Duration)
+	CapHitIncr(serverID, pod string)
 	SetLastPoll(t time.Time)
 }
 
-// IslandPoller owns one island's goroutine.
-type IslandPoller struct {
-	Island   client.Island
+// ServerPoller owns one server's goroutine.
+type ServerPoller struct {
+	Server   client.Server
 	Root     string
 	Interval time.Duration
 	Voodu    *client.VooduClient
 	Writer   *Writer
 	Metrics  Metrics
 
-	// Verbose toggles a per-tick summary log line (one per island per
+	// Verbose toggles a per-tick summary log line (one per server per
 	// tick: counts + elapsed). Errors + lifecycle events still log
 	// regardless. Wired from `POLLER_VERBOSE=1` in main.go.
 	Verbose bool
@@ -71,20 +71,20 @@ type IslandPoller struct {
 // headroom — it can never overflow into a duplicate.
 const DedupRingCapacity = 5000
 
-// maxPodConcurrency bounds how many pods one island polls at once, so a
-// many-pod island doesn't open a request per pod simultaneously. Each
+// maxPodConcurrency bounds how many pods one server polls at once, so a
+// many-pod server doesn't open a request per pod simultaneously. Each
 // fetch is small (a poll-interval window) except the rare backfill.
 const maxPodConcurrency = 8
 
-// NewIslandPoller wires together an island descriptor and the shared
+// NewServerPoller wires together an server descriptor and the shared
 // dependencies. Does NOT spawn the goroutine — call Run.
-func NewIslandPoller(island client.Island, root string, interval, maxBackfill time.Duration, w *Writer, m Metrics) *IslandPoller {
-	return &IslandPoller{
-		Island:      island,
+func NewServerPoller(server client.Server, root string, interval, maxBackfill time.Duration, w *Writer, m Metrics) *ServerPoller {
+	return &ServerPoller{
+		Server:      server,
 		Root:        root,
 		Interval:    interval,
 		MaxBackfill: maxBackfill,
-		Voodu:       client.NewVooduClient(island.Endpoint, island.PAT),
+		Voodu:       client.NewVooduClient(server.Endpoint, server.PAT),
 		Writer:      w,
 		Metrics:     m,
 		rings:       map[string]*DedupRing{},
@@ -93,7 +93,7 @@ func NewIslandPoller(island client.Island, root string, interval, maxBackfill ti
 	}
 }
 
-func (p *IslandPoller) ringFor(pod string) *DedupRing {
+func (p *ServerPoller) ringFor(pod string) *DedupRing {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -111,7 +111,7 @@ func (p *IslandPoller) ringFor(pod string) *DedupRing {
 	return r
 }
 
-// Run blocks until ctx is cancelled. Takes the per-island writer lock
+// Run blocks until ctx is cancelled. Takes the per-server writer lock
 // on startup and holds it for the lifetime of the goroutine; if the
 // lock is already held (e.g. legacy Ruby tail job mid-rollout), Run
 // logs and returns immediately — main.go can retry next refresh tick.
@@ -121,10 +121,10 @@ func (p *IslandPoller) ringFor(pod string) *DedupRing {
 //   - GET /logs?since=<oldest watermark or now-5m>
 //   - parse + dedup + write
 //   - bump watermarks
-func (p *IslandPoller) Run(ctx context.Context) {
-	lockPath, unlock, err := p.acquireIslandLock()
+func (p *ServerPoller) Run(ctx context.Context) {
+	lockPath, unlock, err := p.acquireServerLock()
 	if err != nil {
-		log.Printf("[poller] %s: lock failed (%v) — skipping this run", p.Island.ID, err)
+		log.Printf("[poller] %s: lock failed (%v) — skipping this run", p.Server.ID, err)
 
 		return
 	}
@@ -146,13 +146,13 @@ func (p *IslandPoller) Run(ctx context.Context) {
 	}
 }
 
-// acquireIslandLock takes an exclusive non-blocking flock on
-// storage/logs/<island>/.writer.lock. Returns the unlock fn AND the
+// acquireServerLock takes an exclusive non-blocking flock on
+// storage/logs/<server>/.writer.lock. Returns the unlock fn AND the
 // path so the caller can remove the file on shutdown.
-func (p *IslandPoller) acquireIslandLock() (string, func(), error) {
-	dir := filepath.Join(p.Root, p.Island.ID)
+func (p *ServerPoller) acquireServerLock() (string, func(), error) {
+	dir := filepath.Join(p.Root, p.Server.ID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", nil, fmt.Errorf("mkdir island dir: %w", err)
+		return "", nil, fmt.Errorf("mkdir server dir: %w", err)
 	}
 
 	path := filepath.Join(dir, ".writer.lock")
@@ -182,8 +182,8 @@ func (p *IslandPoller) acquireIslandLock() (string, func(), error) {
 // the next tick fires on schedule for everyone else, so the chatty pods hold
 // their ~Interval cadence regardless. Errors are logged + counted per pod;
 // the tick itself only fails (and retries next tick) if the ROSTER fetch does.
-func (p *IslandPoller) tick(ctx context.Context) {
-	p.Metrics.PollIncr(p.Island.ID)
+func (p *ServerPoller) tick(ctx context.Context) {
+	p.Metrics.PollIncr(p.Server.ID)
 	p.Metrics.SetLastPoll(time.Now())
 
 	pods, err := p.roster(ctx)
@@ -192,8 +192,8 @@ func (p *IslandPoller) tick(ctx context.Context) {
 			return
 		}
 
-		log.Printf("[poller] %s: roster fetch failed: %v", p.Island.ID, err)
-		p.Metrics.ErrorIncr(p.Island.ID)
+		log.Printf("[poller] %s: roster fetch failed: %v", p.Server.ID, err)
+		p.Metrics.ErrorIncr(p.Server.ID)
 
 		return
 	}
@@ -213,15 +213,15 @@ func (p *IslandPoller) tick(ctx context.Context) {
 
 	// Watermark-age gauge: how stale is the oldest watermark right now?
 	if oldest := p.oldestWatermark(); !oldest.IsZero() {
-		p.Metrics.WatermarkAge(p.Island.ID, time.Since(oldest))
+		p.Metrics.WatermarkAge(p.Server.ID, time.Since(oldest))
 	}
 }
 
 // startPoll reserves an in-flight slot for `pod`, returning false when the
-// pod already has a fetch running or the per-island concurrency bound is
+// pod already has a fetch running or the per-server concurrency bound is
 // reached. Non-blocking by design: a busy/slow pod is simply skipped this
 // tick rather than gating it.
-func (p *IslandPoller) startPoll(pod string) bool {
+func (p *ServerPoller) startPoll(pod string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -238,19 +238,19 @@ func (p *IslandPoller) startPoll(pod string) bool {
 	return true
 }
 
-func (p *IslandPoller) endPoll(pod string) {
+func (p *ServerPoller) endPoll(pod string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	delete(p.inflight, pod)
 }
 
-// roster fetches the island's CURRENT pod names. This is the discovery
+// roster fetches the server's CURRENT pod names. This is the discovery
 // source for the per-pod fetch (the old multiplexed stream discovered pods
 // implicitly; per-pod fetches need the list up front). A dead/decommissioned
 // pod simply isn't in the roster, so we never waste a fetch on it — and never
 // let its stale on-disk watermark drag anything.
-func (p *IslandPoller) roster(ctx context.Context) ([]string, error) {
+func (p *ServerPoller) roster(ctx context.Context) ([]string, error) {
 	body, err := p.Voodu.FetchPodList(ctx)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func (p *IslandPoller) roster(ctx context.Context) ([]string, error) {
 //     is inclusive + second-granular) the ring tells a true re-delivery from
 //     a distinct same-instant line. It only ever sees one instant's worth of
 //     lines, so it can't overflow.
-func (p *IslandPoller) pollPod(ctx context.Context, pod string) (written, scanned, deduped int) {
+func (p *ServerPoller) pollPod(ctx context.Context, pod string) (written, scanned, deduped int) {
 	start := time.Now()
 	floor := p.dedupFloor(pod)
 	since := p.sinceFor(floor)
@@ -281,8 +281,8 @@ func (p *IslandPoller) pollPod(ctx context.Context, pod string) (written, scanne
 			return
 		}
 
-		log.Printf("[poller] %s/%s: fetch failed: %v", p.Island.ID, pod, err)
-		p.Metrics.ErrorIncr(p.Island.ID)
+		log.Printf("[poller] %s/%s: fetch failed: %v", p.Server.ID, pod, err)
+		p.Metrics.ErrorIncr(p.Server.ID)
 
 		return
 	}
@@ -325,9 +325,9 @@ func (p *IslandPoller) pollPod(ctx context.Context, pod string) (written, scanne
 		ring.Record(h)
 
 		rec := Record{Pod: pod, TS: ts, Msg: msg, Raw: string(raw)}
-		if err := p.Writer.Append(p.Island.ID, pod, rec); err != nil {
-			log.Printf("[poller] %s/%s: append failed: %v", p.Island.ID, pod, err)
-			p.Metrics.ErrorIncr(p.Island.ID)
+		if err := p.Writer.Append(p.Server.ID, pod, rec); err != nil {
+			log.Printf("[poller] %s/%s: append failed: %v", p.Server.ID, pod, err)
+			p.Metrics.ErrorIncr(p.Server.ID)
 
 			continue
 		}
@@ -342,30 +342,30 @@ func (p *IslandPoller) pollPod(ctx context.Context, pod string) (written, scanne
 		// A 60s timeout mid-backfill lands here: we keep what we read and
 		// resume next tick (stream is oldest-first + the watermark advances
 		// below), so it self-chunks. Counted as an error for visibility.
-		log.Printf("[poller] %s/%s: scan error: %v", p.Island.ID, pod, err)
-		p.Metrics.ErrorIncr(p.Island.ID)
+		log.Printf("[poller] %s/%s: scan error: %v", p.Server.ID, pod, err)
+		p.Metrics.ErrorIncr(p.Server.ID)
 	}
 
 	// Advance the floor + watermark AFTER appends so a cut-off mid-stream
 	// replays the unwritten suffix next tick.
 	if !latest.IsZero() {
 		p.advanceFloor(pod, latest)
-		if err := WriteWatermark(p.Root, p.Island.ID, pod, latest); err != nil {
-			log.Printf("[poller] %s/%s: watermark write failed: %v", p.Island.ID, pod, err)
-			p.Metrics.ErrorIncr(p.Island.ID)
+		if err := WriteWatermark(p.Root, p.Server.ID, pod, latest); err != nil {
+			log.Printf("[poller] %s/%s: watermark write failed: %v", p.Server.ID, pod, err)
+			p.Metrics.ErrorIncr(p.Server.ID)
 		}
 	}
 
 	// Report metrics here (not in the caller): the tick fire-and-forgets us,
 	// so it can't aggregate our counts.
 	if written > 0 {
-		p.Metrics.LinesIncr(p.Island.ID, written)
+		p.Metrics.LinesIncr(p.Server.ID, written)
 	}
 
 	if p.Verbose {
 		log.Printf(
-			"[poller] pod island=%s pod=%s scanned=%d written=%d deduped=%d since=%s elapsed=%s",
-			p.Island.ID, pod, scanned, written, deduped,
+			"[poller] pod server=%s pod=%s scanned=%d written=%d deduped=%d since=%s elapsed=%s",
+			p.Server.ID, pod, scanned, written, deduped,
 			since.UTC().Format(time.RFC3339), time.Since(start).Round(time.Millisecond),
 		)
 	}
@@ -377,7 +377,7 @@ func (p *IslandPoller) pollPod(ctx context.Context, pod string) (written, scanne
 //   - zero floor (brand-new pod)            → now - ColdStartLookback
 //   - floor older than MaxBackfill          → now - MaxBackfill (bounded)
 //   - otherwise                             → the floor itself
-func (p *IslandPoller) sinceFor(floor time.Time) time.Time {
+func (p *ServerPoller) sinceFor(floor time.Time) time.Time {
 	now := time.Now()
 	if floor.IsZero() {
 		return now.Add(-ColdStartLookback)
@@ -393,7 +393,7 @@ func (p *IslandPoller) sinceFor(floor time.Time) time.Time {
 // dedupFloor returns the pod's max-persisted-ts (the overlap-drop boundary),
 // seeding it from disk on first touch. Cached + advanced in memory so we
 // don't re-read the tail every tick.
-func (p *IslandPoller) dedupFloor(pod string) time.Time {
+func (p *ServerPoller) dedupFloor(pod string) time.Time {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -409,7 +409,7 @@ func (p *IslandPoller) dedupFloor(pod string) time.Time {
 
 // advanceFloor bumps a pod's floor to `ts` when newer (called after a
 // successful write so the floor tracks what's actually persisted).
-func (p *IslandPoller) advanceFloor(pod string, ts time.Time) {
+func (p *ServerPoller) advanceFloor(pod string, ts time.Time) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -418,13 +418,13 @@ func (p *IslandPoller) advanceFloor(pod string, ts time.Time) {
 	}
 }
 
-// oldestWatermark walks the island's pod directories on disk and
+// oldestWatermark walks the server's pod directories on disk and
 // returns the minimum watermark. Returns zero if there are no pods yet
 // (cold start) — caller's Voodu client treats a zero `since` as "let
 // the controller choose".
-func (p *IslandPoller) oldestWatermark() time.Time {
-	islandDir := filepath.Join(p.Root, p.Island.ID)
-	entries, err := os.ReadDir(islandDir)
+func (p *ServerPoller) oldestWatermark() time.Time {
+	serverDir := filepath.Join(p.Root, p.Server.ID)
+	entries, err := os.ReadDir(serverDir)
 	if err != nil {
 		// Cold start — directory does not exist yet.
 		return time.Now().Add(-ColdStartLookback)
@@ -436,7 +436,7 @@ func (p *IslandPoller) oldestWatermark() time.Time {
 			continue
 		}
 
-		t, err := ReadWatermark(p.Root, p.Island.ID, e.Name())
+		t, err := ReadWatermark(p.Root, p.Server.ID, e.Name())
 		if err != nil {
 			continue
 		}

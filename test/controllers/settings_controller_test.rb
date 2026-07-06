@@ -7,11 +7,11 @@ require "test_helper"
 # the network). Pins that the card shows the synced plugins and degrades
 # to an empty state — the same list backs the plugin feature gates.
 class SettingsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @key = @island.key
+    @server = servers(:alpha)
+    @key = @server.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -20,7 +20,7 @@ class SettingsControllerTest < ActionDispatch::IntegrationTest
 
   def attach_system(plugins:)
     System.create!(
-      island: @island,
+      server: @server,
       payload: {"host" => {}, "plugins" => plugins}.to_json,
       synced_at: Time.current
     )
@@ -29,7 +29,7 @@ class SettingsControllerTest < ActionDispatch::IntegrationTest
   test "lists installed plugins from the synced /system payload" do
     attach_system(plugins: [{"name" => "hep3", "version" => "0.5.0", "aliases" => ["hep"]}])
 
-    get settings_path(tenant_key: @key)
+    get settings_path(server_key: @key)
 
     assert_response :success
     assert_match "Plugins", @response.body
@@ -47,7 +47,7 @@ class SettingsControllerTest < ActionDispatch::IntegrationTest
   test "shows an empty state when no plugins are installed" do
     attach_system(plugins: [])
 
-    get settings_path(tenant_key: @key)
+    get settings_path(server_key: @key)
 
     assert_response :success
     assert_match "No plugins installed", @response.body

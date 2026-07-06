@@ -12,18 +12,18 @@
 class Views::MetricDashboards::Manage < Views::Base
   EDITOR_FRAME = "dashboard-editor"
 
-  def initialize(island:, dashboards:, current_path:, islands: [], current_island: nil, active_uuid: nil)
-    @island = island
+  def initialize(server:, dashboards:, current_path:, servers: [], current_server: nil, active_uuid: nil)
+    @server = server
     @dashboards = dashboards
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @active_uuid = active_uuid
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island,
+      current_path: @current_path, servers: @servers, current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Metrics"})
     ) do
       render(modal) { body }
@@ -150,7 +150,7 @@ class Views::MetricDashboards::Manage < Views::Base
   end
 
   # initial_src — open straight into an editor: the explicitly requested
-  # dashboard, else the pinned one, else the first. Empty island → the New form.
+  # dashboard, else the pinned one, else the first. Empty server → the New form.
   def initial_src
     target = @dashboards.find { |d| d.uuid == @active_uuid } ||
       @dashboards.find(&:pinned) || @dashboards.first

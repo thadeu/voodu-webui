@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # HasUuidV7 — a string primary key filled with a time-ordered UUIDv7 on
-# create. Applied to the org-layer tables (Org now; Island in M1) so ids
+# create. Applied to the org-layer tables (Org now; Server in M1) so ids
 # are globally unique + non-guessable AND sort by creation time (v7 embeds
 # a millisecond timestamp) — no central sequence to coordinate when this
 # grows into multi-node SaaS.

@@ -1,4 +1,4 @@
-// Package state owns the per-island "state" stream poller. Each tick
+// Package state owns the per-server "state" stream poller. Each tick
 // fetches BOTH /api/pat/v1/pods?detail=true&spec=true and
 // /api/pat/v1/system in parallel, writes both responses to a hashed
 // folder under storage/poller/state/<hash>/, then notifies Rails via
@@ -28,15 +28,15 @@ const StreamType = "state"
 // Metrics is the observability callback bundle. observability.State
 // implements it.
 type Metrics interface {
-	StreamPollIncr(stream, island string)
-	StreamLinesIncr(stream, island string, n int)
-	StreamErrorIncr(stream, island string)
-	StreamNotifyIncr(stream, island, result string)
+	StreamPollIncr(stream, server string)
+	StreamLinesIncr(stream, server string, n int)
+	StreamErrorIncr(stream, server string)
+	StreamNotifyIncr(stream, server, result string)
 }
 
-// Fetcher runs one island's state polling goroutine.
+// Fetcher runs one server's state polling goroutine.
 type Fetcher struct {
-	Island   client.Island
+	Server   client.Server
 	Voodu    *client.VooduClient
 	Rails    *client.RailsClient
 	Root     string
@@ -45,12 +45,12 @@ type Fetcher struct {
 	Verbose  bool
 }
 
-// NewFetcher wires together an island descriptor and the shared
+// NewFetcher wires together an server descriptor and the shared
 // dependencies. Does NOT spawn the goroutine — call Run.
-func NewFetcher(island client.Island, root string, interval time.Duration, rails *client.RailsClient, m Metrics) *Fetcher {
+func NewFetcher(server client.Server, root string, interval time.Duration, rails *client.RailsClient, m Metrics) *Fetcher {
 	return &Fetcher{
-		Island:   island,
-		Voodu:    client.NewVooduClient(island.Endpoint, island.PAT),
+		Server:   server,
+		Voodu:    client.NewVooduClient(server.Endpoint, server.PAT),
 		Rails:    rails,
 		Root:     root,
 		Interval: interval,
@@ -83,12 +83,12 @@ type fetchResult struct {
 
 func (f *Fetcher) tick(ctx context.Context) {
 	start := time.Now()
-	f.Metrics.StreamPollIncr(StreamType, f.Island.ID)
+	f.Metrics.StreamPollIncr(StreamType, f.Server.ID)
 
 	pending, err := digest.CountPending(f.Root, StreamType)
 	if err == nil && pending >= digest.MaxPendingFolders {
-		log.Printf("[poller] state %s: pending backlog (%d) at cap — skipping tick", f.Island.ID, pending)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] state %s: pending backlog (%d) at cap — skipping tick", f.Server.ID, pending)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
@@ -112,8 +112,8 @@ func (f *Fetcher) tick(ctx context.Context) {
 
 	if podsRes.err != nil {
 		if !errors.Is(podsRes.err, context.Canceled) {
-			log.Printf("[poller] state %s: pods fetch failed: %v", f.Island.ID, podsRes.err)
-			f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+			log.Printf("[poller] state %s: pods fetch failed: %v", f.Server.ID, podsRes.err)
+			f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 		}
 
 		return
@@ -121,15 +121,15 @@ func (f *Fetcher) tick(ctx context.Context) {
 
 	if systemRes.err != nil {
 		if !errors.Is(systemRes.err, context.Canceled) {
-			log.Printf("[poller] state %s: system fetch failed: %v", f.Island.ID, systemRes.err)
-			f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+			log.Printf("[poller] state %s: system fetch failed: %v", f.Server.ID, systemRes.err)
+			f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 		}
 
 		return
 	}
 
 	ts := time.Now()
-	syncHash := digest.ComputeHash(StreamType, f.Island.ID, ts)
+	syncHash := digest.ComputeHash(StreamType, f.Server.ID, ts)
 	totalSize := len(podsRes.body) + len(systemRes.body)
 
 	files := map[string]io.Reader{
@@ -139,40 +139,40 @@ func (f *Fetcher) tick(ctx context.Context) {
 
 	meta := digest.Meta{
 		Type:     StreamType,
-		TenantID: f.Island.ID,
+		ServerID: f.Server.ID,
 		TS:       ts.Unix(),
 		Size:     totalSize,
 	}
 
 	if err := digest.WriteHashedFolder(f.Root, StreamType, syncHash, files, meta); err != nil {
-		log.Printf("[poller] state %s: write folder: %v", f.Island.ID, err)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] state %s: write folder: %v", f.Server.ID, err)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
 
 	notifyErr := f.Rails.NotifyDigest(client.DigestRequest{
 		Type:     StreamType,
-		TenantID: f.Island.ID,
+		ServerID: f.Server.ID,
 		SyncHash: syncHash,
 		TS:       ts.Unix(),
 		Size:     totalSize,
 	})
 	if notifyErr != nil {
-		log.Printf("[poller] state %s: notify failed: %v", f.Island.ID, notifyErr)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
-		f.Metrics.StreamNotifyIncr(StreamType, f.Island.ID, "fail")
+		log.Printf("[poller] state %s: notify failed: %v", f.Server.ID, notifyErr)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
+		f.Metrics.StreamNotifyIncr(StreamType, f.Server.ID, "fail")
 
 		return
 	}
 
-	f.Metrics.StreamNotifyIncr(StreamType, f.Island.ID, "ok")
-	f.Metrics.StreamLinesIncr(StreamType, f.Island.ID, totalSize)
+	f.Metrics.StreamNotifyIncr(StreamType, f.Server.ID, "ok")
+	f.Metrics.StreamLinesIncr(StreamType, f.Server.ID, totalSize)
 
 	if f.Verbose {
 		log.Printf(
-			"[poller] state tick island=%s size=%db hash=%s elapsed=%s",
-			f.Island.ID, totalSize, syncHash,
+			"[poller] state tick server=%s size=%db hash=%s elapsed=%s",
+			f.Server.ID, totalSize, syncHash,
 			time.Since(start).Round(time.Millisecond),
 		)
 	}

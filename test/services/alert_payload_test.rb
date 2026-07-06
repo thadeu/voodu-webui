@@ -3,19 +3,19 @@
 require "test_helper"
 
 class AlertPayloadTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @event = AlertEvent.new(
-      island: @island, state: "firing", started_at: Time.utc(2026, 6, 10, 12),
+      server: @server, state: "firing", started_at: Time.utc(2026, 6, 10, 12),
       threshold: 90, rule_name: "Host CPU ≥ 90%", metric_kind: "cpu",
       target_label: "host alpha", peak_value: 97.0, last_value: 95.0
     )
   end
 
   def dest(kind, **attrs)
-    @island.org.alert_destinations.new({name: "d", kind: kind}.merge(attrs))
+    @server.org.alert_destinations.new({name: "d", kind: kind}.merge(attrs))
   end
 
   test "webhook with a body template renders it to a verbatim JSON string" do
@@ -35,12 +35,12 @@ class AlertPayloadTest < ActiveSupport::TestCase
 
     # Same persisted event → same dedup_key across both transitions, so
     # a resolve closes the incident the trigger opened.
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
     ev = rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 1.minute.ago,
+      server: @server, state: "firing", started_at: 1.minute.ago,
       threshold: 90, rule_name: rule.name, metric_kind: "cpu", target_label: "host alpha"
     )
 
@@ -75,7 +75,7 @@ class AlertPayloadTest < ActiveSupport::TestCase
     assert_equal "cpu", p[:metric]
     assert_equal 90, p[:threshold]
     assert_equal 95.0, p[:value]
-    assert_equal "alpha", p[:island]
+    assert_equal "alpha", p[:server]
   end
 
   test "link is included only when APP_BASE_URL is set" do
@@ -84,7 +84,7 @@ class AlertPayloadTest < ActiveSupport::TestCase
 
     ENV["APP_BASE_URL"] = "https://voodu.example"
     p = AlertPayload.for(@event, "firing", d)
-    assert_equal "https://voodu.example/#{@island.key}/alerts", p[:url]
+    assert_equal "https://voodu.example/#{@server.key}/alerts", p[:url]
   ensure
     ENV.delete("APP_BASE_URL")
   end

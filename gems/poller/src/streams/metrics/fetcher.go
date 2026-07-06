@@ -1,5 +1,5 @@
-// Package metrics owns the per-island "metrics" stream poller. One
-// goroutine per island pulls /api/pat/v1/metrics on a fixed cadence,
+// Package metrics owns the per-server "metrics" stream poller. One
+// goroutine per server pulls /api/pat/v1/metrics on a fixed cadence,
 // drops the raw NDJSON into a hashed folder under
 // storage/poller/metrics/<hash>/, then notifies Rails via
 // /internal/poller/digest.
@@ -57,16 +57,16 @@ const BackfillCap = 10 * time.Minute
 // Metrics is the observability callback bundle. observability.State
 // implements it.
 type Metrics interface {
-	StreamPollIncr(stream, island string)
-	StreamLinesIncr(stream, island string, n int)
-	StreamErrorIncr(stream, island string)
-	StreamNotifyIncr(stream, island, result string)
+	StreamPollIncr(stream, server string)
+	StreamLinesIncr(stream, server string, n int)
+	StreamErrorIncr(stream, server string)
+	StreamNotifyIncr(stream, server, result string)
 }
 
-// Fetcher runs one island's metrics polling goroutine. Construct via
+// Fetcher runs one server's metrics polling goroutine. Construct via
 // NewFetcher; call Run to block until ctx is cancelled.
 type Fetcher struct {
-	Island   client.Island
+	Server   client.Server
 	Voodu    *client.VooduClient
 	Rails    *client.RailsClient
 	Root     string
@@ -104,12 +104,12 @@ type sample struct {
 	Container string `json:"container"`
 }
 
-// NewFetcher wires together an island descriptor and the shared
+// NewFetcher wires together an server descriptor and the shared
 // dependencies. Does NOT spawn the goroutine — call Run.
-func NewFetcher(island client.Island, root string, interval time.Duration, rails *client.RailsClient, m Metrics) *Fetcher {
+func NewFetcher(server client.Server, root string, interval time.Duration, rails *client.RailsClient, m Metrics) *Fetcher {
 	return &Fetcher{
-		Island:   island,
-		Voodu:    client.NewVooduClient(island.Endpoint, island.PAT),
+		Server:   server,
+		Voodu:    client.NewVooduClient(server.Endpoint, server.PAT),
 		Rails:    rails,
 		Root:     root,
 		Interval: interval,
@@ -139,12 +139,12 @@ func (f *Fetcher) Run(ctx context.Context) {
 
 func (f *Fetcher) tick(ctx context.Context) {
 	start := time.Now()
-	f.Metrics.StreamPollIncr(StreamType, f.Island.ID)
+	f.Metrics.StreamPollIncr(StreamType, f.Server.ID)
 
 	pending, err := digest.CountPending(f.Root, StreamType)
 	if err == nil && pending >= digest.MaxPendingFolders {
-		log.Printf("[poller] metrics %s: pending backlog (%d) at cap — skipping tick", f.Island.ID, pending)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] metrics %s: pending backlog (%d) at cap — skipping tick", f.Server.ID, pending)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
@@ -157,8 +157,8 @@ func (f *Fetcher) tick(ctx context.Context) {
 			return
 		}
 
-		log.Printf("[poller] metrics %s: fetch failed: %v", f.Island.ID, err)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] metrics %s: fetch failed: %v", f.Server.ID, err)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
@@ -171,8 +171,8 @@ func (f *Fetcher) tick(ctx context.Context) {
 	// and the next tick re-fetches the same window.
 	kept, count, seriesTS, sourceTS, err := f.dedup(body)
 	if err != nil {
-		log.Printf("[poller] metrics %s: read body: %v", f.Island.ID, err)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] metrics %s: read body: %v", f.Server.ID, err)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
@@ -181,17 +181,17 @@ func (f *Fetcher) tick(ctx context.Context) {
 		// Caught up — nothing past every source's watermark. Skip writing
 		// an empty digest + notifying Rails; the next tick re-checks.
 		if f.Verbose {
-			log.Printf("[poller] metrics %s: no new rows (since=%d)", f.Island.ID, since)
+			log.Printf("[poller] metrics %s: no new rows (since=%d)", f.Server.ID, since)
 		}
 
 		return
 	}
 
 	ts := time.Now()
-	syncHash := digest.ComputeHash(StreamType, f.Island.ID, ts)
+	syncHash := digest.ComputeHash(StreamType, f.Server.ID, ts)
 	meta := digest.Meta{
 		Type:     StreamType,
-		TenantID: f.Island.ID,
+		ServerID: f.Server.ID,
 		TS:       ts.Unix(),
 		Size:     len(kept),
 		Since:    strconv.FormatInt(since, 10),
@@ -202,23 +202,23 @@ func (f *Fetcher) tick(ctx context.Context) {
 	}
 
 	if err := digest.WriteHashedFolder(f.Root, StreamType, syncHash, files, meta); err != nil {
-		log.Printf("[poller] metrics %s: write folder: %v", f.Island.ID, err)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
+		log.Printf("[poller] metrics %s: write folder: %v", f.Server.ID, err)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
 
 		return
 	}
 
 	notifyErr := f.Rails.NotifyDigest(client.DigestRequest{
 		Type:     StreamType,
-		TenantID: f.Island.ID,
+		ServerID: f.Server.ID,
 		SyncHash: syncHash,
 		TS:       ts.Unix(),
 		Size:     len(kept),
 	})
 	if notifyErr != nil {
-		log.Printf("[poller] metrics %s: notify failed: %v", f.Island.ID, notifyErr)
-		f.Metrics.StreamErrorIncr(StreamType, f.Island.ID)
-		f.Metrics.StreamNotifyIncr(StreamType, f.Island.ID, "fail")
+		log.Printf("[poller] metrics %s: notify failed: %v", f.Server.ID, notifyErr)
+		f.Metrics.StreamErrorIncr(StreamType, f.Server.ID)
+		f.Metrics.StreamNotifyIncr(StreamType, f.Server.ID, "fail")
 		// Folder stays on disk; cleanup GC will sweep it after PendingTTL.
 		// We do NOT commit the watermark advances, so the next tick's
 		// `since` re-fetches this window and writes a fresh digest.
@@ -230,20 +230,20 @@ func (f *Fetcher) tick(ctx context.Context) {
 	f.seriesTS = seriesTS
 	f.sourceTS = sourceTS
 
-	f.Metrics.StreamNotifyIncr(StreamType, f.Island.ID, "ok")
-	f.Metrics.StreamLinesIncr(StreamType, f.Island.ID, count)
+	f.Metrics.StreamNotifyIncr(StreamType, f.Server.ID, "ok")
+	f.Metrics.StreamLinesIncr(StreamType, f.Server.ID, count)
 
 	if f.Verbose {
 		log.Printf(
-			"[poller] metrics tick island=%s rows=%d size=%db hash=%s since=%d elapsed=%s",
-			f.Island.ID, count, len(kept), syncHash, since,
+			"[poller] metrics tick server=%s rows=%d size=%db hash=%s since=%d elapsed=%s",
+			f.Server.ID, count, len(kept), syncHash, since,
 			time.Since(start).Round(time.Millisecond),
 		)
 	}
 }
 
 // seedSince asks Rails for the newest metric ts already warehoused for this
-// island and records it as the cold-start `since`, so the first tick after a
+// server and records it as the cold-start `since`, so the first tick after a
 // (re)start backfills the gap the poller was offline for instead of starting
 // at now-ColdStartLookback. Non-fatal: a failure (Rails down, version skew)
 // logs and leaves seededSince at 0 — the fetcher still runs, just cold-starts
@@ -253,9 +253,9 @@ func (f *Fetcher) seedSince() {
 		return
 	}
 
-	since, err := f.Rails.FetchMetricsWatermark(f.Island.ID)
+	since, err := f.Rails.FetchMetricsWatermark(f.Server.ID)
 	if err != nil {
-		log.Printf("[poller] metrics %s: watermark seed failed: %v (cold-starting at -%s)", f.Island.ID, err, ColdStartLookback)
+		log.Printf("[poller] metrics %s: watermark seed failed: %v (cold-starting at -%s)", f.Server.ID, err, ColdStartLookback)
 
 		return
 	}
@@ -263,7 +263,7 @@ func (f *Fetcher) seedSince() {
 	if since > 0 {
 		f.seededSince = since
 		if f.Verbose {
-			log.Printf("[poller] metrics %s: seeded since=%d from warehouse", f.Island.ID, since)
+			log.Printf("[poller] metrics %s: seeded since=%d from warehouse", f.Server.ID, since)
 		}
 	}
 }

@@ -3,7 +3,7 @@
 require "test_helper"
 
 # Exercises LogSearchData + LogSurroundingData against a hand-seeded
-# NDJSON warehouse on disk (storage/logs/<island_id>/<pod>/…), the
+# NDJSON warehouse on disk (storage/logs/<server_id>/<pod>/…), the
 # same layout LogTail::Writer produces. We seed a deterministic set of
 # lines, then assert the query-shaping logic: time filtering, newest-
 # first ordering, full-text + regex search, pod scope, and the
@@ -11,12 +11,12 @@ require "test_helper"
 #
 # Files are written under the real storage root (LogTail::FilePath has
 # no test override) and torn down per-test, scoped to the fixture
-# island's id so we never touch another island's tree.
+# server's id so we never touch another server's tree.
 class LogSearchDataTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
 
     # Pin "now" to just after the seeded era. LogSearchData#window clamps
@@ -29,10 +29,10 @@ class LogSearchDataTest < ActiveSupport::TestCase
     # teardown via ActiveSupport::Testing::TimeHelpers.
     travel_to @base + 1.minute
 
-    clear_island_logs
+    clear_server_logs
   end
 
-  teardown { clear_island_logs }
+  teardown { clear_server_logs }
 
   test "filters by time window and returns newest-first" do
     seed("web", [
@@ -128,19 +128,19 @@ class LogSearchDataTest < ActiveSupport::TestCase
   end
 
   test "range falls back to the default when unknown" do
-    data = LogSearchData.new(island: @island, params: {range: "bogus"})
+    data = LogSearchData.new(server: @server, params: {range: "bogus"})
     assert_equal LogSearchData::DEFAULT_RANGE, data.range
     assert_not data.custom?
   end
 
   test "explicit from/until without a preset reads as custom" do
-    data = LogSearchData.new(island: @island, params: {from: iso(@base), until: iso(@base + 1.minute)})
+    data = LogSearchData.new(server: @server, params: {from: iso(@base), until: iso(@base + 1.minute)})
     assert data.custom?
     assert_equal "custom", data.range
   end
 
   test "range=custom stays custom even when from is blank (no silent preset fallback)" do
-    data = LogSearchData.new(island: @island, params: {range: "custom", from: "", until: ""})
+    data = LogSearchData.new(server: @server, params: {range: "custom", from: "", until: ""})
     assert data.custom?, "custom must be sticky so the inputs do not vanish on reload"
     assert_equal "custom", data.range
     # Window must resolve without a nil-comparison crash; blank from
@@ -150,7 +150,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   end
 
   test "from_iso / until_iso are unambiguous UTC strings" do
-    data = LogSearchData.new(island: @island, params: {range: "1h"})
+    data = LogSearchData.new(server: @server, params: {range: "1h"})
     assert_match(/Z\z/, data.from_iso)
     assert_match(/Z\z/, data.until_iso)
   end
@@ -191,7 +191,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
     seed("web", lines)
 
     sur = LogSurroundingData.new(
-      island: @island, pod: "web", ts: iso(@base + 5.seconds), before: 2, after: 2
+      server: @server, pod: "web", ts: iso(@base + 5.seconds), before: 2, after: 2
     )
 
     assert sur.found?
@@ -206,7 +206,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
     seed("web", lines)
 
     sur = LogSurroundingData.new(
-      island: @island, pod: "web", ts: iso(@base), before: 100, after: 100
+      server: @server, pod: "web", ts: iso(@base), before: 100, after: 100
     )
 
     assert sur.found?
@@ -218,12 +218,12 @@ class LogSearchDataTest < ActiveSupport::TestCase
   test "surrounding signals more? when the slice is cut, not when the window fits" do
     seed("web", (0..10).map { |i| [@base + i.seconds, "line-#{i}"] })
 
-    cut = LogSurroundingData.new(island: @island, pod: "web", ts: iso(@base + 5.seconds), before: 2, after: 2)
+    cut = LogSurroundingData.new(server: @server, pod: "web", ts: iso(@base + 5.seconds), before: 2, after: 2)
     assert_equal 5, cut.rows.size
     assert cut.more?, "11 scanned > 5 shown → there is more to reveal"
     assert_equal 1, cut.next_expand
 
-    full = LogSurroundingData.new(island: @island, pod: "web", ts: iso(@base + 5.seconds), before: 100, after: 100)
+    full = LogSurroundingData.new(server: @server, pod: "web", ts: iso(@base + 5.seconds), before: 100, after: 100)
     assert_equal 11, full.rows.size
     assert_not full.more?, "the whole window is shown → nothing more"
   end
@@ -232,7 +232,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
     seed("web", [[@base, "only-line"]])
 
     sur = LogSurroundingData.new(
-      island: @island, pod: "web", ts: iso(@base + 1.hour), before: 5, after: 5
+      server: @server, pod: "web", ts: iso(@base + 1.hour), before: 5, after: 5
     )
 
     assert_not sur.found?
@@ -241,7 +241,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   private
 
   def search(params)
-    LogSearchData.new(island: @island, params: params)
+    LogSearchData.new(server: @server, params: params)
   end
 
   # with_page_size — temporarily shrink PAGE_SIZE so pagination is
@@ -264,7 +264,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   # for the given pod, in the exact on-disk shape LogTail::Writer emits.
   def seed(pod, lines)
     lines.each do |time, msg|
-      path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
+      path = LogTail::FilePath.daily_file(@server.id, pod, time.to_date)
       LogTail::FilePath.ensure_dir(File.dirname(path))
       row = {
         ts: time.iso8601(3),
@@ -279,8 +279,8 @@ class LogSearchDataTest < ActiveSupport::TestCase
     end
   end
 
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

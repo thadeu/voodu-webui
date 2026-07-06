@@ -33,17 +33,17 @@ class LogSurroundingData
   MAX_CONTEXT = 5_000
   MAX_EXPAND = 4
 
-  attr_reader :island, :pod, :anchor_ts, :expand
+  attr_reader :server, :pod, :anchor_ts, :expand
 
-  # @param island   [Island]
+  # @param server   [Server]
   # @param pod       [String]  anchor pod
   # @param ts        [String]  anchor timestamp (ISO8601)
   # @param all_pods  [Boolean] widen scope to every pod in the window
   # @param expand    [Integer] Load more level (0 = default window)
   # @param before/after [Integer, nil] explicit context override (tests);
   #        defaults to the expand-scaled context.
-  def initialize(island:, pod:, ts:, all_pods: false, expand: 0, before: nil, after: nil)
-    @island = island
+  def initialize(server:, pod:, ts:, all_pods: false, expand: 0, before: nil, after: nil)
+    @server = server
     @pod = pod.to_s
     @anchor_ts = ts.to_s
     @all_pods = all_pods
@@ -111,7 +111,7 @@ class LogSurroundingData
     scanned = []
     seq = 0
     LogTail::Reader.each_line(
-      island_id: island.id,
+      server_id: server.id,
       pods: @all_pods ? nil : [@pod],
       from: anchor - @window,
       until_: anchor + @window,

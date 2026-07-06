@@ -94,7 +94,7 @@ class Components::Metrics::Chart < Components::Base
 
     # Single point edge case — happens when the range/interval is
     # narrow enough that only one bucket has samples (warehouse
-    # warming up, brand-new island, or very short range). The
+    # warming up, brand-new server, or very short range). The
     # operator already sees a meaningful value in the StatCard
     # headline pulled from that same point; the chart should render
     # a flat line at that level rather than say "no data" (which
@@ -306,7 +306,7 @@ class Components::Metrics::Chart < Components::Base
   #
   # Returning normalized segments (instead of raw points) means
   # the chart honours its gap policy across resize too: a 3-hour
-  # outage stays as two disconnected islands of data in the wide
+  # outage stays as two disconnected servers of data in the wide
   # post-resize chart, never auto-bridged.
   def normalized_segments
     pts = projected_points
@@ -525,7 +525,7 @@ class Components::Metrics::Chart < Components::Base
   # previous Y as a single flat line all the way to the post-outage
   # sample would imply "value stayed at X for hours" which is
   # equally dishonest. A real gap breaks the path so the chart
-  # shows two disconnected islands of data with empty space between.
+  # shows two disconnected servers of data with empty space between.
   def path_for(pts)
     segments_of(pts).map { |seg| segment_path(seg) }.reject(&:empty?).join(" ")
   end
@@ -535,7 +535,7 @@ class Components::Metrics::Chart < Components::Base
   # close from the post-gap rightmost point ALL THE WAY LEFT to the
   # first sample, creating a translucent polygon covering the entire
   # gap region (visually pretending there was data). Per-segment
-  # closure means each "island" of real data gets its own area fill
+  # closure means each "server" of real data gets its own area fill
   # rooted to the baseline — the gap is honest empty space.
   def area_path_for(pts)
     segments_of(pts).map do |seg|

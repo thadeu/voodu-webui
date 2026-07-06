@@ -2,7 +2,7 @@
 
 # StateDigestService — persist + broadcast layer shared by:
 #
-#   - StateSyncIslandJob (Ruby fetches /pods + /system via
+#   - StateSyncServerJob (Ruby fetches /pods + /system via
 #     Voodu::Client, hands the parsed JSON to `.from_parsed`)
 #   - PollerDigestJob (Go binary fetched + wrote two files to
 #     `storage/poller/state/<sync_hash>/`; the job reads them and
@@ -18,7 +18,7 @@
 #     system.json   — JSON object (the `data` from /system)
 #
 # Atomicity model is inherited from PodSnapshot + SystemSnapshot:
-# the outer transaction here wraps both replace_for_island! calls so
+# the outer transaction here wraps both replace_for_server! calls so
 # either both snapshots commit or neither does. SQLite WAL guarantees
 # readers see one consistent post-state, not the empty middle.
 class StateDigestService
@@ -28,7 +28,7 @@ class StateDigestService
   PODS_FILE = "pods.json"
   SYSTEM_FILE = "system.json"
 
-  def self.from_folder(folder_path:, tenant_id:)
+  def self.from_folder(folder_path:, server_id:)
     folder = Pathname.new(folder_path)
 
     # The Go binary writes the raw PAT envelope verbatim:
@@ -37,9 +37,9 @@ class StateDigestService
     #                                              "degraded": [...] } }
     #   system.json → { "status": "ok", "data": { "host": {...}, ... } }
     #
-    # `PodSnapshot.replace_for_island!` + `SystemSnapshot.replace_for_island!`
+    # `PodSnapshot.replace_for_server!` + `SystemSnapshot.replace_for_server!`
     # expect the already-unwrapped shapes (Array of pod Hash, system Hash).
-    # `StateSyncIslandJob` does that unwrap via `Voodu::Client#pods/#system`
+    # `StateSyncServerJob` does that unwrap via `Voodu::Client#pods/#system`
     # (which strips `status` + returns `data`) and then `pods_payload_from`
     # (which pulls `data.pods` out). The digest path bypasses both layers,
     # so we replicate the same unwrap here so the two ingest paths feed
@@ -50,72 +50,72 @@ class StateDigestService
     pods = unwrap_pods(pods_envelope)
     system = unwrap_system(system_envelope)
 
-    from_parsed(pods: pods, system: system, tenant_id: tenant_id)
+    from_parsed(pods: pods, system: system, server_id: server_id)
   end
 
   # from_parsed — entry point for the Ruby-fetch path. Caller has
   # already parsed both responses out of the JSON envelope.
   #
-  # `tenant_id` is the Island primary key (legacy domain table is
-  # still `islands`, but the poller feature uses `tenant_id` as the
+  # `server_id` is the Server primary key (legacy domain table is
+  # still `servers`, but the poller feature uses `server_id` as the
   # internal name end-to-end — matches the wire contract from the
   # Go binary and the column on `poller_digests`).
-  def self.from_parsed(pods:, system:, tenant_id:)
-    island = Island.find_by(id: tenant_id)
-    return unless island
+  def self.from_parsed(pods:, system:, server_id:)
+    server = Server.find_by(id: server_id)
+    return unless server
 
-    persist(island, pods, system)
+    persist(server, pods, system)
     # Keep last_synced_at honest from the poller/digest path too — the
-    # Ruby StateSyncIslandJob bumps it itself, but this path skipped it,
+    # Ruby StateSyncServerJob bumps it itself, but this path skipped it,
     # freezing the column (and anything reading it directly) at the last
     # Ruby sync even while snapshots stayed fresh.
-    island.update_columns(last_synced_at: Time.current)
+    server.update_columns(last_synced_at: Time.current)
     # A successful digest means the poller just reached the controller —
-    # confirm it online, exactly like StateSyncIslandJob does. Without
-    # this, poller-mode islands have NO health-warm path, so status_for
+    # confirm it online, exactly like StateSyncServerJob does. Without
+    # this, poller-mode servers have NO health-warm path, so status_for
     # read :unknown and the pill flickered offline→online between the
     # sporadic Ruby ticks that did warm it.
-    IslandHealth.warm(island, online: true)
-    broadcast_state_tick(island)
-    island
+    ServerHealth.warm(server, online: true)
+    broadcast_state_tick(server)
+    server
   end
 
   # persist — the snapshot replace half. Public so the existing
-  # StateSyncIslandJob can wrap it in its own outer transaction
-  # alongside `island.update_columns(last_synced_at: ...)`.
-  def self.persist(island, pods, system)
+  # StateSyncServerJob can wrap it in its own outer transaction
+  # alongside `server.update_columns(last_synced_at: ...)`.
+  def self.persist(server, pods, system)
     ActiveRecord::Base.transaction do
-      PodSnapshot.replace_for_island!(island, pods)
-      SystemSnapshot.replace_for_island!(island, system)
+      PodSnapshot.replace_for_server!(server, pods)
+      SystemSnapshot.replace_for_server!(server, system)
     end
   end
 
   # broadcast_state_tick — same triple-broadcast (status pill +
-  # status dot + state_tick action) that StateSyncIslandJob does.
+  # status dot + state_tick action) that StateSyncServerJob does.
   # Extracted here so the Go-fed path produces an identical UI
   # update to the Ruby-fed path.
   #
   # Rescued generically — a Solid Cable transport blip mid-process
   # shouldn't fail the digest; the next tick will refresh the UI.
-  def self.broadcast_state_tick(island)
+  def self.broadcast_state_tick(server)
     pill_html = Components::UI::StatusPill.new(status: :online).call
     dot_html = Components::UI::StatusDot.new(status: :online).call
-    stream = "island-state-#{island.id}"
+    stream = "server-state-#{server.id}"
 
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
-      target: "island-status-pill-#{island.id}",
+      target: "server-status-pill-#{server.id}",
       html: pill_html
     )
     Turbo::StreamsChannel.broadcast_update_to(
       stream,
-      target: "island-status-dot-#{island.id}",
+      target: "server-status-dot-#{server.id}",
       html: dot_html
     )
     Turbo::StreamsChannel.broadcast_action_to(stream, action: :state_tick)
   rescue => e
     Rails.logger.warn(
-      "state-digest broadcast island=#{island.key} failed: #{e.class}: #{e.message}"
+      "state-digest broadcast server=#{server.key} failed: #{e.class}: #{e.message}"
     )
   end
 

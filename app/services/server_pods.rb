@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# IslandPods — single source of truth for "give me the compact pod
-# list of this island."
+# ServerPods — single source of truth for "give me the compact pod
+# list of this server."
 #
 # Why a dedicated service vs. inline Rails.cache.fetch in each
 # caller:
@@ -13,7 +13,7 @@
 #     different cells — opening /metrics after /logs paid the
 #     round-trip again even though the data was already cached.
 #
-#   - AFTER: both call IslandPods.compact(client, island) → one
+#   - AFTER: both call ServerPods.compact(client, server) → one
 #     key (voodu:pods_compact:v1) → one warm reads, no duplicate
 #     fetches. TTL + error handling live in one place.
 #
@@ -22,7 +22,7 @@
 # joined stats has different freshness needs (Overview is OK with
 # 10s, /pods page wants live, …). Add per-need wrappers if
 # detail=true sharing ever becomes a problem.
-class IslandPods
+class ServerPods
   TTL = 30.seconds
 
   # compact — `GET /api/pat/v1/pods` without `?detail=true`. Returns
@@ -33,7 +33,7 @@ class IslandPods
   #     "image" => "nginx:latest", "status" => "running",
   #     "ports" => [80] }
   #
-  # Empty array on any failure (no island, network error, malformed
+  # Empty array on any failure (no server, network error, malformed
   # payload). Callers should NOT raise — the surfaces that consume
   # this (picker dropdowns) gracefully hide themselves on [].
   #
@@ -41,19 +41,19 @@ class IslandPods
   # resilient). Same payload shape since pods.payload stores the
   # /pods?detail=true&spec=true row verbatim — pickers don't need
   # to know which path served them.
-  def self.compact(client, island)
-    return [] if client.nil? || island.nil?
+  def self.compact(client, server)
+    return [] if client.nil? || server.nil?
 
-    if IslandState.warehouse?
-      return island.pods.order(:container_name).map(&:payload_hash)
+    if ServerState.warehouse?
+      return server.pods.order(:container_name).map(&:payload_hash)
     end
 
-    Rails.cache.fetch(cache_key(island), expires_in: TTL) do
+    Rails.cache.fetch(cache_key(server), expires_in: TTL) do
       payload = client.pods(detail: false)
       Array(payload && payload["pods"])
     end
   rescue Voodu::Client::Error => e
-    Rails.logger.warn("island_pods.compact: #{e.class} #{e.message}")
+    Rails.logger.warn("server_pods.compact: #{e.class} #{e.message}")
     []
   end
 
@@ -62,11 +62,11 @@ class IslandPods
   # if the operator's "I just deployed" → "the picker shows it" gap
   # ever feels long. For now the 30s TTL is short enough that we
   # don't bother.
-  def self.invalidate(island)
-    Rails.cache.delete(cache_key(island))
+  def self.invalidate(server)
+    Rails.cache.delete(cache_key(server))
   end
 
-  def self.cache_key(island)
-    "voodu:pods_compact:v1:island:#{island.id}"
+  def self.cache_key(server)
+    "voodu:pods_compact:v1:server:#{server.id}"
   end
 end

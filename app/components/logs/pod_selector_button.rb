@@ -6,7 +6,7 @@
 # Replaces the older Components::Logs::PodPicker dropdown (single-
 # select navigation to /logs/:name). Operator now toggles which
 # resource_names stream into the live tail via a drawer of
-# checkboxes; selection persists in localStorage per island and
+# checkboxes; selection persists in localStorage per server and
 # the log-stream controller filters rows accordingly.
 #
 # Trigger button:

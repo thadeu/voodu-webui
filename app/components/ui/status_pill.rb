@@ -2,7 +2,7 @@
 
 # Components::UI::StatusPill — labeled status indicator. Used in
 # detail headers (e.g. "Running" next to a pod title), in the pods
-# table's status column, and in the topbar (island health).
+# table's status column, and in the topbar (server health).
 #
 # Ports the <StatusPill> from parts.jsx. Each status maps to a
 # (label, color, bg) triple from the voodu palette. The dot inside

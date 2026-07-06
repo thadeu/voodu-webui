@@ -1,7 +1,7 @@
 // Package client wraps the two HTTP surfaces the log poller talks to:
 //
-//   - The Rails app (`/internal/poller/islands`) for the list of
-//     islands to poll. Auth: `X-Voodu-Internal-Token` header.
+//   - The Rails app (`/internal/poller/servers`) for the list of
+//     servers to poll. Auth: `X-Voodu-Internal-Token` header.
 //   - The voodu controllers themselves, via their PAT plane.
 //     Auth: `Authorization: Bearer <pat>`.
 //
@@ -19,27 +19,27 @@ import (
 	"time"
 )
 
-// Island is one row from /internal/poller/islands. Mirrors the
+// Server is one row from /internal/poller/servers. Mirrors the
 // JSON the Rails endpoint emits — keep the field names in sync.
-type Island struct {
+type Server struct {
 	ID       string `json:"id"`
 	Key      string `json:"key"`
 	Endpoint string `json:"endpoint"`
 	PAT      string `json:"pat"`
 }
 
-// IslandsResponse is the envelope the Rails endpoint returns.
+// ServersResponse is the envelope the Rails endpoint returns.
 //
 // `Version` is a hard gate — if the Rails side ever changes the wire
 // shape (e.g. adds required fields), it bumps this and the Go binary
 // must be re-released. The poller refuses unknown versions rather
 // than silently misbehaving on missing data.
-type IslandsResponse struct {
+type ServersResponse struct {
 	Version int      `json:"version"`
-	Islands []Island `json:"islands"`
+	Servers []Server `json:"servers"`
 }
 
-// SupportedVersion is the only `version` value FetchIslands will
+// SupportedVersion is the only `version` value FetchServers will
 // accept from the Rails endpoint. Bump in lockstep with the Rails
 // side when the envelope changes.
 const SupportedVersion = 1
@@ -64,10 +64,10 @@ func NewRailsClient(baseURL, token string) *RailsClient {
 	}
 }
 
-// FetchIslands GETs `/internal/poller/islands` and returns the
-// parsed island list. Refuses an unknown `version`.
-func (c *RailsClient) FetchIslands() ([]Island, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/internal/poller/islands", nil)
+// FetchServers GETs `/internal/poller/servers` and returns the
+// parsed server list. Refuses an unknown `version`.
+func (c *RailsClient) FetchServers() ([]Server, error) {
+	req, err := http.NewRequest("GET", c.BaseURL+"/internal/poller/servers", nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
@@ -85,43 +85,43 @@ func (c *RailsClient) FetchIslands() ([]Island, error) {
 		return nil, fmt.Errorf("rails returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	var env IslandsResponse
+	var env ServersResponse
 	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
 		return nil, fmt.Errorf("decode rails response: %w", err)
 	}
 
 	if env.Version != SupportedVersion {
-		return nil, fmt.Errorf("rails islands version %d unsupported (need %d)", env.Version, SupportedVersion)
+		return nil, fmt.Errorf("rails servers version %d unsupported (need %d)", env.Version, SupportedVersion)
 	}
 
-	return env.Islands, nil
+	return env.Servers, nil
 }
 
 // MetricsWatermarkResponse is the envelope /internal/poller/metrics_watermark
 // returns: the newest metric ts (unix seconds) Rails has warehoused for the
-// island. The metrics fetcher seeds its cold-start `since` from this so a
+// server. The metrics fetcher seeds its cold-start `since` from this so a
 // restart backfills the gap the poller was offline for instead of starting at
 // now-ColdStartLookback. `Since` is 0 when the warehouse is empty for the
-// island (first-ever sync — nothing to backfill).
+// server (first-ever sync — nothing to backfill).
 type MetricsWatermarkResponse struct {
 	Version int   `json:"version"`
 	Since   int64 `json:"since"`
 }
 
-// FetchMetricsWatermark GETs /internal/poller/metrics_watermark for one island
+// FetchMetricsWatermark GETs /internal/poller/metrics_watermark for one server
 // and returns the warehoused high-water mark (unix seconds), 0 when the
 // warehouse is empty. Refuses an unknown `version`. Same wire contract +
-// boundary the Ruby MetricsSyncIslandJob uses (MetricSample.last_ts_for): a
+// boundary the Ruby MetricsSyncServerJob uses (MetricSample.last_ts_for): a
 // global-max `since` means the controller re-delivers only strictly-newer rows
 // — backfill with zero duplicates.
-func (c *RailsClient) FetchMetricsWatermark(tenantID string) (int64, error) {
+func (c *RailsClient) FetchMetricsWatermark(serverID string) (int64, error) {
 	req, err := http.NewRequest("GET", c.BaseURL+"/internal/poller/metrics_watermark", nil)
 	if err != nil {
 		return 0, fmt.Errorf("build request: %w", err)
 	}
 
 	q := req.URL.Query()
-	q.Set("tenant_id", tenantID)
+	q.Set("server_id", serverID)
 	req.URL.RawQuery = q.Encode()
 
 	req.Header.Set("X-Voodu-Internal-Token", c.Token)
@@ -152,16 +152,16 @@ func (c *RailsClient) FetchMetricsWatermark(tenantID string) (int64, error) {
 }
 
 // DigestRequest is the body the Rails /internal/poller/digest endpoint
-// expects. Rails uses (Type, TenantID, SyncHash) for dedup before
+// expects. Rails uses (Type, ServerID, SyncHash) for dedup before
 // reading the on-disk folder.
 //
-// `TenantID` is the platform-internal name for the Island row's
-// primary key. The wire field is `tenant_id` so the Rails side can
-// route it into the `poller_digests.tenant_id` column without an
+// `ServerID` is the platform-internal name for the Server row's
+// primary key. The wire field is `server_id` so the Rails side can
+// route it into the `poller_digests.server_id` column without an
 // extra mapping step.
 type DigestRequest struct {
 	Type     string `json:"type"`
-	TenantID string `json:"tenant_id"`
+	ServerID string `json:"server_id"`
 	SyncHash string `json:"sync_hash"`
 	TS       int64  `json:"ts"`
 	Size     int    `json:"size"`

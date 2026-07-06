@@ -9,10 +9,10 @@ require "test_helper"
 # contract only: order, declared-only filtering, and the empty/defensive
 # shapes the view gates on (#any?).
 class PodDetailDataProbesTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -47,11 +47,11 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
     seed_pod(spec: enveloped({}).tap { |s| s["spec"].delete("probes") })
     assert_empty build.probes
 
-    @island.pods.delete_all
+    @server.pods.delete_all
     seed_pod(spec: nil)
     assert_empty build.probes
 
-    @island.pods.delete_all
+    @server.pods.delete_all
     seed_pod(spec: enveloped({"liveness" => {}, "readiness" => "nope"}))
     assert_empty build.probes
   end
@@ -59,7 +59,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
   private
 
   def client
-    @client ||= Voodu::Client.new(@island)
+    @client ||= Voodu::Client.new(@server)
   end
 
   # enveloped — wrap a probes hash the way the controller ships it:
@@ -74,7 +74,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
   end
 
   def build
-    PodDetailData.new(client, @island, "web.aaaa")
+    PodDetailData.new(client, @server, "web.aaaa")
   end
 
   def seed_pod(spec:)
@@ -85,7 +85,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
     }
     payload["spec"] = spec unless spec.nil?
 
-    @island.pods.create!(
+    @server.pods.create!(
       container_name: "web.aaaa",
       kind: "deployment",
       scope: "web",

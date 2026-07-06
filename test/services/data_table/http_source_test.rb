@@ -8,9 +8,9 @@ require "test_helper"
 # and that a failed fetch surfaces (FetchError for rows, [] for a chart). The
 # outbound HTTP is stubbed — these test the mapping, not the network.
 class DataTable::HttpSourceTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
-  setup { @island = islands(:alpha) }
+  setup { @server = servers(:alpha) }
 
   SERIES_JSON = {
     "data" => {"points" => [
@@ -20,7 +20,7 @@ class DataTable::HttpSourceTest < ActiveSupport::TestCase
   }.freeze
 
   def source(mapping, **panel)
-    DataTable::HttpSource.new(island: @island, panel: {"url" => "http://ext/api", "mapping" => mapping}.merge(panel))
+    DataTable::HttpSource.new(server: @server, panel: {"url" => "http://ext/api", "mapping" => mapping}.merge(panel))
   end
 
   # stub_fetch — swap HttpFetch.call for `impl` (or a canned result) for the

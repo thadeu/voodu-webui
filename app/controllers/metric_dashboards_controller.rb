@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # MetricDashboardsController — CRUD for the operator's saved metric
-# dashboards, plus pin/unpin. Tenant-scoped (lives under /:tenant_key)
-# so current_island flows through naturally.
+# dashboards, plus pin/unpin. Server-scoped (lives under /:server_key)
+# so current_server flows through naturally.
 #
 # Surfaces:
 #   - index → the manage MODAL (Views::MetricDashboards::Manage): a full-page
@@ -10,11 +10,11 @@
 #   - new / edit → the editor (Views::MetricDashboards::Form, layout: false)
 #     swapped into the modal's "dashboard-editor" frame.
 #   - create / update    → full-page POST (form is data-turbo:false,
-#     same as IslandsController). Success redirects to the rendered
+#     same as ServersController). Success redirects to the rendered
 #     dashboard (/metrics?dashboard=<id>); a validation error re-renders
 #     the builder as a full page (embed: false) with inline errors,
 #     preserving the entered name + panels.
-#   - pin / unpin        → toggle the single per-island default and
+#   - pin / unpin        → toggle the single per-server default and
 #     bounce back to /metrics.
 class MetricDashboardsController < ApplicationController
   before_action :set_dashboard, only: [:edit, :update, :destroy, :pin, :unpin]
@@ -25,11 +25,11 @@ class MetricDashboardsController < ApplicationController
     # Full-page master-detail modal over the dashboard chrome (no layout:false
     # — the view brings its own chrome). The right frame lazy-loads an editor.
     render Views::MetricDashboards::Manage.new(
-      island: current_island,
+      server: current_server,
       dashboards: @dashboards,
       current_path: current_path,
-      islands: all_islands,
-      current_island: current_island,
+      servers: all_servers,
+      current_server: current_server,
       active_uuid: params[:edit].presence
     )
   end
@@ -38,9 +38,9 @@ class MetricDashboardsController < ApplicationController
     @dashboard = current_org.metric_dashboards.new
 
     render Views::MetricDashboards::Form.new(
-      island: current_island,
+      server: current_server,
       dashboard: @dashboard,
-      island_pods: org_island_pods,
+      server_pods: org_server_pods,
       embed: true,
       return_to: referer_return_to
     ), layout: false
@@ -63,9 +63,9 @@ class MetricDashboardsController < ApplicationController
 
   def edit
     render Views::MetricDashboards::Form.new(
-      island: current_island,
+      server: current_server,
       dashboard: @dashboard,
-      island_pods: org_island_pods,
+      server_pods: org_server_pods,
       embed: true,
       return_to: referer_return_to
     ), layout: false
@@ -102,8 +102,8 @@ class MetricDashboardsController < ApplicationController
 
   private
 
-  # set_dashboard — scope the lookup to the current island so one
-  # island can't address another's dashboards by id. A stale id (the
+  # set_dashboard — scope the lookup to the current server so one
+  # server can't address another's dashboards by id. A stale id (the
   # operator bookmarked a since-deleted dashboard) bounces to /metrics
   # rather than 500ing.
   def set_dashboard
@@ -126,9 +126,9 @@ class MetricDashboardsController < ApplicationController
         render turbo_stream: turbo_stream.replace(
           Views::MetricDashboards::Form::FRAME_ID,
           Views::MetricDashboards::Form.new(
-            island: current_island,
+            server: current_server,
             dashboard: @dashboard,
-            island_pods: org_island_pods,
+            server_pods: org_server_pods,
             embed: true,
             return_to: return_to_path
           )
@@ -143,13 +143,13 @@ class MetricDashboardsController < ApplicationController
   # sees inline errors with their entered name + panels intact.
   def render_form_full_page(status:)
     render Views::MetricDashboards::Form.new(
-      island: current_island,
+      server: current_server,
       dashboard: @dashboard,
-      island_pods: org_island_pods,
+      server_pods: org_server_pods,
       embed: false,
       current_path: current_path,
-      islands: all_islands,
-      current_island: current_island,
+      servers: all_servers,
+      current_server: current_server,
       return_to: return_to_path
     ), status: status
   end
@@ -169,7 +169,7 @@ class MetricDashboardsController < ApplicationController
 
   # internal_metrics_path — sanitize a candidate URL down to a same-app
   # /metrics path (+ query), or nil. Open-redirect guard: only a relative
-  # path on THIS tenant's metrics route is accepted (cross-tenant or
+  # path on THIS server's metrics route is accepted (cross-server or
   # absolute external URLs are rejected).
   def internal_metrics_path(url)
     return nil if url.blank?
@@ -184,14 +184,14 @@ class MetricDashboardsController < ApplicationController
     nil
   end
 
-  # org_island_pods — [[island, [compact pods]], …] for EVERY server in the
+  # org_server_pods — [[server, [compact pods]], …] for EVERY server in the
   # org (M2). The builder enumerates workloads / hep3 readers across all of
   # them so a dashboard panel can read from any server (each panel carries its
-  # island_id). One compact-pods fetch per server (cached 60s); the org is the
+  # server_id). One compact-pods fetch per server (cached 60s); the org is the
   # isolation boundary, so no server outside current_org is ever listed.
-  def org_island_pods
-    @org_island_pods ||= current_org.islands.order(:name).map do |island|
-      [island, IslandPods.compact(Voodu::Client.new(island), island)]
+  def org_server_pods
+    @org_server_pods ||= current_org.servers.order(:name).map do |server|
+      [server, ServerPods.compact(Voodu::Client.new(server), server)]
     end
   end
 

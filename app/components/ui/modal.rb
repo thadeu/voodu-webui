@@ -12,7 +12,7 @@
 #   render Components::UI::Modal.new(title: "Add server",
 #                                    subtitle: "Connect a Docker host",
 #                                    icon: :PlusOutline,
-#                                    close_to: islands_path)
+#                                    close_to: servers_path)
 #     .with_footer { div { "Cancel  · Add server" } } do
 #       form { ... }
 #     end

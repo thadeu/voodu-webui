@@ -2,11 +2,11 @@
 
 module Internal
   # Internal::PollerController — feeds the out-of-process Go log
-  # poller binary the list of islands it should tail.
+  # poller binary the list of servers it should tail.
   #
   # Lives under /internal/ and does NOT inherit ApplicationController:
   #
-  #   - No tenant scoping (the binary is global, sees every island).
+  #   - No server scoping (the binary is global, sees every server).
   #   - No CSRF (machine-to-machine, no browser).
   #   - No view rendering (JSON only).
   #
@@ -42,9 +42,9 @@ module Internal
   class PollerController < ActionController::API
     include InternalEndpointAuth
 
-    # GET /internal/poller/islands
+    # GET /internal/poller/servers
     #
-    # Returns the full island roster with decrypted PATs so the Go
+    # Returns the full server roster with decrypted PATs so the Go
     # binary can stream `docker logs` from each controller. PAT is
     # plaintext because the binary has no access to the Rails
     # encryption key — by the time the bytes reach the binary they
@@ -53,21 +53,21 @@ module Internal
     # `version` field gives us a hand-rolled compat fence: bumping
     # it lets the binary refuse to talk to an old WebUI (and vice
     # versa) without inventing a separate handshake endpoint.
-    def islands
+    def servers
       payload = {
         version: 1,
-        islands: Island.find_each.map { |island|
+        servers: Server.find_each.map { |server|
           # id stringified to keep the wire shape stable across the
           # Ruby/Go boundary — AR primary keys are integers, but the
           # Go binary uses the id as a path component
           # (`storage/logs/<id>/...`) where a string is natural. The
-          # Go decoder's `Island.ID string` field would explode on a
+          # Go decoder's `Server.ID string` field would explode on a
           # number otherwise.
           {
-            id: island.id.to_s,
-            key: island.key,
-            endpoint: island.endpoint,
-            pat: island.pat
+            id: server.id.to_s,
+            key: server.key,
+            endpoint: server.endpoint,
+            pat: server.pat
           }
         }
       }
@@ -75,25 +75,25 @@ module Internal
       render json: payload
     end
 
-    # GET /internal/poller/metrics_watermark?tenant_id=<id>
+    # GET /internal/poller/metrics_watermark?server_id=<id>
     #
     # Returns the newest metric ts (unix seconds) the warehouse holds
-    # for this island, so the Go binary can resume `/metrics/dump?since=`
+    # for this server, so the Go binary can resume `/metrics/dump?since=`
     # from there on a cold start instead of now-30s. This is the SAME
-    # boundary the Ruby MetricsSyncIslandJob uses (MetricSample.last_ts_for),
+    # boundary the Ruby MetricsSyncServerJob uses (MetricSample.last_ts_for),
     # bringing the Go poller to parity: a global-max `since` means the
     # controller re-delivers only strictly-newer rows — backfills the
     # offline gap with zero duplicates (the warehouse has no unique index).
     #
-    # `since` is 0 when the warehouse is empty for this island (first-ever
+    # `since` is 0 when the warehouse is empty for this server (first-ever
     # sync); the binary treats 0 as "nothing to backfill" and keeps its
     # short cold-start lookback rather than pulling the controller's full
-    # 7-day retention on a brand-new island.
+    # 7-day retention on a brand-new server.
     def metrics_watermark
-      tenant_id = params[:tenant_id].presence
-      return render(json: {error: "tenant_id required"}, status: :bad_request) unless tenant_id
+      server_id = params[:server_id].presence
+      return render(json: {error: "server_id required"}, status: :bad_request) unless server_id
 
-      render json: {version: 1, since: MetricSample.last_ts_for(tenant_id)}
+      render json: {version: 1, since: MetricSample.last_ts_for(server_id)}
     end
   end
 end

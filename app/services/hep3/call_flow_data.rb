@@ -42,8 +42,8 @@ module Hep3
       606 => "Not Acceptable"
     }.freeze
 
-    def initialize(island:, scope:, name:, corr_id:, focus_id: nil)
-      @island = island
+    def initialize(server:, scope:, name:, corr_id:, focus_id: nil)
+      @server = server
       @scope = scope.to_s
       @name = name.to_s
       @corr_id = corr_id.to_s
@@ -202,7 +202,7 @@ module Hep3
     end
 
     def records
-      HepMessage.for_call(tenant_id: @island.id, scope: @scope, name: @name, corr_id: @corr_id)
+      HepMessage.for_call(server_id: @server.id, scope: @scope, name: @name, corr_id: @corr_id)
     end
 
     # build_message — one parsed message as a flat, view-ready hash. `kind`

@@ -142,7 +142,7 @@ class MetricsWarehouse
     "latency_p99_ms" => "MAX",
     "latency_max_ms" => "MAX",
 
-    # Log-metric filters (LogMetricsSyncIslandJob) store the match count per
+    # Log-metric filters (LogMetricsSyncServerJob) store the match count per
     # storage bucket. SUM rolls the per-tick partials into each render-bucket's
     # total count. The panel's agg (count=latest / sum=total / avg=mean /
     # min/max) is then applied OVER that per-render-bucket count series in
@@ -155,15 +155,15 @@ class MetricsWarehouse
   # signature. Returns the JSON envelope (stringified keys) that
   # Voodu::Client#metrics would have returned, ready to flow through
   # MetricsData unchanged.
-  def self.query(island, source:, metric:, range:, interval:, scope: nil, name: nil, pod: nil, from: nil, until_: nil)
-    new(island).query(
+  def self.query(server, source:, metric:, range:, interval:, scope: nil, name: nil, pod: nil, from: nil, until_: nil)
+    new(server).query(
       source: source, metric: metric, range: range, interval: interval,
       scope: scope, name: name, pod: pod, from: from, until_: until_
     )
   end
 
-  def initialize(island)
-    @island = island
+  def initialize(server)
+    @server = server
   end
 
   # query — `from`/`until_` (Time or ISO string) pin an explicit window for the
@@ -207,7 +207,7 @@ class MetricsWarehouse
   # the entry of query(), so the interpolation is safe.
   def scoped_relation(source, scope, name, pod, metric, start_ts, end_ts)
     rel = MetricSample
-      .where(tenant_id: @island.id, source: source.to_s)
+      .where(server_id: @server.id, source: source.to_s)
       .where(ts_epoch: start_ts...end_ts)
       .where(metric_present_sql(metric))
 
@@ -248,21 +248,21 @@ class MetricsWarehouse
   end
 
   # truncated? — true when the warehouse's oldest sample for this
-  # tenant + source is NEWER than the query start. Mirrors the
+  # server + source is NEWER than the query start. Mirrors the
   # controller's `available_from > start` truncation flag. Lets the
   # WebUI render an honest "partial range" hint instead of a chart
   # that looks complete but only goes back N days.
   def truncated?(source, start_t)
-    earliest = MetricSample.where(tenant_id: @island.id, source: source.to_s)
+    earliest = MetricSample.where(server_id: @server.id, source: source.to_s)
       .minimum(:ts_epoch)
     earliest.present? && earliest > start_t.to_i
   end
 
   # available_from_iso — earliest ts in the warehouse for this
-  # tenant + source. Hits idx_metric_samples_watermark partial fan
+  # server + source. Hits idx_metric_samples_watermark partial fan
   # (well, the source-scoped equivalent). Cheap.
   def available_from_iso(source)
-    earliest = MetricSample.where(tenant_id: @island.id, source: source.to_s)
+    earliest = MetricSample.where(server_id: @server.id, source: source.to_s)
       .minimum(:ts_epoch)
     earliest && Time.at(earliest).utc.iso8601
   end

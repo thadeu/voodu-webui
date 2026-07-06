@@ -12,7 +12,7 @@ import (
 )
 
 // VooduClient hits a single voodu controller's PAT plane. One instance
-// per island. The HTTP client has a 60s round-trip timeout. Per-pod log
+// per server. The HTTP client has a 60s round-trip timeout. Per-pod log
 // backfill that can't drain its whole window inside 60s is RESUMABLE: the
 // stream is oldest-first, the poller persists what it read and advances the
 // watermark, so the next tick continues where it left off.
@@ -107,12 +107,12 @@ func (c *VooduClient) FetchPodLogs(ctx context.Context, pod string, since time.T
 //     chart frames: requires `source=system|pod|ingress` + returns a
 //     bounded JSON array.
 //   - `/metrics/dump` is the warehouse-sync endpoint Ruby's
-//     `MetricsSyncIslandJob` uses: streams ALL rows newer than `since`
+//     `MetricsSyncServerJob` uses: streams ALL rows newer than `since`
 //     as NDJSON, no `source` filter. This is the one the poller wants.
 //
 // `since` is unix seconds (integer, as a string). 0 / empty tells the
 // controller to dump the full retention window — the natural backfill
-// path for a brand-new island or a process restart.
+// path for a brand-new server or a process restart.
 func (c *VooduClient) FetchMetrics(ctx context.Context, since string) (io.ReadCloser, error) {
 	q := url.Values{}
 	if since != "" {

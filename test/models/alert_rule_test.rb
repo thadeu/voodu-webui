@@ -3,14 +3,14 @@
 require "test_helper"
 
 class AlertRuleTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
   end
 
   test "valid host rule saves" do
-    rule = @island.alert_rules.new(
+    rule = @server.alert_rules.new(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
@@ -19,27 +19,27 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "org is derived from the target server" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
 
-    assert_equal @island.org_id, rule.org_id, "a rule's org is its target server's org"
+    assert_equal @server.org_id, rule.org_id, "a rule's org is its target server's org"
   end
 
   test "a rule targeting a server in ANOTHER org is rejected (cross-org guard)" do
-    gamma = islands(:gamma) # globex — a different org from alpha's (acme)
-    rule = @island.org.alert_rules.new(
-      island: gamma, name: "forged", metric_kind: "cpu", target_kind: "host",
+    gamma = servers(:gamma) # globex — a different org from alpha's (acme)
+    rule = @server.org.alert_rules.new(
+      server: gamma, name: "forged", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
 
     assert_not rule.valid?, "a rule can't watch a server outside its org"
-    assert rule.errors[:island].present?
+    assert rule.errors[:server].present?
   end
 
   test "pod target requires scope and name" do
-    rule = @island.alert_rules.new(
+    rule = @server.alert_rules.new(
       name: "pod cpu", metric_kind: "cpu", target_kind: "pod",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
@@ -50,7 +50,7 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "disk is host-only" do
-    rule = @island.alert_rules.new(
+    rule = @server.alert_rules.new(
       name: "pod disk", metric_kind: "disk", target_kind: "pod",
       target_scope: "clowk", target_name: "web",
       comparator: "gte", threshold: 85, duration_seconds: 300
@@ -61,7 +61,7 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "req_s is deployment-only" do
-    rule = @island.alert_rules.new(
+    rule = @server.alert_rules.new(
       name: "host reqs", metric_kind: "req_s", target_kind: "host",
       comparator: "gte", threshold: 50, duration_seconds: 300
     )
@@ -71,13 +71,13 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "percent metrics cap threshold at 100, req_s does not" do
-    over = @island.alert_rules.new(
+    over = @server.alert_rules.new(
       name: "over", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 150, duration_seconds: 300
     )
     assert_not over.valid?
 
-    rate = @island.alert_rules.new(
+    rate = @server.alert_rules.new(
       name: "rate", metric_kind: "req_s", target_kind: "pod",
       target_scope: "clowk", target_name: "web",
       comparator: "gte", threshold: 150, duration_seconds: 300
@@ -85,19 +85,19 @@ class AlertRuleTest < ActiveSupport::TestCase
     assert rate.valid?, rate.errors.full_messages.join(", ")
   end
 
-  test "name is unique per island but reusable across islands" do
-    @island.alert_rules.create!(
+  test "name is unique per server but reusable across servers" do
+    @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
 
-    dup = @island.alert_rules.new(
+    dup = @server.alert_rules.new(
       name: "cpu", metric_kind: "memory", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
     assert_not dup.valid?
 
-    other = islands(:beta).alert_rules.new(
+    other = servers(:beta).alert_rules.new(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
@@ -105,20 +105,20 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "create_defaults! is idempotent and keeps operator tweaks" do
-    first = AlertRule.create_defaults!(@island)
+    first = AlertRule.create_defaults!(@server)
     assert_equal 3, first.size
-    assert_equal 3, @island.alert_rules.count
+    assert_equal 3, @server.alert_rules.count
 
-    @island.alert_rules.find_by!(name: "Host CPU ≥ 90%").update!(threshold: 75)
+    @server.alert_rules.find_by!(name: "Host CPU ≥ 90%").update!(threshold: 75)
 
-    AlertRule.create_defaults!(@island)
-    assert_equal 3, @island.alert_rules.count
-    assert_equal 75.0, @island.alert_rules.find_by!(name: "Host CPU ≥ 90%").threshold
+    AlertRule.create_defaults!(@server)
+    assert_equal 3, @server.alert_rules.count
+    assert_equal 75.0, @server.alert_rules.find_by!(name: "Host CPU ≥ 90%").threshold
   end
 
   test "firing_count_for counts only enabled firing rules" do
     make = lambda do |name, firing:, enabled:|
-      @island.alert_rules.create!(
+      @server.alert_rules.create!(
         name: name, metric_kind: "cpu", target_kind: "host",
         comparator: "gte", threshold: 90, duration_seconds: 300,
         firing: firing, enabled: enabled
@@ -128,17 +128,17 @@ class AlertRuleTest < ActiveSupport::TestCase
     make.call("b", firing: true, enabled: false)
     make.call("c", firing: false, enabled: true)
 
-    assert_equal 1, AlertRule.firing_count_for(@island.id)
+    assert_equal 1, AlertRule.firing_count_for(@server.id)
   end
 
   test "disable! resolves the open event and clears firing" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300,
       firing: true, firing_since: 10.minutes.ago
     )
     event = rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 10.minutes.ago,
+      server: @server, state: "firing", started_at: 10.minutes.ago,
       threshold: 90, rule_name: rule.name, metric_kind: "cpu",
       target_label: rule.target_label
     )
@@ -159,18 +159,18 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "metrics_link_params points host rules at the host scope" do
-    rule = @island.alert_rules.new(metric_kind: "cpu", target_kind: "host")
+    rule = @server.alert_rules.new(metric_kind: "cpu", target_kind: "host")
 
     assert_equal({scope_kind: "host"}, rule.metrics_link_params)
   end
 
   test "metrics_link_params resolves a pod rule to a live replica container" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "ctrl", metric_kind: "cpu", target_kind: "pod",
       target_scope: "fsw", target_name: "controller",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
-    @island.pods.create!(
+    @server.pods.create!(
       scope: "fsw", resource_name: "controller", container_name: "fsw-controller.e1e1",
       kind: "deployment", replica_id: "e1e1", payload: "{}", synced_at: Time.current
     )
@@ -179,7 +179,7 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "metrics_link_params falls back to host when the deployment has no live replica" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "ctrl", metric_kind: "cpu", target_kind: "pod",
       target_scope: "fsw", target_name: "controller",
       comparator: "gte", threshold: 90, duration_seconds: 300
@@ -189,29 +189,29 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "destinations_for: no selection notifies nobody (the don't-send default)" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
     # A destination exists in the org, but the rule wired none — so it sends
     # nowhere (no surprise fan-out).
-    @island.org.alert_destinations.create!(name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true)
+    @server.org.alert_destinations.create!(name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true)
 
     assert_empty rule.destinations_for("firing")
   end
 
   test "destinations_for: only the selected ones, filtered by enabled + the transition toggle" do
-    rule = @island.alert_rules.create!(
+    rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
-    firing_only = @island.org.alert_destinations.create!(
+    firing_only = @server.org.alert_destinations.create!(
       name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true, on_resolved: false
     )
-    both = @island.org.alert_destinations.create!(
+    both = @server.org.alert_destinations.create!(
       name: "b", kind: "webhook", endpoint: "https://b.example/h", on_firing: true, on_resolved: true
     )
-    disabled = @island.org.alert_destinations.create!(
+    disabled = @server.org.alert_destinations.create!(
       name: "c", kind: "webhook", endpoint: "https://c.example/h", enabled: false
     )
     rule.update!(alert_destinations: [firing_only, both, disabled])
@@ -222,7 +222,7 @@ class AlertRuleTest < ActiveSupport::TestCase
   end
 
   test "condition_label composes comparator, value and duration" do
-    rule = @island.alert_rules.new(
+    rule = @server.alert_rules.new(
       metric_kind: "disk", comparator: "gte", threshold: 85, duration_seconds: 300
     )
 

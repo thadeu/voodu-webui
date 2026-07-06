@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Pins the watermark-advance contract in LogTailIslandJob#poll_once after
+# Pins the watermark-advance contract in LogTailServerJob#poll_once after
 # the dedup fix made the watermark persist across runs. Two regressions
 # the persisted watermark could introduce (and that this guards against):
 #
@@ -10,8 +10,8 @@ require "test_helper"
 #      pressure / cap) → the next run's `since` skips it forever.
 #   2. An inclusive `ts <= watermark` boundary guard dropping a DISTINCT
 #      line that shares the watermark's exact millisecond.
-class LogTailIslandJobTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+class LogTailServerJobTest < ActiveSupport::TestCase
+  fixtures :orgs, :servers
 
   WATERMARK = "2026-06-09T12:00:00.000Z"
 
@@ -26,15 +26,15 @@ class LogTailIslandJobTest < ActiveSupport::TestCase
   end
 
   setup do
-    @island = islands(:alpha)
-    clear_island_logs
+    @server = servers(:alpha)
+    clear_server_logs
   end
 
-  teardown { clear_island_logs }
+  teardown { clear_server_logs }
 
   test "watermark does not advance past a line the Writer dropped (disk pressure)" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@island.id)
+      writer = LogTail::Writer.new(@server.id)
       writer.instance_variable_set(:@disk_ok, false) # simulate disk-pressure pause
 
       advanced = :unset
@@ -47,7 +47,7 @@ class LogTailIslandJobTest < ActiveSupport::TestCase
 
   test "watermark advances for a persisted line" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@island.id)
+      writer = LogTail::Writer.new(@server.id)
 
       advanced = nil
       count = poll_once(FakeClient.new([line(at: "2026-06-09T12:05:00.000Z")]), writer, WATERMARK) { |ts| advanced = ts }
@@ -61,7 +61,7 @@ class LogTailIslandJobTest < ActiveSupport::TestCase
 
   test "a distinct line sharing the watermark ms is kept (strict boundary guard)" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@island.id)
+      writer = LogTail::Writer.new(@server.id)
 
       count = poll_once(FakeClient.new([line(at: WATERMARK, msg: "boundary")]), writer, WATERMARK) { |_ts| }
       writer.close
@@ -73,15 +73,15 @@ class LogTailIslandJobTest < ActiveSupport::TestCase
   private
 
   def poll_once(client, writer, watermark, &block)
-    LogTailIslandJob.new.send(:poll_once, client, writer, watermark, &block)
+    LogTailServerJob.new.send(:poll_once, client, writer, watermark, &block)
   end
 
   def line(at:, msg: "hello")
     %([web] {"time":"#{at}","msg":"#{msg}"}\n)
   end
 
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

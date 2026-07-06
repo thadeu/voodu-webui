@@ -7,10 +7,10 @@
 # Two signals per broadcast:
 #
 #   1. Badge refresh — the sidebar's collapsed dot + expanded pill,
-#      sent over the EXISTING `island-state-#{id}` channel (the
+#      sent over the EXISTING `server-state-#{id}` channel (the
 #      sidebar already subscribes to it for status dots — no new
 #      subscription needed). `update` not `replace`, same reasoning
-#      as StateSyncIslandJob#broadcast_status_change: replace would
+#      as StateSyncServerJob#broadcast_status_change: replace would
 #      remove the id-bearing wrapper and orphan every later
 #      broadcast.
 #
@@ -23,25 +23,25 @@
 # never fail the evaluation job (state is already committed; the
 # next page render shows the truth regardless).
 class AlertsLive
-  def self.broadcast(island)
-    count = AlertRule.firing_count_for(island.id)
+  def self.broadcast(server)
+    count = AlertRule.firing_count_for(server.id)
 
     Turbo::StreamsChannel.broadcast_update_to(
-      "island-state-#{island.id}",
-      target: "alerts-badge-dot-#{island.id}",
+      "server-state-#{server.id}",
+      target: "alerts-badge-dot-#{server.id}",
       html: Components::Alerts::NavBadge.new(count: count, variant: :dot).call
     )
 
     Turbo::StreamsChannel.broadcast_update_to(
-      "island-state-#{island.id}",
-      target: "alerts-badge-pill-#{island.id}",
+      "server-state-#{server.id}",
+      target: "alerts-badge-pill-#{server.id}",
       html: Components::Alerts::NavBadge.new(count: count, variant: :pill).call
     )
 
-    Turbo::StreamsChannel.broadcast_action_to("alerts-org-#{island.org_id}", action: :alerts_tick)
+    Turbo::StreamsChannel.broadcast_action_to("alerts-org-#{server.org_id}", action: :alerts_tick)
   rescue => e
     Rails.logger.warn(
-      "alerts-live broadcast island=#{island.key} failed: #{e.class}: #{e.message}"
+      "alerts-live broadcast server=#{server.key} failed: #{e.class}: #{e.message}"
     )
   end
 end

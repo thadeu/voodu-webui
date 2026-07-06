@@ -8,17 +8,17 @@ require "test_helper"
 # surrounding modal / export never show `[m` litter. Clean lines pass through
 # untouched, and only matched lines pay the scrub — not the whole scan.
 class LogTail::ReaderTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   ESC = "\e"
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @day = Time.utc(2026, 6, 29, 12, 0, 0)
-    clear_island_logs
+    clear_server_logs
   end
 
-  teardown { clear_island_logs }
+  teardown { clear_server_logs }
 
   test "strips ANSI colour escapes from msg and raw on read (legacy line)" do
     dirty = "#{ESC}[m#{ESC}[msend 609 bytes to udp/[54.20.49.188]:5060"
@@ -68,7 +68,7 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
   def read_all
     out = []
     LogTail::Reader.each_line(
-      island_id: @island.id, pods: nil,
+      server_id: @server.id, pods: nil,
       from: @day - 1.hour, until_: @day + 1.hour,
       content_search: nil, regex: false, limit: 100
     ) { |pod, hash| out << [pod, hash] }
@@ -77,14 +77,14 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
   end
 
   def seed(pod, time, msg:, raw:)
-    path = LogTail::FilePath.daily_file(@island.id, pod, time.to_date)
+    path = LogTail::FilePath.daily_file(@server.id, pod, time.to_date)
     LogTail::FilePath.ensure_dir(File.dirname(path))
     row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: raw, parsed: false}
     File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
   end
 
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

@@ -89,12 +89,12 @@ class Components::Logs::Page < Components::Base
     end.to_json
   end
 
-  # pods_filter_storage_key — namespaces the selection per-island
+  # pods_filter_storage_key — namespaces the selection per-server
   # so switching servers doesn't bleed a filter from server A onto
   # server B. Pulled from the current request's path_parameters so
-  # we don't need to thread current_island down into the component.
+  # we don't need to thread current_server down into the component.
   def pods_filter_storage_key
-    key = request.path_parameters[:tenant_key]
+    key = request.path_parameters[:server_key]
     return "" if key.blank?
 
     "voodu:logs-pods:v1:#{key}"

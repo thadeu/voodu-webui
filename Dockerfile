@@ -45,7 +45,7 @@ RUN apt-get update -qq && \
 # Poller ON by default (the binary copied above owns log/metric/state sync; the
 # Ruby orchestrators step aside when POLLER_SPAWN=1). The operator must still
 # supply POLLER_TOKEN (a secret — never baked into the image) and configure
-# islands; set POLLER_SPAWN=0 to opt out and let the Ruby jobs poll instead.
+# servers; set POLLER_SPAWN=0 to opt out and let the Ruby jobs poll instead.
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \

@@ -13,7 +13,7 @@
 class PodsController < ApplicationController
   def index
     @data = OverviewData.new(
-      voodu_client, current_island,
+      voodu_client, current_server,
       force_refresh: params[:refresh].present?
     )
 
@@ -29,7 +29,7 @@ class PodsController < ApplicationController
   def show
     name = params[:name]
     @data = PodDetailData.new(
-      voodu_client, current_island, name,
+      voodu_client, current_server, name,
       force_refresh: params[:refresh].present?
     )
 
@@ -50,14 +50,14 @@ class PodsController < ApplicationController
     back = request.referer || pods_path
 
     if voodu_client.nil?
-      redirect_to back, alert: "No island selected." and return
+      redirect_to back, alert: "No server selected." and return
     end
 
     voodu_client.restart(name)
     # Restart invalidates whatever the detail page cached — flush so
     # the operator's next reload reflects the new state immediately.
-    Rails.cache.delete("voodu:pod_detail:v1:island:#{current_island.id}:pod:#{name}")
-    Rails.cache.delete("voodu:overview:v1:island:#{current_island.id}")
+    Rails.cache.delete("voodu:pod_detail:v1:server:#{current_server.id}:pod:#{name}")
+    Rails.cache.delete("voodu:overview:v1:server:#{current_server.id}")
 
     redirect_to back, notice: "Restart triggered for #{name}."
   rescue Voodu::Client::Error => e

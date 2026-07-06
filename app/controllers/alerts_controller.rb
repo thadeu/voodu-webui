@@ -10,7 +10,7 @@
 # layout: false, so live updates skip the dashboard chrome.
 class AlertsController < ApplicationController
   def index
-    data = AlertsPageData.new(current_org, current_island, history_filter: history_filter)
+    data = AlertsPageData.new(current_org, current_server, history_filter: history_filter)
     tab = active_tab
 
     if request.headers["Turbo-Frame"] == "alerts-live"

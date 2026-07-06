@@ -9,16 +9,16 @@ require "test_helper"
 #
 # Time is pinned just after the seeded buckets so they fall inside the range.
 class LogMetricDataTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
     travel_to @base + 1.minute
-    MetricSample.where(tenant_id: @island.id).delete_all
+    MetricSample.where(server_id: @server.id).delete_all
   end
 
-  teardown { MetricSample.where(tenant_id: @island.id).delete_all }
+  teardown { MetricSample.where(server_id: @server.id).delete_all }
 
   test "count → the latest bucket (the current value)" do
     q = "@message like /INVITE/ | count"
@@ -123,7 +123,7 @@ class LogMetricDataTest < ActiveSupport::TestCase
   private
 
   def data(query, range: "1h", interval: "auto")
-    LogMetricData.new(@island, query: query, range: range, interval: interval, scope: "fs", name: "fs")
+    LogMetricData.new(@server, query: query, range: range, interval: interval, scope: "fs", name: "fs")
   end
 
   # seed — write per-bucket log_count samples under the query's def_key.
@@ -134,7 +134,7 @@ class LogMetricDataTest < ActiveSupport::TestCase
     rows = counts.map do |mins, n|
       iso = "#{(@base - mins.minutes).utc.iso8601[0, 16]}:00Z"
 
-      {tenant_id: @island.id, source: "log", ts_iso: iso,
+      {server_id: @server.id, source: "log", ts_iso: iso,
        payload: {source: "log", ts: iso, name: key, log_count: n}.to_json}
     end
 

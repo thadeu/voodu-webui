@@ -1,4 +1,4 @@
-// Custom Turbo Stream action broadcast from StateSyncIslandJob.
+// Custom Turbo Stream action broadcast from StateSyncServerJob.
 //
 // state_tick fires after every sync attempt (success OR failure)
 // to push the new snapshot into the operator's open browser tabs.

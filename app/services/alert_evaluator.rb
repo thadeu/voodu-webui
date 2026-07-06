@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# AlertEvaluator — checks every enabled rule of one island against
+# AlertEvaluator — checks every enabled rule of one server against
 # the local metrics warehouse and drives the fire → resolve state
-# machine. Runs every 30s via AlertsEvaluationIslandJob; everything
+# machine. Runs every 30s via AlertsEvaluationServerJob; everything
 # here is local SQLite, no controller HTTP.
 #
 # Timing model (why the window is anchored where it is):
@@ -19,20 +19,20 @@
 # ≈ duration + 45s worst case.
 #
 # Missing data is never an opinion: an empty or stale series neither
-# fires (no false positives while an island is offline) nor resolves
+# fires (no false positives while an server is offline) nor resolves
 # (a firing alert holds, surfaced as last_status "stale", until real
 # samples say otherwise).
 class AlertEvaluator
   # Warehouse bucket width AND the floor for the observed sample
-  # cadence. The local sampler ticks every 15s, but a remote island
+  # cadence. The local sampler ticks every 15s, but a remote server
   # can deliver pod/system samples far more sparsely (e.g. every
   # ~210s). Everything time-sensitive below scales off the cadence
   # ESTIMATED from the data (cadence_for), not this fixed value — so a
-  # coarse-cadence island isn't permanently "NO DATA"/"stale".
+  # coarse-cadence server isn't permanently "NO DATA"/"stale".
   BUCKET_SECONDS = 15
 
   # Minimum lookback for the warehouse query. Must be wide enough to
-  # see SEVERAL samples even on a coarse-cadence island, otherwise we
+  # see SEVERAL samples even on a coarse-cadence server, otherwise we
   # can't estimate the cadence (or even find a fresh sample) for a
   # short-duration rule. 15min captures ~4 samples at a 210s cadence.
   MIN_LOOKBACK = 15 * 60
@@ -42,8 +42,8 @@ class AlertEvaluator
   WINDOW_SLACK = 120
 
   # Staleness floor + multiplier. The newest sample is stale when it's
-  # older than max(STALE_FLOOR, cadence × STALE_CADENCES). Dense island
-  # (cadence 15s) ⇒ 90s; coarse island (cadence 210s) ⇒ ~10.5min, so a
+  # older than max(STALE_FLOOR, cadence × STALE_CADENCES). Dense server
+  # (cadence 15s) ⇒ 90s; coarse server (cadence 210s) ⇒ ~10.5min, so a
   # normal 206s-old sample reads as FRESH, not offline.
   STALE_FLOOR = 90
   STALE_CADENCES = 3
@@ -63,19 +63,19 @@ class AlertEvaluator
   # a percentage against it would be meaningless noise.
   MEMORY_LIMIT_SENTINEL = 1_099_511_627_776
 
-  def self.run(island)
-    new(island).run
+  def self.run(server)
+    new(server).run
   end
 
-  def initialize(island)
-    @island = island
+  def initialize(server)
+    @server = server
   end
 
   # Returns the number of fire/resolve transitions this tick (job log).
   def run
     transitions = 0
 
-    @island.alert_rules.enabled.find_each do |rule|
+    @server.alert_rules.enabled.find_each do |rule|
       transitions += 1 if evaluate(rule)
     rescue => e
       Rails.logger.warn(
@@ -145,7 +145,7 @@ class AlertEvaluator
 
       event = rule.alert_events.create!(
         org: rule.org,
-        island: @island,
+        server: @server,
         state: "firing",
         started_at: started_at,
         threshold: rule.threshold,
@@ -158,7 +158,7 @@ class AlertEvaluator
       rule.update_columns(firing: true, firing_since: started_at)
     end
 
-    AlertsLive.broadcast(@island)
+    AlertsLive.broadcast(@server)
     AlertNotifier.enqueue(event, "firing") if event
   rescue ActiveRecord::RecordNotUnique
     # A concurrent tick already opened the episode (partial unique
@@ -179,7 +179,7 @@ class AlertEvaluator
       rule.update_columns(firing: false, firing_since: nil)
     end
 
-    AlertsLive.broadcast(@island)
+    AlertsLive.broadcast(@server)
     AlertNotifier.enqueue(event, "resolved") if event
   end
 
@@ -221,7 +221,7 @@ class AlertEvaluator
   # cadence_for — the typical gap between samples, estimated from the
   # series (median, so a single long gap doesn't skew it), floored at
   # BUCKET_SECONDS. Drives staleness + coverage so the evaluator
-  # adapts to whatever cadence an island actually delivers.
+  # adapts to whatever cadence an server actually delivers.
   def cadence_for(series)
     return BUCKET_SECONDS if series.size < 2
 
@@ -243,7 +243,7 @@ class AlertEvaluator
 
   # Minimum samples required in the window — a fraction of the expected
   # count (duration ÷ cadence), but never fewer than 1. On a coarse
-  # island where cadence > duration, the window holds just the newest
+  # server where cadence > duration, the window holds just the newest
   # sample and that single fresh reading is enough to act on.
   def min_samples(rule, cadence)
     expected = rule.duration_seconds.to_f / cadence
@@ -306,7 +306,7 @@ class AlertEvaluator
 
   def query(rule, source:, metric:)
     MetricsWarehouse.query(
-      @island,
+      @server,
       source: source,
       metric: metric,
       range: "#{[rule.duration_seconds + WINDOW_SLACK, MIN_LOOKBACK].max}s",
@@ -341,6 +341,6 @@ class AlertEvaluator
   end
 
   def state
-    @state ||= IslandState.for(@island)
+    @state ||= ServerState.for(@server)
   end
 end

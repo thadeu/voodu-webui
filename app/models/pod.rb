@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 # Pod — local snapshot of one container the voodu controller manages.
-# One row per replica per island, kept in lockstep with the controller
-# by `StateSyncIslandJob` (every 10s). Pages render entirely from this
+# One row per replica per server, kept in lockstep with the controller
+# by `StateSyncServerJob` (every 10s). Pages render entirely from this
 # table — no synchronous HTTP to the controller on the page render
 # path. When the controller is offline the table stays put with the
 # last-known state, so pages keep rendering useful data instead of
@@ -10,7 +10,7 @@
 #
 # This model is READ-ONLY from the application's perspective. The
 # `PodSnapshot` service (see `app/services/pod_snapshot.rb`) is the
-# single writer, replacing the per-island row set atomically inside a
+# single writer, replacing the per-server row set atomically inside a
 # transaction. Don't add `before_save`, validation callbacks, or
 # `update!` helpers here — the upsert path bypasses them on purpose
 # (10s syncs × N pods × callbacks would be wasteful), and adding
@@ -18,7 +18,7 @@
 # truth.
 #
 # Schema (see db/migrate/<ts>_create_pods.rb):
-#   id, island_id, container_name (unique with island_id),
+#   id, server_id, container_name (unique with server_id),
 #   kind, scope, resource_name, replica_id, payload (JSON text),
 #   synced_at, timestamps
 #
@@ -28,7 +28,7 @@
 # hash per instance — the JSON parse happens once even when the
 # same Pod row drives multiple UI surfaces.
 class Pod < ApplicationRecord
-  belongs_to :island
+  belongs_to :server
 
   # payload_hash — lazy-parsed view of the `payload` JSON column.
   # Memoised per instance so the chart_card, header, and any other

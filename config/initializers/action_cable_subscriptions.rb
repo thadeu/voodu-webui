@@ -1,6 +1,6 @@
 # Turbo Drive disconnects <turbo-cable-stream-source> elements on
 # navigation. During page caching/restoration the same signed stream
-# (island-state-*, metrics-*) can fire `unsubscribe` twice: the first
+# (server-state-*, metrics-*) can fire `unsubscribe` twice: the first
 # removes the subscription, the second finds nothing and ActionCable's
 # `find` raises "Unable to find subscription with identifier".
 #

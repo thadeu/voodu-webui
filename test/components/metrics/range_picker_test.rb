@@ -7,13 +7,13 @@ require "test_helper"
 # assertion breaks if the behavior is inverted (wrong active state, a
 # dropped param, a missing custom field).
 class Components::Metrics::RangePickerTest < ActiveSupport::TestCase
-  # metrics_path is tenant-scoped (/:tenant_key/metrics), so the picker
-  # needs a view context whose request carries a tenant_key for the route
+  # metrics_path is server-scoped (/:server_key/metrics), so the picker
+  # needs a view context whose request carries a server_key for the route
   # helper to resolve. Build one once.
   setup do
     controller = ApplicationController.new
     req = ActionDispatch::TestRequest.create
-    req.path_parameters = {tenant_key: "ABC123", controller: "metrics", action: "index"}
+    req.path_parameters = {server_key: "ABC123", controller: "metrics", action: "index"}
     controller.request = req
     controller.response = ActionDispatch::TestResponse.new
     @view = controller.view_context

@@ -4,7 +4,7 @@
 #
 # Persisted in SQLite (single row per key). Scope is GLOBAL — Voodu
 # is a single-operator console, so prefs live anchored to the
-# install, not the active island. If multi-operator ever becomes a
+# install, not the active server. If multi-operator ever becomes a
 # thing, this table gets a `user_id` column and the helpers learn
 # `Setting.get(:timezone, user_id:)`.
 #

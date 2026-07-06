@@ -8,15 +8,15 @@
 #   2. The canonical "look this up" for a developer about to add a
 #      new screen — copy a block, paste, tweak.
 class Views::Styleguide::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil)
+  def initialize(current_path:, servers: [], current_server: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island
+      current_path: @current_path, servers: @servers, current_server: @current_server
     ) do
       div(class: "mx-auto max-w-5xl px-6 py-8 flex flex-col gap-10") do
         page_header
@@ -124,7 +124,7 @@ class Views::Styleguide::Index < Views::Base
   def section_forms
     section("Forms") do
       div(class: "max-w-md flex flex-col gap-4") do
-        render Components::Form::Group.new(label: "Island name", hint: "Free-form label.") do
+        render Components::Form::Group.new(label: "Server name", hint: "Free-form label.") do
           render Components::Form::Input.new(placeholder: "production-sao-paulo")
         end
         render Components::Form::Group.new(label: "Destination", hint: "Port optional (defaults to 8687).") do

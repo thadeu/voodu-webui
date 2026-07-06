@@ -21,7 +21,7 @@
 # The table is SCHEMA-LESS: it derives columns from `fields`, renders
 # every value as text, and offers a substring filter on any field. No
 # types/labels/formatting are declared — a new source just implements
-# the four methods + a `from_params(island:, params:)` factory and
+# the four methods + a `from_params(server:, params:)` factory and
 # registers its key below.
 module DataTable
   module Registry
@@ -36,11 +36,11 @@ module DataTable
     # build — instantiate the source for `key` from request params, or
     # nil when the key is unknown or the params don't resolve a valid
     # source (the controller turns nil into a 404).
-    def self.build(key, island:, params:)
+    def self.build(key, server:, params:)
       class_name = SOURCES[key.to_s]
       return nil unless class_name
 
-      class_name.constantize.from_params(island: island, params: params)
+      class_name.constantize.from_params(server: server, params: params)
     end
 
     def self.registered?(key)
@@ -48,13 +48,13 @@ module DataTable
     end
 
     # available — source metadata for the panel builder's Table form, for
-    # the sources applicable to this island: [{key:, label:, views:[…]}].
+    # the sources applicable to this server: [{key:, label:, views:[…]}].
     # The form's source dropdown lists these; the view dropdown reads each
     # source's `views`. Currently just hep3 (when its plugin is installed).
-    def self.available(island)
+    def self.available(server)
       SOURCES.keys.filter_map do |key|
         klass = SOURCES[key].constantize
-        next unless klass.available_for?(island)
+        next unless klass.available_for?(server)
 
         {key: key, label: klass.label, short_label: klass.short_label, views: klass.view_options}
       end

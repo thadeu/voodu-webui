@@ -1,19 +1,19 @@
 # voodu-webui
 
 Self-hosted web UI for the [voodu](https://github.com/thadeu/clowk-voodu) PaaS controller.
-Register your servers ("islands"), watch pods, stream logs, browse metrics, and run common
+Register your servers, watch pods, stream logs, browse metrics, and run common
 operator commands without SSHing in for every check.
 
 ## What you get
 
-- **Multi-island dashboard.** One URL prefix per server (`/<island-key>/...`). Switch
-  islands by changing the URL — bookmarks and parallel tabs Just Work.
+- **Multi-server dashboard.** One URL prefix per server (`/<server-key>/...`). Switch
+  servers by changing the URL — bookmarks and parallel tabs Just Work.
 - **Live pods / logs / metrics.** Drawer-mode log following, sparklines + range pills
   on charts, current values stable across time ranges.
-- **⌘K command palette.** Global across every registered island, cached client-side.
+- **⌘K command palette.** Global across every registered server, cached client-side.
 - **External API dashboards.** Build a Table or Area/Number chart from any HTTP endpoint
   with a small JSON mapping — see [docs/http-source-mapping.md](docs/http-source-mapping.md).
-- **PAT auth, encrypted at rest.** Each island stores a personal access token used to
+- **PAT auth, encrypted at rest.** Each server stores a personal access token used to
   talk to its `voodu` controller; tokens live in SQLite as `pat_ciphertext` and are
   encrypted via ActiveRecord Encryption.
 - **Single container.** Rails 8.1 on SQLite with the Solid stack (`solid_cache`,
@@ -70,9 +70,9 @@ The bundled `docker-compose.yml` already wires the storage volume, the
 (`voodu_webui_network`). Other containers on your host won't reach it on the Docker
 network — only through the published host port.
 
-## Registering an island (server address)
+## Registering an server (server address)
 
-When you add a new island in the UI you'll enter a controller URL. Pick the right one
+When you add a new server in the UI you'll enter a controller URL. Pick the right one
 based on where the controller lives:
 
 | Where your `voodu` controller runs                       | Address to enter                          |
@@ -118,7 +118,7 @@ network namespace, not the macOS network. Don't reach for it.
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
 | `TARGET_PORT`                                                                                         | Internal Rails port behind Thruster (default `3001`). Must differ from `HTTP_PORT`.    |
 | `SOLID_QUEUE_IN_PUMA`                                                                                 | Run `solid_queue` (recurring scheduler + workers) inside the Puma process. Default `true` in the image — required for the metrics warehouse to refill every 30s. Unset to disable (e.g., when running a sidecar `bin/jobs` container). |
-| `JOB_CONCURRENCY`                                                                                     | Worker processes solid_queue forks (default `1`). Bump if you have many islands.       |
+| `JOB_CONCURRENCY`                                                                                     | Worker processes solid_queue forks (default `1`). Bump if you have many servers.       |
 
 ## Image internals
 
@@ -132,7 +132,7 @@ network namespace, not the macOS network. Don't reach for it.
 - **Background jobs run in-process.** `SOLID_QUEUE_IN_PUMA=true` (default in the image)
   loads the solid_queue Puma plugin — the dispatcher, worker pool, and recurring-task
   scheduler all run inside the same Puma process. The recurring `metrics_sync` task
-  (see `config/recurring.yml`) fans out a per-island sync job every 30 seconds; if you
+  (see `config/recurring.yml`) fans out a per-server sync job every 30 seconds; if you
   unset `SOLID_QUEUE_IN_PUMA`, the metrics warehouse never refills.
 - Runs as uid `1000` (`rails`). The storage volume is owned by that uid.
 - Multi-arch: `linux/amd64`, `linux/arm64`.

@@ -10,7 +10,7 @@ class Components::Metrics::TableCardTest < ActiveSupport::TestCase
   setup do
     controller = ApplicationController.new
     req = ActionDispatch::TestRequest.create
-    req.path_parameters = {tenant_key: "ABC123", controller: "metrics", action: "index"}
+    req.path_parameters = {server_key: "ABC123", controller: "metrics", action: "index"}
     controller.request = req
     controller.response = ActionDispatch::TestResponse.new
     @view = controller.view_context

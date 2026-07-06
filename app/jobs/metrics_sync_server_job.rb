@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# MetricsSyncIslandJob — pulls the NDJSON delta for ONE island and
+# MetricsSyncServerJob — pulls the NDJSON delta for ONE server and
 # persists it into the local metrics warehouse (MetricSample model
 # on the `metrics` SQLite database).
 #
 # Sliding window mechanics:
 #
-#   - last_ts = MAX(ts_epoch) in the warehouse for this tenant.
+#   - last_ts = MAX(ts_epoch) in the warehouse for this server.
 #     Cold warehouse (no rows yet) → 0 → controller interprets as
 #     "dump retention window" and backfills 7d in one pull.
 #   - Subsequent ticks pass last_ts → controller returns only rows
@@ -26,7 +26,7 @@
 # (5 attempts, exponential backoff). Auth/scope errors won't
 # self-recover, so we discard rather than burning the retry budget
 # (operator notices via stale-warehouse symptoms on the UI side).
-class MetricsSyncIslandJob < ApplicationJob
+class MetricsSyncServerJob < ApplicationJob
   queue_as :default
 
   # 500-row batches balance INSERT amortisation against bounded peak
@@ -35,12 +35,12 @@ class MetricsSyncIslandJob < ApplicationJob
 
   # Bail without consuming retries on auth/scope errors — a PAT was
   # revoked or has insufficient scope; retrying every 30s won't fix
-  # it. Operator sees the warehouse stop advancing for that island
-  # and can re-configure the PAT in /islands/:id/edit.
+  # it. Operator sees the warehouse stop advancing for that server
+  # and can re-configure the PAT in /servers/:id/edit.
   discard_on Voodu::Client::AuthError
 
-  def perform(island_id)
-    # POLLER_SPAWN=1 — the Go binary owns the per-island NDJSON
+  def perform(server_id)
+    # POLLER_SPAWN=1 — the Go binary owns the per-server NDJSON
     # pull; this job becomes a no-op so we don't double-fetch the
     # same delta. Same flag as the log_tail jobs and the state
     # jobs — single switch, all three lanes. Per-stream rollback
@@ -48,11 +48,11 @@ class MetricsSyncIslandJob < ApplicationJob
     # `POLLER_METRICS=0`.
     return if ENV["POLLER_SPAWN"] == "1"
 
-    island = Island.find_by(id: island_id)
-    return unless island # deleted between orchestrator + job dispatch
+    server = Server.find_by(id: server_id)
+    return unless server # deleted between orchestrator + job dispatch
 
-    client = Voodu::Client.new(island)
-    last_ts = MetricSample.last_ts_for(island.id)
+    client = Voodu::Client.new(server)
+    last_ts = MetricSample.last_ts_for(server.id)
 
     # Stream the controller's NDJSON into MetricsDigestService — the
     # same persist + broadcast path the Go-fed PollerDigestJob uses.
@@ -62,14 +62,14 @@ class MetricsSyncIslandJob < ApplicationJob
       client.metrics_dump(since: last_ts) { |row| yielder << row }
     end
 
-    total = MetricsDigestService.ingest_lines(island: island, rows: rows)
+    total = MetricsDigestService.ingest_lines(server: server, rows: rows)
 
     # Log at INFO so a `tail -f log/development.log | grep metrics-sync`
     # gives a continuous feed of "how alive is the warehouse?" without
     # opening a SQLite session. Empty pulls log too — that's the
     # signal the sliding window is caught up.
     Rails.logger.info(
-      "metrics-sync island=#{island.key} tenant=#{island.id} " \
+      "metrics-sync server=#{server.key} server=#{server.id} " \
       "since=#{last_ts} inserted=#{total}"
     )
   end

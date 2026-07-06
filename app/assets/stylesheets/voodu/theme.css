@@ -293,7 +293,7 @@ turbo-frame:has(.log-list.la-list:not(.cols-ready)) .la-render-label { display: 
 
 /* Per-row call-flow chip — the Logs→HEP3 bridge. Mirrors `.log-surrounding`
  * but sits leftmost (right: 76px) and only renders when the line carries a
- * SIP Call-ID AND the island has voodu-hep3. Hover lights it accent (not the
+ * SIP Call-ID AND the server has voodu-hep3. Hover lights it accent (not the
  * neutral surrounding tint) so the "jump to the SIP ladder" action reads as
  * a crossing-over, not another in-place drill. */
 .log-row .log-callflow {

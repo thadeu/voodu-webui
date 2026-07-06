@@ -3,11 +3,11 @@
 require "test_helper"
 
 class MetricsDigestServiceTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
     MetricSample.delete_all
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @folder = Rails.root.join("tmp", "test", "metrics-digest-#{SecureRandom.hex(4)}")
     FileUtils.mkdir_p(@folder)
     @stubs = []
@@ -30,11 +30,11 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
       captured << {stream: stream, kwargs: kwargs}
     end
 
-    total = MetricsDigestService.from_folder(folder_path: @folder, tenant_id: @island.id)
+    total = MetricsDigestService.from_folder(folder_path: @folder, server_id: @server.id)
     assert_equal 2, total
-    assert_equal 2, MetricSample.where(tenant_id: @island.id).count
+    assert_equal 2, MetricSample.where(server_id: @server.id).count
 
-    expected_stream = "metrics-#{@island.id}"
+    expected_stream = "metrics-#{@server.id}"
     assert captured.any? { |c| c[:stream] == expected_stream },
       "expected broadcast_action_to(#{expected_stream})"
   end
@@ -50,9 +50,9 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
 
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) { |*| }
 
-    total = MetricsDigestService.from_io(io: io, tenant_id: @island.id)
+    total = MetricsDigestService.from_io(io: io, server_id: @server.id)
     assert_equal 2, total
-    assert_equal 2, MetricSample.where(tenant_id: @island.id).count
+    assert_equal 2, MetricSample.where(server_id: @server.id).count
   end
 
   test "ingest_lines accepts pre-parsed Hash rows" do
@@ -63,12 +63,12 @@ class MetricsDigestServiceTest < ActiveSupport::TestCase
 
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) { |*| }
 
-    total = MetricsDigestService.ingest_lines(island: @island, rows: rows)
+    total = MetricsDigestService.ingest_lines(server: @server, rows: rows)
     assert_equal 2, total
   end
 
   test "from_folder returns 0 when ndjson missing" do
-    total = MetricsDigestService.from_folder(folder_path: @folder, tenant_id: @island.id)
+    total = MetricsDigestService.from_folder(folder_path: @folder, server_id: @server.id)
     assert_equal 0, total
   end
 

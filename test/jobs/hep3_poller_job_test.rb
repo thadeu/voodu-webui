@@ -7,7 +7,7 @@ require "test_helper"
 # cursor, NEVER re-reads across ticks (the cardinal sin — duplicates),
 # and a malformed line is skipped without stalling the cursor.
 class Hep3PollerJobTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   # FakeHepReader models the reader's /export as a byte-offset tail: the
   # cursor is an integer index into the line array, exactly like the real
@@ -33,7 +33,7 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
   end
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @scope = "fsw"
     @name = "hep3-api"
   end
@@ -43,11 +43,11 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
   end
 
   def run_poll(fake)
-    Hep3PollerJob.new.drain(@island, @scope, @name, fake)
+    Hep3PollerJob.new.drain(@server, @scope, @name, fake)
   end
 
   def message_count
-    HepMessage.for_instance(tenant_id: @island.id, scope: @scope, name: @name).count
+    HepMessage.for_instance(server_id: @server.id, scope: @scope, name: @name).count
   end
 
   test "drains the tail, inserts every line, and advances the cursor" do
@@ -56,7 +56,7 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
     run_poll(fake)
 
     assert_equal 3, message_count
-    assert_equal "3", HepCursor.cursor_for(@island.id, @scope, @name)
+    assert_equal "3", HepCursor.cursor_for(@server.id, @scope, @name)
   end
 
   test "a second tick re-reads nothing — no duplicates" do
@@ -78,12 +78,12 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
     run_poll(fake)
 
     assert_equal 2, message_count, "the garbage line is dropped, the 2 valid lines land"
-    assert_equal "3", HepCursor.cursor_for(@island.id, @scope, @name),
+    assert_equal "3", HepCursor.cursor_for(@server.id, @scope, @name),
       "cursor reflects lines consumed (incl. the skipped one) so it never re-reads"
   end
 
   test "a caught-up reader is a no-op" do
-    HepCursor.advance(@island.id, @scope, @name, "5")
+    HepCursor.advance(@server.id, @scope, @name, "5")
     fake = FakeHepReader.new([sip_line(call_id: "a")], page_size: 1000)
     # since='5' is past the single line → empty.
     run_poll(fake)

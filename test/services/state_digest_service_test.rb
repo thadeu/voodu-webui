@@ -3,10 +3,10 @@
 require "test_helper"
 
 class StateDigestServiceTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @folder = Rails.root.join("tmp", "test", "state-digest-#{SecureRandom.hex(4)}")
     FileUtils.mkdir_p(@folder)
     @stubs = []
@@ -15,8 +15,8 @@ class StateDigestServiceTest < ActiveSupport::TestCase
   teardown do
     restore_stubs
     FileUtils.rm_rf(@folder)
-    Pod.where(island_id: @island.id).delete_all
-    System.where(island_id: @island.id).delete_all
+    Pod.where(server_id: @server.id).delete_all
+    System.where(server_id: @server.id).delete_all
   end
 
   test "from_folder replaces pod + system snapshots" do
@@ -44,13 +44,13 @@ class StateDigestServiceTest < ActiveSupport::TestCase
     stub_class_method(Turbo::StreamsChannel, :broadcast_action_to) { |*| }
     stub_class_method(Turbo::StreamsChannel, :broadcast_update_to) { |*| }
 
-    StateDigestService.from_folder(folder_path: @folder, tenant_id: @island.id)
+    StateDigestService.from_folder(folder_path: @folder, server_id: @server.id)
 
-    assert_equal 1, Pod.where(island_id: @island.id).count
+    assert_equal 1, Pod.where(server_id: @server.id).count
     assert_equal "voodu-x-web.a3f9",
-      Pod.where(island_id: @island.id).first.container_name
+      Pod.where(server_id: @server.id).first.container_name
 
-    assert System.find_by(island_id: @island.id), "system snapshot must exist"
+    assert System.find_by(server_id: @server.id), "system snapshot must exist"
   end
 
   test "from_parsed broadcasts state_tick + status updates" do
@@ -62,9 +62,9 @@ class StateDigestServiceTest < ActiveSupport::TestCase
       captured << {stream: stream, kind: :action, kwargs: kwargs}
     end
 
-    StateDigestService.from_parsed(pods: [], system: {}, tenant_id: @island.id)
+    StateDigestService.from_parsed(pods: [], system: {}, server_id: @server.id)
 
-    stream = "island-state-#{@island.id}"
+    stream = "server-state-#{@server.id}"
     assert captured.any? { |b| b[:stream] == stream && b[:kind] == :action },
       "expected state_tick action broadcast"
     assert captured.any? { |b| b[:stream] == stream && b[:kind] == :update },
@@ -76,12 +76,12 @@ class StateDigestServiceTest < ActiveSupport::TestCase
     stub_class_method(Turbo::StreamsChannel, :broadcast_update_to) { |*| }
 
     assert_nothing_raised do
-      StateDigestService.from_folder(folder_path: @folder, tenant_id: @island.id)
+      StateDigestService.from_folder(folder_path: @folder, server_id: @server.id)
     end
   end
 
-  test "from_parsed returns nil for unknown island" do
-    assert_nil StateDigestService.from_parsed(pods: [], system: {}, tenant_id: -1)
+  test "from_parsed returns nil for unknown server" do
+    assert_nil StateDigestService.from_parsed(pods: [], system: {}, server_id: -1)
   end
 
   private

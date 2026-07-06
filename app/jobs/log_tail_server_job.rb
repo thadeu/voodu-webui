@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# LogTailIslandJob — long-running tail consumer for ONE island.
+# LogTailServerJob — long-running tail consumer for ONE server.
 #
 # Opens a streaming connection to the controller's multi-pod log
 # endpoint (one HTTP request covers every pod via the M61 fan-out
@@ -10,7 +10,7 @@
 #
 # Lifecycle:
 #
-#   1. Orchestrator (every 1m) calls `perform_later(island_id)`.
+#   1. Orchestrator (every 1m) calls `perform_later(server_id)`.
 #   2. Acquire LogTail::TailLock — if already held, return early
 #      (some other run is in flight).
 #   3. Open SSE stream, parse chunks line-by-line, append.
@@ -25,7 +25,7 @@
 #     default exponential backoff. The orchestrator will also
 #     keep re-enqueuing every minute regardless.
 #   - Auth errors → discard immediately (PAT revoked / scope
-#     changed). Operator sees missing data, fixes PAT in /islands.
+#     changed). Operator sees missing data, fixes PAT in /servers.
 #   - Kill switch `LOG_TAIL_ENABLED=0` → early return at the top of
 #     `perform`; orchestrator already filters but we double-check
 #     here for jobs that were enqueued before the flag flipped.
@@ -33,7 +33,7 @@
 # Queue: `:log_tail` (dedicated). Long-running here would starve
 # `:default`, so we isolate. Configured in config/queue.yml with
 # its own worker count.
-class LogTailIslandJob < ApplicationJob
+class LogTailServerJob < ApplicationJob
   queue_as :log_tail
 
   # Self-terminate at this point so the loop releases the lock
@@ -88,7 +88,7 @@ class LogTailIslandJob < ApplicationJob
   # storm without value.
   discard_on Voodu::Client::AuthError
 
-  def perform(island_id)
+  def perform(server_id)
     # POLLER_SPAWN=1 — Go binary owns tailing. This job becomes a
     # no-op so we don't double-stream the same `docker logs`. The
     # check also catches in-flight enqueues that landed before the
@@ -96,37 +96,37 @@ class LogTailIslandJob < ApplicationJob
     return if ENV["POLLER_SPAWN"] == "1"
 
     return unless LogTail::Feature.enabled?
-    return if LogTail::TailLock.held?(island_id)
+    return if LogTail::TailLock.held?(server_id)
 
-    island = Island.find_by(id: island_id)
-    return unless island
+    server = Server.find_by(id: server_id)
+    return unless server
 
-    LogTail::TailLock.acquire!(island_id) do
-      run_tail(island)
+    LogTail::TailLock.acquire!(server_id) do
+      run_tail(server)
     end
   end
 
   private
 
-  def run_tail(island)
-    client = Voodu::Client.new(island)
-    writer = LogTail::Writer.new(island.id)
+  def run_tail(server)
+    client = Voodu::Client.new(server)
+    writer = LogTail::Writer.new(server.id)
     started_at = Time.current
     # Resume from the persisted watermark so a recycle/restart continues
     # with `since` instead of re-fetching a `tail=N` backfill. nil only
     # on a first-ever run (or after the watermark TTL lapsed).
-    last_seen_ts = read_watermark(island.id)
+    last_seen_ts = read_watermark(server.id)
     appended = 0
 
     Rails.logger.info(
-      "log-tail island=#{island.key} started (poll=#{POLL_INTERVAL_SECONDS}s tail=#{TAIL_PER_POLL})"
+      "log-tail server=#{server.key} started (poll=#{POLL_INTERVAL_SECONDS}s tail=#{TAIL_PER_POLL})"
     )
 
     loop do
       elapsed = Time.current - started_at
       if elapsed > MAX_RUNTIME
         Rails.logger.info(
-          "log-tail island=#{island.key} max_runtime reached, recycling " \
+          "log-tail server=#{server.key} max_runtime reached, recycling " \
           "(#{appended} lines appended over #{elapsed.to_i}s)"
         )
         break
@@ -134,7 +134,7 @@ class LogTailIslandJob < ApplicationJob
 
       appended += poll_once(client, writer, last_seen_ts) do |new_ts|
         last_seen_ts = new_ts
-        write_watermark(island.id, new_ts)
+        write_watermark(server.id, new_ts)
       end
 
       sleep POLL_INTERVAL_SECONDS
@@ -144,19 +144,19 @@ class LogTailIslandJob < ApplicationJob
   end
 
   # Watermark store — durable (solid_cache) so it outlives the job. Keyed
-  # per island; value is the newest persisted ts (ISO8601 string).
-  def watermark_key(island_id)
-    "log-tail:watermark:#{island_id}"
+  # per server; value is the newest persisted ts (ISO8601 string).
+  def watermark_key(server_id)
+    "log-tail:watermark:#{server_id}"
   end
 
-  def read_watermark(island_id)
-    Rails.cache.read(watermark_key(island_id))
+  def read_watermark(server_id)
+    Rails.cache.read(watermark_key(server_id))
   end
 
-  def write_watermark(island_id, ts)
+  def write_watermark(server_id, ts)
     return if ts.blank?
 
-    Rails.cache.write(watermark_key(island_id), ts, expires_in: WATERMARK_TTL)
+    Rails.cache.write(watermark_key(server_id), ts, expires_in: WATERMARK_TTL)
   end
 
   # poll_once — single one-shot fetch from the controller. Two

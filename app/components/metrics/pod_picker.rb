@@ -36,12 +36,12 @@ class Components::Metrics::PodPicker < Components::Base
   #                 to either host OR pod — offering "host" inside
   #                 a modal showing a pod-only metric (like
   #                 req_count) would lead to "no data" confusion.
-  def initialize(scope_kind:, scope_id:, current_island:, pods: [],
+  def initialize(scope_kind:, scope_id:, current_server:, pods: [],
     base_path: nil, extra_params: {}, turbo_stream: false,
     hide_host: false)
     @scope_kind = scope_kind         # "host" | "pod"
     @scope_id = scope_id           # host name or pod container name
-    @current_island = current_island
+    @current_server = current_server
     @pods = Array(pods)
     @base_path = base_path
     @extra_params = extra_params || {}
@@ -69,19 +69,19 @@ class Components::Metrics::PodPicker < Components::Base
 
   def display_id
     return @scope_id.to_s if @scope_id.present?
-    return @current_island&.name || "host" if @scope_kind == "host"
+    return @current_server&.name || "host" if @scope_kind == "host"
 
     "(unknown)"
   end
 
   def build_host_section
-    host_name = @current_island&.name || "host"
+    host_name = @current_server&.name || "host"
 
     {
       label: "HOST",
       option: {
         title: host_name,
-        meta: "#{@current_island&.host || "—"} · #{@pods.size} pods",
+        meta: "#{@current_server&.host || "—"} · #{@pods.size} pods",
         href: metrics_url(kind: "host", id: host_name),
         active: @scope_kind == "host",
         icon: :CpuChipOutline,

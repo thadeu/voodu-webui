@@ -15,8 +15,8 @@ import { Controller } from "@hotwired/stimulus"
 // internals to poke at.
 //
 // State persists across page reloads via localStorage, keyed per
-// island (so toggling auto-refresh on island A doesn't bleed into
-// island B). NOT URL-state on purpose: this is operator preference,
+// server (so toggling auto-refresh on server A doesn't bleed into
+// server B). NOT URL-state on purpose: this is operator preference,
 // not a shareable view, and threading a param through every link
 // (refresh / pod picker / range pills / interval picker) would be
 // a maintenance burden for a thin payoff.
@@ -30,11 +30,11 @@ import { Controller } from "@hotwired/stimulus"
 //   div(
 //     data: {
 //       controller: "auto-refresh",
-//       auto_refresh_storage_key_value: "voodu:auto-refresh:#{island.id}"
+//       auto_refresh_storage_key_value: "voodu:auto-refresh:#{server.id}"
 //     }
 //   ) do
 //     span(data: { auto_refresh_target: "source" }) do
-//       turbo_stream_from "metrics-#{island.id}"
+//       turbo_stream_from "metrics-#{server.id}"
 //     end
 //
 //     button(data: { action: "click->auto-refresh#toggle" }) do

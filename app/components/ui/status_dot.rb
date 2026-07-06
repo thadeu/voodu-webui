@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Components::UI::StatusDot — 7px dot used in dense lists (pod table,
-# island sidebar) to convey running/restarting/offline without taking
+# server sidebar) to convey running/restarting/offline without taking
 # a full pill's width.
 #
 # Ported from the inspiration HTML's <StatusDot> (parts.jsx). The

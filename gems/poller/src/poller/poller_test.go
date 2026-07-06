@@ -49,7 +49,7 @@ func logLine(ts time.Time, body string) string {
 func TestPollPod_NoDuplicatesOnHugeOverlap(t *testing.T) {
 	root := t.TempDir()
 	w := NewWriter(root, nil)
-	island := client.Island{ID: "isl-1"}
+	server := client.Server{ID: "isl-1"}
 	pod := "fsw-freeswitch.0"
 
 	// Seed MORE lines than the ring can hold (5000), so if the ring were the
@@ -62,7 +62,7 @@ func TestPollPod_NoDuplicatesOnHugeOverlap(t *testing.T) {
 
 	for i := 0; i < seeded; i++ {
 		rec := Record{Pod: pod, TS: seedTS(i), Msg: body(i), Raw: body(i)}
-		if err := w.Append(island.ID, pod, rec); err != nil {
+		if err := w.Append(server.ID, pod, rec); err != nil {
 			t.Fatalf("seed append: %v", err)
 		}
 	}
@@ -81,8 +81,8 @@ func TestPollPod_NoDuplicatesOnHugeOverlap(t *testing.T) {
 	srv := podLogServer(t, []string{pod}, sb.String())
 	defer srv.Close()
 
-	island.Endpoint = srv.URL
-	p := NewIslandPoller(island, root, time.Minute, 12*time.Hour, w, nopMetrics{})
+	server.Endpoint = srv.URL
+	p := NewServerPoller(server, root, time.Minute, 12*time.Hour, w, nopMetrics{})
 
 	written, _, deduped := p.pollPod(context.Background(), pod)
 
@@ -94,7 +94,7 @@ func TestPollPod_NoDuplicatesOnHugeOverlap(t *testing.T) {
 	}
 
 	// The day file must hold exactly one copy of everything: seeded + new.
-	path := w.DailyFile(island.ID, pod, base)
+	path := w.DailyFile(server.ID, pod, base)
 	if got := countLines(t, path); got != seeded+10 {
 		t.Fatalf("day file has %d lines, want %d — duplicates leaked", got, seeded+10)
 	}
@@ -106,7 +106,7 @@ func TestPollPod_NoDuplicatesOnHugeOverlap(t *testing.T) {
 func TestTick_BackfillsRosterPods(t *testing.T) {
 	root := t.TempDir()
 	w := NewWriter(root, nil)
-	island := client.Island{ID: "isl-1"}
+	server := client.Server{ID: "isl-1"}
 	pod := "fsw-controller.0793"
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -116,13 +116,13 @@ func TestTick_BackfillsRosterPods(t *testing.T) {
 	srv := podLogServer(t, []string{pod}, body)
 	defer srv.Close()
 
-	island.Endpoint = srv.URL
-	p := NewIslandPoller(island, root, time.Minute, 12*time.Hour, w, nopMetrics{})
+	server.Endpoint = srv.URL
+	p := NewServerPoller(server, root, time.Minute, 12*time.Hour, w, nopMetrics{})
 
 	p.tick(context.Background())
 	waitIdle(t, p, 2*time.Second) // tick is fire-and-forget — let the pod goroutine finish
 
-	path := w.DailyFile(island.ID, pod, now)
+	path := w.DailyFile(server.ID, pod, now)
 	if got := countLines(t, path); got != 2 {
 		t.Fatalf("day file has %d lines, want 2", got)
 	}
@@ -130,7 +130,7 @@ func TestTick_BackfillsRosterPods(t *testing.T) {
 
 // waitIdle blocks until no per-pod fetch is in flight (the fire-and-forget
 // goroutines a tick launched have all finished), or fails after timeout.
-func waitIdle(t *testing.T, p *IslandPoller, timeout time.Duration) {
+func waitIdle(t *testing.T, p *ServerPoller, timeout time.Duration) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
@@ -152,7 +152,7 @@ func waitIdle(t *testing.T, p *IslandPoller, timeout time.Duration) {
 }
 
 func TestSinceFor(t *testing.T) {
-	p := &IslandPoller{MaxBackfill: 12 * time.Hour}
+	p := &ServerPoller{MaxBackfill: 12 * time.Hour}
 	now := time.Now()
 
 	// brand-new pod (zero floor) → cold-start lookback.

@@ -11,16 +11,16 @@ class Views::Base < Components::Base
   def cache_store = Rails.cache
 
   # overview_crumbs — standard breadcrumb trail rooted at the current
-  # island's Overview, for the Dashboard `breadcrumb:` kwarg. Pass the
+  # server's Overview, for the Dashboard `breadcrumb:` kwarg. Pass the
   # trail AFTER Overview as { label:, href: } hashes (last = current,
-  # rendered as plain text). Returns [] when there's no island so the
-  # NoIslandState pages render no crumb. Management pages (no tenant)
+  # rendered as plain text). Returns [] when there's no server so the
+  # NoServerState pages render no crumb. Management pages (no server)
   # build their crumbs inline instead.
   def overview_crumbs(*trail)
-    return [] if @current_island.nil?
+    return [] if @current_server.nil?
 
-    key = @current_island.key
+    key = @current_server.key
 
-    [{label: "Overview", href: tenant_root_path(tenant_key: key)}, *trail]
+    [{label: "Overview", href: server_root_path(server_key: key)}, *trail]
   end
 end

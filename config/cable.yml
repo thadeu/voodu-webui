@@ -2,7 +2,7 @@
 #
 # Why: Procfile.dev runs `web` and `jobs` in SEPARATE processes.
 # The async adapter is IN-PROCESS only — a `broadcast_to` from
-# MetricsSyncIslandJob (running in jobs process) never reaches the
+# MetricsSyncServerJob (running in jobs process) never reaches the
 # browser's `<turbo-cable-stream-source>` subscription (mounted in
 # web process). Symptom: server log shows "Broadcasting to ..." but
 # charts never update live; the bug is silent because the broadcast

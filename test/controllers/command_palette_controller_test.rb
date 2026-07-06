@@ -2,13 +2,13 @@
 
 require "test_helper"
 
-# The ⌘K palette is a tenant-LESS endpoint, so route helpers there get no
-# org_id from default_url_options — every href must name its island's org + key
+# The ⌘K palette is a server-LESS endpoint, so route helpers there get no
+# org_id from default_url_options — every href must name its server's org + key
 # itself (CommandSet#loc). The feed is scoped to the org passed as ?org, since
 # the endpoint can't infer it. These tests lock both in: the palette went empty
-# once because it iterated the (now org-scoped, here nil) all_islands.
+# once because it iterated the (now org-scoped, here nil) all_servers.
 class CommandPaletteControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
     @prev_wh = ENV["WAREHOUSE"]
@@ -33,10 +33,10 @@ class CommandPaletteControllerTest < ActionDispatch::IntegrationTest
     nav = commands.select { |c| c["group"] == "Navigate" }
     assert nav.any?, "org-scoped feed must include per-server Navigate commands"
 
-    # The regression: every per-island href must carry BOTH org_id + tenant_key.
+    # The regression: every per-server href must carry BOTH org_id + server_key.
     nav.each do |c|
       assert_match %r{\A/acmeorg1/(aaaaaa|bbbbbb)(/|\z)}, c["href"],
-        "nav href must be org+tenant qualified, got #{c["href"].inspect}"
+        "nav href must be org+server qualified, got #{c["href"].inspect}"
     end
   end
 
@@ -47,7 +47,7 @@ class CommandPaletteControllerTest < ActionDispatch::IntegrationTest
     # Compare paths sans query — the test harness's global default_url_options
     # appends a stray ?org_id here that the real (path-param-based) one doesn't.
     paths = commands.map { |c| c["href"].split("?").first }.sort
-    assert_equal ["/islands", "/islands/new"], paths
+    assert_equal ["/servers", "/servers/new"], paths
   end
 
   test "an unknown ?org falls back to globals only (no leak, no 500)" do

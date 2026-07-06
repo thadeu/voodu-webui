@@ -2,9 +2,9 @@
 
 # AlertRulesController — CRUD for the operator's alert rules, plus
 # pause/resume (`toggle`) and the starter-pack seeder (`defaults`).
-# Tenant-scoped so current_island flows through naturally.
+# Server-scoped so current_server flows through naturally.
 #
-# Form POSTs are full-page (data-turbo:false, same as Islands /
+# Form POSTs are full-page (data-turbo:false, same as Servers /
 # MetricDashboards): success redirects to /alerts; a validation
 # error re-renders the form with inline errors and the entered
 # values intact.
@@ -19,7 +19,7 @@ class AlertRulesController < ApplicationController
   def new
     # Owned by the org (M3); default target = the current server's host.
     @rule = current_org.alert_rules.new(
-      island: current_island,
+      server: current_server,
       metric_kind: "cpu", target_kind: "host", comparator: "gte",
       threshold: 90, duration_seconds: 300
     )
@@ -47,7 +47,7 @@ class AlertRulesController < ApplicationController
       # it and let the evaluator re-open against the new condition.
       was_firing = @rule.firing?
       @rule.clear_episode_on_change!
-      AlertsLive.broadcast(current_island) if was_firing && !@rule.firing?
+      AlertsLive.broadcast(current_server) if was_firing && !@rule.firing?
 
       redirect_to return_to_path(alerts_path), notice: "Alert rule #{@rule.name} updated."
     else
@@ -61,7 +61,7 @@ class AlertRulesController < ApplicationController
 
     # A deleted firing rule must clear the badge — its events
     # cascaded away, so the count just changed under every open tab.
-    AlertsLive.broadcast(current_island) if was_firing
+    AlertsLive.broadcast(current_server) if was_firing
 
     redirect_to return_to_path(alerts_path), notice: "Alert rule removed."
   end
@@ -73,7 +73,7 @@ class AlertRulesController < ApplicationController
     if @rule.enabled?
       was_firing = @rule.firing?
       @rule.disable!
-      AlertsLive.broadcast(current_island) if was_firing
+      AlertsLive.broadcast(current_server) if was_firing
       redirect_to return_to_path(alerts_path), notice: "Rule #{@rule.name} paused."
     else
       @rule.update!(enabled: true, last_status: nil)
@@ -82,7 +82,7 @@ class AlertRulesController < ApplicationController
   end
 
   def defaults
-    AlertRule.create_defaults!(current_island)
+    AlertRule.create_defaults!(current_server)
     # Seeding is only offered from the Rules tab, so default the return there.
     redirect_to return_to_path(alerts_path(tab: "rules")), notice: "Default rules created."
   end
@@ -97,12 +97,13 @@ class AlertRulesController < ApplicationController
   end
 
   def render_form(status: nil)
-    page = AlertsPageData.new(current_org, current_island)
+    page = AlertsPageData.new(current_org, current_server)
     view = Views::AlertRules::Form.new(
+      # dashboard_context already carries servers: all_servers (== page.servers,
+      # both the org's servers) — the form uses it for the layout AND the picker.
       **dashboard_context,
       rule: @rule,
       targets: page.targets,
-      servers: page.servers,
       destinations: page.destinations,
       # Where cancel/close/save go — the validated origin, or /alerts by default.
       return_to: return_to_path(alerts_path)
@@ -112,10 +113,10 @@ class AlertRulesController < ApplicationController
   end
 
   # rule_attributes — decode the form's single encoded target select into
-  # island_id (which SERVER, M3) + target_kind + scope/name. The value shapes:
-  #   "host|<island_id>"                 → a server's host
-  #   "pod|<island_id>|<scope>|<name>"   → a pod on that server
-  # island_id resolved WITHIN the org (the guard) so a forged id for another
+  # server_id (which SERVER, M3) + target_kind + scope/name. The value shapes:
+  #   "host|<server_id>"                 → a server's host
+  #   "pod|<server_id>|<scope>|<name>"   → a pod on that server
+  # server_id resolved WITHIN the org (the guard) so a forged id for another
   # org's server can't be targeted — falls back to the current server.
   def rule_attributes
     permitted = params.require(:alert_rule)
@@ -130,8 +131,8 @@ class AlertRulesController < ApplicationController
       attrs["alert_destination_ids"] = attrs["alert_destination_ids"].reject(&:blank?)
     end
 
-    kind, island_id, scope, name = target.split("|", 4)
-    attrs["island_id"] = org_island_id(island_id)
+    kind, server_id, scope, name = target.split("|", 4)
+    attrs["server_id"] = org_server_id(server_id)
 
     if kind == "pod"
       attrs.merge("target_kind" => "pod", "target_scope" => scope, "target_name" => name)
@@ -140,12 +141,12 @@ class AlertRulesController < ApplicationController
     end
   end
 
-  # org_island_id — an island id from the encoded target, kept only if it's a
+  # org_server_id — an server id from the encoded target, kept only if it's a
   # server IN the org (the isolation guard); otherwise the current server. The
-  # model re-validates island ∈ org, so a forged id can never save.
-  def org_island_id(id)
-    return current_island&.id if id.blank?
+  # model re-validates server ∈ org, so a forged id can never save.
+  def org_server_id(id)
+    return current_server&.id if id.blank?
 
-    current_org.islands.where(id: id).pick(:id) || current_island&.id
+    current_org.servers.where(id: id).pick(:id) || current_server&.id
   end
 end

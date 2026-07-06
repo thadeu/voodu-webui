@@ -2,7 +2,7 @@
 
 # MetricsDigestService — persist + broadcast layer shared by:
 #
-#   - MetricsSyncIslandJob (Ruby streams /metrics/dump via
+#   - MetricsSyncServerJob (Ruby streams /metrics/dump via
 #     Voodu::Client; pipes the body into `.from_io`)
 #   - PollerDigestJob (Go binary fetched + wrote the NDJSON to
 #     `storage/poller/metrics/<sync_hash>/data.ndjson`; the job
@@ -19,18 +19,18 @@
 #                   controller's /metrics/dump endpoint emits.
 #                   Lines without `ts` or `source` are skipped.
 #
-# Batching mirrors MetricsSyncIslandJob: BATCH_SIZE rows per
+# Batching mirrors MetricsSyncServerJob: BATCH_SIZE rows per
 # insert_all round-trip, bounded peak memory, amortised INSERT cost.
 class MetricsDigestService
   BATCH_SIZE = 500
   NDJSON_FILE = "data.ndjson"
 
-  def self.from_folder(folder_path:, tenant_id:)
+  def self.from_folder(folder_path:, server_id:)
     ndjson = Pathname.new(folder_path).join(NDJSON_FILE)
     return 0 unless File.exist?(ndjson)
 
     File.open(ndjson, "r") do |io|
-      from_io(io: io, tenant_id: tenant_id)
+      from_io(io: io, server_id: server_id)
     end
   end
 
@@ -41,13 +41,13 @@ class MetricsDigestService
   # Returns the total row count inserted (useful for log lines +
   # the "broadcast only when total > 0" gate).
   #
-  # `tenant_id` is the Island primary key (legacy domain table is
-  # still `islands`, but the poller feature uses `tenant_id` as the
+  # `server_id` is the Server primary key (legacy domain table is
+  # still `servers`, but the poller feature uses `server_id` as the
   # internal name end-to-end — matches the wire contract from the
   # Go binary and the column on `poller_digests`).
-  def self.from_io(io:, tenant_id:)
-    island = Island.find_by(id: tenant_id)
-    return 0 unless island
+  def self.from_io(io:, server_id:)
+    server = Server.find_by(id: server_id)
+    return 0 unless server
 
     batch = []
     total = 0
@@ -59,7 +59,7 @@ class MetricsDigestService
       row = parse_line(line)
       next unless row
 
-      batch << row.merge(tenant_id: island.id)
+      batch << row.merge(server_id: server.id)
       next if batch.size < BATCH_SIZE
 
       MetricSample.bulk_insert(batch)
@@ -72,22 +72,22 @@ class MetricsDigestService
       total += batch.size
     end
 
-    broadcast_metrics_tick(island) if total.positive?
+    broadcast_metrics_tick(server) if total.positive?
     total
   end
 
   # ingest_lines — convenience entry point for callers that already
   # have an Enumerable of pre-parsed Hashes (e.g. the existing
-  # MetricsSyncIslandJob that walks Voodu::Client#metrics_dump via a
+  # MetricsSyncServerJob that walks Voodu::Client#metrics_dump via a
   # yield block).
-  def self.ingest_lines(island:, rows:)
+  def self.ingest_lines(server:, rows:)
     return 0 if rows.blank?
 
     batch = []
     total = 0
 
     rows.each do |row|
-      batch << row.merge(tenant_id: island.id)
+      batch << row.merge(server_id: server.id)
       next if batch.size < BATCH_SIZE
 
       MetricSample.bulk_insert(batch)
@@ -100,23 +100,23 @@ class MetricsDigestService
       total += batch.size
     end
 
-    broadcast_metrics_tick(island) if total.positive?
+    broadcast_metrics_tick(server) if total.positive?
     total
   end
 
   # broadcast_metrics_tick — wakes every browser subscribed to the
-  # island's metrics channel; each subscriber re-fetches its chart
-  # frame at its current scope/range. Same shape MetricsSyncIslandJob
+  # server's metrics channel; each subscriber re-fetches its chart
+  # frame at its current scope/range. Same shape MetricsSyncServerJob
   # uses so the wire contract is one place.
-  def self.broadcast_metrics_tick(island)
+  def self.broadcast_metrics_tick(server)
     Turbo::StreamsChannel.broadcast_action_to(
-      "metrics-#{island.id}",
+      "metrics-#{server.id}",
       action: :metrics_tick,
       target: "metrics-charts"
     )
   rescue => e
     Rails.logger.warn(
-      "metrics-digest broadcast failed island=#{island.id}: #{e.class} #{e.message}"
+      "metrics-digest broadcast failed server=#{server.id}: #{e.class} #{e.message}"
     )
   end
 

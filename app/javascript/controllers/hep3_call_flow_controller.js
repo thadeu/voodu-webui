@@ -15,7 +15,7 @@ export default class extends Controller {
   static targets = ["host"]
   static values = { url: String }
 
-  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus", "cf_callid", "cf_island"]
+  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus", "cf_callid", "cf_server"]
 
   connect() {
     this.onAction = this.onAction.bind(this)
@@ -48,7 +48,7 @@ export default class extends Controller {
     const callId = p.get("cf_callid")
 
     if (callId) {
-      this.fetchInto({ callId, island: p.get("cf_island") || "" })
+      this.fetchInto({ callId, server: p.get("cf_server") || "" })
 
       return
     }
@@ -62,7 +62,7 @@ export default class extends Controller {
       name: p.get("cf_name") || "",
       value: corr,
       rowId: p.get("cf_focus") || "",
-      island: p.get("cf_island") || "",
+      server: p.get("cf_server") || "",
     })
   }
 
@@ -81,9 +81,9 @@ export default class extends Controller {
       if (detail.rowId) params.set("focus", detail.rowId)
     }
 
-    // island — the server this reader lives on (M2). The endpoint resolves it
-    // within the org so a cross-server call-flow queries the right tenant.
-    if (detail.island) params.set("island_id", detail.island)
+    // server — the server this reader lives on (M2). The endpoint resolves it
+    // within the org so a cross-server call-flow queries the right server.
+    if (detail.server) params.set("server_id", detail.server)
 
     try {
       const resp = await fetch(`${this.urlValue}?${params}`, { headers: { Accept: "text/html" } })
@@ -120,7 +120,7 @@ export default class extends Controller {
       if (detail.rowId) url.searchParams.set("cf_focus", detail.rowId)
     }
 
-    if (detail.island) url.searchParams.set("cf_island", detail.island)
+    if (detail.server) url.searchParams.set("cf_server", detail.server)
 
     window.history.replaceState(window.history.state, "", url)
   }

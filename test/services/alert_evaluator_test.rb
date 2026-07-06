@@ -3,20 +3,20 @@
 require "test_helper"
 
 # AlertEvaluator core suite. Seeds the metrics warehouse directly —
-# only tenant_id/source/ts_iso/payload are written; ts_epoch / scope /
+# only server_id/source/ts_iso/payload are written; ts_epoch / scope /
 # name / pod are SQLite generated columns (same seeding approach as
 # MetricsDigestServiceTest).
 #
 # All tests freeze time at a 15s-aligned instant so seeded sample
 # epochs land exactly on warehouse bucket boundaries.
 class AlertEvaluatorTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   NOW = Time.utc(2026, 6, 9, 12, 0, 0)
 
   setup do
     MetricSample.delete_all
-    @island = islands(:alpha)
+    @server = servers(:alpha)
     @broadcasts = []
     @stubs = []
     # Local capture on purpose: define_method rebinds `self` (and thus
@@ -24,7 +24,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     # a nil ivar on AlertsLive, and the `<<` would explode inside the
     # evaluator's rescue. Locals close over lexically.
     captured = @broadcasts
-    stub_class_method(AlertsLive, :broadcast) { |island| captured << island.id }
+    stub_class_method(AlertsLive, :broadcast) { |server| captured << server.id }
     travel_to NOW
   end
 
@@ -40,7 +40,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     rule = host_cpu_rule(threshold: 90, duration: 120)
     seed_system_range(cpu_percent: 95.0)
 
-    assert_equal 1, AlertEvaluator.run(@island)
+    assert_equal 1, AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
@@ -51,7 +51,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     assert_not_nil event
     assert_in_delta 95.0, event.peak_value
     assert_equal rule.target_label, event.target_label
-    assert_equal [@island.id], @broadcasts
+    assert_equal [@server.id], @broadcasts
   end
 
   test "does not fire when one mid-window bucket dips under" do
@@ -60,7 +60,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
       (epoch == NOW.to_i - 60) ? 50.0 : 95.0
     end
 
-    assert_equal 0, AlertEvaluator.run(@island)
+    assert_equal 0, AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -72,7 +72,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     rule = host_cpu_rule(threshold: 10, duration: 120, comparator: "lte")
     seed_system_range(cpu_percent: 2.0)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     assert rule.reload.firing
   end
@@ -82,18 +82,18 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "resolves only after three consecutive clean tail buckets" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
     seed_system_range(cpu_percent: 95.0, from: NOW.to_i - 165, to: NOW.to_i - 60)
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
     assert rule.reload.firing
 
     # One clean bucket — not enough.
     seed_system(NOW.to_i - 45, cpu_percent: 5.0)
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
     assert rule.reload.firing, "one clean bucket must not resolve"
 
     # Two more clean buckets → 3-clean tail → resolve.
     seed_system(NOW.to_i - 30, cpu_percent: 5.0)
     seed_system(NOW.to_i - 15, cpu_percent: 5.0)
-    assert_equal 1, AlertEvaluator.run(@island)
+    assert_equal 1, AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -105,11 +105,11 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "keeps peak value fresh while the episode stays open" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
     seed_system_range(cpu_percent: 95.0)
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     travel 15.seconds
     seed_system(NOW.to_i, cpu_percent: 99.5)
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     event = rule.reload.open_event
     assert_in_delta 99.5, event.peak_value
@@ -121,7 +121,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "no data never fires" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
 
-    assert_equal 0, AlertEvaluator.run(@island)
+    assert_equal 0, AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -131,12 +131,12 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
   test "stale series holds a firing alert instead of resolving it" do
     rule = host_cpu_rule(threshold: 90, duration: 120)
     seed_system_range(cpu_percent: 95.0)
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
     assert rule.reload.firing
 
     travel 10.minutes
 
-    assert_equal 0, AlertEvaluator.run(@island)
+    assert_equal 0, AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing, "stale data must not resolve a firing alert"
@@ -154,15 +154,15 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     # looks enabled, but the row is now disabled.
     AlertRule.where(id: rule.id).update_all(enabled: false)
 
-    AlertEvaluator.new(@island).send(:evaluate, rule)
+    AlertEvaluator.new(@server).send(:evaluate, rule)
 
     rule.reload
     assert_not rule.firing, "must not fire a rule disabled mid-tick"
     assert_equal 0, rule.alert_events.firing.count
   end
 
-  test "coarse-cadence island evaluates the latest sample instead of NO DATA" do
-    # A remote island delivers pod samples every ~210s, not 15s. A
+  test "coarse-cadence server evaluates the latest sample instead of NO DATA" do
+    # A remote server delivers pod samples every ~210s, not 15s. A
     # 60s-duration rule's window holds just the newest sample, and that
     # sample is ~2 cadence-cycles old — fixed 15s/90s assumptions would
     # wrongly read NO DATA / stale. Cadence adaptation evaluates it.
@@ -178,10 +178,10 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
       )
     end
 
-    assert_equal 1, AlertEvaluator.run(@island)
+    assert_equal 1, AlertEvaluator.run(@server)
 
     rule.reload
-    assert rule.firing, "a fresh breaching sample on a coarse-cadence island must fire"
+    assert rule.firing, "a fresh breaching sample on a coarse-cadence server must fire"
     assert_equal "firing", rule.last_status
   end
 
@@ -197,7 +197,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
       )
     end
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -211,7 +211,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     insert_sample(NOW.to_i - 910, source: "system", payload: {cpu_percent: 95.0})
     insert_sample(NOW.to_i - 700, source: "system", payload: {cpu_percent: 95.0})
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing, "a sample older than the cadence allowance must not fire"
@@ -225,7 +225,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     seed_system(NOW.to_i - 30, cpu_percent: 95.0)
     seed_system(NOW.to_i - 15, cpu_percent: 95.0)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -238,7 +238,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     rule = make_rule(name: "mem", metric_kind: "memory", threshold: 85, duration: 120)
     seed_system_range(mem_used_bytes: 9_000_000_000, mem_total_bytes: 10_000_000_000)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
@@ -249,7 +249,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     rule = make_rule(name: "disk", metric_kind: "disk", threshold: 85, duration: 120)
     seed_system_range(disk_used_bytes: 88_000_000_000, disk_total_bytes: 100_000_000_000)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
@@ -263,7 +263,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     )
     seed_pod_range(mem_usage_bytes: 500_000_000, mem_limit_bytes: 2_199_023_255_552)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert_not rule.firing
@@ -277,7 +277,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     )
     seed_pod_range(mem_usage_bytes: 900_000_000, mem_limit_bytes: 1_000_000_000)
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
@@ -291,7 +291,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     )
     seed_ingress_range(req_count: 300) # 300 per 15s bucket = 20 req/s
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
@@ -307,25 +307,25 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     # Simulate a racing tick that already opened the episode but whose
     # rule-flag write hasn't been seen by this process yet.
     rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 1.minute.ago,
+      server: @server, state: "firing", started_at: 1.minute.ago,
       threshold: 90, rule_name: rule.name, metric_kind: "cpu",
       target_label: rule.target_label
     )
 
-    AlertEvaluator.run(@island)
+    AlertEvaluator.run(@server)
 
     rule.reload
     assert rule.firing
     assert_equal 1, rule.alert_events.count
   end
 
-  test "one broken rule does not kill the island tick" do
+  test "one broken rule does not kill the server tick" do
     bad = host_cpu_rule(threshold: 90, duration: 120, name: "bad")
     bad.update_columns(metric_kind: "bogus") # bypass validation on purpose
     good = host_cpu_rule(threshold: 90, duration: 120, name: "good")
     seed_system_range(cpu_percent: 95.0)
 
-    assert_nothing_raised { AlertEvaluator.run(@island) }
+    assert_nothing_raised { AlertEvaluator.run(@server) }
 
     assert good.reload.firing
     assert_equal "no_data", bad.reload.last_status
@@ -336,7 +336,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     rule.update!(enabled: false)
     seed_system_range(cpu_percent: 95.0)
 
-    assert_equal 0, AlertEvaluator.run(@island)
+    assert_equal 0, AlertEvaluator.run(@server)
     assert_not rule.reload.firing
   end
 
@@ -349,7 +349,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
 
   def make_rule(name:, metric_kind:, threshold:, duration:, comparator: "gte",
     target_kind: "host", target_scope: nil, target_name: nil)
-    @island.alert_rules.create!(
+    @server.alert_rules.create!(
       name: name, metric_kind: metric_kind, target_kind: target_kind,
       target_scope: target_scope, target_name: target_name,
       comparator: comparator, threshold: threshold, duration_seconds: duration
@@ -389,7 +389,7 @@ class AlertEvaluatorTest < ActiveSupport::TestCase
     ts = Time.at(epoch).utc.iso8601
     MetricSample.insert!(
       {
-        tenant_id: @island.id,
+        server_id: @server.id,
         source: source,
         ts_iso: ts,
         payload: payload.merge(ts: ts, source: source).to_json

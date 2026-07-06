@@ -23,13 +23,13 @@
 # entirely server-driven via turbo_stream actions, no Stimulus
 # state to coordinate.
 class Views::Metrics::ChartModalBody < Views::Base
-  def initialize(chart:, range:, range_ms:, query:, pods: [], current_island: nil, metric_sections: [])
+  def initialize(chart:, range:, range_ms:, query:, pods: [], current_server: nil, metric_sections: [])
     @chart = chart
     @range = range
     @range_ms = range_ms
     @query = query
     @pods = Array(pods)
-    @current_island = current_island
+    @current_server = current_server
     @metric_sections = Array(metric_sections)
   end
 
@@ -142,7 +142,7 @@ class Views::Metrics::ChartModalBody < Views::Base
     render Components::Metrics::PodPicker.new(
       scope_kind: sk.presence || "host",
       scope_id: sid,
-      current_island: @current_island,
+      current_server: @current_server,
       pods: @pods,
       base_path: metrics_chart_path,
       extra_params: strip_scope_keys(@query),

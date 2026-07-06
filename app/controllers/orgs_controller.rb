@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# OrgsController — CRUD for the Org (tenant/grouping) layer above servers.
+# OrgsController — CRUD for the Org (server/grouping) layer above servers.
 #
-# Lives OUTSIDE the tenant scope (same as IslandsController): an org is
-# created from the server-registration form, before any `:tenant_key` exists.
+# Lives OUTSIDE the server scope (same as ServersController): an org is
+# created from the server-registration form, before any `:server_key` exists.
 #
 # Every action answers turbo_stream so the two live surfaces update in place,
 # no page reload:
@@ -17,7 +17,7 @@
 # Cross-tab realtime (Solid Cable broadcast) is a later add; same-tab
 # turbo_stream already gives the "create org → dropdown updates" flow.
 class OrgsController < ApplicationController
-  skip_before_action :require_tenant!
+  skip_before_action :require_server!
 
   before_action :set_org, only: [:update, :destroy]
 

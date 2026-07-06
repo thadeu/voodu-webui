@@ -2,15 +2,15 @@
 
 # PodSnapshot — the service that takes the controller's
 # `/pods?detail=true&spec=true` response and atomically replaces the
-# `pods` table's row set for one island.
+# `pods` table's row set for one server.
 #
 # Sibling of `SystemSnapshot`; together they are the only two writers
-# of snapshot data. Called from `StateSyncIslandJob` every 10s.
+# of snapshot data. Called from `StateSyncServerJob` every 10s.
 #
 # Atomicity model:
 #
 #   ActiveRecord::Base.transaction do
-#     Pod.where(island_id: …).delete_all
+#     Pod.where(server_id: …).delete_all
 #     Pod.insert_all(rows)
 #   end
 #
@@ -21,7 +21,7 @@
 # the UI flickering pods off and back on during each sync.
 #
 # When called inside an OUTER transaction (the job wraps both
-# services + the `island.last_synced_at` touch together), Rails
+# services + the `server.last_synced_at` touch together), Rails
 # turns this inner one into a savepoint — pods/system/synced_at
 # still commit-or-rollback as a unit. No semantic change vs
 # standalone use.
@@ -32,24 +32,24 @@
 # hash is round-tripped to JSON and stored in `payload` so
 # downstream readers don't lose any field.
 class PodSnapshot
-  # replace_for_island! — atomic swap of every pod snapshot for
-  # one island. Returns the count of rows inserted.
+  # replace_for_server! — atomic swap of every pod snapshot for
+  # one server. Returns the count of rows inserted.
   #
   # `pods_payload` accepts:
   #   - Array of Hash (typical: parsed JSON from the controller)
   #   - nil / empty (sync got back zero pods → just truncate the
-  #     existing rows for this island; valid state for a freshly-
+  #     existing rows for this server; valid state for a freshly-
   #     joined-then-emptied host)
-  def self.replace_for_island!(island, pods_payload)
-    rows = build_rows(island, pods_payload)
+  def self.replace_for_server!(server, pods_payload)
+    rows = build_rows(server, pods_payload)
 
     ActiveRecord::Base.transaction do
-      Pod.where(island_id: island.id).delete_all
+      Pod.where(server_id: server.id).delete_all
 
       # `insert_all` skips ActiveRecord callbacks + validations —
       # exactly what we want here (the model is read-only; the
       # sync job is the source of truth). With the unique index
-      # `(island_id, container_name)` in place, the bulk insert
+      # `(server_id, container_name)` in place, the bulk insert
       # is also dedup-safe at the DB layer if the controller ever
       # ships duplicates.
       Pod.insert_all(rows) if rows.any?
@@ -72,7 +72,7 @@ class PodSnapshot
   # between list and inspect during a restart, etc.), `insert_all`
   # would raise on the unique index. Keep the last occurrence —
   # newer info shadows older.
-  def self.build_rows(island, pods_payload)
+  def self.build_rows(server, pods_payload)
     now = Time.current
     seen = {}
 
@@ -81,7 +81,7 @@ class PodSnapshot
       next if name.empty?
 
       seen[name] = {
-        island_id: island.id,
+        server_id: server.id,
         container_name: name,
         kind: pod["kind"].to_s,
         scope: pod["scope"].to_s,

@@ -26,7 +26,7 @@ class Components::Alerts::LiveBody < Components::Base
   def view_template
     # Show the tabbed UI once anything exists — rules OR destinations.
     # Destinations are configured independently of rules, so a fresh
-    # island with a Slack target but no rules yet still reaches the
+    # server with a Slack target but no rules yet still reaches the
     # Destinations tab instead of the rules-onboarding empty state.
     if @data.rules? || @data.destinations_count.positive?
       tab_bar

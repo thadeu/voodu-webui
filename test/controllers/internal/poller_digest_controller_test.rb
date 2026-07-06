@@ -4,7 +4,7 @@ require "test_helper"
 
 module Internal
   class PollerDigestControllerTest < ActionDispatch::IntegrationTest
-    fixtures :orgs, :islands
+    fixtures :orgs, :servers
 
     INTERNAL_TOKEN = "test-internal-token-aaaaaaaaaaaaaaaa"
     VALID_HASH = "0123456789abcdef"
@@ -20,7 +20,7 @@ module Internal
 
     test "returns 401 without X-Voodu-Internal-Token header" do
       post internal_poller_digest_path,
-        params: {type: "metrics", tenant_id: islands(:alpha).id, sync_hash: VALID_HASH}
+        params: {type: "metrics", server_id: servers(:alpha).id, sync_hash: VALID_HASH}
 
       assert_response :unauthorized
     end
@@ -60,7 +60,7 @@ module Internal
       digest = PollerDigest.find_by(sync_hash: VALID_HASH)
       assert digest
       assert_equal "metrics", digest.type
-      assert_equal islands(:alpha).id, digest.tenant_id
+      assert_equal servers(:alpha).id, digest.server_id
       assert_equal "queued", digest.status
     end
 
@@ -68,7 +68,7 @@ module Internal
       PollerDigest.create!(
         sync_hash: VALID_HASH,
         type: "metrics",
-        tenant_id: islands(:alpha).id,
+        server_id: servers(:alpha).id,
         status: "processed"
       )
 
@@ -99,9 +99,9 @@ module Internal
       assert_response :bad_request
     end
 
-    test "returns 400 when tenant_id missing" do
+    test "returns 400 when server_id missing" do
       post internal_poller_digest_path,
-        params: valid_params.except(:tenant_id),
+        params: valid_params.except(:server_id),
         headers: token_header
 
       assert_response :bad_request
@@ -112,7 +112,7 @@ module Internal
     def valid_params
       {
         type: "metrics",
-        tenant_id: islands(:alpha).id,
+        server_id: servers(:alpha).id,
         sync_hash: VALID_HASH,
         ts: 1_716_922_000_000,
         size: 12_345

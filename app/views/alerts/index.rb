@@ -9,21 +9,21 @@
 # that reloads the `alerts-live` frame — the same body
 # Views::Alerts::Frame returns, so the swap is DOM-stable.
 class Views::Alerts::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :active)
+  def initialize(current_path:, servers: [], current_server: nil, data: nil, active_tab: :active)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @data = data
     @active_tab = active_tab
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island,
+      current_path: @current_path, servers: @servers, current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
-      if @current_island.nil?
-        render Components::UI::NoIslandState.new
+      if @current_server.nil?
+        render Components::UI::NoServerState.new
       else
         body
       end

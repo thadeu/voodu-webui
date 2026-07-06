@@ -2,13 +2,13 @@
 
 # Move the alert subsystem to the org (M3, mirrors the M2 dashboard move).
 #
-#   - alert_rules      → add org_id (owner). KEEP island_id — it's the TARGET
+#   - alert_rules      → add org_id (owner). KEEP server_id — it's the TARGET
 #                        server the rule monitors (a rule targets exactly one
 #                        server in its org). Name stays unique per target server.
 #   - alert_destinations → org-shared notification targets: add org_id, DROP
-#                        island_id (a webhook belongs to the org, not one server).
+#                        server_id (a webhook belongs to the org, not one server).
 #   - alert_events     → add org_id (owner, for the org-level history/firing
-#                        query). KEEP island_id — the server the episode fired on.
+#                        query). KEEP server_id — the server the episode fired on.
 #
 # Nothing in production → no data backfill; org_id is added null:false directly.
 class MoveAlertsToOrg < ActiveRecord::Migration[8.1]
@@ -19,10 +19,10 @@ class MoveAlertsToOrg < ActiveRecord::Migration[8.1]
     add_foreign_key :alert_rules, :orgs, column: :org_id
 
     # ── alert_destinations → org-level ───────────────────────────────
-    remove_foreign_key :alert_destinations, :islands if foreign_key_exists?(:alert_destinations, :islands)
-    remove_index :alert_destinations, name: "index_alert_destinations_on_island_id_and_name" if index_exists?(:alert_destinations, [:island_id, :name], name: "index_alert_destinations_on_island_id_and_name")
-    remove_index :alert_destinations, column: :island_id if index_exists?(:alert_destinations, :island_id)
-    remove_column :alert_destinations, :island_id
+    remove_foreign_key :alert_destinations, :servers if foreign_key_exists?(:alert_destinations, :servers)
+    remove_index :alert_destinations, name: "index_alert_destinations_on_server_id_and_name" if index_exists?(:alert_destinations, [:server_id, :name], name: "index_alert_destinations_on_server_id_and_name")
+    remove_index :alert_destinations, column: :server_id if index_exists?(:alert_destinations, :server_id)
+    remove_column :alert_destinations, :server_id
 
     add_column :alert_destinations, :org_id, :string, null: false
     add_index :alert_destinations, [:org_id, :name], unique: true, name: "index_alert_destinations_on_org_id_and_name"
@@ -41,9 +41,9 @@ class MoveAlertsToOrg < ActiveRecord::Migration[8.1]
 
     remove_foreign_key :alert_destinations, :orgs
     remove_column :alert_destinations, :org_id
-    add_column :alert_destinations, :island_id, :integer, null: false
-    add_index :alert_destinations, [:island_id, :name], unique: true, name: "index_alert_destinations_on_island_id_and_name"
-    add_foreign_key :alert_destinations, :islands, column: :island_id
+    add_column :alert_destinations, :server_id, :integer, null: false
+    add_index :alert_destinations, [:server_id, :name], unique: true, name: "index_alert_destinations_on_server_id_and_name"
+    add_foreign_key :alert_destinations, :servers, column: :server_id
 
     remove_foreign_key :alert_rules, :orgs
     remove_column :alert_rules, :org_id

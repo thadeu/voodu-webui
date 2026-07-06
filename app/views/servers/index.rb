@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Views::Islands::Index — server registry page.
+# Views::Servers::Index — server registry page.
 #
-# Tenant-less surface (no /:tenant_key prefix) — this is the meta
+# Server-less surface (no /:server_key prefix) — this is the meta
 # screen where the operator manages WHICH servers the WebUI knows
 # about. Add / edit / remove + see reachability at a glance.
 #
@@ -16,25 +16,25 @@
 # Filtering, hover, the "no rows match" sentinel, and tab counts all
 # carry the same conventions the pods page set, so muscle memory
 # transfers between the two screens.
-class Views::Islands::Index < Views::Base
+class Views::Servers::Index < Views::Base
   STATUS_TABS = [
     {id: :all, label: "All", status: nil, color: nil},
     {id: :online, label: "Online", status: :online, color: "var(--voodu-green)"},
     {id: :offline, label: "Offline", status: :offline, color: "var(--voodu-red)"}
   ].freeze
 
-  def initialize(current_path:, islands:, active_tab: :all)
+  def initialize(current_path:, servers:, active_tab: :all)
     @current_path = current_path
-    @islands = islands
+    @servers = servers
     @active_tab = active_tab
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, islands: @islands, breadcrumb: [{label: "Servers"}]) do
+    render Components::Layouts::Dashboard.new(current_path: @current_path, servers: @servers, breadcrumb: [{label: "Servers"}]) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
 
-        if @islands.empty?
+        if @servers.empty?
           empty_state
         else
           server_section
@@ -76,7 +76,7 @@ class Views::Islands::Index < Views::Base
 
   def add_server_btn
     a(
-      href: new_island_path,
+      href: new_server_path,
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2 shrink-0"
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -87,7 +87,7 @@ class Views::Islands::Index < Views::Base
   # empty_state — onboarding-ish callout when the registry is empty.
   # In practice the operator rarely lands here in this state — the
   # DashboardController#redirect_to_default bounces them to
-  # /islands/new — but the state still exists for the case where
+  # /servers/new — but the state still exists for the case where
   # someone navigates here AFTER removing their last server.
   def empty_state
     div(class: "py-12 flex flex-col items-center gap-3 text-center border border-voodu-border bg-voodu-surface") do
@@ -149,9 +149,9 @@ class Views::Islands::Index < Views::Base
   end
 
   def tab_count(tab)
-    return @islands.size if tab[:id] == :all
+    return @servers.size if tab[:id] == :all
 
-    @islands.count { |i| i.status == tab[:status] }
+    @servers.count { |i| i.status == tab[:status] }
   end
 
   def filter_input
@@ -186,7 +186,7 @@ class Views::Islands::Index < Views::Base
           end
         end
         tbody do
-          islands_for_active_tab.each { |i| desktop_row(i) }
+          servers_for_active_tab.each { |i| desktop_row(i) }
           tr(hidden: true, data: {kv_filter_target: "empty"}) do
             td(colspan: 6, class: "px-3 py-8 text-center text-voodu-muted text-[12px]") { "no servers match the filter." }
           end
@@ -195,36 +195,36 @@ class Views::Islands::Index < Views::Base
     end
   end
 
-  def desktop_row(island)
+  def desktop_row(server)
     tr(
       class: "border-b border-voodu-border last:border-b-0 hover:bg-voodu-surface-2 transition-colors",
       data: {
         kv_filter_target: "row",
-        key: search_blob(island)
+        key: search_blob(server)
       }
     ) do
-      td(class: "px-3 py-2.5") { server_cell(island) }
-      td(class: "px-3 py-2.5") { render Components::UI::StatusPill.new(status: island.status || :stopped) }
-      td(class: "px-3 py-2.5 text-[11.5px] text-voodu-text-2") { meta_value(island.region) }
-      td(class: "px-3 py-2.5 text-[11.5px] text-voodu-text-2") { meta_value(island.infra) }
-      td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-muted") { age_label(island) }
-      td(class: "px-3 py-2.5 text-right") { row_actions(island) }
+      td(class: "px-3 py-2.5") { server_cell(server) }
+      td(class: "px-3 py-2.5") { render Components::UI::StatusPill.new(status: server.status || :stopped) }
+      td(class: "px-3 py-2.5 text-[11.5px] text-voodu-text-2") { meta_value(server.region) }
+      td(class: "px-3 py-2.5 text-[11.5px] text-voodu-text-2") { meta_value(server.infra) }
+      td(class: "px-3 py-2.5 font-voodu-mono text-[11px] text-voodu-muted") { age_label(server) }
+      td(class: "px-3 py-2.5 text-right") { row_actions(server) }
     end
   end
 
   # server_cell — compound identity column. Two-tier display:
   #   name (bold, sans)
   #   endpoint (mono muted, truncated)
-  # Clicking either line opens the island's overview. Same shape
+  # Clicking either line opens the server's overview. Same shape
   # as Components::Overview::PodsTable#pod_cell so the eye lands
-  # on the same spot when bouncing between /pods and /islands.
-  def server_cell(island)
+  # on the same spot when bouncing between /pods and /servers.
+  def server_cell(server)
     a(
-      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
+      href: server_root_path(org_id: server.org.short_id, server_key: server.key),
       class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-link-2 transition-colors"
     ) do
-      span(class: "text-[13px] font-semibold text-voodu-link whitespace-nowrap") { island.name }
-      span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0") { island.endpoint }
+      span(class: "text-[13px] font-semibold text-voodu-link whitespace-nowrap") { server.name }
+      span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate min-w-0") { server.endpoint }
     end
   end
 
@@ -234,8 +234,8 @@ class Views::Islands::Index < Views::Base
     v
   end
 
-  def age_label(island)
-    secs = (Time.current - island.created_at).to_i
+  def age_label(server)
+    secs = (Time.current - server.created_at).to_i
     return "#{secs}s" if secs < 60
     return "#{secs / 60}m" if secs < 3_600
     return "#{secs / 3_600}h" if secs < 86_400
@@ -248,13 +248,13 @@ class Views::Islands::Index < Views::Base
   # · age), action row.
   def mobile_list
     div(class: "vmd:hidden flex flex-col gap-2") do
-      islands_for_active_tab.each do |island|
+      servers_for_active_tab.each do |server|
         div(
           data: {
             kv_filter_target: "row",
-            key: search_blob(island)
+            key: search_blob(server)
           }
-        ) { mobile_card(island) }
+        ) { mobile_card(server) }
       end
       div(
         hidden: true,
@@ -264,36 +264,36 @@ class Views::Islands::Index < Views::Base
     end
   end
 
-  def mobile_card(island)
+  def mobile_card(server)
     div(class: "flex flex-col gap-3 p-3 border border-voodu-border bg-voodu-surface") do
-      # Header: name+endpoint clickable (opens island), status pill right.
+      # Header: name+endpoint clickable (opens server), status pill right.
       div(class: "flex items-start gap-3") do
         a(
-          href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
+          href: server_root_path(org_id: server.org.short_id, server_key: server.key),
           class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-link-2 transition-colors"
         ) do
-          span(class: "text-[14px] font-semibold text-voodu-link truncate") { island.name }
-          span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate") { island.endpoint }
+          span(class: "text-[14px] font-semibold text-voodu-link truncate") { server.name }
+          span(class: "font-voodu-mono text-[11.5px] text-voodu-muted truncate") { server.endpoint }
         end
-        render Components::UI::StatusPill.new(status: island.status || :stopped)
+        render Components::UI::StatusPill.new(status: server.status || :stopped)
       end
 
       # Meta strip: region · infra · age. Hidden segments collapse
       # cleanly if both region+infra are blank.
-      mobile_meta(island)
+      mobile_meta(server)
 
       # Footer: actions cluster.
       div(class: "flex items-center gap-2 pt-2.5 border-t border-voodu-border") do
         div(class: "flex-1")
-        row_actions(island)
+        row_actions(server)
       end
     end
   end
 
-  def mobile_meta(island)
-    region = meta_value(island.region)
-    infra = meta_value(island.infra)
-    age = age_label(island)
+  def mobile_meta(server)
+    region = meta_value(server.region)
+    infra = meta_value(server.infra)
+    age = age_label(server)
     parts = [region, infra].reject { |v| v == "—" }
     parts << "age #{age}"
 
@@ -307,19 +307,19 @@ class Views::Islands::Index < Views::Base
     end
   end
 
-  def row_actions(island)
+  def row_actions(server)
     div(class: "inline-flex items-center gap-1.5") do
-      open_btn(island)
-      edit_btn(island)
-      remove_form(island)
+      open_btn(server)
+      edit_btn(server)
+      remove_form(server)
     end
   end
 
-  def open_btn(island)
+  def open_btn(server)
     a(
-      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
+      href: server_root_path(org_id: server.org.short_id, server_key: server.key),
       title: "Open overview",
-      "aria-label": "Open #{island.name}",
+      "aria-label": "Open #{server.name}",
       class: action_btn_classes
     ) do
       render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
@@ -327,11 +327,11 @@ class Views::Islands::Index < Views::Base
     end
   end
 
-  def edit_btn(island)
+  def edit_btn(server)
     a(
-      href: edit_island_path(island),
+      href: edit_server_path(server),
       title: "Edit server",
-      "aria-label": "Edit #{island.name}",
+      "aria-label": "Edit #{server.name}",
       class: action_btn_classes
     ) do
       render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5")
@@ -339,20 +339,20 @@ class Views::Islands::Index < Views::Base
     end
   end
 
-  def remove_form(island)
+  def remove_form(server)
     render(Components::UI::Confirmable.new(
       title: "Remove server",
-      message: %(Permanently remove "#{island.name}" from the registry? You can re-add it later.),
+      message: %(Permanently remove "#{server.name}" from the registry? You can re-add it later.),
       confirm_label: "Remove",
       danger: true,
       icon: :TrashOutline,
       form: {
-        action: island_path(island),
+        action: server_path(server),
         method: :delete
       },
       trigger: {
         title: "Remove server",
-        "aria-label": "Remove #{island.name}",
+        "aria-label": "Remove #{server.name}",
         class: "inline-flex items-center gap-1.5 px-2.5 h-8 border border-voodu-red/30 text-voodu-red text-[12px] font-medium hover:bg-voodu-red-dim"
       }
     )) do
@@ -367,24 +367,24 @@ class Views::Islands::Index < Views::Base
 
   # ── data shaping ─────────────────────────────────────────────
 
-  def islands_for_active_tab
-    return @islands if @active_tab == :all
+  def servers_for_active_tab
+    return @servers if @active_tab == :all
 
     target = STATUS_TABS.find { |t| t[:id] == @active_tab }&.dig(:status)
-    return @islands if target.nil?
+    return @servers if target.nil?
 
-    @islands.select { |i| i.status == target }
+    @servers.select { |i| i.status == target }
   end
 
   def status_counts
     {
-      online: @islands.count { |i| i.status == :online },
-      offline: @islands.count { |i| i.status == :offline }
+      online: @servers.count { |i| i.status == :online },
+      offline: @servers.count { |i| i.status == :offline }
     }
   end
 
-  def search_blob(island)
-    [island.name, island.endpoint, island.region, island.infra].compact.join(" ").downcase
+  def search_blob(server)
+    [server.name, server.endpoint, server.region, server.infra].compact.join(" ").downcase
   end
 
   def dot_sep

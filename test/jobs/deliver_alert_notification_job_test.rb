@@ -3,22 +3,22 @@
 require "test_helper"
 
 class DeliverAlertNotificationJobTest < ActiveJob::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   PUBLIC = "93.184.216.34"
 
   setup do
-    @island = islands(:alpha)
-    @rule = @island.alert_rules.create!(
+    @server = servers(:alpha)
+    @rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
     @event = @rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 2.minutes.ago,
+      server: @server, state: "firing", started_at: 2.minutes.ago,
       threshold: 90, rule_name: @rule.name, metric_kind: "cpu",
       target_label: @rule.target_label, peak_value: 95, last_value: 95
     )
-    @dest = @island.org.alert_destinations.create!(
+    @dest = @server.org.alert_destinations.create!(
       name: "hook", kind: "webhook", endpoint: "https://#{PUBLIC}/h"
     )
   end

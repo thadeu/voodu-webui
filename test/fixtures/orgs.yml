@@ -1,7 +1,7 @@
-# Fixtures for Org (the tenant/grouping layer above servers).
+# Fixtures for Org (the server/grouping layer above servers).
 #
 # UUIDv7 string PK: fixtures don't run the before_create callback, so `id`
-# is set explicitly here. islands.yml references it via an explicit `org_id`
+# is set explicitly here. servers.yml references it via an explicit `org_id`
 # (string PK associations can't use fixture-label resolution — that yields
 # an integer that wouldn't match the string id).
 acme:

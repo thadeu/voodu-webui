@@ -3,15 +3,15 @@
 # Views::Dashboard::Index — Overview screen.
 #
 # Three-state pattern:
-#   - no island       → NoIslandState
+#   - no server       → NoServerState
 #   - controller err  → ErrorState banner inline above the (mocked) body
 #   - happy           → header + stat cards (auto-fit grid) + pods section
 class Views::Dashboard::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil,
+  def initialize(current_path:, servers: [], current_server: nil, data: nil, active_tab: :all, updated_at: nil,
     recent_alerts: [], recent_dashboards: [], recent_events: [])
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @data = data
     @active_tab = active_tab
     @updated_at = updated_at
@@ -23,14 +23,14 @@ class Views::Dashboard::Index < Views::Base
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path,
-      islands: @islands,
-      current_island: @current_island,
+      servers: @servers,
+      current_server: @current_server,
       updated_at: @updated_at,
       uptime: @data&.uptime_label,
       breadcrumb: overview_crumbs
     ) do
-      if @current_island.nil?
-        render Components::UI::NoIslandState.new
+      if @current_server.nil?
+        render Components::UI::NoServerState.new
       else
         overview_body
       end
@@ -39,7 +39,7 @@ class Views::Dashboard::Index < Views::Base
 
   private
 
-  # overview_body — wrapped in a Turbo Frame so StateSyncIslandJob's
+  # overview_body — wrapped in a Turbo Frame so StateSyncServerJob's
   # state_tick broadcast can refresh it without a page reload. We
   # DON'T set src= on the frame (would cause Turbo to auto-fetch on
   # connect, which can blank out the body before the network round-
@@ -64,7 +64,7 @@ class Views::Dashboard::Index < Views::Base
     # so open drawers / modals keep their client state across the
     # state_tick reload.
     turbo_frame_tag(
-      "island-#{@current_island.id}-state",
+      "server-#{@current_server.id}-state",
       target: "_top",
       refresh: "morph",
       data: {state_frame: true}
@@ -136,7 +136,7 @@ class Views::Dashboard::Index < Views::Base
   # `{!isMobile && (...)}`).
   def page_sub
     div(class: "flex flex-wrap items-center gap-2.5 mt-1 text-[12.5px] text-voodu-muted") do
-      span(class: "font-voodu-mono") { @current_island.name }
+      span(class: "font-voodu-mono") { @current_server.name }
       dot_sep
       span { "#{@data.pods_running_count} of #{@data.pods_total} pods running" }
 

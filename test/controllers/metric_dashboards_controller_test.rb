@@ -6,12 +6,12 @@ require "test_helper"
 # List/Form/Index views (a render error surfaces as a 500 here).
 # Warehouse mode keeps /metrics rendering off the network.
 class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @org = @island.org
-    @key = @island.key
+    @server = servers(:alpha)
+    @org = @server.org
+    @key = @server.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -24,14 +24,14 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   }.freeze
 
   # host_panel — the HOST base + the server it reads from (M2: every server
-  # panel carries its island_id; the model rejects one without it).
+  # panel carries its server_id; the model rejects one without it).
   def host_panel
-    HOST.merge("island_id" => @island.id)
+    HOST.merge("server_id" => @server.id)
   end
 
   test "create persists panels and reopens the manager on the new dashboard" do
     assert_difference("MetricDashboard.count", 1) do
-      post metric_dashboards_path(tenant_key: @key),
+      post metric_dashboards_path(server_key: @key),
         params: {metric_dashboard: {name: "overview", panels: [host_panel].to_json}}
     end
 
@@ -40,11 +40,11 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, d.panels.size
     assert_equal "cpu_percent", d.panels.first["metric"]
     # Don't auto-close: land back in the manager on the new dashboard.
-    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
+    assert_redirected_to metric_dashboards_path(server_key: @key, edit: d.to_param)
   end
 
   test "create with a blank name re-renders 422" do
-    post metric_dashboards_path(tenant_key: @key),
+    post metric_dashboards_path(server_key: @key),
       params: {metric_dashboard: {name: "", panels: [host_panel].to_json}}
 
     assert_response :unprocessable_entity
@@ -53,7 +53,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "index renders the manage modal with the dashboard rail + editor frame" do
     @org.metric_dashboards.create!(name: "saved-one", panels: [host_panel])
 
-    get metric_dashboards_path(tenant_key: @key)
+    get metric_dashboards_path(server_key: @key)
 
     assert_response :success
     assert_match "Dashboards", @response.body            # modal title
@@ -63,7 +63,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "new renders the builder (embed)" do
-    get new_metric_dashboard_path(tenant_key: @key, embed: 1)
+    get new_metric_dashboard_path(server_key: @key, embed: 1)
 
     assert_response :success
     assert_match "Add panel", @response.body
@@ -71,16 +71,16 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "with the hep3 plugin + a reader pod, the builder offers a HEP3 type — no pod picker, reader folded into the source·view" do
-    System.create!(island: @island, synced_at: Time.current,
+    System.create!(server: @server, synced_at: Time.current,
       payload: {"host" => {}, "plugins" => [{"name" => "hep3", "version" => "0.5.0"}]}.to_json)
-    @island.pods.create!(
+    @server.pods.create!(
       container_name: "hep3-api.aaaa", kind: "deployment", scope: "fsw", resource_name: "hep3-api",
       replica_id: "aaaa", synced_at: Time.current,
       payload: {"name" => "hep3-api.aaaa", "scope" => "fsw", "resource_name" => "hep3-api",
                 "kind" => "deployment", "status" => "running", "image" => "voodu-hep3-api:0.5.0"}.to_json
     )
 
-    get new_metric_dashboard_path(tenant_key: @key, embed: 1)
+    get new_metric_dashboard_path(server_key: @key, embed: 1)
 
     assert_response :success
     assert_match ">Table<", @response.body, "the generic Table type is always offered"
@@ -89,14 +89,14 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     # HEP3 options carry the reader's scope/name (no pod pick); the builder
     # folds them into the source·view dropdown via this value.
     assert_match(/hep3-source-views-value="[^"]*hep3-api/, @response.body)
-    # The generic Table kind offers the island's pods as logs sources.
+    # The generic Table kind offers the server's pods as logs sources.
     assert_match(/logs-source-views-value="[^"]*&quot;source&quot;:&quot;logs&quot;/, @response.body)
   end
 
   test "edit renders the builder prefilled (embed)" do
     d = @org.metric_dashboards.create!(name: "editme", panels: [host_panel])
 
-    get edit_metric_dashboard_path(tenant_key: @key, id: d.to_param, embed: 1)
+    get edit_metric_dashboard_path(server_key: @key, id: d.to_param, embed: 1)
 
     assert_response :success
     assert_match "editme", @response.body
@@ -105,11 +105,11 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "pin makes /metrics open to the dashboard" do
     d = @org.metric_dashboards.create!(name: "pinme", panels: [host_panel])
 
-    post pin_metric_dashboard_path(tenant_key: @key, id: d.to_param)
+    post pin_metric_dashboard_path(server_key: @key, id: d.to_param)
     assert d.reload.pinned
-    assert_redirected_to metrics_path(tenant_key: @key, pid: d.to_param)
+    assert_redirected_to metrics_path(server_key: @key, pid: d.to_param)
 
-    get metrics_path(tenant_key: @key)
+    get metrics_path(server_key: @key)
     assert_response :success
     assert_match "pinme", @response.body
   end
@@ -118,12 +118,12 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     @org.metric_dashboards.create!(name: "pinned-one", panels: [host_panel], pinned: true)
 
     # bare /metrics opens the pinned dashboard (the default)
-    get metrics_path(tenant_key: @key)
+    get metrics_path(server_key: @key)
     assert_response :success
     assert_match "pinned-one", @response.body
 
     # …but ?scope_kind=host forces the host view despite the pin
-    get metrics_path(tenant_key: @key, scope_kind: "host")
+    get metrics_path(server_key: @key, scope_kind: "host")
     assert_response :success
     assert_match "Host (default)", @response.body
   end
@@ -132,7 +132,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     @org.metric_dashboards.create!(name: "the-pinned", panels: [host_panel], pinned: true)
     other = @org.metric_dashboards.create!(name: "the-other", panels: [host_panel])
 
-    get metrics_path(tenant_key: @key, pid: other.to_param)
+    get metrics_path(server_key: @key, pid: other.to_param)
     assert_response :success
     assert_match "the-other", @response.body
   end
@@ -140,18 +140,18 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "unpin reverts /metrics to the host view" do
     d = @org.metric_dashboards.create!(name: "p", panels: [host_panel], pinned: true)
 
-    post unpin_metric_dashboard_path(tenant_key: @key, id: d.to_param)
+    post unpin_metric_dashboard_path(server_key: @key, id: d.to_param)
     assert_not d.reload.pinned
-    assert_redirected_to metrics_path(tenant_key: @key)
+    assert_redirected_to metrics_path(server_key: @key)
   end
 
   test "destroy removes the dashboard and redirects" do
     d = @org.metric_dashboards.create!(name: "gone", panels: [host_panel])
 
     assert_difference("MetricDashboard.count", -1) do
-      delete metric_dashboard_path(tenant_key: @key, id: d.to_param)
+      delete metric_dashboard_path(server_key: @key, id: d.to_param)
     end
-    assert_redirected_to metrics_path(tenant_key: @key)
+    assert_redirected_to metrics_path(server_key: @key)
   end
 
   test "display_settings in dashboard mode lists the active dashboard's panels" do
@@ -160,7 +160,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
       panels: [host_panel, host_panel.merge("label" => "host · CPU again")]
     )
 
-    get metrics_display_settings_path(tenant_key: @key, pid: d.to_param, kind: "dashboard:#{d.id}")
+    get metrics_display_settings_path(server_key: @key, pid: d.to_param, kind: "dashboard:#{d.id}")
 
     assert_response :success
     # one settings card per panel, keyed by panel_card_key (k0, k1),
@@ -173,7 +173,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "metrics renders the dashboard panel grid in dashboard mode" do
     d = @org.metric_dashboards.create!(name: "grid", panels: [host_panel])
 
-    get metrics_path(tenant_key: @key, pid: d.to_param)
+    get metrics_path(server_key: @key, pid: d.to_param)
 
     assert_response :success
     assert_match "metrics-charts", @response.body
@@ -184,7 +184,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     cpu = @org.metric_dashboards.create!(name: "cpu-dash", panels: [host_panel])
     mem = @org.metric_dashboards.create!(name: "mem-dash", panels: [host_panel])
 
-    get metrics_path(tenant_key: @key, pid: "#{cpu.to_param},#{mem.to_param}")
+    get metrics_path(server_key: @key, pid: "#{cpu.to_param},#{mem.to_param}")
 
     assert_response :success
     # both section headers render…
@@ -199,27 +199,27 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   test "update reopens the manager on the saved dashboard (does not auto-close)" do
     d = @org.metric_dashboards.create!(name: "dash-b", panels: [host_panel])
 
-    patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
+    patch metric_dashboard_path(server_key: @key, id: d.to_param),
       params: {metric_dashboard: {name: "dash-b2", panels: [host_panel].to_json}}
 
     assert_equal "dash-b2", d.reload.name
-    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
+    assert_redirected_to metric_dashboards_path(server_key: @key, edit: d.to_param)
   end
 
   test "update stays in the manager regardless of any return_to" do
     d = @org.metric_dashboards.create!(name: "dash-x", panels: [host_panel])
 
-    patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
-      params: {return_to: metrics_path(tenant_key: @key, pid: d.to_param),
+    patch metric_dashboard_path(server_key: @key, id: d.to_param),
+      params: {return_to: metrics_path(server_key: @key, pid: d.to_param),
                metric_dashboard: {name: "dash-x", panels: [host_panel].to_json}}
 
-    assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
+    assert_redirected_to metric_dashboards_path(server_key: @key, edit: d.to_param)
   end
 
   test "multi ?pid silently drops unknown uuids and renders the rest" do
     only = @org.metric_dashboards.create!(name: "real-dash", panels: [host_panel])
 
-    get metrics_path(tenant_key: @key, pid: "#{only.to_param},does-not-exist")
+    get metrics_path(server_key: @key, pid: "#{only.to_param},does-not-exist")
 
     assert_response :success
     assert_match "real-dash", @response.body

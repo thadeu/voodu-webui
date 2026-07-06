@@ -7,10 +7,10 @@ class Views::Logs::Show < Views::Base
   # drawer: true → embedded render path used by Components::UI::Drawer.
   # Skips the Dashboard chrome (sidebar/topbar) so the drawer's body
   # gets just the log viewer surface.
-  def initialize(current_path:, pod_name:, islands: [], current_island: nil, updated_at: nil, drawer: false, pods: [], back_to_pod: false)
+  def initialize(current_path:, pod_name:, servers: [], current_server: nil, updated_at: nil, drawer: false, pods: [], back_to_pod: false)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @updated_at = updated_at
     @pod_name = pod_name
     @drawer = drawer
@@ -26,11 +26,11 @@ class Views::Logs::Show < Views::Base
       render Components::Logs::Page.new(pod_name: @pod_name, drawer: true)
     else
       render Components::Layouts::Dashboard.new(
-        current_path: @current_path, islands: @islands,
-        current_island: @current_island, updated_at: @updated_at
+        current_path: @current_path, servers: @servers,
+        current_server: @current_server, updated_at: @updated_at
       ) do
-        if @current_island.nil?
-          render Components::UI::NoIslandState.new
+        if @current_server.nil?
+          render Components::UI::NoServerState.new
         else
           render Components::Logs::Page.new(pod_name: @pod_name, pods: @pods, back_to_pod: @back_to_pod)
         end

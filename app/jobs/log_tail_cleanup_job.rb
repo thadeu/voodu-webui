@@ -17,7 +17,7 @@ class LogTailCleanupJob < ApplicationJob
   def perform
     # Prune pre-aggregated log-count samples FIRST — before the poller guard.
     # These live in the metrics warehouse and are written by the Ruby counter
-    # (LogMetricsSyncIslandJob) in BOTH modes, so Rails always owns their GC
+    # (LogMetricsSyncServerJob) in BOTH modes, so Rails always owns their GC
     # even when the Go binary owns the NDJSON file tree.
     prune_log_metric_samples
 
@@ -45,7 +45,7 @@ class LogTailCleanupJob < ApplicationJob
       # race with another sweep — fine
     end
 
-    # Remove empty pod-dirs (and empty island-dirs) so the tree
+    # Remove empty pod-dirs (and empty server-dirs) so the tree
     # doesn't grow forever with decommissioned pod names.
     Dir.glob(root.join("*/*"))
       .select { |d| File.directory?(d) && Dir.empty?(d) }

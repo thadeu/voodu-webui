@@ -36,20 +36,20 @@ class Components::Base < Phlex::HTML
   # `register_value_helper` is the post-phlex-2.4 replacement for the
   # deprecated `helpers.X` indirection — it auto-defines a method that
   # forwards to view_context internally, so callers write `flash`,
-  # `recent_islands`, etc. directly.
+  # `recent_servers`, etc. directly.
   #
   # Routes (metrics_path, pod_logs_path, etc.) are already exposed by
   # `Phlex::Rails::Helpers::Routes` above; CSRF + custom controller
   # helpers need explicit registration:
   register_value_helper :form_authenticity_token
-  register_value_helper :recent_islands
-  # current_island — the focused server, for components that gate an
+  register_value_helper :recent_servers
+  # current_server — the focused server, for components that gate an
   # affordance on a plugin (e.g. the Logs→HEP3 call-flow chip only shows
-  # when `current_island.plugin_installed?("hep3")`). Cheap: the island +
+  # when `current_server.plugin_installed?("hep3")`). Cheap: the server +
   # its System row + parsed payload are all memoised, so a per-row check
   # stays free.
-  register_value_helper :current_island
-  # current_org / all_orgs — the tenant layer above servers, for the topbar
+  register_value_helper :current_server
+  # current_org / all_orgs — the server layer above servers, for the topbar
   # org switcher + breadcrumb (org › servers › <server>).
   register_value_helper :current_org
   register_value_helper :all_orgs

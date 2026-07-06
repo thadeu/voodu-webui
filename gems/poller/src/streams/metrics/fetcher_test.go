@@ -25,15 +25,15 @@ type stubMetrics struct {
 	notifyOk   int
 	notifyFail int
 	lastStream string
-	lastIsland string
+	lastServer string
 }
 
-func (s *stubMetrics) StreamPollIncr(stream, island string) {
+func (s *stubMetrics) StreamPollIncr(stream, server string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.polls++
 	s.lastStream = stream
-	s.lastIsland = island
+	s.lastServer = server
 }
 
 func (s *stubMetrics) StreamLinesIncr(_, _ string, n int) {
@@ -62,7 +62,7 @@ func newFetcherForTest(t *testing.T, vooduSrv, railsSrv *httptest.Server, root s
 	t.Helper()
 
 	rails := client.NewRailsClient(railsSrv.URL, "tok")
-	isl := client.Island{ID: "island-1", Endpoint: vooduSrv.URL, PAT: "pat-1"}
+	isl := client.Server{ID: "server-1", Endpoint: vooduSrv.URL, PAT: "pat-1"}
 
 	m := &stubMetrics{}
 	f := NewFetcher(isl, root, 100*time.Millisecond, rails, m)
@@ -344,8 +344,8 @@ func TestSeedSince_FromWarehouse(t *testing.T) {
 		if r.URL.Path != "/internal/poller/metrics_watermark" {
 			t.Errorf("rails path: %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("tenant_id") != "island-1" {
-			t.Errorf("tenant_id = %q", r.URL.Query().Get("tenant_id"))
+		if r.URL.Query().Get("server_id") != "server-1" {
+			t.Errorf("server_id = %q", r.URL.Query().Get("server_id"))
 		}
 		if r.Header.Get("X-Voodu-Internal-Token") != "tok" {
 			t.Errorf("missing internal token")
@@ -354,7 +354,7 @@ func TestSeedSince_FromWarehouse(t *testing.T) {
 	}))
 	defer rails.Close()
 
-	f := NewFetcher(client.Island{ID: "island-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
+	f := NewFetcher(client.Server{ID: "server-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
 	f.seedSince()
 
 	if f.seededSince != 1718700000 {
@@ -364,14 +364,14 @@ func TestSeedSince_FromWarehouse(t *testing.T) {
 
 // An empty warehouse (since=0) or a Rails error leaves seededSince at 0 so
 // computeSince falls back to the short cold-start lookback rather than
-// pulling the controller's full retention on a brand-new island.
+// pulling the controller's full retention on a brand-new server.
 func TestSeedSince_EmptyWarehouseStaysZero(t *testing.T) {
 	rails := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"version":1,"since":0}`))
 	}))
 	defer rails.Close()
 
-	f := NewFetcher(client.Island{ID: "island-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
+	f := NewFetcher(client.Server{ID: "server-1"}, t.TempDir(), time.Second, client.NewRailsClient(rails.URL, "tok"), &stubMetrics{})
 	f.seedSince()
 
 	if f.seededSince != 0 {

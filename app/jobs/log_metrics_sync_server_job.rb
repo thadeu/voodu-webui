@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-# LogMetricsSyncIslandJob — turns log lines into pre-aggregated counts for ONE
-# island. The Fase-2 backend behind the dashboard log-count panels: instead of
+# LogMetricsSyncServerJob — turns log lines into pre-aggregated counts for ONE
+# server. The Fase-2 backend behind the dashboard log-count panels: instead of
 # scanning the NDJSON warehouse on every card render (the MVP live-scan), this
 # job tallies matches in the background and writes them as warehouse samples
 # (source="log", metric="log_count"), so the card reads a cheap indexed series
 # (with history → sparkline) and updates live on the broadcast.
 #
 # MODE-AGNOSTIC BY DESIGN: it reads the on-disk NDJSON warehouse
-# (storage/logs/<island>/<pod>/<date>.ndjson), which BOTH the Ruby
-# LogTailIslandJob AND the out-of-process Go poller write to (see
+# (storage/logs/<server>/<pod>/<date>.ndjson), which BOTH the Ruby
+# LogTailServerJob AND the out-of-process Go poller write to (see
 # Internal::PollerController — the binary writes to storage/logs/<id>/...). So
 # there is NO `POLLER_SPAWN` guard: in poller mode this is the ONLY thing
 # turning logs into counts.
@@ -28,7 +28,7 @@
 # Buckets are 60s, keyed by a string slice of the line ts (no Time parse in the
 # hot loop). The warehouse SUM-aggregates the per-bucket rows into the chart's
 # render-buckets, same as the ingress counters.
-class LogMetricsSyncIslandJob < ApplicationJob
+class LogMetricsSyncServerJob < ApplicationJob
   queue_as :default
 
   # Live window recomputed every tick. Comfortably larger than the log-tail
@@ -46,14 +46,14 @@ class LogMetricsSyncIslandJob < ApplicationJob
   # window stays exact.
   SCAN_CAP = 5_000_000
 
-  def perform(island_id)
-    island = Island.find_by(id: island_id)
-    return unless island
+  def perform(server_id)
+    server = Server.find_by(id: server_id)
+    return unless server
 
-    defs = LogMetric::Definition.all_for(island)
+    defs = LogMetric::Definition.all_for(server)
     return if defs.empty? # nothing pinned → fast no-op, zero file reads
 
-    pod_map = build_pod_map(island)
+    pod_map = build_pod_map(server)
     return if pod_map.empty? # no live pods to attribute lines to
 
     by_workload = defs.group_by { |d| [d.scope, d.name] }
@@ -64,20 +64,20 @@ class LogMetricsSyncIslandJob < ApplicationJob
 
     MetricSample.transaction do
       # Live window — recompute for all defs every tick (idempotent).
-      inserted += recompute(island, by_workload, pod_map, defs, from: win_start, until_: now, boundary: win_start, side: :live)
+      inserted += recompute(server, by_workload, pod_map, defs, from: win_start, until_: now, boundary: win_start, side: :live)
 
       # Deep history — once per def (cache-gated; idempotent if it does re-run).
       defs.each do |d|
         next if backfilled?(d.key)
 
-        recompute(island, {[d.scope, d.name] => [d]}, pod_map, [d], from: RETENTION.ago, until_: win_start, boundary: win_start, side: :history)
+        recompute(server, {[d.scope, d.name] => [d]}, pod_map, [d], from: RETENTION.ago, until_: win_start, boundary: win_start, side: :history)
         mark_backfilled(d.key)
       end
     end
 
-    MetricsDigestService.broadcast_metrics_tick(island) if inserted.positive?
+    MetricsDigestService.broadcast_metrics_tick(server) if inserted.positive?
 
-    Rails.logger.info("log-metrics-sync island=#{island.key} defs=#{defs.size} inserted=#{inserted}")
+    Rails.logger.info("log-metrics-sync server=#{server.key} defs=#{defs.size} inserted=#{inserted}")
   end
 
   private
@@ -90,17 +90,17 @@ class LogMetricsSyncIslandJob < ApplicationJob
   #
   #   side: :live    → buckets >= boundary, delete [boundary..until_]
   #   side: :history → buckets <  boundary, delete [from...boundary]
-  def recompute(island, by_workload, pod_map, defs, from:, until_:, boundary:, side:)
+  def recompute(server, by_workload, pod_map, defs, from:, until_:, boundary:, side:)
     b = boundary.to_i
 
-    counts = count_buckets(island, by_workload, pod_map, from: from, until_: until_)
+    counts = count_buckets(server, by_workload, pod_map, from: from, until_: until_)
     counts.select! { |(_key, bucket), _n| (side == :live) ? bucket_epoch(bucket) >= b : bucket_epoch(bucket) < b }
 
     keys = defs.map(&:key)
     range = (side == :live) ? (b..until_.to_i) : (from.to_i...b)
-    MetricSample.where(tenant_id: island.id, source: "log", name: keys, ts_epoch: range).delete_all
+    MetricSample.where(server_id: server.id, source: "log", name: keys, ts_epoch: range).delete_all
 
-    rows = counts.map { |(key, bucket), count| sample_row(island, key, bucket, count) }
+    rows = counts.map { |(key, bucket), count| sample_row(server, key, bucket, count) }
 
     MetricSample.bulk_insert(rows)
     rows.size
@@ -109,18 +109,18 @@ class LogMetricsSyncIslandJob < ApplicationJob
   # sample_row — one warehouse row per (def, bucket): the match count for that
   # bucket. The agg (count/sum/avg/min/max) is applied at READ time over this
   # per-bucket count series, so the counter is agg-agnostic — it just tallies.
-  def sample_row(island, key, bucket, count)
-    {tenant_id: island.id, source: "log", ts_iso: bucket,
+  def sample_row(server, key, bucket, count)
+    {server_id: server.id, source: "log", ts_iso: bucket,
      payload: {source: "log", ts: bucket, name: key, log_count: count}.to_json}
   end
 
   # count_buckets — ONE pass over the window's lines, tallying every candidate
   # def's matches per bucket. Returns { [def_key, bucket_iso] => count }.
-  def count_buckets(island, by_workload, pod_map, from:, until_:)
+  def count_buckets(server, by_workload, pod_map, from:, until_:)
     counts = Hash.new(0)
 
     LogTail::Reader.each_line(
-      island_id: island.id, pods: nil, from: from, until_: until_,
+      server_id: server.id, pods: nil, from: from, until_: until_,
       content_search: nil, regex: false, limit: SCAN_CAP
     ) do |_pod, h|
       pod = (h["pod"] || h[:pod]).to_s
@@ -143,11 +143,11 @@ class LogMetricsSyncIslandJob < ApplicationJob
   # build_pod_map — container name → its workload {scope, name}. Lines from a
   # container not in the live pod list (a dead replica still on disk) are
   # dropped — consistent with the live-scan MVP. Needs a (non-network) client
-  # because IslandPods.compact guards on client presence even in warehouse mode.
-  def build_pod_map(island)
-    client = Voodu::Client.new(island)
+  # because ServerPods.compact guards on client presence even in warehouse mode.
+  def build_pod_map(server)
+    client = Voodu::Client.new(server)
 
-    IslandPods.compact(client, island).each_with_object({}) do |p, map|
+    ServerPods.compact(client, server).each_with_object({}) do |p, map|
       name = (p["name"] || p[:name]).to_s
       next if name.empty?
 

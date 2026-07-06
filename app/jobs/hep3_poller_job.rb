@@ -3,7 +3,7 @@
 # Hep3PollerJob — drains ONE voodu-hep3 reader instance's /export NDJSON
 # tail into the local read model (HepMessage on the `hep` SQLite DB).
 #
-# Cursor mechanics (the HEP3 analogue of MetricsSyncIslandJob's ts
+# Cursor mechanics (the HEP3 analogue of MetricsSyncServerJob's ts
 # watermark):
 #
 #   - The reader reports its resume point as an opaque "<file>:<offset>"
@@ -39,11 +39,11 @@ class Hep3PollerJob < ApplicationJob
   discard_on Voodu::Client::AuthError
   discard_on Voodu::Client::NotFoundError
 
-  def perform(island_id, scope, name)
-    island = Island.find_by(id: island_id)
-    return unless island # deleted between orchestrator + job dispatch
+  def perform(server_id, scope, name)
+    server = Server.find_by(id: server_id)
+    return unless server # deleted between orchestrator + job dispatch
 
-    drain(island, scope, name, Voodu::Client.new(island))
+    drain(server, scope, name, Voodu::Client.new(server))
   end
 
   # drain — the testable core: pulls /export pages through `client` and
@@ -52,9 +52,9 @@ class Hep3PollerJob < ApplicationJob
   # behind it (→ duplicates). Returns the number of rows inserted.
   #
   # `client` is injected so tests drive it with a fake reader instead of
-  # stubbing the network (same seam as LogTailIslandJob#poll_once).
-  def drain(island, scope, name, client)
-    cursor = HepCursor.cursor_for(island.id, scope, name)
+  # stubbing the network (same seam as LogTailServerJob#poll_once).
+  def drain(server, scope, name, client)
+    cursor = HepCursor.cursor_for(server.id, scope, name)
     inserted = 0
     pages = 0
 
@@ -62,7 +62,7 @@ class Hep3PollerJob < ApplicationJob
       body, next_cursor = client.hep_export(scope, name, since: cursor)
       next_cursor = next_cursor.to_s
 
-      rows = parse_lines(body, island.id, scope, name)
+      rows = parse_lines(body, server.id, scope, name)
       break if rows.empty? # caught up — no new complete lines
 
       # We have data: require a forward cursor to commit it, else next
@@ -72,7 +72,7 @@ class Hep3PollerJob < ApplicationJob
 
       HepRecord.transaction do
         rows.each_slice(BATCH_SIZE) { |slice| HepMessage.bulk_insert(slice) }
-        HepCursor.advance(island.id, scope, name, next_cursor)
+        HepCursor.advance(server.id, scope, name, next_cursor)
       end
 
       inserted += rows.size
@@ -81,7 +81,7 @@ class Hep3PollerJob < ApplicationJob
     end
 
     Rails.logger.info(
-      "hep3-poll island=#{island.key} tenant=#{island.id} reader=#{scope}/#{name} " \
+      "hep3-poll server=#{server.key} server=#{server.id} reader=#{scope}/#{name} " \
       "inserted=#{inserted} pages=#{pages} cursor=#{cursor}"
     )
 
@@ -91,10 +91,10 @@ class Hep3PollerJob < ApplicationJob
   private
 
   # parse_lines — NDJSON body → bulk_insert-ready row Hashes. scope/name
-  # identify the reader instance (not present in the line); tenant_id is
-  # the island. Tolerant: a malformed or ts-less line is skipped so one
+  # identify the reader instance (not present in the line); server_id is
+  # the server. Tolerant: a malformed or ts-less line is skipped so one
   # bad line never poisons the page.
-  def parse_lines(body, tenant_id, scope, name)
+  def parse_lines(body, server_id, scope, name)
     body.to_s.each_line.filter_map do |raw|
       line = raw.chomp
       next if line.empty?
@@ -102,7 +102,7 @@ class Hep3PollerJob < ApplicationJob
       parsed = JSON.parse(line)
       next if parsed["ts"].blank?
 
-      {tenant_id: tenant_id, scope: scope, name: name, payload: line}
+      {server_id: server_id, scope: scope, name: name, payload: line}
     rescue JSON::ParserError
       nil
     end

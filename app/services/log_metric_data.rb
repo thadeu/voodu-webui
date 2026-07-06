@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # LogMetricData — the READ side of a dashboard log-count panel. The counter
-# (LogMetricsSyncIslandJob) pre-aggregates the per-bucket MATCH COUNT of a
+# (LogMetricsSyncServerJob) pre-aggregates the per-bucket MATCH COUNT of a
 # filter into the warehouse (source="log", metric="log_count", name=<def_key>).
 # This reads that count series at the dashboard's interval and reduces it to
 # the headline number per the query's `| agg` suffix:
@@ -17,15 +17,15 @@
 #
 # def_key MUST match LogMetric::Definition.key_for — the write/read contract.
 class LogMetricData
-  # @param island   [Island]
+  # @param server   [Server]
   # @param query    [String] LogQuery filter, optionally with a `| agg` suffix
   # @param range    [String] dashboard range key (MetricsPageData::RANGES)
   # @param interval [String] dashboard interval (MetricsPageData::INTERVALS) —
   #   what the count series is bucketed by (defaults to "auto")
   # @param scope    [String] workload scope (for the def_key)
   # @param name     [String] workload resource name (for the def_key)
-  def initialize(island, query:, range:, interval: "auto", scope: nil, name: nil, from: nil, until_: nil)
-    @island = island
+  def initialize(server, query:, range:, interval: "auto", scope: nil, name: nil, from: nil, until_: nil)
+    @server = server
     @query = query.to_s
     @range = range.to_s
     @interval = interval.to_s.presence || "auto"
@@ -114,7 +114,7 @@ class LogMetricData
   # the dashboard interval. Empty until the counter first tracks this def.
   def series_points
     env = MetricsWarehouse.query(
-      @island, source: "log", metric: "log_count",
+      @server, source: "log", metric: "log_count",
       range: @range, interval: @interval, scope: nil, name: def_key, pod: nil,
       from: @from, until_: @until_
     )

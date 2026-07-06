@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# orgs — the Org (tenant) layer above servers. An Org groups N servers
-# (islands); Metrics + Alerts become org-level in later milestones. String
+# orgs — the Org (server) layer above servers. An Org groups N servers
+# (servers); Metrics + Alerts become org-level in later milestones. String
 # primary key holding a UUIDv7 (see HasUuidV7 concern — SQLite has no uuid
 # type, so we store TEXT and fill it app-side). `short_id` is the opaque
 # 8-char handle for URLs from M1 on — generated now so it's ready.

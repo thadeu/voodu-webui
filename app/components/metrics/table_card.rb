@@ -20,7 +20,7 @@
 class Components::Metrics::TableCard < Components::Base
   def initialize(label:, color:, source:, scope:, name:, view:, rows_url:,
     fields: [], default_fields: [], filter_query: "", metric: nil, default_visible: true,
-    row_action: nil, dashboard_uuid: nil, island_id: nil, range: "1h", window_from: nil, window_until: nil)
+    row_action: nil, dashboard_uuid: nil, server_id: nil, range: "1h", window_from: nil, window_until: nil)
     @label = label
     @color = color
     @source = source
@@ -28,9 +28,9 @@ class Components::Metrics::TableCard < Components::Base
     @name = name
     @view = view
     @rows_url = rows_url
-    # island_id — the server this table's reader lives on (M2). Rides in the
-    # rows fetch so the endpoint queries the right server's warehouse tenant.
-    @island_id = island_id
+    # server_id — the server this table's reader lives on (M2). Rides in the
+    # rows fetch so the endpoint queries the right server's warehouse.
+    @server_id = server_id
     @fields = Array(fields)
     @default_fields = Array(default_fields)
     @filter_query = filter_query.to_s
@@ -120,7 +120,7 @@ class Components::Metrics::TableCard < Components::Base
         data_table_view_value: @view,
         data_table_key_value: @metric.to_s,
         data_table_dashboard_value: @dashboard_uuid,
-        data_table_island_value: @island_id.to_s,
+        data_table_server_value: @server_id.to_s,
         data_table_range_value: @range,
         data_table_from_value: @window_from,
         data_table_until_value: @window_until,

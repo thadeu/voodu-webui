@@ -7,11 +7,11 @@ require "test_helper"
 # messages, a not-found call still renders the in-overlay empty state
 # (never a dead click), and missing params 404.
 class Hep3ControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @key = @island.key
+    @server = servers(:alpha)
+    @key = @server.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
 
@@ -31,7 +31,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
       method: method, response_code: code, src_ip: src, dst_ip: dst,
       src_port: "5060", dst_port: "5060", from_user: "alice", to_user: "bob", raw_sip: raw
     }.to_json
-    {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: payload}
+    {server_id: @server.id, scope: "fsw", name: "hep3-api", payload: payload}
   end
 
   def sdp_raw(start_line, ip, port)
@@ -40,7 +40,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "renders the ladder fragment for a call (no layout)" do
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
 
     assert_response :success
     assert_match(/<svg/, @response.body, "the ladder is an inline SVG")
@@ -51,7 +51,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "carries the raw SIP so the panel needs no extra fetch" do
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
 
     assert_response :success
     assert_match "INVITE sip:bob@10.0.0.2 SIP/2.0", @response.body,
@@ -59,10 +59,10 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "focus pre-selects the clicked message (server emits its ladder index)" do
-    ok = HepMessage.for_call(tenant_id: @island.id, scope: "fsw", name: "hep3-api", corr_id: "call-1")
+    ok = HepMessage.for_call(server_id: @server.id, scope: "fsw", name: "hep3-api", corr_id: "call-1")
       .find { |m| m.payload_json["response_code"] == 200 }
 
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1", focus: ok.id)
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1", focus: ok.id)
 
     assert_response :success
     # ladder order: INVITE(0) 100(1) 200(2) ACK(3) → the 200 is index 2.
@@ -71,7 +71,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "the fragment wires refresh + keyboard nav (scope/corr values, actions)" do
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1")
 
     assert_response :success
     assert_match 'data-call-flow-corr-value="call-1"', @response.body
@@ -86,7 +86,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
       msg("", 200, "2.2.2.2", "1.1.1.1", ts: "02", corr: "inl", raw: sdp_raw("SIP/2.0 200 OK", "2.2.2.2", 2000))
     ])
 
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "inl")
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "inl")
 
     assert_response :success
     assert_match "call-flow-media", @response.body, "on-lifeline RTP is drawn inline in the ladder"
@@ -98,17 +98,17 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
     # line only ever carries one leg's Call-ID. Opening by it must resolve the
     # reader instance + corr_id (= shared) and show the WHOLE call.
     HepMessage.bulk_insert([
-      {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: {
+      {server_id: @server.id, scope: "fsw", name: "hep3-api", payload: {
         ts: "2026-06-30 10:00:01.000000", call_id: "legA@sbc", x_cid: "shared",
         method: "INVITE", response_code: 0, src_ip: "1.1.1.1", dst_ip: "2.2.2.2", from_user: "a", to_user: "b"
       }.to_json},
-      {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: {
+      {server_id: @server.id, scope: "fsw", name: "hep3-api", payload: {
         ts: "2026-06-30 10:00:02.000000", call_id: "legB@fsw", x_cid: "shared",
         method: "", response_code: 200, src_ip: "2.2.2.2", dst_ip: "1.1.1.1", from_user: "a", to_user: "b"
       }.to_json}
     ])
 
-    get metrics_hep3_call_path(tenant_key: @key, call_id: "legA@sbc")
+    get metrics_hep3_call_path(server_key: @key, call_id: "legA@sbc")
 
     assert_response :success
     assert_match(/<svg/, @response.body)
@@ -118,7 +118,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "Logs bridge: an uncaptured call_id renders the empty state carrying the id" do
-    get metrics_hep3_call_path(tenant_key: @key, call_id: "never-captured@10.0.0.9")
+    get metrics_hep3_call_path(server_key: @key, call_id: "never-captured@10.0.0.9")
 
     assert_response :success
     assert_match "Call not found", @response.body
@@ -126,14 +126,14 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "an unknown call renders the in-overlay empty state, not a 404" do
-    get metrics_hep3_call_path(tenant_key: @key, scope: "fsw", name: "hep3-api", corr_id: "ghost")
+    get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "ghost")
 
     assert_response :success
     assert_match "Call not found", @response.body
   end
 
   test "missing scope/name/corr_id is a 404" do
-    get metrics_hep3_call_path(tenant_key: @key, scope: "", name: "", corr_id: "")
+    get metrics_hep3_call_path(server_key: @key, scope: "", name: "", corr_id: "")
 
     assert_response :not_found
   end

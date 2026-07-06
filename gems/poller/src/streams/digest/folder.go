@@ -37,25 +37,25 @@ const PendingTTL = time.Hour
 // timestamp drives the cleanup GC; size is the on-disk total (sum of
 // payload files) so Rails can sanity-check before reading.
 //
-// `TenantID` is the Rails-side Island primary key (passed as string so
+// `ServerID` is the Rails-side Server primary key (passed as string so
 // the JSON envelope is uniform across Go services that don't know /
-// care that the stable identifier is integer-backed). Tenant is the
-// platform-internal name for "operator-managed scope" — `tenant_id`
+// care that the stable identifier is integer-backed). Server is the
+// platform-internal name for "operator-managed scope" — `server_id`
 // in this contract is the same value that ends up on the `poller_digests`
 // table on the Rails side.
 type Meta struct {
 	Type     string `json:"type"`
-	TenantID string `json:"tenant_id"`
+	ServerID string `json:"server_id"`
 	TS       int64  `json:"ts"`
 	Size     int    `json:"size"`
 	Since    string `json:"since,omitempty"`
 }
 
-// ComputeHash returns a 16-hex xxhash64 over the stream type, tenant id
+// ComputeHash returns a 16-hex xxhash64 over the stream type, server id
 // and tick timestamp (nanoseconds). The collision space is far past
 // what one poller will ever produce within the retention window.
-func ComputeHash(streamType, tenantID string, ts time.Time) string {
-	key := fmt.Sprintf("%s|%s|%d", streamType, tenantID, ts.UnixNano())
+func ComputeHash(streamType, serverID string, ts time.Time) string {
+	key := fmt.Sprintf("%s|%s|%d", streamType, serverID, ts.UnixNano())
 
 	return fmt.Sprintf("%016x", xxhash.Sum64String(key))
 }

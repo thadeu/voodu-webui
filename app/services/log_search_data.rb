@@ -56,13 +56,13 @@ class LogSearchData
   # Hard floor on `from` — never scan past what cleanup keeps.
   RETENTION = LogTail::FilePath::RETENTION_DAYS.days
 
-  attr_reader :island
+  attr_reader :server
 
-  # @param island [Island]
+  # @param server [Server]
   # @param params [Hash] the operator's filter choices. Recognised keys
   #   (symbol or string): :range, :from, :until, :q, :regex, :pods.
-  def initialize(island:, params: {})
-    @island = island
+  def initialize(server:, params: {})
+    @server = server
     @params = normalize_params(params)
     @page = [@params[:page].to_i, 1].max
   end
@@ -209,7 +209,7 @@ class LogSearchData
     scanned = 0
 
     LogTail::Reader.each_line(
-      island_id: island.id,
+      server_id: server.id,
       pods: pods.presence,
       from: from,
       until_: until_,

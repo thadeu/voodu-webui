@@ -4,23 +4,23 @@ require "test_helper"
 
 # Runs in warehouse mode so MetricsData reads the local metrics SQLite
 # instead of needing a live controller — same headless pattern as
-# IslandUptimeTest. We don't assert metric VALUES (the warehouse is
+# ServerUptimeTest. We don't assert metric VALUES (the warehouse is
 # empty here, charts come back flat); we assert the dashboard-specific
 # logic: workload→replica resolution, the missing placeholder, and the
 # range/interval guards.
 class MetricDashboardDataTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @org = @island.org
+    @server = servers(:alpha)
+    @org = @server.org
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
 
   teardown do
     ENV["WAREHOUSE"] = @prev_wh
-    dir = LogTail::FilePath.island_dir(@island.id)
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 
@@ -51,13 +51,13 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   end
 
   test "a panel forged to read a server in ANOTHER org resolves to a placeholder, never a cross-org read" do
-    # gamma lives in globex, NOT @org (acme). A panel whose island_id points at
-    # it must NOT resolve — the read-path only resolves islands WITHIN @org
-    # (islands_by_id is org-scoped), so a forged/cross-org id is a dead panel.
-    gamma = islands(:gamma)
+    # gamma lives in globex, NOT @org (acme). A panel whose server_id points at
+    # it must NOT resolve — the read-path only resolves servers WITHIN @org
+    # (servers_by_id is org-scoped), so a forged/cross-org id is a dead panel.
+    gamma = servers(:gamma)
     assert_not_equal @org.id, gamma.org_id, "gamma must be in a different org for this to test isolation"
 
-    forged = HOST.merge("island_id" => gamma.id, "label" => "forged")
+    forged = HOST.merge("server_id" => gamma.id, "label" => "forged")
     dash = @org.metric_dashboards.new(name: "forged", panels: [forged])
 
     charts = MetricDashboardData.new(@org, dash, range: "1h").charts
@@ -173,17 +173,17 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   private
 
-  # make_dashboard — an org dashboard whose server panels bind to @island (M2:
-  # every non-http panel carries its island_id; the read-path resolves each
-  # panel's server WITHIN the org). http panels are external — no island_id.
+  # make_dashboard — an org dashboard whose server panels bind to @server (M2:
+  # every non-http panel carries its server_id; the read-path resolves each
+  # panel's server WITHIN the org). http panels are external — no server_id.
   def make_dashboard(panels)
-    with_island = panels.map { |p| (p["source"].to_s == "http") ? p : p.merge("island_id" => @island.id) }
+    with_server = panels.map { |p| (p["source"].to_s == "http") ? p : p.merge("server_id" => @server.id) }
 
-    @org.metric_dashboards.create!(name: "d-#{panels.size}-#{panels.object_id}", panels: with_island)
+    @org.metric_dashboards.create!(name: "d-#{panels.size}-#{panels.object_id}", panels: with_server)
   end
 
   def seed_running_web_pod
-    @island.pods.create!(
+    @server.pods.create!(
       container_name: "web.aaaa",
       kind: "deployment",
       scope: "web",
@@ -206,7 +206,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     rows = counts.map do |mins, n|
       iso = "#{(Time.current - mins.minutes).utc.iso8601[0, 16]}:00Z"
 
-      {tenant_id: @island.id, source: "log", ts_iso: iso,
+      {server_id: @server.id, source: "log", ts_iso: iso,
        payload: {source: "log", ts: iso, name: key, log_count: n}.to_json}
     end
 
@@ -219,7 +219,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     iso = "#{time.utc.iso8601[0, 16]}:00Z"
 
     MetricSample.bulk_insert([
-      {tenant_id: @island.id, source: "log", ts_iso: iso,
+      {server_id: @server.id, source: "log", ts_iso: iso,
        payload: {source: "log", ts: iso, name: key, log_count: count}.to_json}
     ])
   end

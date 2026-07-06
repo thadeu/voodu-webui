@@ -9,25 +9,25 @@ require "test_helper"
 # job re-fetches an overlapping batch, byte-identical lines hit the
 # warehouse at most once.
 class LogTail::WriterTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    clear_island_logs
+    @server = servers(:alpha)
+    clear_server_logs
   end
 
-  teardown { clear_island_logs }
+  teardown { clear_server_logs }
 
   test "a fresh Writer dedupes against lines already on disk" do
     line = line_for("hello", ts: "2026-06-09T15:00:00.000Z")
 
-    w1 = LogTail::Writer.new(@island.id)
+    w1 = LogTail::Writer.new(@server.id)
     assert w1.append("web", line), "first write lands"
     w1.close
 
     # New Writer = empty in-memory window. It must still skip the
     # identical line by seeding its window from the file tail.
-    w2 = LogTail::Writer.new(@island.id)
+    w2 = LogTail::Writer.new(@server.id)
     assert_not w2.append("web", line), "identical on-disk line is skipped"
     assert w2.append("web", line_for("world", ts: "2026-06-09T15:00:01.000Z")), "a genuinely new line still writes"
     w2.close
@@ -38,7 +38,7 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   test "dedupes within a single Writer run too" do
     line = line_for("repeat", ts: "2026-06-09T15:00:00.000Z")
 
-    w = LogTail::Writer.new(@island.id)
+    w = LogTail::Writer.new(@server.id)
     assert w.append("web", line)
     assert_not w.append("web", line), "same line twice in one run is skipped"
     w.close
@@ -53,11 +53,11 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   end
 
   def daily_path(pod)
-    LogTail::FilePath.daily_file(@island.id, pod, Date.current)
+    LogTail::FilePath.daily_file(@server.id, pod, Date.current)
   end
 
-  def clear_island_logs
-    dir = LogTail::FilePath.island_dir(@island.id)
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server.id)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

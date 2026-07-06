@@ -8,7 +8,7 @@ require "test_helper"
 # owns servers (the guard). Asserts on the turbo-stream targets so a change to
 # what streams back breaks the test.
 class OrgsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   test "create adds the org and streams the new option + refreshed panel" do
     assert_difference -> { Org.count }, 1 do

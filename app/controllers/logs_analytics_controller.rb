@@ -14,7 +14,7 @@
 #     /logs/analytics?range=1h&q=callid is bookmarkable + shareable.
 class LogsAnalyticsController < ApplicationController
   def index
-    data = current_island && LogSearchData.new(island: current_island, params: search_params)
+    data = current_server && LogSearchData.new(server: current_server, params: search_params)
     frame = request.headers["Turbo-Frame"]
 
     if data && frame&.start_with?("la-page-")
@@ -38,10 +38,10 @@ class LogsAnalyticsController < ApplicationController
   # before/after one anchor row in its log stream. Fetched + injected as
   # an overlay by the log-analytics controller, so it returns bare markup.
   def surrounding
-    return head(:not_found) if current_island.nil?
+    return head(:not_found) if current_server.nil?
 
     data = LogSurroundingData.new(
-      island: current_island,
+      server: current_server,
       pod: params[:pod].to_s,
       ts: params[:ts].to_s,
       all_pods: params[:all_pods] == "1",
@@ -54,7 +54,7 @@ class LogsAnalyticsController < ApplicationController
       fmt = params[:fmt].to_s
       send_data(
         format_rows(data.rows, fmt),
-        filename: "surrounding-#{current_island.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
+        filename: "surrounding-#{current_server.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
         type: EXPORT_TYPES[fmt][:mime],
         disposition: "attachment"
       )
@@ -80,16 +80,16 @@ class LogsAnalyticsController < ApplicationController
   }.freeze
 
   def export
-    return head(:not_found) if current_island.nil?
+    return head(:not_found) if current_server.nil?
 
-    data = LogSearchData.new(island: current_island, params: search_params)
+    data = LogSearchData.new(server: current_server, params: search_params)
     fmt = EXPORT_TYPES.key?(params[:fmt].to_s) ? params[:fmt].to_s : "ndjson"
 
     body = (fmt == "json") ? export_json(data) : export_lines(data, fmt)
 
     send_data(
       body,
-      filename: "logs-#{current_island.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
+      filename: "logs-#{current_server.key}-#{Time.current.utc.strftime("%Y%m%d-%H%M%S")}.#{EXPORT_TYPES[fmt][:ext]}",
       type: EXPORT_TYPES[fmt][:mime],
       disposition: "attachment"
     )
@@ -133,7 +133,7 @@ class LogsAnalyticsController < ApplicationController
 
   def each_export_record(data, &block)
     reader = LogTail::Reader.each_line(
-      island_id: data.island.id,
+      server_id: data.server.id,
       pods: data.pods.presence,
       from: data.from,
       until_: data.until_,
@@ -159,11 +159,11 @@ class LogsAnalyticsController < ApplicationController
   # the multi-pod case is one shape; the rest are scalars. `page` drives
   # Load more. Symbolised so LogSearchData's accessors read uniformly.
   def search_params
-    # tenant_key is a routing param (always present); permit it so strong
+    # server_key is a routing param (always present); permit it so strong
     # params stops logging it as "Unpermitted" on every request. LogSearchData
     # ignores the extra key — it reads only the filter fields below.
     params.permit(
-      :tenant_key,
+      :server_key,
       :range,
       :from,
       :until,
@@ -175,9 +175,9 @@ class LogsAnalyticsController < ApplicationController
   end
 
   # pods_for_picker — compact pod list for the scope dropdown. Shares the
-  # IslandPods cache cell with /logs + /metrics (no extra round-trip when
+  # ServerPods cache cell with /logs + /metrics (no extra round-trip when
   # the operator bounces between surfaces).
   def pods_for_picker
-    IslandPods.compact(voodu_client, current_island)
+    ServerPods.compact(voodu_client, current_server)
   end
 end

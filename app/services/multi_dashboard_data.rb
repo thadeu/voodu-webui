@@ -11,8 +11,8 @@
 class MultiDashboardData
   attr_reader :range, :interval
 
-  # M2: dashboards live at the org and each panel carries its island_id, so
-  # each section takes the org (not one client/island) and self-resolves its
+  # M2: dashboards live at the org and each panel carries its server_id, so
+  # each section takes the org (not one client/server) and self-resolves its
   # panels' servers.
   def initialize(org, dashboards, range:, interval: nil, from: nil, until_: nil)
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE

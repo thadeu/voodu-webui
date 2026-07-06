@@ -11,7 +11,7 @@ module Internal
   #     Body (JSON):
   #       {
   #         "type":       "metrics" | "state",
-  #         "tenant_id":  42,
+  #         "server_id":  42,
   #         "sync_hash":  "0123456789abcdef",  # 16-hex xxhash64
   #         "ts":         1716922000000,        # epoch ms
   #         "size":       12345                  # folder bytes
@@ -25,7 +25,7 @@ module Internal
   #   - 403                                           — request from public IP
   #
   # Auth + IP guards come from `InternalEndpointAuth` — same wiring as
-  # `PollerController` (the GET /internal/poller/islands sibling).
+  # `PollerController` (the GET /internal/poller/servers sibling).
   # Both must stay in lockstep; the operator configures ONE
   # POLLER_TOKEN and the Go binary uses it for every internal call.
   #
@@ -44,15 +44,15 @@ module Internal
 
     def create
       type = params[:type].to_s
-      tenant_id = params[:tenant_id]
+      server_id = params[:server_id]
       sync_hash = params[:sync_hash].to_s
 
       unless PollerDigest::TYPES.include?(type)
         return render json: {error: "invalid type"}, status: :bad_request
       end
 
-      if tenant_id.blank?
-        return render json: {error: "tenant_id required"}, status: :bad_request
+      if server_id.blank?
+        return render json: {error: "server_id required"}, status: :bad_request
       end
 
       unless sync_hash.match?(HASH_FORMAT)
@@ -73,7 +73,7 @@ module Internal
       PollerDigest.create!(
         sync_hash: sync_hash,
         type: type,
-        tenant_id: tenant_id.to_i,
+        server_id: server_id.to_i,
         status: "queued"
       )
 

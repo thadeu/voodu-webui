@@ -31,16 +31,16 @@
 # variants on the aside root — no per-child JS, no Phlex branching.
 class Components::Layouts::Sidebar < Components::Base
   # Nav is split into two groups. The :path key maps to a route HELPER name
-  # (resolved at render-time against the current request's org_id + tenant_key
+  # (resolved at render-time against the current request's org_id + server_key
   # via ApplicationController#default_url_options) — helpers not literal strings,
   # so a route rename is a one-line routes.rb change.
   #
   # SERVER_NAV — scoped to THE CURRENT server (overview/pods/logs/settings read
-  # one island). ORG_NAV — org-level surfaces that span every server in the org
+  # one server). ORG_NAV — org-level surfaces that span every server in the org
   # (Metrics + Alerts became cross-server in M2/M3), so they sit in their own
   # group under an "Org" heading.
   SERVER_NAV = [
-    {id: :overview, label: "Overview", icon: :Squares2x2Outline, path: :tenant_root},
+    {id: :overview, label: "Overview", icon: :Squares2x2Outline, path: :server_root},
     {id: :pods, label: "Pods", icon: :CubeOutline, path: :pods},
     # Logs lands on Analytics (the primary surface); `active_prefix`
     # keeps the item highlighted across the whole /logs/* family
@@ -54,11 +54,11 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count}
   ].freeze
 
-  def initialize(current_path: "/", islands: [], recent_islands: nil, current_island: nil)
+  def initialize(current_path: "/", servers: [], recent_servers: nil, current_server: nil)
     @current_path = current_path
-    @islands = islands
-    @recent_islands = recent_islands
-    @current_island = current_island
+    @servers = servers
+    @recent_servers = recent_servers
+    @current_server = current_server
   end
 
   def view_template
@@ -93,17 +93,17 @@ class Components::Layouts::Sidebar < Components::Base
       },
       aria: {label: "Sidebar"}
     ) do
-      # Turbo Stream subscriptions — one per visible island so the
+      # Turbo Stream subscriptions — one per visible server so the
       # status dot in each row flips live when its state-sync job
       # completes (success → :online, failure → :offline). The
-      # current_island's subscription also covers the topbar
+      # current_server's subscription also covers the topbar
       # status pill (same channel; broadcast carries both targets).
-      recent_islands_to_render.each do |island|
-        turbo_stream_from "island-state-#{island.id}"
+      recent_servers_to_render.each do |server|
+        turbo_stream_from "server-state-#{server.id}"
       end
 
       brand
-      islands_section
+      servers_section
       nav_section
       div(class: "flex-1")
       collapse_footer
@@ -145,19 +145,19 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
-  def islands_section
+  def servers_section
     div(class: "flex flex-col gap-1.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5") do
       # Section header (label + count + add button) hides entirely
       # when collapsed — the rail isn't wide enough to read it.
       div(class: "flex items-center justify-between px-2 pt-1 pb-0.5 vmd:group-data-[collapsed]:hidden") do
         span(class: "inline-flex items-baseline gap-1.5") do
           span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Servers" }
-          if @islands.any?
-            span(class: "font-voodu-mono text-[10.5px] text-voodu-muted-2") { "(#{@islands.size})" }
+          if @servers.any?
+            span(class: "font-voodu-mono text-[10.5px] text-voodu-muted-2") { "(#{@servers.size})" }
           end
         end
         a(
-          href: new_island_path,
+          href: new_server_path,
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
           aria: {label: "Add server"}
         ) do
@@ -165,25 +165,25 @@ class Components::Layouts::Sidebar < Components::Base
         end
       end
 
-      list = recent_islands_to_render
+      list = recent_servers_to_render
       if list.empty?
-        empty_islands
+        empty_servers
       else
         div(class: "flex flex-col gap-px") do
-          list.each { |island| island_row(island) }
+          list.each { |server| server_row(server) }
           see_all_link
         end
       end
     end
   end
 
-  def recent_islands_to_render
-    return @recent_islands if @recent_islands
+  def recent_servers_to_render
+    return @recent_servers if @recent_servers
 
     begin
-      recent_islands
+      recent_servers
     rescue NoMethodError
-      @islands
+      @servers
     end
   end
 
@@ -191,7 +191,7 @@ class Components::Layouts::Sidebar < Components::Base
   # "manage servers" affordance never disappears.
   def see_all_link
     a(
-      href: islands_path,
+      href: servers_path,
       title: "See all servers",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
@@ -207,29 +207,29 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
-  def empty_islands
+  def empty_servers
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 vmd:group-data-[collapsed]:hidden") do
       plain "no servers yet."
       br
-      a(href: new_island_path, class: "text-voodu-link hover:underline") { "add one →" }
+      a(href: new_server_path, class: "text-voodu-link hover:underline") { "add one →" }
     end
   end
 
-  # island_row — two visual modes:
+  # server_row — two visual modes:
   #
   #   Expanded:  [● dot] [name + host meta]
   #   Collapsed: [2-letter avatar with status-tinted background]
   #
   # The `title` attribute supplies a native tooltip when collapsed
   # so the operator can confirm which server they're hovering.
-  def island_row(island)
-    selected = @current_island && island.id == @current_island.id
-    status = (island.status || :stopped).to_sym
-    letters = avatar_letters_for(island.name)
+  def server_row(server)
+    selected = @current_server && server.id == @current_server.id
+    status = (server.status || :stopped).to_sym
+    letters = avatar_letters_for(server.name)
 
     a(
-      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
-      title: "#{island.name} · #{island.host}",
+      href: server_root_path(org_id: server.org.short_id, server_key: server.key),
+      title: "#{server.name} · #{server.host}",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
@@ -241,12 +241,12 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       # Status dot — expanded view only. DOM id is the Turbo
-      # Stream broadcast target. StateSyncIslandJob re-renders
+      # Stream broadcast target. StateSyncServerJob re-renders
       # this span on every sync result and the dot flips live
       # without a page refresh. See
-      # StateSyncIslandJob#broadcast_status_change.
+      # StateSyncServerJob#broadcast_status_change.
       span(
-        id: "island-status-dot-#{island.id}",
+        id: "server-status-dot-#{server.id}",
         class: "shrink-0 vmd:group-data-[collapsed]:hidden"
       ) do
         render Components::UI::StatusDot.new(status: status)
@@ -259,12 +259,12 @@ class Components::Layouts::Sidebar < Components::Base
             "font-voodu-mono text-[12.5px] truncate",
             selected ? "font-semibold text-voodu-accent-2" : "font-medium text-voodu-text"
           )
-        ) { island.name }
+        ) { server.name }
 
         span(class: "font-voodu-mono text-[10.5px] text-voodu-muted truncate") do
-          count = island.pods_count
+          count = server.pods_count
           suffix = count.nil? ? "— pods" : "#{count} pods"
-          "#{island.host} · #{suffix}"
+          "#{server.host} · #{suffix}"
         end
       end
 
@@ -294,7 +294,7 @@ class Components::Layouts::Sidebar < Components::Base
   # tint. Mirrors the palette StatusDot uses so the two
   # representations of "this server is X" agree on color.
   #
-  # selected — when this is the currently-active navigation island,
+  # selected — when this is the currently-active navigation server,
   # the accent (purple) overrides the status tint. Rationale: the
   # topbar already surfaces the LIVE status of the active server
   # (the green "Online" pill in the screenshots), so repeating it
@@ -326,7 +326,7 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def nav_section
-    return if nav_tenant_key.nil?
+    return if nav_server_key.nil?
 
     nav(
       class: "flex flex-col gap-3.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
@@ -359,16 +359,16 @@ class Components::Layouts::Sidebar < Components::Base
     end
   end
 
-  def nav_tenant_key
-    nav_island&.key
+  def nav_server_key
+    nav_server&.key
   end
 
-  # nav_org_id — the org short_id for the nav's tenant-scoped path helpers (M1
-  # routes are `/:org_id/:tenant_key/…`, so every per-server link needs it).
-  # Derived from the island the nav points at, so on the tenant-less /islands
+  # nav_org_id — the org short_id for the nav's server-scoped path helpers (M1
+  # routes are `/:org_id/:server_key/…`, so every per-server link needs it).
+  # Derived from the server the nav points at, so on the server-less /servers
   # page (no current_org) the links still resolve to that server's org.
   def nav_org_id
-    nav_island&.org&.short_id
+    nav_server&.org&.short_id
   end
 
   # nav_item — collapsed view: icon centered, label hidden, badge
@@ -378,7 +378,7 @@ class Components::Layouts::Sidebar < Components::Base
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
-    href = public_send("#{item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key)
+    href = public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)
 
     a(
       href: href,
@@ -400,8 +400,8 @@ class Components::Layouts::Sidebar < Components::Base
         # id-bearing wrapper ALWAYS renders (even at count 0) so the
         # AlertsLive broadcast has a stable `update` target; the
         # NavBadge inside renders nothing when nothing is firing.
-        if item[:badge] && nav_island
-          span(id: "alerts-badge-dot-#{nav_island.id}") do
+        if item[:badge] && nav_server
+          span(id: "alerts-badge-dot-#{nav_server.id}") do
             render Components::Alerts::NavBadge.new(count: badge_count, variant: :dot)
           end
         end
@@ -412,38 +412,38 @@ class Components::Layouts::Sidebar < Components::Base
       # Expanded-state badge — inline right-aligned pill. Hidden when
       # collapsed (the icon badge takes over). Same always-rendered
       # wrapper contract as the dot above.
-      if item[:badge] && nav_island
-        span(id: "alerts-badge-pill-#{nav_island.id}", class: "vmd:group-data-[collapsed]:hidden") do
+      if item[:badge] && nav_server
+        span(id: "alerts-badge-pill-#{nav_server.id}", class: "vmd:group-data-[collapsed]:hidden") do
           render Components::Alerts::NavBadge.new(count: badge_count, variant: :pill)
         end
       end
     end
   end
 
-  # Firing count for the island the nav links point at. Scoped to ONE
-  # island on purpose — the sidebar nav is per-island context; other
-  # islands' incidents surface on their own pages (cross-island
+  # Firing count for the server the nav links point at. Scoped to ONE
+  # server on purpose — the sidebar nav is per-server context; other
+  # servers' incidents surface on their own pages (cross-server
   # roll-up is an explicit non-goal for v1).
   def nav_badge_count(key)
     return nil unless key
-    return nil if nav_island.nil?
+    return nil if nav_server.nil?
 
     case key
-    when :alerts_count then AlertRule.firing_count_for(nav_island.id)
+    when :alerts_count then AlertRule.firing_count_for(nav_server.id)
     end
   end
 
-  def nav_island
-    @current_island || @islands.first
+  def nav_server
+    @current_server || @servers.first
   end
 
   def nav_active?(item)
-    return @current_path == public_send("#{item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key) if item[:path] == :tenant_root
+    return @current_path == public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key) if item[:path] == :server_root
 
     # `active_prefix` lets an item highlight across a URL family wider
     # than its href (e.g. Logs links to /logs/analytics but stays active
     # on /logs too). Falls back to the item's own path.
-    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key)
+    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)
     @current_path.start_with?(prefix)
   end
 

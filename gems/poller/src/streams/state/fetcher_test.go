@@ -109,7 +109,7 @@ func TestFetcher_BothFilesCommittedBeforeNotify(t *testing.T) {
 	defer rails.Close()
 
 	railsClient := client.NewRailsClient(rails.URL, "tok")
-	isl := client.Island{ID: "island-1", Endpoint: voodu.URL, PAT: "pat-1"}
+	isl := client.Server{ID: "server-1", Endpoint: voodu.URL, PAT: "pat-1"}
 	m := &stubMetrics{}
 	f := NewFetcher(isl, root, time.Second, railsClient, m)
 
@@ -156,7 +156,7 @@ func TestFetcher_ParallelFetch(t *testing.T) {
 	defer rails.Close()
 
 	railsClient := client.NewRailsClient(rails.URL, "tok")
-	isl := client.Island{ID: "island-1", Endpoint: voodu.URL, PAT: "pat-1"}
+	isl := client.Server{ID: "server-1", Endpoint: voodu.URL, PAT: "pat-1"}
 	f := NewFetcher(isl, root, time.Second, railsClient, &stubMetrics{})
 
 	tickStart := time.Now()
@@ -202,7 +202,7 @@ func TestFetcher_PodsFails_NoFolderWritten(t *testing.T) {
 	defer rails.Close()
 
 	railsClient := client.NewRailsClient(rails.URL, "tok")
-	isl := client.Island{ID: "island-1", Endpoint: voodu.URL, PAT: "pat-1"}
+	isl := client.Server{ID: "server-1", Endpoint: voodu.URL, PAT: "pat-1"}
 	m := &stubMetrics{}
 	f := NewFetcher(isl, root, time.Second, railsClient, m)
 

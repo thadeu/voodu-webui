@@ -3,22 +3,22 @@
 require "test_helper"
 
 class MetricDashboardTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   # Dashboards live at the ORG now (M2); every server panel carries its own
-  # island_id (the server it reads from). @island is a server of @org.
+  # server_id (the server it reads from). @server is a server of @org.
   setup do
-    @island = islands(:alpha)
-    @org = @island.org
+    @server = servers(:alpha)
+    @org = @server.org
   end
 
   def host_panel
     {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "island_id" => @island.id}
+     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "server_id" => @server.id}
   end
 
   def log_panel
-    {"scope_kind" => "log", "scope" => "fs", "name" => "fs", "island_id" => @island.id,
+    {"scope_kind" => "log", "scope" => "fs", "name" => "fs", "server_id" => @server.id,
      "query" => "@message like /INVITE/", "agg" => "count",
      "label" => "fs · INVITE", "color" => "var(--voodu-orange)", "chart_type" => "number"}
   end
@@ -41,16 +41,16 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "the same name is allowed in a different org" do
     @org.metric_dashboards.create!(name: "shared", panels: [host_panel])
-    gamma = islands(:gamma)
+    gamma = servers(:gamma)
     other = gamma.org.metric_dashboards.new(name: "shared",
-      panels: [host_panel.merge("island_id" => gamma.id)])
+      panels: [host_panel.merge("server_id" => gamma.id)])
 
     assert other.valid?, other.errors.full_messages.to_sentence
   end
 
   test "a panel with an empty unit is valid (Requests, Net Rx, errors, …)" do
     unitless = {"scope_kind" => "pod", "scope" => "api", "name" => "api", "kind" => "deployment",
-                "metric" => "req_count", "scale" => "count", "island_id" => @island.id,
+                "metric" => "req_count", "scale" => "count", "server_id" => @server.id,
                 "label" => "api · Requests", "color" => "var(--voodu-orange)", "unit" => ""}
     d = @org.metric_dashboards.new(name: "reqs", panels: [unitless])
 
@@ -136,7 +136,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "destroyed with its org" do
     @org.metric_dashboards.create!(name: "a", panels: [host_panel])
-    @org.islands.destroy_all # remove the org's servers so the org is deletable
+    @org.servers.destroy_all # remove the org's servers so the org is deletable
 
     assert_difference("MetricDashboard.count", -1) { @org.destroy }
   end
@@ -145,7 +145,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   def table_panel(**overrides)
     {"scope_kind" => "table", "chart_type" => "table", "source" => "hep3",
-     "scope" => "fsw", "name" => "hep3-api", "view" => "messages", "island_id" => @island.id,
+     "scope" => "fsw", "name" => "hep3-api", "view" => "messages", "server_id" => @server.id,
      "label" => "SIP", "color" => "var(--voodu-accent)"}.merge(overrides.transform_keys(&:to_s))
   end
 
@@ -187,7 +187,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
       host_panel                                       # non-table → ignored
     ])
 
-    readers = MetricDashboard.table_readers_for(@island, source: "hep3")
+    readers = MetricDashboard.table_readers_for(@server, source: "hep3")
 
     assert_equal [{scope: "fsw", name: "hep3-api"}, {scope: "ops", name: "sip"}].sort_by { |r| r[:name] },
       readers.sort_by { |r| r[:name] }

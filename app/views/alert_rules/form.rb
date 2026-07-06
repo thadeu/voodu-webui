@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Views::AlertRules::Form — the New/Edit alert rule modal, rendered
-# over the dashboard chrome (same shell as Views::Islands::New).
+# over the dashboard chrome (same shell as Views::Servers::New).
 #
 # The target is ONE select — "Host (entire server)" plus the
 # workloads from the state-sync snapshot grouped by scope — encoded
@@ -14,14 +14,15 @@
 # req/s = deployments-only) and swaps the unit suffix. Server-side
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
-  def initialize(current_path:, rule:, targets: [], servers: [], destinations: [], islands: [], current_island: nil, return_to: nil)
+  def initialize(current_path:, rule:, targets: [], servers: [], destinations: [], current_server: nil, return_to: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @current_server = current_server
     @rule = rule
     @targets = targets
-    # servers — the org's servers (M3), so the Target select offers a Host per
-    # server + that server's pods. A rule targets exactly one (server, host|pod).
+    # servers — the org's servers (M3): feeds BOTH the layout sidebar list and
+    # the Target select (a Host per server + that server's pods). A rule targets
+    # exactly one (server, host|pod). (Pre-rename this was two params — islands
+    # for the layout + servers for the picker — but they carry the same data.)
     @servers = servers
     @destinations = destinations
     # return_to — the path cancel/close/save go back to (a full route, already
@@ -32,7 +33,7 @@ class Views::AlertRules::Form < Views::Base
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands, current_island: @current_island,
+      current_path: @current_path, servers: @servers, current_server: @current_server,
       breadcrumb: overview_crumbs({label: "Alerts"})
     ) do
       render(modal) { form_body }
@@ -201,7 +202,7 @@ class Views::AlertRules::Form < Views::Base
   # target_select — the DS custom dropdown (trigger + hidden input + filterable
   # menu), NOT a native <select>. One flat, server-prefixed list of targets
   # across the org (M3): a Host per server + that server's pods. The hidden
-  # input carries the encoded value (`host|<island_id>` / `pod|<id>|<scope>|
+  # input carries the encoded value (`host|<server_id>` / `pod|<id>|<scope>|
   # <name>`); alert_rule_form#pickTarget syncs it + the trigger label + the
   # metric↔kind constraint. Org-wide pod lists get an in-menu search box.
   def target_select
@@ -235,7 +236,7 @@ class Views::AlertRules::Form < Views::Base
       rows = servers_for_select.flat_map do |server|
         host = {value: "host|#{server.id}", kind: "host", label: target_label_for(server, "Host (entire server)")}
         pods = targets_for(server).map do |t|
-          {value: encode_target(t[:island_id], t[:scope], t[:name]), kind: t[:kind],
+          {value: encode_target(t[:server_id], t[:scope], t[:name]), kind: t[:kind],
            label: target_label_for(server, "#{t[:scope]}/#{t[:name]}")}
         end
         [host, *pods]
@@ -278,12 +279,12 @@ class Views::AlertRules::Form < Views::Base
   # servers_for_select — the org's servers; falls back to the current server so
   # the menu is never empty (a lone-server org / pre-servers state).
   def servers_for_select
-    @servers.presence || [@current_island].compact
+    @servers.presence || [@current_server].compact
   end
 
   # targets_for — a server's pod targets (workloads), sorted by scope+name.
   def targets_for(server)
-    @targets.select { |t| t[:island_id] == server.id }.sort_by { |t| [t[:scope], t[:name]] }
+    @targets.select { |t| t[:server_id] == server.id }.sort_by { |t| [t[:scope], t[:name]] }
   end
 
   # An edited rule may point at a workload that has since left the snapshot
@@ -292,7 +293,7 @@ class Views::AlertRules::Form < Views::Base
   def orphaned_target_row
     return if @rule.host_target?
     return if current_target_value.blank?
-    return if @targets.any? { |t| encode_target(t[:island_id], t[:scope], t[:name]) == current_target_value }
+    return if @targets.any? { |t| encode_target(t[:server_id], t[:scope], t[:name]) == current_target_value }
 
     {value: current_target_value, kind: "deployment", label: "#{@rule.target_scope}/#{@rule.target_name} (not running)"}
   end
@@ -323,15 +324,15 @@ class Views::AlertRules::Form < Views::Base
     div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
   end
 
-  def encode_target(island_id, scope, name)
-    "pod|#{island_id}|#{scope}|#{name}"
+  def encode_target(server_id, scope, name)
+    "pod|#{server_id}|#{scope}|#{name}"
   end
 
   def current_target_value
-    return "host|#{@rule.island_id}" if @rule.host_target?
+    return "host|#{@rule.server_id}" if @rule.host_target?
     return nil if @rule.target_scope.blank?
 
-    encode_target(@rule.island_id, @rule.target_scope, @rule.target_name)
+    encode_target(@rule.server_id, @rule.target_scope, @rule.target_name)
   end
 
   def target_error
@@ -426,7 +427,7 @@ class Views::AlertRules::Form < Views::Base
     end
   end
 
-  # ---- shared field plumbing (same look as Views::Islands::New) ----
+  # ---- shared field plumbing (same look as Views::Servers::New) ----
 
   def field(label:, hint: nil, error: nil)
     div(class: "flex flex-col gap-1.5") do

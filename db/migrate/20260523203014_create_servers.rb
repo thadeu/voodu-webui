@@ -1,6 +1,6 @@
-class CreateIslands < ActiveRecord::Migration[8.1]
+class CreateServers < ActiveRecord::Migration[8.1]
   def change
-    create_table :islands do |t|
+    create_table :servers do |t|
       # Operator-supplied display label. Shows in the sidebar list.
       t.string :name, null: false
 
@@ -16,6 +16,6 @@ class CreateIslands < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :islands, :name, unique: true
+    add_index :servers, :name, unique: true
   end
 end

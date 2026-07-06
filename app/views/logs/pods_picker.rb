@@ -11,7 +11,7 @@
 # instead of single-select navigation.
 #
 # State machinery (all client-side):
-#   - localStorage key  `voodu:logs-pods:v1:<island_key>` →
+#   - localStorage key  `voodu:logs-pods:v1:<server_key>` →
 #                       JSON array of resource_names (empty = all)
 #   - Stimulus ctrl     `logs-pods-selector` (drawer body root)
 #                       — loads selection, toggles checkboxes,
@@ -22,11 +22,11 @@
 #
 # No POST endpoint. The drawer is purely a UI surface; persistence
 # is localStorage so it survives navigation but doesn't burden the
-# Settings table with per-island junk that's better treated as
+# Settings table with per-server junk that's better treated as
 # ephemeral display state.
 class Views::Logs::PodsPicker < Views::Base
-  def initialize(island_key:, pods: [])
-    @island_key = island_key
+  def initialize(server_key:, pods: [])
+    @server_key = server_key
     @pods = Array(pods)
   end
 
@@ -41,7 +41,7 @@ class Views::Logs::PodsPicker < Views::Base
       class: "p-4 flex flex-col gap-3.5 @container",
       data: {
         controller: "logs-pods-selector",
-        logs_pods_selector_storage_key_value: "voodu:logs-pods:v1:#{@island_key}"
+        logs_pods_selector_storage_key_value: "voodu:logs-pods:v1:#{@server_key}"
       }
     ) do
       header_row

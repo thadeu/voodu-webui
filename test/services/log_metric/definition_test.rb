@@ -3,22 +3,22 @@
 require "test_helper"
 
 class LogMetric::DefinitionTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @org = @island.org
+    @server = servers(:alpha)
+    @org = @server.org
   end
 
   def log_panel(scope: "fs", name: "fs", query: "@message like /INVITE/", label: "fs · INVITE")
     {"scope_kind" => "log", "scope" => scope, "name" => name, "query" => query,
-     "island_id" => @island.id,
+     "server_id" => @server.id,
      "label" => label, "color" => "var(--voodu-orange)", "chart_type" => "number"}
   end
 
   def metric_panel
     {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "island_id" => @island.id}
+     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "server_id" => @server.id}
   end
 
   test "key_for is stable and varies with each identity field" do
@@ -37,7 +37,7 @@ class LogMetric::DefinitionTest < ActiveSupport::TestCase
       log_panel(query: "@message like /480/", label: "fs · Failed")
     ])
 
-    defs = LogMetric::Definition.all_for(@island)
+    defs = LogMetric::Definition.all_for(@server)
 
     assert_equal 2, defs.size, "the duplicate INVITE filter (a + b) collapses to one"
     queries = defs.map(&:query).sort

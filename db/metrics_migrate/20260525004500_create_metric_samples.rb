@@ -19,15 +19,15 @@
 # Partial indexes (`WHERE source = X`) keep the B-trees lean —
 # system rows don't pollute the pod index and vice-versa.
 #
-# Vocab note: foreign key is `tenant_id` (forward-compatible with a
-# future Island → Tenant rename) referencing islands.id. We
-# intentionally don't add a Rails-level `belongs_to :island` because
+# Vocab note: foreign key is `server_id` (forward-compatible with a
+# future Server → Server rename) referencing servers.id. We
+# intentionally don't add a Rails-level `belongs_to :server` because
 # the warehouse lives in a separate database and cross-DB joins are
-# out of scope; the model exposes scopes that take tenant_id directly.
+# out of scope; the model exposes scopes that take server_id directly.
 class CreateMetricSamples < ActiveRecord::Migration[8.1]
   def change
     create_table :metric_samples do |t|
-      t.integer :tenant_id, null: false
+      t.integer :server_id, null: false
       t.string :source, null: false
       t.string :ts_iso, null: false
       t.text :payload, null: false
@@ -54,26 +54,26 @@ class CreateMetricSamples < ActiveRecord::Migration[8.1]
     end
 
     # Hot path #1: system metric over time range.
-    # Covers: WHERE tenant_id = ? AND source = 'system' AND ts_epoch BETWEEN ? AND ?
-    add_index :metric_samples, [:tenant_id, :source, :ts_epoch],
+    # Covers: WHERE server_id = ? AND source = 'system' AND ts_epoch BETWEEN ? AND ?
+    add_index :metric_samples, [:server_id, :source, :ts_epoch],
       where: "source = 'system'",
       name: "idx_metric_samples_system"
 
     # Hot path #2: specific pod metric over time range.
-    # Covers: WHERE tenant_id = ? AND source = 'pod'
+    # Covers: WHERE server_id = ? AND source = 'pod'
     #           AND scope = ? AND name = ? [AND pod = ?]
     #           AND ts_epoch BETWEEN ? AND ?
     # `pod` is the rightmost column so prefix-matches without pod
     # (e.g. all replicas of a resource) still use the index.
-    add_index :metric_samples, [:tenant_id, :source, :scope, :name, :pod, :ts_epoch],
+    add_index :metric_samples, [:server_id, :source, :scope, :name, :pod, :ts_epoch],
       where: "source = 'pod'",
       name: "idx_metric_samples_pod"
 
-    # Sync watermark — used by MetricsSyncIslandJob to derive `since`
-    # for the next incremental pull. MAX(ts_epoch) per tenant is the
+    # Sync watermark — used by MetricsSyncServerJob to derive `since`
+    # for the next incremental pull. MAX(ts_epoch) per server is the
     # single hottest query in the warehouse; this dedicated index
     # makes it O(log n) instead of scanning the partial indexes.
-    add_index :metric_samples, [:tenant_id, :ts_epoch],
+    add_index :metric_samples, [:server_id, :ts_epoch],
       name: "idx_metric_samples_watermark"
   end
 end

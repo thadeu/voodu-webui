@@ -2,17 +2,17 @@
 
 # SettingsController — per-server settings surface.
 #
-# Scope is PER-island: everything rendered here is about the server
-# the operator's currently focused on (Island record + /system
-# payload from that island's agent). Global webui prefs (refresh
+# Scope is PER-server: everything rendered here is about the server
+# the operator's currently focused on (Server record + /system
+# payload from that server's agent). Global webui prefs (refresh
 # cadence, log buffer, appearance) are a separate concern that
-# will land later in a tenant-LESS /settings/global page.
+# will land later in a server-LESS /settings/global page.
 class SettingsController < ApplicationController
   def index
     render Views::Settings::Index.new(
       **dashboard_context.merge(
-        system: IslandSystem.fetch(voodu_client, current_island),
-        pats: IslandPats.fetch(voodu_client, current_island)
+        system: ServerSystem.fetch(voodu_client, current_server),
+        pats: ServerPats.fetch(voodu_client, current_server)
       )
     )
   end
@@ -23,7 +23,7 @@ class SettingsController < ApplicationController
   # auth/not-found/etc. are visible to the operator.
   def revoke_pat
     voodu_client.revoke_pat(params[:pat_id])
-    IslandPats.invalidate(current_island)
+    ServerPats.invalidate(current_server)
     redirect_to settings_path, notice: "Token revoked."
   rescue Voodu::Client::Error => e
     redirect_to settings_path, alert: "Couldn't revoke token: #{e.message}"
@@ -31,11 +31,11 @@ class SettingsController < ApplicationController
 
   # reconnect — immediately re-probes the agent. refresh! warms the
   # health cache with the result, so the topbar status pill reflects it
-  # on the redirect render. Also invalidates IslandSystem so the next
+  # on the redirect render. Also invalidates ServerSystem so the next
   # Settings render shows fresh agent data.
   def reconnect
-    IslandSystem.invalidate(current_island)
-    new_status = IslandHealth.refresh!(current_island)
+    ServerSystem.invalidate(current_server)
+    new_status = ServerHealth.refresh!(current_server)
 
     notice =
       if new_status == :online

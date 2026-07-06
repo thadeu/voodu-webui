@@ -1,21 +1,21 @@
 # frozen_string_literal: true
 
-# Views::Islands::New — the "Add server" modal.
+# Views::Servers::New — the "Add server" modal.
 #
 # Mirrors design-webui-inspiration/modal-add-server.jsx layout
 # (header avatar + title + close X, body fields, footer Cancel +
 # primary action). Component is Components::UI::Modal — every modal
 # in the app shares its backdrop/blur/ESC/scroll-lock plumbing.
 #
-# Onboarding contract: when the operator has zero islands registered
+# Onboarding contract: when the operator has zero servers registered
 # DashboardController#redirect_to_default bounces "/" here. The
 # sidebar behind shows the empty-servers state, the backdrop blurs
 # it; the operator's only meaningful action is the form. After save
-# IslandsController#create redirects to /<key>/.
-class Views::Islands::New < Views::Base
-  def initialize(current_path:, island:, orgs: [], connection_error: nil)
+# ServersController#create redirects to /<key>/.
+class Views::Servers::New < Views::Base
+  def initialize(current_path:, server:, orgs: [], connection_error: nil)
     @current_path = current_path
-    @island = island
+    @server = server
     @orgs = orgs
     @connection_error = connection_error
   end
@@ -42,13 +42,13 @@ class Views::Islands::New < Views::Base
       subtitle: "Connect a Docker host running the voodu agent",
       icon: :PlusOutline,
       size: :md,
-      close_to: islands_path
+      close_to: servers_path
     ).with_footer { footer_actions }
   end
 
   def form_body
     form(
-      action: islands_path, method: "post",
+      action: servers_path, method: "post",
       data: {turbo: false}, id: "add-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
@@ -59,20 +59,20 @@ class Views::Islands::New < Views::Base
       field(
         label: "Name",
         hint: "Display name shown in the sidebar.",
-        error: @island.errors[:name].first
+        error: @server.errors[:name].first
       ) do
-        text_input(name: "island[name]", value: @island.name, placeholder: "prod-edge-02")
+        text_input(name: "server[name]", value: @server.name, placeholder: "prod-edge-02")
       end
 
-      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @island.org_id)
+      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @server.org_id)
 
       field(
         label: "Server endpoint",
         hint: endpoint_hint,
-        error: @island.errors[:endpoint].first
+        error: @server.errors[:endpoint].first
       ) do
         text_input(
-          name: "island[endpoint]", value: @island.endpoint,
+          name: "server[endpoint]", value: @server.endpoint,
           placeholder: "https://edge-02.example.com:8687", mono: true,
           spellcheck: "false"
         )
@@ -81,7 +81,7 @@ class Views::Islands::New < Views::Base
       field(
         label: "Personal access token",
         hint: pat_hint,
-        error: @island.errors[:pat_ciphertext].first
+        error: @server.errors[:pat_ciphertext].first
       ) do
         pat_input
       end
@@ -97,10 +97,10 @@ class Views::Islands::New < Views::Base
         end
         div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3 mt-3") do
           field(label: "Region", hint: "fra1 · us-east-1 · homelab") do
-            text_input(name: "island[region]", value: editable_region, placeholder: "fra1")
+            text_input(name: "server[region]", value: editable_region, placeholder: "fra1")
           end
           field(label: "Infra", hint: "hetzner · aws · bare-metal") do
-            text_input(name: "island[infra]", value: @island.infra, placeholder: "hetzner")
+            text_input(name: "server[infra]", value: @server.infra, placeholder: "hetzner")
           end
         end
       end
@@ -160,8 +160,8 @@ class Views::Islands::New < Views::Base
     ) do
       input(
         type: "password",
-        name: "island[pat_ciphertext]",
-        value: @island.pat,
+        name: "server[pat_ciphertext]",
+        value: @server.pat,
         placeholder: "vd_live_••••••••••••••••",
         autocomplete: "off",
         spellcheck: "false",
@@ -205,7 +205,7 @@ class Views::Islands::New < Views::Base
     div(class: "flex-1")
 
     a(
-      href: islands_path,
+      href: servers_path,
       class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { "Cancel" }
 
@@ -237,8 +237,8 @@ class Views::Islands::New < Views::Base
   end
 
   def editable_region
-    return nil if @island.region.blank? || @island.region == "—"
+    return nil if @server.region.blank? || @server.region == "—"
 
-    @island.region
+    @server.region
   end
 end

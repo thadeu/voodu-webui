@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Voodu::Client — thin Faraday wrapper around one Island's PAT plane.
+# Voodu::Client — thin Faraday wrapper around one Server's PAT plane.
 #
 # Lifecycle:
 #
-#   client = Voodu::Client.new(island)
+#   client = Voodu::Client.new(server)
 #   client.stats        # GET /api/pat/v1/stats
 #   client.pods         # GET /api/pat/v1/pods
 #   client.pod(name)    # GET /api/pat/v1/pods/{name}
@@ -12,8 +12,8 @@
 #   client.restart(name)# POST /api/pat/v1/pods/{name}/restart
 #
 # Every call:
-#   - Targets <island.endpoint>/api/pat/v1/<path>
-#   - Sends Authorization: Bearer <island.pat>
+#   - Targets <server.endpoint>/api/pat/v1/<path>
+#   - Sends Authorization: Bearer <server.pat>
 #   - 6s read timeout (the WebUI is doing user-facing polling; we'd
 #     rather show a "controller slow" message than hang the page)
 #   - Returns the parsed `data` slice from the JSON envelope. Errors
@@ -34,8 +34,8 @@ module Voodu
 
     DEFAULT_TIMEOUT = 6 # seconds
 
-    def initialize(island, timeout: DEFAULT_TIMEOUT)
-      @island = island
+    def initialize(server, timeout: DEFAULT_TIMEOUT)
+      @server = server
       @timeout = timeout
     end
 
@@ -124,7 +124,7 @@ module Voodu
     #     render probes / env / resources from the source of truth
     #     in a single request instead of fanning out to /apply.
     #
-    # Composable: passing both is the shape `StateSyncIslandJob` uses
+    # Composable: passing both is the shape `StateSyncServerJob` uses
     # to populate the snapshot table — full runtime + declared spec
     # in one fetch per sync tick.
     # stats: false → opt OUT of the live docker stats batch the
@@ -132,7 +132,7 @@ module Voodu
     # the single biggest CPU consumer on the controller side
     # (`docker stats --no-stream` samples cgroup files TWICE per
     # container to compute CPU%, in a synchronous batch). Polling
-    # consumers like StateSyncIslandJob pass `stats: false` —
+    # consumers like StateSyncServerJob pass `stats: false` —
     # their UI table can show "—" for live CPU/Mem (operator has
     # /metrics charts for that anyway) in exchange for letting
     # the controller breathe between ticks.
@@ -245,7 +245,7 @@ module Voodu
     # metrics_dump — incremental NDJSON warehouse pull. Streams the
     # controller's `/metrics/dump?since=<unix_ts>` endpoint and yields
     # one Hash per parsed line, shaped for MetricSample#bulk_insert
-    # consumption (minus `tenant_id`, which the caller adds).
+    # consumption (minus `server_id`, which the caller adds).
     #
     # Streaming + line-buffered: Faraday's on_data delivers arbitrary
     # byte boundaries. We accumulate in `buffer`, split on `\n`,
@@ -257,13 +257,13 @@ module Voodu
     #
     # `since` is unix seconds (integer). 0 (or `since.to_i.zero?`)
     # tells the controller to dump the full retention window —
-    # the natural backfill path for a brand-new island.
+    # the natural backfill path for a brand-new server.
     #
     # No return value (streaming). Caller counts rows via the yield
     # callback if it needs a tally.
     #
     # Errors surface as Voodu::Client::Error subclasses — the
-    # MetricsSyncIslandJob lets solid_queue retry transient transport
+    # MetricsSyncServerJob lets solid_queue retry transient transport
     # failures and logs auth errors for operator follow-up.
     def metrics_dump(since:, &on_row)
       raise ArgumentError, "block required" unless on_row
@@ -341,12 +341,12 @@ module Voodu
     end
 
     def conn
-      @conn ||= Faraday.new(url: @island.endpoint) do |f|
+      @conn ||= Faraday.new(url: @server.endpoint) do |f|
         f.request :url_encoded
         f.response :json, content_type: /\bjson$/
         f.options.timeout = @timeout
         f.options.open_timeout = @timeout
-        f.headers["Authorization"] = "Bearer #{@island.pat}"
+        f.headers["Authorization"] = "Bearer #{@server.pat}"
         f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end
@@ -356,10 +356,10 @@ module Voodu
     # middleware (the body is text/plain chunked). Otherwise identical
     # to the main `conn`.
     def streaming_conn
-      @streaming_conn ||= Faraday.new(url: @island.endpoint) do |f|
+      @streaming_conn ||= Faraday.new(url: @server.endpoint) do |f|
         f.options.timeout = nil
         f.options.open_timeout = @timeout
-        f.headers["Authorization"] = "Bearer #{@island.pat}"
+        f.headers["Authorization"] = "Bearer #{@server.pat}"
         f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end

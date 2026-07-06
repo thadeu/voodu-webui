@@ -8,10 +8,10 @@
 # so the table look stays consistent between Overview and the
 # dedicated /pods page.
 class Views::Pods::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
+  def initialize(current_path:, servers: [], current_server: nil, data: nil, active_tab: :all, updated_at: nil)
     @current_path = current_path
-    @islands = islands
-    @current_island = current_island
+    @servers = servers
+    @current_server = current_server
     @data = data
     @active_tab = active_tab
     @updated_at = updated_at
@@ -19,12 +19,12 @@ class Views::Pods::Index < Views::Base
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, islands: @islands,
-      current_island: @current_island, updated_at: @updated_at,
+      current_path: @current_path, servers: @servers,
+      current_server: @current_server, updated_at: @updated_at,
       breadcrumb: overview_crumbs({label: "Pods"})
     ) do
-      if @current_island.nil?
-        render Components::UI::NoIslandState.new
+      if @current_server.nil?
+        render Components::UI::NoServerState.new
       else
         body
       end
@@ -33,7 +33,7 @@ class Views::Pods::Index < Views::Base
 
   private
 
-  # body — wrapped in a Turbo Frame so StateSyncIslandJob's
+  # body — wrapped in a Turbo Frame so StateSyncServerJob's
   # state_tick broadcast can refresh it without a page reload. No
   # src= on the frame (would cause Turbo to auto-fetch on connect
   # and possibly blank the body). The state-tick JS handler sets
@@ -53,7 +53,7 @@ class Views::Pods::Index < Views::Base
     # so open drawers / modals keep their client state across the
     # state_tick reload.
     turbo_frame_tag(
-      "island-#{@current_island.id}-state",
+      "server-#{@current_server.id}-state",
       target: "_top",
       refresh: "morph",
       data: {state_frame: true}

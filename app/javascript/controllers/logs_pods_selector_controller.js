@@ -6,13 +6,13 @@ import { Controller } from "@hotwired/stimulus"
 // Owns:
 //   - The checkbox state in the drawer
 //   - Persistence of the selection to localStorage (one key per
-//     island so switching servers doesn't smear filters across them)
+//     server so switching servers doesn't smear filters across them)
 //   - The `logs-pods:changed` window-level event that tells the
 //     log-stream controller "rebuild your row-visibility filter
 //     from this new selection"
 //
 // Storage shape (localStorage):
-//   key: voodu:logs-pods:v1:<island_key>
+//   key: voodu:logs-pods:v1:<server_key>
 //   value:
 //     null / missing     → no saved selection → show all pods (default)
 //     []                 → intentional empty selection → show no pods

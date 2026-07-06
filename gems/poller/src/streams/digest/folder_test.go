@@ -12,8 +12,8 @@ import (
 
 func TestComputeHash_Deterministic(t *testing.T) {
 	ts := time.Unix(1700000000, 12345)
-	got1 := ComputeHash("metrics", "island-1", ts)
-	got2 := ComputeHash("metrics", "island-1", ts)
+	got1 := ComputeHash("metrics", "server-1", ts)
+	got2 := ComputeHash("metrics", "server-1", ts)
 
 	if got1 != got2 {
 		t.Fatalf("hash not deterministic: %q vs %q", got1, got2)
@@ -25,21 +25,21 @@ func TestComputeHash_Deterministic(t *testing.T) {
 
 func TestComputeHash_DistinctByType(t *testing.T) {
 	ts := time.Unix(1700000000, 0)
-	metricsHash := ComputeHash("metrics", "island-1", ts)
-	stateHash := ComputeHash("state", "island-1", ts)
+	metricsHash := ComputeHash("metrics", "server-1", ts)
+	stateHash := ComputeHash("state", "server-1", ts)
 
 	if metricsHash == stateHash {
-		t.Fatal("metrics + state collided on same (island, ts)")
+		t.Fatal("metrics + state collided on same (server, ts)")
 	}
 }
 
-func TestComputeHash_DistinctByIsland(t *testing.T) {
+func TestComputeHash_DistinctByServer(t *testing.T) {
 	ts := time.Unix(1700000000, 0)
-	a := ComputeHash("metrics", "island-1", ts)
-	b := ComputeHash("metrics", "island-2", ts)
+	a := ComputeHash("metrics", "server-1", ts)
+	b := ComputeHash("metrics", "server-2", ts)
 
 	if a == b {
-		t.Fatal("two islands collided on same (type, ts)")
+		t.Fatal("two servers collided on same (type, ts)")
 	}
 }
 
@@ -52,7 +52,7 @@ func TestWriteHashedFolder_AtomicRename(t *testing.T) {
 	}
 	meta := Meta{
 		Type:     "metrics",
-		TenantID: "island-1",
+		ServerID: "server-1",
 		TS:       time.Now().Unix(),
 	}
 
@@ -91,7 +91,7 @@ func TestWriteHashedFolder_MetaWrittenLast(t *testing.T) {
 	}
 	meta := Meta{
 		Type:     "state",
-		TenantID: "island-1",
+		ServerID: "server-1",
 		TS:       time.Now().Unix(),
 	}
 
@@ -144,7 +144,7 @@ func TestCountPending(t *testing.T) {
 		hash[15] = byte('0' + i)
 		err := WriteHashedFolder(root, "metrics", string(hash), map[string]io.Reader{
 			"data.ndjson": strings.NewReader("x"),
-		}, Meta{Type: "metrics", TenantID: "i", TS: time.Now().Unix()})
+		}, Meta{Type: "metrics", ServerID: "i", TS: time.Now().Unix()})
 		if err != nil {
 			t.Fatalf("write %d: %v", i, err)
 		}
@@ -175,14 +175,14 @@ func TestCleanupOlderThan(t *testing.T) {
 
 	err := WriteHashedFolder(root, "metrics", oldHash, map[string]io.Reader{
 		"data.ndjson": strings.NewReader("old"),
-	}, Meta{Type: "metrics", TenantID: "i", TS: time.Now().Unix()})
+	}, Meta{Type: "metrics", ServerID: "i", TS: time.Now().Unix()})
 	if err != nil {
 		t.Fatalf("write old: %v", err)
 	}
 
 	err = WriteHashedFolder(root, "metrics", newHash, map[string]io.Reader{
 		"data.ndjson": strings.NewReader("new"),
-	}, Meta{Type: "metrics", TenantID: "i", TS: time.Now().Unix()})
+	}, Meta{Type: "metrics", ServerID: "i", TS: time.Now().Unix()})
 	if err != nil {
 		t.Fatalf("write new: %v", err)
 	}

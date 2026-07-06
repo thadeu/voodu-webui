@@ -3,11 +3,11 @@
 require "test_helper"
 
 class AlertEventTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
   setup do
-    @island = islands(:alpha)
-    @rule = @island.alert_rules.create!(
+    @server = servers(:alpha)
+    @rule = @server.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
@@ -15,7 +15,7 @@ class AlertEventTest < ActiveSupport::TestCase
 
   def event(rule = @rule)
     rule.alert_events.create!(
-      island: @island, state: "firing", started_at: 1.minute.ago,
+      server: @server, state: "firing", started_at: 1.minute.ago,
       threshold: 90, rule_name: rule.name, metric_kind: "cpu", target_label: "host alpha"
     )
   end
@@ -30,7 +30,7 @@ class AlertEventTest < ActiveSupport::TestCase
     e = event
     assert_equal e.to_dedup_key, e.reload.to_dedup_key
 
-    other_rule = @island.alert_rules.create!(
+    other_rule = @server.alert_rules.create!(
       name: "mem", metric_kind: "memory", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )

@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
-# Alert destinations — shared, island-scoped notification targets that
+# Alert destinations — shared, server-scoped notification targets that
 # rules fire requests to (Slack incoming webhook or a generic JSON
-# webhook). Configured once per island; rules reference a subset (or
+# webhook). Configured once per server; rules reference a subset (or
 # all) via the alert_rule_destinations join.
 #
 # The endpoint (Slack/webhook URL — carries a token) and optional
 # secret are encrypted at rest via ActiveRecord Encryption, same as
-# the island PAT. last_* columns are lightweight delivery
+# the server PAT. last_* columns are lightweight delivery
 # observability (no per-event log table in v1).
 class CreateAlertDestinations < ActiveRecord::Migration[8.1]
   def change
     create_table :alert_destinations do |t|
-      t.references :island, null: false, foreign_key: {on_delete: :cascade}
+      t.references :server, null: false, foreign_key: {on_delete: :cascade}
       t.string :name, null: false
       t.string :kind, null: false
       t.text :endpoint_ciphertext, null: false
@@ -28,7 +28,7 @@ class CreateAlertDestinations < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :alert_destinations, [:island_id, :name], unique: true
-    add_index :alert_destinations, [:island_id, :enabled]
+    add_index :alert_destinations, [:server_id, :name], unique: true
+    add_index :alert_destinations, [:server_id, :enabled]
   end
 end

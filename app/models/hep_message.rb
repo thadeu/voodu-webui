@@ -5,14 +5,14 @@
 #
 # JSON-first (see db/hep_migrate/*_create_hep_messages.rb): the raw line
 # lives in `payload`; ts/call_id/x_cid/corr_id/method/response_code are
-# generated columns. `tenant_id` references islands.id; `scope`/`name`
+# generated columns. `server_id` references servers.id; `scope`/`name`
 # identify the reader instance the line came from (the poller stamps
-# these — they're not in the NDJSON). No `belongs_to :island`: the
-# Island model lives in the primary DB and cross-DB joins are out of
+# these — they're not in the NDJSON). No `belongs_to :server`: the
+# Server model lives in the primary DB and cross-DB joins are out of
 # scope.
 class HepMessage < HepRecord
   # bulk_insert — primary write path (Hep3PollerJob). `rows` are Hashes
-  # shaped like the real columns: [{ tenant_id:, scope:, name:, payload: }].
+  # shaped like the real columns: [{ server_id:, scope:, name:, payload: }].
   # Generated columns are computed by SQLite. insert_all → one round-trip
   # per batch instead of per row.
   def self.bulk_insert(rows)
@@ -49,9 +49,9 @@ class HepMessage < HepRecord
     "json_extract(payload, '$.#{field}')" if JSON_FILTER_FIELDS.include?(field)
   end
 
-  # for_instance — narrow to one reader (scope, name) of a tenant.
-  scope :for_instance, ->(tenant_id:, scope:, name:) {
-    where(tenant_id: tenant_id, scope: scope, name: name)
+  # for_instance — narrow to one reader (scope, name) of a server.
+  scope :for_instance, ->(server_id:, scope:, name:) {
+    where(server_id: server_id, scope: scope, name: name)
   }
 
   # page — newest-first slice for the DataTable. `filter` is an optional
@@ -59,10 +59,10 @@ class HepMessage < HepRecord
   # allowlist). `before_id` pages older (infinite scroll); `since_id`
   # pulls only rows newer than a watermark (live-append). id ordering is
   # the stable arrival order — ts ties at the second don't reshuffle.
-  def self.page(tenant_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_id: nil, since_id: nil, min_code: nil, ts_from: nil, ts_to: nil)
+  def self.page(server_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_id: nil, since_id: nil, min_code: nil, ts_from: nil, ts_to: nil)
     ensure_regexp! if where_sql.present?
 
-    rel = for_instance(tenant_id: tenant_id, scope: scope, name: name)
+    rel = for_instance(server_id: server_id, scope: scope, name: name)
     rel = rel.where("hep_messages.id < ?", before_id) if before_id
     rel = rel.where("hep_messages.id > ?", since_id) if since_id
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
@@ -91,10 +91,10 @@ class HepMessage < HepRecord
     "GROUP_CONCAT(DISTINCT sip_method)"
   ].freeze
 
-  def self.calls_page(tenant_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_epoch: nil, ts_from: nil, ts_to: nil)
+  def self.calls_page(server_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_epoch: nil, ts_from: nil, ts_to: nil)
     ensure_regexp! if where_sql.present?
 
-    rel = for_instance(tenant_id: tenant_id, scope: scope, name: name)
+    rel = for_instance(server_id: server_id, scope: scope, name: name)
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
     rel = rel.where("ts_epoch <= ?", ts_to) if ts_to
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
@@ -109,11 +109,11 @@ class HepMessage < HepRecord
   # [ts_from, ts_to). Returns [[bucket_epoch, count], …] ascending, ready to
   # feed a sparkline. `distinct_corr` counts calls (one per corr_id) instead of
   # messages; `min_code` narrows to errors (4xx/5xx).
-  def self.count_series(tenant_id:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [], distinct_corr: false, min_code: nil)
+  def self.count_series(server_id:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [], distinct_corr: false, min_code: nil)
     ensure_regexp! if where_sql.present?
 
     b = [bucket.to_i, 1].max
-    rel = for_instance(tenant_id: tenant_id, scope: scope, name: name)
+    rel = for_instance(server_id: server_id, scope: scope, name: name)
       .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
     rel = rel.where("response_code >= ?", min_code) if min_code
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
@@ -126,12 +126,12 @@ class HepMessage < HepRecord
   end
 
   # locate_by_call_id — the most recent captured message whose SIP Call-ID is
-  # `call_id`, across ALL reader instances of the tenant. Backs the Logs →
+  # `call_id`, across ALL reader instances of the server. Backs the Logs →
   # call-flow bridge: a FreeSWITCH log line carries a `Call-ID:`, and this
   # resolves which reader has it + the corr_id (which folds x_cid → call_id).
   # nil when the call wasn't captured.
-  def self.locate_by_call_id(tenant_id, call_id)
-    where(tenant_id: tenant_id, call_id: call_id.to_s).order(id: :desc).first
+  def self.locate_by_call_id(server_id, call_id)
+    where(server_id: server_id, call_id: call_id.to_s).order(id: :desc).first
   end
 
   # for_call — every message of one call (by the correlation key), in
@@ -143,8 +143,8 @@ class HepMessage < HepRecord
   # so ts_epoch ties and the fallback to arrival `id` reorders the ladder
   # (a 100 Trying that the poller inserted before its INVITE would render
   # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
-  scope :for_call, ->(tenant_id:, scope:, name:, corr_id:) {
-    for_instance(tenant_id: tenant_id, scope: scope, name: name)
+  scope :for_call, ->(server_id:, scope:, name:, corr_id:) {
+    for_instance(server_id: server_id, scope: scope, name: name)
       .where(corr_id: corr_id).order(:ts, :id)
   }
 

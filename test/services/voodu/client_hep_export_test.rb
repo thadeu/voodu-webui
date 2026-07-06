@@ -9,12 +9,12 @@ require "test_helper"
 # passed through unparsed (it's NDJSON, not JSON), and HTTP errors map to
 # the typed Client errors the poller discards on.
 class Voodu::ClientHepExportTest < ActiveSupport::TestCase
-  fixtures :orgs, :islands
+  fixtures :orgs, :servers
 
-  setup { @island = islands(:alpha) }
+  setup { @server = servers(:alpha) }
 
   def export_url
-    "#{@island.endpoint}/api/pat/v1/hep3/fsw/hep3-api/export"
+    "#{@server.endpoint}/api/pat/v1/hep3/fsw/hep3-api/export"
   end
 
   test "resumes from the cursor and surfaces the next one" do
@@ -23,7 +23,7 @@ class Voodu::ClientHepExportTest < ActiveSupport::TestCase
       .to_return(status: 200, body: "a\nb\n",
         headers: {"X-Hep-Cursor" => "sip.ndjson:42", "Content-Type" => "application/x-ndjson"})
 
-    body, cursor = Voodu::Client.new(@island).hep_export("fsw", "hep3-api", since: "sip.ndjson:10")
+    body, cursor = Voodu::Client.new(@server).hep_export("fsw", "hep3-api", since: "sip.ndjson:10")
 
     assert_equal "a\nb\n", body, "raw NDJSON body must pass through unparsed"
     assert_equal "sip.ndjson:42", cursor
@@ -35,7 +35,7 @@ class Voodu::ClientHepExportTest < ActiveSupport::TestCase
       .with(query: {})
       .to_return(status: 200, body: "", headers: {"X-Hep-Cursor" => "sip.ndjson:0"})
 
-    body, cursor = Voodu::Client.new(@island).hep_export("fsw", "hep3-api")
+    body, cursor = Voodu::Client.new(@server).hep_export("fsw", "hep3-api")
 
     assert_equal "", body
     assert_equal "sip.ndjson:0", cursor
@@ -46,7 +46,7 @@ class Voodu::ClientHepExportTest < ActiveSupport::TestCase
     stub_request(:get, export_url).to_return(status: 401, body: "{}")
 
     assert_raises(Voodu::Client::AuthError) do
-      Voodu::Client.new(@island).hep_export("fsw", "hep3-api")
+      Voodu::Client.new(@server).hep_export("fsw", "hep3-api")
     end
   end
 end

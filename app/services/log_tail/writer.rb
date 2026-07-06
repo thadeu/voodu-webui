@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# LogTail::Writer — buffered NDJSON appender for one island.
+# LogTail::Writer — buffered NDJSON appender for one server.
 #
-# Lifecycle: open one Writer per LogTailIslandJob run; call
+# Lifecycle: open one Writer per LogTailServerJob run; call
 # #append(pod, parsed_hash) for each line; #close on shutdown.
 # Internally caches one File handle per (pod, date) and rotates
 # at midnight without dropping bytes.
@@ -21,13 +21,13 @@
 #     by then the operator presumably freed space or disabled the
 #     feature).
 #
-#   - Per-island disk cap (2GB): NOT enforced inside the hot path
+#   - Per-server disk cap (2GB): NOT enforced inside the hot path
 #     (would require expensive du on every line). Enforced by
-#     orchestrator before scheduling the island's job.
+#     orchestrator before scheduling the server's job.
 #
-# Concurrency: ONE writer per (island_id, pod) at a time, because
-# only one LogTailIslandJob runs per island (TailLock serialises).
-# Within an island, pods don't share file handles, so per-pod
+# Concurrency: ONE writer per (server_id, pod) at a time, because
+# only one LogTailServerJob runs per server (TailLock serialises).
+# Within an server, pods don't share file handles, so per-pod
 # files have no concurrent writers.
 module LogTail
   class Writer
@@ -66,8 +66,8 @@ module LogTail
     # 50MB day file).
     SEED_FROM_DISK_BYTES = 1 * 1024 * 1024  # 1 MB
 
-    def initialize(island_id)
-      @island_id = island_id
+    def initialize(server_id)
+      @server_id = server_id
       @handles = {}  # { [pod, date_str] => File }
       @sizes = {}  # { [pod, date_str] => Integer (cached size) }
       @seen = {}  # { [pod, date_str] => { hash => true } (insertion-ordered) }
@@ -193,7 +193,7 @@ module LogTail
 
       pod_name, date_str = key
       date_obj = Date.parse(date_str)
-      path = LogTail::FilePath.daily_file(@island_id, pod_name, date_obj)
+      path = LogTail::FilePath.daily_file(@server_id, pod_name, date_obj)
 
       LogTail::FilePath.ensure_dir(File.dirname(path))
 
@@ -235,7 +235,7 @@ module LogTail
       end
       @seen[key] = window
     rescue => e
-      Rails.logger.warn("log-tail dedupe seed failed island=#{@island_id} #{path}: #{e.class}: #{e.message}")
+      Rails.logger.warn("log-tail dedupe seed failed server=#{@server_id} #{path}: #{e.class}: #{e.message}")
       @seen[key] ||= {}
     end
 
@@ -315,7 +315,7 @@ module LogTail
       )
 
       Rails.logger.warn(
-        "log-tail island=#{@island_id} pod=#{pod_name} date=#{date_str} " \
+        "log-tail server=#{@server_id} pod=#{pod_name} date=#{date_str} " \
         "hit daily cap — drops engaged until midnight"
       )
     end
@@ -324,11 +324,11 @@ module LogTail
     # ("Some entries lost today — daily cap reached at HH:MM"). Class
     # method on the writer so the UI side can read with the same key.
     def cap_flag_key(pod_name, date_str)
-      self.class.cap_flag_key(@island_id, pod_name, date_str)
+      self.class.cap_flag_key(@server_id, pod_name, date_str)
     end
 
-    def self.cap_flag_key(island_id, pod_name, date_str)
-      "log-tail:cap:#{island_id}:#{pod_name}:#{date_str}"
+    def self.cap_flag_key(server_id, pod_name, date_str)
+      "log-tail:cap:#{server_id}:#{pod_name}:#{date_str}"
     end
 
     # maybe_check_disk — every DISK_CHECK_EVERY writes, statfs the
@@ -344,7 +344,7 @@ module LogTail
 
       @disk_ok = false
       Rails.logger.warn(
-        "log-tail island=#{@island_id} disk pressure — " \
+        "log-tail server=#{@server_id} disk pressure — " \
         "#{(free / 1024.0 / 1024.0).round}MB free, pausing writes"
       )
     end

@@ -4,10 +4,10 @@
 #
 # Five variants tuned for the voodu palette:
 #
-#   :primary    — purple accent fill (CTAs, "Add island", "Restart")
+#   :primary    — purple accent fill (CTAs, "Add server", "Restart")
 #   :secondary  — surface fill + border (cancel, secondary actions)
 #   :ghost      — no fill, hover lifts background (subtle nav, icon-only)
-#   :danger     — red outline (destructive — revoke PAT, delete island)
+#   :danger     — red outline (destructive — revoke PAT, delete server)
 #   :inversed   — light text on dark for high-contrast pulls
 #
 # Plus three sizes and four shapes (matching the clowk convention so
@@ -44,7 +44,7 @@ class Components::UI::Button < Components::Base
     #   nil (default) on a <button> → "button" (safe — won't auto-submit
     #                                  a wrapping form, matching most
     #                                  call sites that use it for UI actions)
-    #   :submit  → emits type="submit" for form CTAs (Add island, Save, …)
+    #   :submit  → emits type="submit" for form CTAs (Add server, Save, …)
     #   on an <a> tag → omitted (links have no `type`).
     @type = type
     @disabled = attrs.delete(:disabled) || false

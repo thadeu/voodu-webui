@@ -71,7 +71,7 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   # call_flow_button — the Logs→HEP3 bridge for the whole window: opens the
   # SIP ladder for the ANCHOR line's Call-ID, without closing the surrounding
   # context (the ladder is a separate overlay on top). Shown only when the
-  # anchor carries a Call-ID and the island runs voodu-hep3 — the per-row
+  # anchor carries a Call-ID and the server runs voodu-hep3 — the per-row
   # chips still cover any other captured line in the window.
   def call_flow_button
     button(
@@ -86,7 +86,7 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   end
 
   def call_flow_available?
-    anchor_call_id.present? && current_island&.plugin_installed?("hep3")
+    anchor_call_id.present? && current_server&.plugin_installed?("hep3")
   end
 
   # anchor_call_id — the Call-ID of the line the modal is anchored on (nil

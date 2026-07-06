@@ -4,26 +4,25 @@
 # from a voodu controller's NDJSON stream.
 #
 # Lives in a dedicated SQLite database (`metrics`) so the high-volume
-# sync writes (every 30s × all tenants) don't contend with the primary
+# sync writes (every 30s × all servers) don't contend with the primary
 # DB. The schema is JSON-first: each row stores the raw NDJSON line
 # verbatim in `payload`, with virtual generated columns indexing the
 # hot identity fields (scope, name, pod). See
 # db/metrics_migrate/*_create_metric_samples.rb for the schema rationale.
 #
 # Vocab:
-#   - `tenant_id` refs islands.id (forward-compatible with a future
-#     Island → Tenant rename).
+#   - `server_id` refs servers.id (the server this sample was polled from).
 #   - `pod` is the operator-facing name for what the NDJSON calls
 #     `container` (e.g. "voodu-x-web.a3f9"). The virtual column
 #     extracts $.container; queries speak `pod`.
 #
-# Cross-DB note: no `belongs_to :island` — the Island model lives in
+# Cross-DB note: no `belongs_to :server` — the Server model lives in
 # the primary DB and cross-DB ActiveRecord joins are out of scope.
-# Callers pass `tenant_id` directly to the scopes below.
+# Callers pass `server_id` directly to the scopes below.
 class MetricSample < MetricsRecord
-  # bulk_insert — primary write path, called by MetricsSyncIslandJob.
+  # bulk_insert — primary write path, called by MetricsSyncServerJob.
   # `rows` is an Array of Hashes shaped exactly like the columns:
-  #   [{ tenant_id:, source:, ts_iso:, payload: }, ...]
+  #   [{ server_id:, source:, ts_iso:, payload: }, ...]
   # Generated columns (ts_epoch / scope / name / pod) are computed by
   # SQLite automatically — STORED at write, VIRTUAL on read. We use
   # `insert_all` (not `create!`) so a 1000-row batch is one round-trip
@@ -35,16 +34,16 @@ class MetricSample < MetricsRecord
     rows.size
   end
 
-  # last_ts_for — highest ts_epoch we've persisted for this tenant.
-  # MetricsSyncIslandJob uses this as the `?since=<ts>` boundary on
+  # last_ts_for — highest ts_epoch we've persisted for this server.
+  # MetricsSyncServerJob uses this as the `?since=<ts>` boundary on
   # the next incremental pull. Hits idx_metric_samples_watermark.
   #
-  # Returns 0 when the warehouse is empty for this tenant (cold boot
+  # Returns 0 when the warehouse is empty for this server (cold boot
   # / first sync). Caller decides whether 0 means "pull controller's
   # full 7d retention" (backfill path) or "start fresh from now"
   # (normal incremental — controller filter handles the empty case).
-  def self.last_ts_for(tenant_id)
-    where(tenant_id: tenant_id).maximum(:ts_epoch) || 0
+  def self.last_ts_for(server_id)
+    where(server_id: server_id).maximum(:ts_epoch) || 0
   end
 
   # ── Scopes ──────────────────────────────────────────────────────

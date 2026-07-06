@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Island represents one voodu controller the WebUI talks to.
+# Server represents one voodu controller the WebUI talks to.
 #
-# Each Island carries:
+# Each Server carries:
 #
 #   - `name`     — operator-supplied label (sidebar display).
 #   - `endpoint` — full URL of the controller's PAT plane,
@@ -14,7 +14,7 @@
 # Static helpers (`host`, `pods_count`, `status`) feed the sidebar
 # row without going to the network — `pods_count` is a cheap derived
 # field cached in the future; for M3 it returns 0 (M4 caches live).
-class Island < ApplicationRecord
+class Server < ApplicationRecord
   # Default voodu observability-plane port. The operator usually only
   # types the IP; we splice this in if no explicit port is present.
   DEFAULT_PORT = 8687
@@ -23,44 +23,44 @@ class Island < ApplicationRecord
   # decrypts on read. Operator never has to think about it.
   encrypts :pat_ciphertext
 
-  # Every server belongs to exactly one Org (the tenant/grouping layer above
+  # Every server belongs to exactly one Org (the server/grouping layer above
   # servers). Required — no orphan servers; the registration form always
   # picks or creates an org. See app/models/org.rb.
   belongs_to :org
 
-  # Local snapshots maintained by `StateSyncIslandJob` (every 10s).
+  # Local snapshots maintained by `StateSyncServerJob` (every 10s).
   # Pages read from these instead of making a fresh HTTP call to
   # the controller — page-instant render + offline resilience. See
-  # `app/services/island_state.rb` for the read facade and
+  # `app/services/server_state.rb` for the read facade and
   # `app/services/pod_snapshot.rb` / `system_snapshot.rb` for the
   # writers.
   #
   # `dependent: :destroy` keeps snapshot tables tidy: removing an
-  # Island purges its row sets in the same transaction (also enforced
+  # Server purges its row sets in the same transaction (also enforced
   # at the DB level via `foreign_key: { on_delete: :cascade }`).
   has_many :pods, dependent: :destroy
   has_one :system, dependent: :destroy
 
-  # Alert rules + their firing episodes. island_id on both is the TARGET server
-  # (a rule monitors this island; an event fired on it), so these stay direct.
+  # Alert rules + their firing episodes. server_id on both is the TARGET server
+  # (a rule monitors this server; an event fired on it), so these stay direct.
   # Destinations moved to the org (M3) — a webhook is shared org-wide, not per
-  # server — so there's no island→destinations association any more.
+  # server — so there's no server→destinations association any more.
   has_many :alert_rules, dependent: :destroy
   has_many :alert_events, dependent: :destroy
 
   before_validation :normalize_endpoint
   before_validation :ensure_key, on: :create
 
-  # Kick the first sync jobs immediately on island creation. Without
-  # this, a newly-added island would wait up to 10s (state) / 14s
+  # Kick the first sync jobs immediately on server creation. Without
+  # this, a newly-added server would wait up to 10s (state) / 14s
   # (metrics) for the next orchestrator tick before pages stop
   # rendering "—". Both jobs are no-op-safe / idempotent, so this
   # and the orchestrators can both fire without double-work.
-  after_create_commit { MetricsSyncIslandJob.perform_later(id) }
-  # StateSyncIslandJob ships in C4 — guarded so this commit (C2)
+  after_create_commit { MetricsSyncServerJob.perform_later(id) }
+  # StateSyncServerJob ships in C4 — guarded so this commit (C2)
   # boots cleanly without the job class on disk yet.
   after_create_commit do
-    StateSyncIslandJob.perform_later(id) if defined?(StateSyncIslandJob)
+    StateSyncServerJob.perform_later(id) if defined?(StateSyncServerJob)
   end
 
   validates :name, presence: true, uniqueness: true, length: {maximum: 64}
@@ -76,7 +76,7 @@ class Island < ApplicationRecord
   KEY_ALPHABET = ("0".."9").to_a + ("A".."Z").to_a + ("a".."z").to_a
   KEY_LENGTH = 6
 
-  # Convenience accessor — read/write as `island.pat` even though
+  # Convenience accessor — read/write as `server.pat` even though
   # the column is named pat_ciphertext (the name tells anyone reading
   # the schema "this is encrypted, don't grep for the plaintext").
   alias_attribute :pat, :pat_ciphertext
@@ -89,9 +89,9 @@ class Island < ApplicationRecord
     endpoint
   end
 
-  # plugin_installed? — does this island's controller have the named
+  # plugin_installed? — does this server's controller have the named
   # plugin installed (matching its canonical name or any alias)? Reads
-  # the locally-synced System row (StateSyncIslandJob, 10s), so feature
+  # the locally-synced System row (StateSyncServerJob, 10s), so feature
   # gates resolve offline and free at render time. False when no system
   # snapshot has landed yet.
   def plugin_installed?(name)
@@ -102,47 +102,47 @@ class Island < ApplicationRecord
   #
   # WAREHOUSE=1 → reads `pods.count` directly (SQL COUNT, sub-ms).
   # The state-sync job (every 10s) keeps the table fresh, so the
-  # sidebar shows accurate counts for EVERY island — not just the
+  # sidebar shows accurate counts for EVERY server — not just the
   # one the operator most recently opened the overview for.
   #
   # WAREHOUSE=0 → legacy: reads a Rails.cache key OverviewData
   # warms after its /pods fetch. Returns nil when the operator has
-  # never opened the dashboard for this island since boot, and
+  # never opened the dashboard for this server since boot, and
   # the sidebar renders "—" instead of "0".
   def pods_count
-    return pods.count if IslandState.warehouse?
+    return pods.count if ServerState.warehouse?
 
     Rails.cache.read(self.class.pods_count_cache_key(id))
   end
 
   # Class-level cache-key + writer so OverviewData (and any future
   # consumer) can warm the count by id alone, without needing an
-  # Island instance. Same id-keyed pattern IslandHealth uses.
-  def self.pods_count_cache_key(island_id)
-    "voodu:pods_count:v1:island:#{island_id}"
+  # Server instance. Same id-keyed pattern ServerHealth uses.
+  def self.pods_count_cache_key(server_id)
+    "voodu:pods_count:v1:server:#{server_id}"
   end
 
-  def self.write_pods_count(island, count, ttl: 30.seconds)
-    Rails.cache.write(pods_count_cache_key(island.id), count.to_i, expires_in: ttl)
+  def self.write_pods_count(server, count, ttl: 30.seconds)
+    Rails.cache.write(pods_count_cache_key(server.id), count.to_i, expires_in: ttl)
   end
 
-  # status — :online | :offline. Read from IslandHealth's cache.
+  # status — :online | :offline. Read from ServerHealth's cache.
   #
   # First read after cache expiry triggers a synchronous probe (one
   # HTTP round-trip to /api/pat/v1/system). With TTL 30s and typical
-  # 1–3 islands per operator, this is negligible cost; the upside is
+  # 1–3 servers per operator, this is negligible cost; the upside is
   # the sidebar and topbar show truth instead of a hardcoded :online.
   #
   # OverviewData.fetch! warms this cache as a side effect of its
   # /system call — so navigating the dashboard normally keeps the
   # status fresh without spending dedicated probes.
   def status
-    IslandHealth.status_for(self)
+    ServerHealth.status_for(self)
   end
 
   # region — operator-supplied label rendered in the topbar chip
   # ("fra1", "us-east-1", "homelab"). Stored in its own column;
-  # nil/blank means "operator didn't tag this island" and the
+  # nil/blank means "operator didn't tag this server" and the
   # topbar omits the chip rather than fabricating one.
   #
   # No validation — operators use whatever vocabulary fits their
@@ -169,9 +169,9 @@ class Island < ApplicationRecord
   # uptime — humanized "Nd Nh" string surfaced in the topbar chip.
   #
   # WAREHOUSE=1 → reads `system.uptime_seconds` directly from the
-  # local snapshot maintained by `StateSyncIslandJob`. Every page
+  # local snapshot maintained by `StateSyncServerJob`. Every page
   # gets the live uptime, even ones the operator has never opened
-  # for this island.
+  # for this server.
   #
   # WAREHOUSE=0 → legacy Rails.cache lookup that OverviewData
   # warms after its /system fetch. Returns "—" when no snapshot
@@ -179,7 +179,7 @@ class Island < ApplicationRecord
   # Beyond this the host snapshot is too old to trust as "live" — used
   # to blank the uptime instead of showing the value captured before a
   # reboot. Keyed on the snapshot's own age (System#synced_at), NOT on
-  # island.status, which flips Online via the fast /health check while
+  # server.status, which flips Online via the fast /health check while
   # the heavier /system snapshot is still catching up after a boot.
   UPTIME_FRESH_WINDOW = 60.seconds
 
@@ -196,7 +196,7 @@ class Island < ApplicationRecord
   # uptime_seconds_from_source — the raw snapshot number (no boot-time
   # derivation), for callers that want their own format.
   def uptime_seconds_from_source
-    if IslandState.warehouse?
+    if ServerState.warehouse?
       system&.uptime_seconds
     else
       Rails.cache.read(self.class.uptime_cache_key(id))
@@ -208,7 +208,7 @@ class Island < ApplicationRecord
   # every page. Returns nil (→ "—") when the snapshot is stale or
   # missing, so a just-rebooted box doesn't show its PRE-reboot uptime.
   def live_uptime_seconds
-    unless IslandState.warehouse?
+    unless ServerState.warehouse?
       return Rails.cache.read(self.class.uptime_cache_key(id))
     end
 
@@ -238,14 +238,14 @@ class Island < ApplicationRecord
 
   # Class-level cache-key + writer so OverviewData (the canonical
   # writer) can warm the value by id alone, without needing an
-  # Island instance. Same id-keyed shape used by IslandHealth and
+  # Server instance. Same id-keyed shape used by ServerHealth and
   # write_pods_count above.
-  def self.uptime_cache_key(island_id)
-    "voodu:uptime:v1:island:#{island_id}"
+  def self.uptime_cache_key(server_id)
+    "voodu:uptime:v1:server:#{server_id}"
   end
 
-  def self.write_uptime_seconds(island, seconds, ttl: 30.seconds)
-    Rails.cache.write(uptime_cache_key(island.id), seconds.to_i, expires_in: ttl)
+  def self.write_uptime_seconds(server, seconds, ttl: 30.seconds)
+    Rails.cache.write(uptime_cache_key(server.id), seconds.to_i, expires_in: ttl)
   end
 
   # generate_unique_key — picks a random 6-char base62 string that
@@ -253,7 +253,7 @@ class Island < ApplicationRecord
   # the unique index on `key` is the real guard; this loop just keeps
   # collisions from turning into RecordNotUnique exceptions at save.
   # At 6 chars (~56 bits) the loop runs once in practice — even with
-  # 10k islands the first attempt collision probability is ~10^-12.
+  # 10k servers the first attempt collision probability is ~10^-12.
   def self.generate_unique_key
     loop do
       candidate = Array.new(KEY_LENGTH) { KEY_ALPHABET.sample }.join
@@ -263,7 +263,7 @@ class Island < ApplicationRecord
 
   # to_param — Rails uses this to interpolate the model into routes.
   # Returning `key` instead of `id` means the URL stays opaque even
-  # when we use `island_path(island)` (rather than building the URL
+  # when we use `server_path(server)` (rather than building the URL
   # by hand). The route constraint matches the same shape.
   def to_param
     key

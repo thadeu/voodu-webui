@@ -9,11 +9,11 @@ require "test_helper"
 # these invert, the ladder draws the wrong picture — so they're scenario
 # tests, not mirrors of the implementation.
 class Hep3::CallFlowDataTest < ActiveSupport::TestCase
-  TENANT = 7777
+  SERVER_ID = 7777
   SCOPE = "fsw"
   NAME = "hep3-api"
 
-  ISLAND = Struct.new(:id).new(TENANT)
+  SERVER = Struct.new(:id).new(SERVER_ID)
 
   # A realistic INVITE dialog: INVITE → 100 → 180 → 200 → ACK → BYE → 200,
   # caller 10.0.0.1 ↔ callee 10.0.0.2.
@@ -45,11 +45,11 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
       dst_ip: dst, dst_port: "5060", from_user: "alice", to_user: "bob",
       cseq: "1 #{method.presence || "INVITE"}", raw_sip: raw
     }.to_json
-    {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: payload}
+    {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: payload}
   end
 
   def flow(corr_id)
-    Hep3::CallFlowData.new(island: ISLAND, scope: SCOPE, name: NAME, corr_id: corr_id)
+    Hep3::CallFlowData.new(server: SERVER, scope: SCOPE, name: NAME, corr_id: corr_id)
   end
 
   test "messages are chronological with request/response classed by code" do
@@ -93,11 +93,11 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
 
   test "label appends (SDP) only for messages carrying an SDP body" do
     HepMessage.bulk_insert([
-      {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: {
+      {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: {
         ts: "2026-06-30 10:00:01.000000", call_id: "s", x_cid: "sdp", method: "INVITE", response_code: 0,
         raw_sip: "INVITE sip:x SIP/2.0\r\nContent-Type: application/sdp\r\nContent-Length: 8\r\n\r\nv=0\r\nm=a"
       }.to_json},
-      {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: {
+      {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: {
         ts: "2026-06-30 10:00:02.000000", call_id: "s", x_cid: "sdp", method: "", response_code: 100,
         raw_sip: "SIP/2.0 100 Trying\r\nContent-Length: 0\r\n\r\n"
       }.to_json}
@@ -117,9 +117,9 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
              "v=0\r\nc=IN IP4 2.2.2.2\r\nm=audio 2000 RTP/AVP 8\r\na=rtpmap:8 PCMA/8000\r\na=sendrecv"
 
     HepMessage.bulk_insert([
-      {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:01.000000", call_id: "leg1", x_cid: "m", method: "INVITE", response_code: 0, raw_sip: invite_sdp}.to_json},
-      {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:02.000000", call_id: "leg1", x_cid: "m", method: "", response_code: 100, raw_sip: "SIP/2.0 100 Trying\r\nContent-Length: 0"}.to_json},
-      {tenant_id: TENANT, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:03.000000", call_id: "leg1", x_cid: "m", method: "", response_code: 200, raw_sip: ok_sdp}.to_json}
+      {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:01.000000", call_id: "leg1", x_cid: "m", method: "INVITE", response_code: 0, raw_sip: invite_sdp}.to_json},
+      {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:02.000000", call_id: "leg1", x_cid: "m", method: "", response_code: 100, raw_sip: "SIP/2.0 100 Trying\r\nContent-Length: 0"}.to_json},
+      {server_id: SERVER_ID, scope: SCOPE, name: NAME, payload: {ts: "2026-06-30 10:00:03.000000", call_id: "leg1", x_cid: "m", method: "", response_code: 200, raw_sip: ok_sdp}.to_json}
     ])
 
     streams = flow("m").media_streams
@@ -184,13 +184,13 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
     seed_dialog
 
     target = flow("call-k").messages[3] # the 200 OK
-    focused = Hep3::CallFlowData.new(island: ISLAND, scope: SCOPE, name: NAME, corr_id: "call-k", focus_id: target[:id])
+    focused = Hep3::CallFlowData.new(server: SERVER, scope: SCOPE, name: NAME, corr_id: "call-k", focus_id: target[:id])
 
     assert_equal 3, focused.focus_index
     assert_equal target[:id], focused.focus_message[:id]
 
     assert_equal 0, flow("call-k").focus_index, "no focus → opens at the call's first message"
-    assert_equal 0, Hep3::CallFlowData.new(island: ISLAND, scope: SCOPE, name: NAME, corr_id: "call-k", focus_id: 999_999).focus_index,
+    assert_equal 0, Hep3::CallFlowData.new(server: SERVER, scope: SCOPE, name: NAME, corr_id: "call-k", focus_id: 999_999).focus_index,
       "a focus id that isn't in this call (e.g. a Calls-view aggregate row) → first"
   end
 

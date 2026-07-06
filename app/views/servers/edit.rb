@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
-# Views::Islands::Edit — the "Edit server" modal.
+# Views::Servers::Edit — the "Edit server" modal.
 #
-# Same shell as Views::Islands::New (modal + form), wired to PATCH
-# /islands/:id. PAT field is blank on render — submitting blank
-# keeps the stored value (see IslandsController#update). That way
+# Same shell as Views::Servers::New (modal + form), wired to PATCH
+# /servers/:id. PAT field is blank on render — submitting blank
+# keeps the stored value (see ServersController#update). That way
 # the operator can change name/endpoint/region without re-typing
 # the PAT.
-class Views::Islands::Edit < Views::Base
+class Views::Servers::Edit < Views::Base
   # return_to: — caller-supplied path the modal close + post-save
   # redirect should land on (Settings page uses this to keep the
   # operator's flow on Settings instead of bouncing them back to
-  # the /islands registry).
-  def initialize(current_path:, island:, orgs: [], connection_error: nil, return_to: nil)
+  # the /servers registry).
+  def initialize(current_path:, server:, orgs: [], connection_error: nil, return_to: nil)
     @current_path = current_path
-    @island = island
+    @server = server
     @orgs = orgs
     @connection_error = connection_error
     @return_to = return_to
@@ -45,35 +45,35 @@ class Views::Islands::Edit < Views::Base
 
   # close_destination — where the X / Cancel sends the operator.
   # Honors return_to when the caller passed one (Settings → close
-  # goes back to Settings); falls back to /islands so the registry
+  # goes back to Settings); falls back to /servers so the registry
   # surface stays the default landing.
   def close_destination
-    @return_to.presence || islands_path
+    @return_to.presence || servers_path
   end
 
   def form_body
     form(
-      action: island_path(@island), method: "post",
+      action: server_path(@server), method: "post",
       data: {turbo: false}, id: "edit-server-form",
       class: "flex flex-col gap-4 px-5 py-4"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch")
       # return_to rides along so the post-save redirect honours
-      # the page the operator came from (Settings vs /islands).
+      # the page the operator came from (Settings vs /servers).
       input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 
       connection_error_banner if @connection_error
 
-      field(label: "Name", error: @island.errors[:name].first) do
-        text_input(name: "island[name]", value: @island.name)
+      field(label: "Name", error: @server.errors[:name].first) do
+        text_input(name: "server[name]", value: @server.name)
       end
 
-      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @island.org_id)
+      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @server.org_id)
 
-      field(label: "Server endpoint", error: @island.errors[:endpoint].first) do
+      field(label: "Server endpoint", error: @server.errors[:endpoint].first) do
         text_input(
-          name: "island[endpoint]", value: @island.endpoint,
+          name: "server[endpoint]", value: @server.endpoint,
           mono: true, spellcheck: "false"
         )
       end
@@ -81,7 +81,7 @@ class Views::Islands::Edit < Views::Base
       field(
         label: "Personal access token",
         hint: "Leave blank to keep the current token.",
-        error: @island.errors[:pat_ciphertext].first
+        error: @server.errors[:pat_ciphertext].first
       ) do
         pat_input
       end
@@ -93,10 +93,10 @@ class Views::Islands::Edit < Views::Base
         end
         div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3 mt-3") do
           field(label: "Region") do
-            text_input(name: "island[region]", value: editable_region, placeholder: "fra1")
+            text_input(name: "server[region]", value: editable_region, placeholder: "fra1")
           end
           field(label: "Infra") do
-            text_input(name: "island[infra]", value: @island.infra, placeholder: "hetzner")
+            text_input(name: "server[infra]", value: @server.infra, placeholder: "hetzner")
           end
         end
       end
@@ -105,7 +105,7 @@ class Views::Islands::Edit < Views::Base
     end
   end
 
-  # Shared with Views::Islands::New conceptually — both ship the
+  # Shared with Views::Servers::New conceptually — both ship the
   # same modal layout. Duplicated rather than abstracted because
   # extracting a shared "ServerForm" component would couple two
   # otherwise-independent surfaces (new is wizard-y, edit is
@@ -146,7 +146,7 @@ class Views::Islands::Edit < Views::Base
     div(class: "relative", data: {controller: "pat-reveal"}) do
       input(
         type: "password",
-        name: "island[pat_ciphertext]",
+        name: "server[pat_ciphertext]",
         value: nil,
         placeholder: "Leave blank to keep current",
         autocomplete: "off", spellcheck: "false",
@@ -192,8 +192,8 @@ class Views::Islands::Edit < Views::Base
   end
 
   def editable_region
-    return nil if @island.region.blank? || @island.region == "—"
+    return nil if @server.region.blank? || @server.region == "—"
 
-    @island.region
+    @server.region
   end
 end

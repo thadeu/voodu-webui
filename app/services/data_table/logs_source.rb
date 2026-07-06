@@ -34,24 +34,24 @@ module DataTable
 
     def self.short_label = SHORT_LABEL
 
-    # available_for? — every island has logs; the generic Table type is
+    # available_for? — every server has logs; the generic Table type is
     # always offered (unlike hep3, which is plugin-gated).
-    def self.available_for?(_island) = true
+    def self.available_for?(_server) = true
 
     def self.view_options
       VIEWS.map { |v| {key: v[:key], label: v[:label], fields: FIELDS} }
     end
 
-    def self.from_params(island:, params:)
+    def self.from_params(server:, params:)
       scope = params[:scope].to_s
       name = params[:name].to_s
       return nil if scope.empty? || name.empty?
 
-      new(island: island, scope: scope, name: name)
+      new(server: server, scope: scope, name: name)
     end
 
-    def initialize(island:, scope:, name:)
-      @island = island
+    def initialize(server:, scope:, name:)
+      @server = server
       @scope = scope
       @name = name
     end
@@ -104,7 +104,7 @@ module DataTable
       prefix = "#{@scope}-#{@name}."
       exact = "#{@scope}-#{@name}"
 
-      LogTail::FilePath.list_pods(@island.id).select { |p| p == exact || p.start_with?(prefix) }
+      LogTail::FilePath.list_pods(@server.id).select { |p| p == exact || p.start_with?(prefix) }
     end
 
     def read_lines(from:, until_:, filter_query:, limit:)
@@ -114,7 +114,7 @@ module DataTable
       rows = []
 
       LogTail::Reader.each_line(
-        island_id: @island.id, pods: instances, from: from, until_: until_,
+        server_id: @server.id, pods: instances, from: from, until_: until_,
         content_search: filter_query.to_s.presence, limit: [limit * 4, SCAN_CAP].min
       ) do |pod, hash|
         rows << line_row(pod, hash)

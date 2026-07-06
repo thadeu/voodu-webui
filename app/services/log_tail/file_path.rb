@@ -4,12 +4,12 @@
 #
 # Layout:
 #
-#   storage/logs/<island_id>/<pod_name>/YYYY-MM-DD.ndjson
+#   storage/logs/<server_id>/<pod_name>/YYYY-MM-DD.ndjson
 #
-# Partition by (island, pod, date) so that:
+# Partition by (server, pod, date) so that:
 #   - Cleanup is `find storage/logs -name "*.ndjson" -mtime +2 -delete`
 #   - Export reads only the date files in range, never scans the lot
-#   - Multi-tenant isolation: deleting an island removes its tree
+#   - Multi-server isolation: deleting an server removes its tree
 #
 # Pod names from the controller are already container names like
 # `clowk-vd-docs.35a3` — safe filesystem chars (alnum + `-` + `.`).
@@ -25,10 +25,10 @@ module LogTail
     # decision — drop+warn behaviour kicks in when a file hits this.
     PER_FILE_CAP_BYTES = 250 * 1024 * 1024
 
-    # Cap total disk under storage/logs/<island_id>/. 2GB matches the
-    # operator decision — orchestrator pauses tails for that island
+    # Cap total disk under storage/logs/<server_id>/. 2GB matches the
+    # operator decision — orchestrator pauses tails for that server
     # when its tree exceeds this.
-    PER_ISLAND_CAP_BYTES = 2 * 1024 * 1024 * 1024
+    PER_SERVER_CAP_BYTES = 2 * 1024 * 1024 * 1024
 
     # Retention window: anything with mtime older than this gets
     # reaped by LogTailCleanupJob.
@@ -39,20 +39,20 @@ module LogTail
       Rails.root.join(LOG_ROOT)
     end
 
-    # Per-island directory: storage/logs/<island_id>/
-    def island_dir(island_id)
-      log_root.join(island_id.to_s)
+    # Per-server directory: storage/logs/<server_id>/
+    def server_dir(server_id)
+      log_root.join(server_id.to_s)
     end
 
-    # Per-pod directory: storage/logs/<island_id>/<pod>/
-    def pod_dir(island_id, pod_name)
-      island_dir(island_id).join(safe_pod_name(pod_name))
+    # Per-pod directory: storage/logs/<server_id>/<pod>/
+    def pod_dir(server_id, pod_name)
+      server_dir(server_id).join(safe_pod_name(pod_name))
     end
 
-    # Per-day file: storage/logs/<island_id>/<pod>/YYYY-MM-DD.ndjson
+    # Per-day file: storage/logs/<server_id>/<pod>/YYYY-MM-DD.ndjson
     # `date` is a Date or anything responding to #strftime.
-    def daily_file(island_id, pod_name, date)
-      pod_dir(island_id, pod_name).join("#{date.strftime("%Y-%m-%d")}.ndjson")
+    def daily_file(server_id, pod_name, date)
+      pod_dir(server_id, pod_name).join("#{date.strftime("%Y-%m-%d")}.ndjson")
     end
 
     # ensure_dir — mkdir_p on demand. Writer calls before every open
@@ -72,31 +72,31 @@ module LogTail
     # date_files_in_range — list of daily file paths overlapping the
     # [from, until] window for a pod. Returns existing files only;
     # callers iterate this list to read NDJSON for export.
-    def date_files_in_range(island_id, pod_name, from, until_)
+    def date_files_in_range(server_id, pod_name, from, until_)
       from_date = from.to_date
       until_date = until_.to_date
 
       (from_date..until_date).filter_map do |date|
-        path = daily_file(island_id, pod_name, date)
+        path = daily_file(server_id, pod_name, date)
         path if File.exist?(path)
       end
     end
 
-    # list_pods — discover which pods have stored data for an island.
+    # list_pods — discover which pods have stored data for an server.
     # Used by the Reader to handle "All pods" exports without
     # needing the controller's current pod list.
-    def list_pods(island_id)
-      dir = island_dir(island_id)
+    def list_pods(server_id)
+      dir = server_dir(server_id)
       return [] unless Dir.exist?(dir)
 
       Dir.children(dir).sort
     end
 
-    # island_disk_bytes — total bytes under storage/logs/<island_id>/.
+    # server_disk_bytes — total bytes under storage/logs/<server_id>/.
     # Walks the tree once; cheap enough for orchestrator's per-tick
     # check (a few MB-sized files per pod per day).
-    def island_disk_bytes(island_id)
-      dir = island_dir(island_id)
+    def server_disk_bytes(server_id)
+      dir = server_dir(server_id)
       return 0 unless Dir.exist?(dir)
 
       total = 0
