@@ -141,7 +141,19 @@ class Components::Metrics::TableCard < Components::Base
           class: "px-3 py-6 text-center text-[12px] text-voodu-muted"
         ) { "Loading…" }
       end
+
+      table_footer
     end
+  end
+
+  # table_footer — the loaded-row count, filled by the data_table controller on
+  # every paint (load / paging / live-append / filter). Reserves its line height
+  # so the card doesn't jump when the first count lands.
+  def table_footer
+    div(
+      data: {data_table_target: "count"},
+      class: "h-4 text-[11px] text-voodu-muted-2 font-voodu-mono"
+    )
   end
 
   def toolbar

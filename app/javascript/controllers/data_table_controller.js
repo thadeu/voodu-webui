@@ -13,7 +13,7 @@ import { Controller } from "@hotwired/stimulus"
 // sorting only reorders a render-time copy, so the id cursors stay valid:
 //   newest = rows[0].id (poll since_id) · oldest = rows[last].id (before_id)
 export default class extends Controller {
-  static targets = ["viewport", "status", "colToggle", "query", "live", "liveDot", "rowActionIcon"]
+  static targets = ["viewport", "status", "colToggle", "query", "live", "liveDot", "rowActionIcon", "count"]
 
   static values = {
     url: String,
@@ -453,7 +453,22 @@ export default class extends Controller {
 
   // ── render ────────────────────────────────────────────────────────
 
+  // updateCount — reflect how many rows are currently loaded/rendered in the
+  // footer. Paging (loadOlder) grows it, live-prepend adds to it, a filter
+  // re-fetch replaces it — so this runs from render(), the single paint path.
+  // At the MAX_ROWS cap older rows are dropped, so show "N+" (there may be more).
+  updateCount() {
+    if (!this.hasCountTarget) return
+
+    const n = this.rows.length
+    const capped = n >= this.MAX_ROWS
+
+    this.countTarget.textContent = `${n}${capped ? "+" : ""} ${n === 1 ? "row" : "rows"}`
+  }
+
   render() {
+    this.updateCount()
+
     const columns = this.visibleColumns()
 
     if (!this.rows.length) {
