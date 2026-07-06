@@ -9,7 +9,7 @@ require "test_helper"
 # WebMock (test_helper) times out the default outbound call, so an
 # un-stubbed probe resolves to :offline via refresh!'s rescue.
 class IslandHealthTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 

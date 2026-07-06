@@ -196,6 +196,7 @@ class Views::Metrics::Frame < Views::Base
       default_visible: c.fetch(:default_visible, true),
       row_action: c[:row_action],
       dashboard_uuid: c[:dashboard_uuid],
+      island_id: c[:island_id],
       **table_window
     )
   end
@@ -249,6 +250,8 @@ class Views::Metrics::Frame < Views::Base
       label: chart[:label],
       color: chart[:color],
       unit: chart[:unit],
+      # island_id → drill into the panel's own server (cross-server dashboards).
+      island_id: chart[:island_id],
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
       chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
@@ -264,6 +267,7 @@ class Views::Metrics::Frame < Views::Base
       filter_query: chart[:filter_query].presence,
       chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
       label: chart[:label], color: chart[:color],
+      island_id: chart[:island_id],
       range: data.range || "1h",
       interval: (data.interval && data.interval != "auto") ? data.interval : nil
     }.compact

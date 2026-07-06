@@ -93,7 +93,13 @@ class Components::Layouts::Topbar < Components::Base
   def island_breadcrumb
     div(class: "flex items-center gap-2 vmd:gap-2.5 min-w-0 flex-1 vmd:flex-initial") do
       div(class: "flex items-center gap-1.5 min-w-0") do
-        # "servers ›" prefix only on 1100+.
+        # Org switcher first — the tenant layer above servers. Then the
+        # "servers ›" prefix (1100+) and the server switcher.
+        if current_org
+          org_switcher
+          render Icon::ChevronRightOutline.new(class: "hidden vmd:inline w-2.5 h-2.5 text-voodu-muted")
+        end
+
         span(class: "hidden vmd:inline text-voodu-muted text-[13px]") { "servers" }
         render Icon::ChevronRightOutline.new(class: "hidden vmd:inline w-2.5 h-2.5 text-voodu-muted")
 
@@ -120,6 +126,66 @@ class Components::Layouts::Topbar < Components::Base
         chip("uptime", @uptime || @current_island.uptime)
         updated_pill if @updated_at
       end
+    end
+  end
+
+  # org_switcher — the tenant selector, mirroring island_switcher but one
+  # level up. Each row lands on that org's root (org_root redirects to the
+  # org's first server). tenant_key:nil keeps the current server key out of
+  # the org-switch URL (it belongs to a DIFFERENT org).
+  # org_switcher — the org dropdown (switch orgs) + a "Manage orgs" action that
+  # opens the org-manager overlay in place. Wrapped in the org-manager controller
+  # (with its own Overlay sibling) so "Manage orgs" reaches it — the add-server
+  # form's org-manager isn't on tenant pages, so there's no clash.
+  def org_switcher
+    div(class: "relative shrink-0", data: {controller: "org-manager"}) do
+      div(class: "relative", data: {controller: "dropdown"}) do
+        button(
+          type: "button",
+          class: "inline-flex items-center gap-1.5 text-[13px] font-semibold text-voodu-accent-2 hover:text-voodu-link min-w-0",
+          data: {action: "click->dropdown#toggle"}
+        ) do
+          render Icon::BuildingOffice2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+          # Name hides on mobile (icon + chevron stay) so the org, server and
+          # status pill don't collide in the narrow topbar — tap opens the list.
+          span(class: "hidden vmd:inline truncate max-w-[140px]") { current_org.name }
+          render Icon::ChevronDownOutline.new(class: "w-3 h-3 text-voodu-muted shrink-0")
+        end
+
+        div(
+          hidden: true,
+          data: {dropdown_target: "menu"},
+          class: "absolute left-0 top-full mt-1 min-w-[220px] z-40 border border-voodu-border bg-voodu-surface shadow-2xl"
+        ) do
+          div(class: "py-1") { all_orgs.each { |o| org_switcher_row(o) } }
+          div(class: "border-t border-voodu-border py-1") do
+            button(
+              type: "button",
+              data: {action: "org-manager#open click->dropdown#close"},
+              class: "w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text"
+            ) do
+              render Icon::BuildingOffice2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+              span { "Manage orgs" }
+            end
+          end
+        end
+      end
+
+      render Components::Orgs::Overlay.new(orgs: all_orgs)
+    end
+  end
+
+  def org_switcher_row(org)
+    selected = org.id == current_org.id
+    a(
+      href: org_root_path(org_id: org.short_id, tenant_key: nil),
+      class: tokens(
+        "w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px]",
+        selected ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-surface-2"
+      )
+    ) do
+      render Icon::BuildingOffice2Outline.new(class: "w-3.5 h-3.5 shrink-0")
+      span(class: "truncate") { org.name }
     end
   end
 
@@ -154,7 +220,7 @@ class Components::Layouts::Topbar < Components::Base
   def switcher_row(island)
     selected = island.id == @current_island.id
     a(
-      href: tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
       class: tokens(
         "block w-full flex items-center gap-2 px-3 py-1.5 text-left text-[12px] font-voodu-mono",
         selected ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-surface-2"

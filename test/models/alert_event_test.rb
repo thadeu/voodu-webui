@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertEventTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

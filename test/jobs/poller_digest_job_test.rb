@@ -3,7 +3,7 @@
 require "test_helper"
 
 class PollerDigestJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @sync_hash = "abcdef0123456789"

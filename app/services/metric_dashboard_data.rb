@@ -21,14 +21,51 @@
 class MetricDashboardData
   attr_reader :dashboard, :range, :interval
 
-  def initialize(client, island, dashboard, range:, interval: nil, from: nil, until_: nil)
-    @client = client
-    @island = island
+  # M2: a dashboard belongs to the ORG and each panel carries its own
+  # island_id, so this takes the org (not a single client/island). Each panel
+  # resolves its OWN server (scoped to the org — cross-org ids are dropped) and
+  # gets a client + pod list memoised per island.
+  def initialize(org, dashboard, range:, interval: nil, from: nil, until_: nil)
+    @org = org
     @dashboard = dashboard
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
     @from = from
     @until_ = until_
+  end
+
+  # islands_by_id — the org's servers keyed by id-as-string, for the per-panel
+  # island_id lookup. The org scoping IS the isolation guard: a panel with an
+  # island_id outside the org resolves to nil and is dropped.
+  def islands_by_id
+    @islands_by_id ||= (@org&.islands || []).index_by { |i| i.id.to_s }
+  end
+
+  # panel_island — the server a panel reads from. nil when the panel has no
+  # island_id (http/external) or references a server outside the org.
+  def panel_island(panel)
+    islands_by_id[panel["island_id"].to_s]
+  end
+
+  # client_for / pods_for — memoised per island so N panels on the same server
+  # share one PAT client + one compact pod list.
+  def client_for(island)
+    return nil if island.nil?
+
+    (@clients ||= {})[island.id] ||= Voodu::Client.new(island)
+  end
+
+  def pods_for(island)
+    return [] if island.nil?
+
+    (@pods_cache ||= {})[island.id] ||= IslandPods.compact(client_for(island), island)
+  end
+
+  # any_island — a fallback server for panels with no server of their own
+  # (http/external): the org's first. Its client is unused by HttpFetch (the
+  # request is external), it just satisfies the DataTable::Registry signature.
+  def any_island
+    @any_island ||= @org&.islands&.min_by(&:name)
   end
 
   def custom?
@@ -64,8 +101,7 @@ class MetricDashboardData
   # renders a (flat) chart; only an unresolvable workload becomes a
   # placeholder.
   def charts
-    return [] if @client.nil? && !warehouse?
-    return [] if @dashboard.nil?
+    return [] if @dashboard.nil? || @org.nil?
 
     panels.each_with_index.map { |panel, i| chart_for(panel, i) }.compact
   end
@@ -84,18 +120,13 @@ class MetricDashboardData
   end
 
   # scope_page — a throwaway MetricsPageData carrying this dashboard's range +
-  # custom window, used to reuse its custom_window_ms math for range_ms.
+  # custom window, used only to reuse its custom_window_ms math for range_ms
+  # (date arithmetic — the island is irrelevant, so any_island suffices).
   def scope_page
     @scope_page ||= MetricsPageData.new(
-      @client, @island, scope_kind: "host", scope_id: nil,
+      client_for(any_island), any_island, scope_kind: "host", scope_id: nil,
       range: @range, interval: @interval, from: @from, until_: @until_
     )
-  end
-
-  # pods — the compact pod list, fetched once and shared across every
-  # panel's workload→replica resolution.
-  def pods
-    @pods ||= IslandPods.compact(@client, @island)
   end
 
   private
@@ -114,21 +145,30 @@ class MetricDashboardData
   # can build its /metrics/chart expand URL for the right series.
   def chart_for(panel, index)
     key = MetricDashboard.panel_card_key(index)
+    http = panel["scope_kind"].to_s == "table" && panel["source"].to_s == "http"
 
-    return log_chart_for(panel, key) if panel["scope_kind"].to_s == "log"
+    # island — the server this panel reads from, resolved WITHIN the org
+    # (the isolation guard). http/external panels have no server, so they fall
+    # back to any_island (unused by the external fetch). A server panel whose
+    # island_id isn't in this org (deleted / cross-org forged) → a placeholder,
+    # never a cross-org read.
+    island = http ? any_island : panel_island(panel)
+    return missing_card(panel, key) if island.nil? && !http
+
+    return log_chart_for(panel, key, island) if panel["scope_kind"].to_s == "log"
 
     if panel["scope_kind"].to_s == "table"
       # A "table" panel is DataTable-family: chart_type "table" → rows;
       # anything else (area/number/gauge) → a count/timeseries chart. The http
       # source maps the response's own points into the series; hep3 counts.
-      return table_chart_for(panel, key) if panel["chart_type"].to_s == "table"
-      return http_chart_for(panel, key) if panel["source"].to_s == "http"
+      return table_chart_for(panel, key, island) if panel["chart_type"].to_s == "table"
+      return http_chart_for(panel, key, island) if http
 
-      return hep_chart_for(panel, key)
+      return hep_chart_for(panel, key, island)
     end
 
     if panel["scope_kind"].to_s == "pod"
-      scope_id = resolve_container(panel)
+      scope_id = resolve_container(panel, island)
       return missing_card(panel, key) if scope_id.nil?
 
       scope_kind = "pod"
@@ -138,7 +178,7 @@ class MetricDashboardData
     end
 
     page = MetricsPageData.new(
-      @client, @island,
+      client_for(island), island,
       scope_kind: scope_kind, scope_id: scope_id,
       range: @range, interval: @interval, from: @from, until_: @until_
     )
@@ -160,7 +200,7 @@ class MetricDashboardData
     # heuristic hide one (an HTTP metric carries default_visible: false
     # from its spec). panel_key → the unique data-metric-key the
     # Settings/Order drawer toggles + reorders this panel by.
-    chart.merge(scope_kind: scope_kind, scope_id: scope_id,
+    chart.merge(scope_kind: scope_kind, scope_id: scope_id, island_id: island.id,
       default_visible: true, panel_key: key)
   end
 
@@ -172,9 +212,9 @@ class MetricDashboardData
   # default_visible: true — the operator explicitly chose this panel, so the
   # metrics-display "hide picker-only on first run" heuristic must never hide
   # it. panel_key → the data-metric-key the Settings/Order drawer toggles by.
-  def log_chart_for(panel, key)
+  def log_chart_for(panel, key, island)
     data = LogMetricData.new(
-      @island,
+      island,
       query: panel["query"].to_s,
       range: @range,
       interval: @interval,
@@ -219,9 +259,9 @@ class MetricDashboardData
   #   number → a big-number tile (the range TOTAL) + sparkline [NumberCard]
   #   area   → area chart, headline = the range TOTAL                [ChartCard]
   #   gauge  → latest bucket against the range PEAK (Thadeu's "vs pico")
-  def hep_chart_for(panel, key)
+  def hep_chart_for(panel, key, island)
     source = DataTable::Registry.build(
-      panel["source"], island: @island, params: {scope: panel["scope"], name: panel["name"]}
+      panel["source"], island: island, params: {scope: panel["scope"], name: panel["name"]}
     )
     chart_type = panel["chart_type"].presence || "area"
     view = panel["view"].presence || "messages"
@@ -276,6 +316,9 @@ class MetricDashboardData
       name: panel["name"].to_s,
       view: view,
       filter_query: panel["filter_query"].to_s,
+      # island_id → the maximize button rebuilds the expand modal against the
+      # SAME server this panel reads from (not the URL's server).
+      island_id: island&.id,
       default_visible: true,
       panel_key: key
     }
@@ -289,8 +332,8 @@ class MetricDashboardData
   # never a broken page. The headline is the latest point (a live reading),
   # not a sum — summing arbitrary external values (CPU %, temperatures) is
   # meaningless. Gauges read avg-vs-peak of the returned values.
-  def http_chart_for(panel, key)
-    source = DataTable::Registry.build(panel["source"], island: @island, params: {panel: panel})
+  def http_chart_for(panel, key, island)
+    source = DataTable::Registry.build(panel["source"], island: island, params: {panel: panel})
     chart_type = panel["chart_type"].presence || "area"
     from, to = hep_window
 
@@ -369,13 +412,13 @@ class MetricDashboardData
     nil
   end
 
-  def table_chart_for(panel, key)
+  def table_chart_for(panel, key, island)
     view = panel["view"].presence || ((panel["source"].to_s == "http") ? "response" : "messages")
     # Pass the panel itself so an http source resolves its request config from
     # it directly (no dashboard/panel_key round-trip on the render path); hep3/
     # logs ignore it and read scope/name.
     source = DataTable::Registry.build(
-      panel["source"], island: @island,
+      panel["source"], island: island,
       params: {scope: panel["scope"], name: panel["name"], panel: panel}
     )
 
@@ -384,6 +427,10 @@ class MetricDashboardData
       label: panel["label"].to_s,
       color: panel["color"].to_s,
       source: panel["source"].to_s,
+      # island_id → the DataTable rows fetch resolves THIS panel's server (M2),
+      # so a table reading a reader on another org server queries the right
+      # tenant. nil for http (external, no server).
+      island_id: island&.id,
       scope: panel["scope"].to_s,
       name: panel["name"].to_s,
       view: view,
@@ -421,11 +468,11 @@ class MetricDashboardData
   # replica's container name. Prefers a running replica; falls back to
   # the first match of any status; nil when the workload has no pod
   # right now (scaled to zero, deleted, mid-redeploy gap).
-  def resolve_container(panel)
+  def resolve_container(panel, island)
     scope = panel["scope"].to_s
     name = panel["name"].to_s
 
-    matches = pods.select do |p|
+    matches = pods_for(island).select do |p|
       field(p, "scope") == scope && field(p, "resource_name") == name
     end
     return nil if matches.empty?

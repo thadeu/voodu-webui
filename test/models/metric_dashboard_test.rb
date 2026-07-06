@@ -3,55 +3,62 @@
 require "test_helper"
 
 class MetricDashboardTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
-  setup { @island = islands(:alpha) }
+  # Dashboards live at the ORG now (M2); every server panel carries its own
+  # island_id (the server it reads from). @island is a server of @org.
+  setup do
+    @island = islands(:alpha)
+    @org = @island.org
+  end
 
   def host_panel
     {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"}
+     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "island_id" => @island.id}
   end
 
   def log_panel
-    {"scope_kind" => "log", "scope" => "fs", "name" => "fs",
+    {"scope_kind" => "log", "scope" => "fs", "name" => "fs", "island_id" => @island.id,
      "query" => "@message like /INVITE/", "agg" => "count",
      "label" => "fs · INVITE", "color" => "var(--voodu-orange)", "chart_type" => "number"}
   end
 
   test "panels round-trips as a Ruby Array (native json column)" do
-    d = @island.metric_dashboards.create!(name: "a", panels: [host_panel])
+    d = @org.metric_dashboards.create!(name: "a", panels: [host_panel])
 
     assert_kind_of Array, d.reload.panels
     assert_equal "cpu_percent", d.panels.first["metric"]
     assert_equal 1, d.panels_count
   end
 
-  test "name is unique per island" do
-    @island.metric_dashboards.create!(name: "dup", panels: [host_panel])
-    dup = @island.metric_dashboards.new(name: "dup", panels: [host_panel])
+  test "name is unique per org" do
+    @org.metric_dashboards.create!(name: "dup", panels: [host_panel])
+    dup = @org.metric_dashboards.new(name: "dup", panels: [host_panel])
 
     assert_not dup.valid?
     assert dup.errors[:name].present?
   end
 
-  test "the same name is allowed on a different island" do
-    @island.metric_dashboards.create!(name: "shared", panels: [host_panel])
-    other = islands(:beta).metric_dashboards.new(name: "shared", panels: [host_panel])
+  test "the same name is allowed in a different org" do
+    @org.metric_dashboards.create!(name: "shared", panels: [host_panel])
+    gamma = islands(:gamma)
+    other = gamma.org.metric_dashboards.new(name: "shared",
+      panels: [host_panel.merge("island_id" => gamma.id)])
 
-    assert other.valid?
+    assert other.valid?, other.errors.full_messages.to_sentence
   end
 
   test "a panel with an empty unit is valid (Requests, Net Rx, errors, …)" do
     unitless = {"scope_kind" => "pod", "scope" => "api", "name" => "api", "kind" => "deployment",
-                "metric" => "req_count", "scale" => "count",
+                "metric" => "req_count", "scale" => "count", "island_id" => @island.id,
                 "label" => "api · Requests", "color" => "var(--voodu-orange)", "unit" => ""}
-    d = @island.metric_dashboards.new(name: "reqs", panels: [unitless])
+    d = @org.metric_dashboards.new(name: "reqs", panels: [unitless])
 
     assert d.valid?, d.errors.full_messages.to_sentence
   end
 
   test "panels_well_formed rejects a pod panel missing its workload identity" do
-    bad = @island.metric_dashboards.new(
+    bad = @org.metric_dashboards.new(
       name: "x",
       panels: [{"scope_kind" => "pod", "metric" => "cpu_percent", "scale" => "percent",
                 "label" => "l", "color" => "c", "unit" => "%"}]
@@ -62,14 +69,14 @@ class MetricDashboardTest < ActiveSupport::TestCase
   end
 
   test "a log panel is valid with scope/name/query/label/color (no metric/scale)" do
-    d = @island.metric_dashboards.new(name: "calls", panels: [log_panel])
+    d = @org.metric_dashboards.new(name: "calls", panels: [log_panel])
 
     assert d.valid?, d.errors.full_messages.to_sentence
   end
 
   test "a log panel missing its query is rejected" do
     bad = log_panel.except("query")
-    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+    d = @org.metric_dashboards.new(name: "x", panels: [bad])
 
     assert_not d.valid?
     assert d.errors[:panels].present?
@@ -77,7 +84,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "a log panel missing its workload identity is rejected" do
     bad = log_panel.except("name")
-    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+    d = @org.metric_dashboards.new(name: "x", panels: [bad])
 
     assert_not d.valid?
     assert d.errors[:panels].present?
@@ -85,7 +92,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "the number chart type is rejected on a non-log panel" do
     bad = host_panel.merge("chart_type" => "number")
-    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+    d = @org.metric_dashboards.new(name: "x", panels: [bad])
 
     assert_not d.valid?
     assert d.errors[:panels].present?
@@ -93,7 +100,7 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "an unknown scope_kind is rejected" do
     bad = host_panel.merge("scope_kind" => "wormhole")
-    d = @island.metric_dashboards.new(name: "x", panels: [bad])
+    d = @org.metric_dashboards.new(name: "x", panels: [bad])
 
     assert_not d.valid?
     assert d.errors[:panels].present?
@@ -101,15 +108,15 @@ class MetricDashboardTest < ActiveSupport::TestCase
 
   test "panels_well_formed rejects more than MAX_PANELS" do
     many = Array.new(MetricDashboard::MAX_PANELS + 1) { host_panel }
-    d = @island.metric_dashboards.new(name: "big", panels: many)
+    d = @org.metric_dashboards.new(name: "big", panels: many)
 
     assert_not d.valid?
     assert bad_message(d), "expected a panels error"
   end
 
-  test "pin! sets this one and unpins siblings — single pinned per island" do
-    a = @island.metric_dashboards.create!(name: "a", panels: [host_panel])
-    b = @island.metric_dashboards.create!(name: "b", panels: [host_panel])
+  test "pin! sets this one and unpins siblings — single pinned per org" do
+    a = @org.metric_dashboards.create!(name: "a", panels: [host_panel])
+    b = @org.metric_dashboards.create!(name: "b", panels: [host_panel])
 
     a.pin!
     assert a.reload.pinned
@@ -117,62 +124,63 @@ class MetricDashboardTest < ActiveSupport::TestCase
     b.pin!
     assert b.reload.pinned
     assert_not a.reload.pinned
-    assert_equal 1, @island.metric_dashboards.pinned.count
+    assert_equal 1, @org.metric_dashboards.pinned.count
   end
 
   test "unpin! clears the flag" do
-    a = @island.metric_dashboards.create!(name: "a", panels: [host_panel], pinned: true)
+    a = @org.metric_dashboards.create!(name: "a", panels: [host_panel], pinned: true)
     a.unpin!
 
     assert_not a.reload.pinned
   end
 
-  test "destroyed with its island" do
-    @island.metric_dashboards.create!(name: "a", panels: [host_panel])
+  test "destroyed with its org" do
+    @org.metric_dashboards.create!(name: "a", panels: [host_panel])
+    @org.islands.destroy_all # remove the org's servers so the org is deletable
 
-    assert_difference("MetricDashboard.count", -1) { @island.destroy }
+    assert_difference("MetricDashboard.count", -1) { @org.destroy }
   end
 
   # ── Table panels (DataSource-backed) ──────────────────────────────
 
   def table_panel(**overrides)
     {"scope_kind" => "table", "chart_type" => "table", "source" => "hep3",
-     "scope" => "fsw", "name" => "hep3-api", "view" => "messages",
+     "scope" => "fsw", "name" => "hep3-api", "view" => "messages", "island_id" => @island.id,
      "label" => "SIP", "color" => "var(--voodu-accent)"}.merge(overrides.transform_keys(&:to_s))
   end
 
   test "a table panel is valid with source/scope/name/view/label/color" do
-    d = @island.metric_dashboards.new(name: "sip", panels: [table_panel])
+    d = @org.metric_dashboards.new(name: "sip", panels: [table_panel])
 
     assert d.valid?, d.errors.full_messages.to_sentence
   end
 
   test "a table panel missing its source/view is rejected" do
-    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [table_panel(source: "")]))
-    assert bad_message(@island.metric_dashboards.new(name: "b", panels: [table_panel(view: "")]))
+    assert bad_message(@org.metric_dashboards.new(name: "a", panels: [table_panel(source: "")]))
+    assert bad_message(@org.metric_dashboards.new(name: "b", panels: [table_panel(view: "")]))
   end
 
   test "the table chart type is rejected on a non-table panel" do
     panel = host_panel.merge("chart_type" => "table")
 
-    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [panel]))
+    assert bad_message(@org.metric_dashboards.new(name: "a", panels: [panel]))
   end
 
   test "a hep3 table panel may render as a count chart (Area/Radial/Linear)" do
     %w[area gauge_radial gauge_linear].each do |ct|
-      d = @island.metric_dashboards.new(name: "a", panels: [table_panel(chart_type: ct)])
+      d = @org.metric_dashboards.new(name: "a", panels: [table_panel(chart_type: ct)])
 
       assert d.valid?, "hep3 + #{ct} should be allowed: #{d.errors.full_messages}"
     end
   end
 
   test "a logs table panel must use the table chart type (logs only tabulate)" do
-    assert bad_message(@island.metric_dashboards.new(name: "a", panels: [table_panel(source: "logs", chart_type: "area")]))
+    assert bad_message(@org.metric_dashboards.new(name: "a", panels: [table_panel(source: "logs", chart_type: "area")]))
   end
 
   test "table_readers_for returns distinct hep3 readers across dashboards" do
-    @island.metric_dashboards.create!(name: "a", panels: [table_panel(scope: "fsw", name: "hep3-api")])
-    @island.metric_dashboards.create!(name: "b", panels: [
+    @org.metric_dashboards.create!(name: "a", panels: [table_panel(scope: "fsw", name: "hep3-api")])
+    @org.metric_dashboards.create!(name: "b", panels: [
       table_panel(scope: "fsw", name: "hep3-api"),    # dup → collapses
       table_panel(scope: "ops", name: "sip"),         # distinct
       table_panel(scope: "x", name: "y", source: "other"), # different source → excluded

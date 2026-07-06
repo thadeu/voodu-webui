@@ -6,10 +6,11 @@ require "test_helper"
 # List/Form/Index views (a render error surfaces as a 500 here).
 # Warehouse mode keeps /metrics rendering off the network.
 class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
+    @org = @island.org
     @key = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
@@ -22,10 +23,16 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"
   }.freeze
 
+  # host_panel — the HOST base + the server it reads from (M2: every server
+  # panel carries its island_id; the model rejects one without it).
+  def host_panel
+    HOST.merge("island_id" => @island.id)
+  end
+
   test "create persists panels and reopens the manager on the new dashboard" do
     assert_difference("MetricDashboard.count", 1) do
       post metric_dashboards_path(tenant_key: @key),
-        params: {metric_dashboard: {name: "overview", panels: [HOST].to_json}}
+        params: {metric_dashboard: {name: "overview", panels: [host_panel].to_json}}
     end
 
     d = MetricDashboard.order(:id).last
@@ -38,13 +45,13 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
 
   test "create with a blank name re-renders 422" do
     post metric_dashboards_path(tenant_key: @key),
-      params: {metric_dashboard: {name: "", panels: [HOST].to_json}}
+      params: {metric_dashboard: {name: "", panels: [host_panel].to_json}}
 
     assert_response :unprocessable_entity
   end
 
   test "index renders the manage modal with the dashboard rail + editor frame" do
-    @island.metric_dashboards.create!(name: "saved-one", panels: [HOST])
+    @org.metric_dashboards.create!(name: "saved-one", panels: [host_panel])
 
     get metric_dashboards_path(tenant_key: @key)
 
@@ -87,7 +94,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "edit renders the builder prefilled (embed)" do
-    d = @island.metric_dashboards.create!(name: "editme", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "editme", panels: [host_panel])
 
     get edit_metric_dashboard_path(tenant_key: @key, id: d.to_param, embed: 1)
 
@@ -96,7 +103,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "pin makes /metrics open to the dashboard" do
-    d = @island.metric_dashboards.create!(name: "pinme", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "pinme", panels: [host_panel])
 
     post pin_metric_dashboard_path(tenant_key: @key, id: d.to_param)
     assert d.reload.pinned
@@ -108,7 +115,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a pinned dashboard sets the default but does not lock out the host view" do
-    @island.metric_dashboards.create!(name: "pinned-one", panels: [HOST], pinned: true)
+    @org.metric_dashboards.create!(name: "pinned-one", panels: [host_panel], pinned: true)
 
     # bare /metrics opens the pinned dashboard (the default)
     get metrics_path(tenant_key: @key)
@@ -122,8 +129,8 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "an explicit ?dashboard= overrides a different pinned dashboard" do
-    @island.metric_dashboards.create!(name: "the-pinned", panels: [HOST], pinned: true)
-    other = @island.metric_dashboards.create!(name: "the-other", panels: [HOST])
+    @org.metric_dashboards.create!(name: "the-pinned", panels: [host_panel], pinned: true)
+    other = @org.metric_dashboards.create!(name: "the-other", panels: [host_panel])
 
     get metrics_path(tenant_key: @key, pid: other.to_param)
     assert_response :success
@@ -131,7 +138,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "unpin reverts /metrics to the host view" do
-    d = @island.metric_dashboards.create!(name: "p", panels: [HOST], pinned: true)
+    d = @org.metric_dashboards.create!(name: "p", panels: [host_panel], pinned: true)
 
     post unpin_metric_dashboard_path(tenant_key: @key, id: d.to_param)
     assert_not d.reload.pinned
@@ -139,7 +146,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "destroy removes the dashboard and redirects" do
-    d = @island.metric_dashboards.create!(name: "gone", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "gone", panels: [host_panel])
 
     assert_difference("MetricDashboard.count", -1) do
       delete metric_dashboard_path(tenant_key: @key, id: d.to_param)
@@ -148,9 +155,9 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "display_settings in dashboard mode lists the active dashboard's panels" do
-    d = @island.metric_dashboards.create!(
+    d = @org.metric_dashboards.create!(
       name: "ds",
-      panels: [HOST, HOST.merge("label" => "host · CPU again")]
+      panels: [host_panel, host_panel.merge("label" => "host · CPU again")]
     )
 
     get metrics_display_settings_path(tenant_key: @key, pid: d.to_param, kind: "dashboard:#{d.id}")
@@ -164,7 +171,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "metrics renders the dashboard panel grid in dashboard mode" do
-    d = @island.metric_dashboards.create!(name: "grid", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "grid", panels: [host_panel])
 
     get metrics_path(tenant_key: @key, pid: d.to_param)
 
@@ -174,8 +181,8 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "metrics stacks multiple dashboards in selection order for ?pid=a,b" do
-    cpu = @island.metric_dashboards.create!(name: "cpu-dash", panels: [HOST])
-    mem = @island.metric_dashboards.create!(name: "mem-dash", panels: [HOST])
+    cpu = @org.metric_dashboards.create!(name: "cpu-dash", panels: [host_panel])
+    mem = @org.metric_dashboards.create!(name: "mem-dash", panels: [host_panel])
 
     get metrics_path(tenant_key: @key, pid: "#{cpu.to_param},#{mem.to_param}")
 
@@ -190,27 +197,27 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "update reopens the manager on the saved dashboard (does not auto-close)" do
-    d = @island.metric_dashboards.create!(name: "dash-b", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "dash-b", panels: [host_panel])
 
     patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
-      params: {metric_dashboard: {name: "dash-b2", panels: [HOST].to_json}}
+      params: {metric_dashboard: {name: "dash-b2", panels: [host_panel].to_json}}
 
     assert_equal "dash-b2", d.reload.name
     assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
   end
 
   test "update stays in the manager regardless of any return_to" do
-    d = @island.metric_dashboards.create!(name: "dash-x", panels: [HOST])
+    d = @org.metric_dashboards.create!(name: "dash-x", panels: [host_panel])
 
     patch metric_dashboard_path(tenant_key: @key, id: d.to_param),
       params: {return_to: metrics_path(tenant_key: @key, pid: d.to_param),
-               metric_dashboard: {name: "dash-x", panels: [HOST].to_json}}
+               metric_dashboard: {name: "dash-x", panels: [host_panel].to_json}}
 
     assert_redirected_to metric_dashboards_path(tenant_key: @key, edit: d.to_param)
   end
 
   test "multi ?pid silently drops unknown uuids and renders the rest" do
-    only = @island.metric_dashboards.create!(name: "real-dash", panels: [HOST])
+    only = @org.metric_dashboards.create!(name: "real-dash", panels: [host_panel])
 
     get metrics_path(tenant_key: @key, pid: "#{only.to_param},does-not-exist")
 

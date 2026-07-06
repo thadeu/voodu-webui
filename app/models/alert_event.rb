@@ -7,10 +7,17 @@ require "digest"
 # at fire time, so the history list renders join-free and an edited
 # or deleted-and-recreated rule can't rewrite past incidents.
 class AlertEvent < ApplicationRecord
+  # org — the owner (M3), so the org-level /alerts history + firing lists query
+  # events directly. island — the server the episode fired on (the rule's target).
   belongs_to :alert_rule
+  belongs_to :org
   belongs_to :island
 
   STATES = %w[firing resolved].freeze
+
+  # org is the rule's (== the fired-on server's) org; derive it so creating an
+  # event off `rule.alert_events` never needs org spelled out.
+  before_validation { self.org ||= alert_rule&.org || island&.org }
 
   validates :state, inclusion: {in: STATES}
   validates :started_at, :threshold, :rule_name, :metric_kind, :target_label,

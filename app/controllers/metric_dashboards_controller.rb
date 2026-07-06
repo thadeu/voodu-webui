@@ -20,7 +20,7 @@ class MetricDashboardsController < ApplicationController
   before_action :set_dashboard, only: [:edit, :update, :destroy, :pin, :unpin]
 
   def index
-    @dashboards = current_island.metric_dashboards.order(:name).to_a
+    @dashboards = current_org.metric_dashboards.order(:name).to_a
 
     # Full-page master-detail modal over the dashboard chrome (no layout:false
     # — the view brings its own chrome). The right frame lazy-loads an editor.
@@ -35,19 +35,19 @@ class MetricDashboardsController < ApplicationController
   end
 
   def new
-    @dashboard = current_island.metric_dashboards.new
+    @dashboard = current_org.metric_dashboards.new
 
     render Views::MetricDashboards::Form.new(
       island: current_island,
       dashboard: @dashboard,
-      pods: compact_pods,
+      island_pods: org_island_pods,
       embed: true,
       return_to: referer_return_to
     ), layout: false
   end
 
   def create
-    @dashboard = current_island.metric_dashboards.new(name: dashboard_params[:name])
+    @dashboard = current_org.metric_dashboards.new(name: dashboard_params[:name])
     @dashboard.panels = parsed_panels
 
     if @dashboard.save
@@ -65,7 +65,7 @@ class MetricDashboardsController < ApplicationController
     render Views::MetricDashboards::Form.new(
       island: current_island,
       dashboard: @dashboard,
-      pods: compact_pods,
+      island_pods: org_island_pods,
       embed: true,
       return_to: referer_return_to
     ), layout: false
@@ -107,7 +107,7 @@ class MetricDashboardsController < ApplicationController
   # operator bookmarked a since-deleted dashboard) bounces to /metrics
   # rather than 500ing.
   def set_dashboard
-    @dashboard = current_island.metric_dashboards.find_by!(uuid: params[:id])
+    @dashboard = current_org.metric_dashboards.find_by!(uuid: params[:id])
   rescue ActiveRecord::RecordNotFound
     redirect_to metrics_path, alert: "Dashboard was not found."
   end
@@ -128,7 +128,7 @@ class MetricDashboardsController < ApplicationController
           Views::MetricDashboards::Form.new(
             island: current_island,
             dashboard: @dashboard,
-            pods: compact_pods,
+            island_pods: org_island_pods,
             embed: true,
             return_to: return_to_path
           )
@@ -145,7 +145,7 @@ class MetricDashboardsController < ApplicationController
     render Views::MetricDashboards::Form.new(
       island: current_island,
       dashboard: @dashboard,
-      pods: compact_pods,
+      island_pods: org_island_pods,
       embed: false,
       current_path: current_path,
       islands: all_islands,
@@ -184,8 +184,15 @@ class MetricDashboardsController < ApplicationController
     nil
   end
 
-  def compact_pods
-    IslandPods.compact(voodu_client, current_island)
+  # org_island_pods — [[island, [compact pods]], …] for EVERY server in the
+  # org (M2). The builder enumerates workloads / hep3 readers across all of
+  # them so a dashboard panel can read from any server (each panel carries its
+  # island_id). One compact-pods fetch per server (cached 60s); the org is the
+  # isolation boundary, so no server outside current_org is ever listed.
+  def org_island_pods
+    @org_island_pods ||= current_org.islands.order(:name).map do |island|
+      [island, IslandPods.compact(Voodu::Client.new(island), island)]
+    end
   end
 
   def dashboard_params

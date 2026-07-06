@@ -40,6 +40,12 @@ Rails.application.routes.draw do
   # route lives under /:tenant_key/.
   resources :islands, only: [:index, :new, :create, :edit, :update, :destroy]
 
+  # Org registry — the tenant/grouping layer above servers. Also TENANT-LESS
+  # (an org is created from the server-registration form, before any tenant
+  # scope exists). CRUD returns turbo_stream so the org dropdown + manager
+  # list update in place, no reload. M1 puts the org's short_id in the path.
+  resources :orgs, only: [:create, :update, :destroy]
+
   # Internal-only API for the out-of-process log poller binary.
   # Deliberately OUTSIDE the `:tenant_key` scope — the binary is
   # global and wants every island in one shot. Auth + loopback/
@@ -72,6 +78,10 @@ Rails.application.routes.draw do
   # because there's no single tenant_key that owns it.
   get "/command_palette.json", to: "command_palette#commands", as: :command_palette
 
+  # Org root — /<org8>/ (no server) bounces to a server's overview within
+  # the org. 8-char constraint so it never shadows /islands, /orgs, etc.
+  get ":org_id", to: "dashboard#org_root", as: :org_root, constraints: {org_id: /[a-zA-Z0-9]{8}/}
+
   # Tenant-scoped routes. Every navigation surface (overview, pods,
   # logs, metrics, alerts, settings) hangs off /<key>/ so:
   #
@@ -89,7 +99,13 @@ Rails.application.routes.draw do
   # Tenant key is exactly 6 base62 chars — matches Island::KEY_*
   # constants. The constraint here prevents the route from
   # accidentally matching /islands/new etc.
-  scope ":tenant_key", constraints: {tenant_key: /[a-zA-Z0-9]{6}/} do
+  #
+  # M1: the Org (short_id, 8 base62 chars) is the OUTER segment; the server
+  # (tenant_key, 6 chars) nests under it — every per-server route becomes
+  # /<org8>/<server6>/…. A single 2-segment scope (not nested blocks) keeps
+  # the whole route table un-reindented. Metrics + Alerts stay per-server here
+  # (M1 is pure routing plumbing); M2/M3 promote them to org-level.
+  scope ":org_id/:tenant_key", constraints: {org_id: /[a-zA-Z0-9]{8}/, tenant_key: /[a-zA-Z0-9]{6}/} do
     root "dashboard#index", as: :tenant_root
 
     get "/pods", to: "pods#index", as: :pods

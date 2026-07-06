@@ -55,7 +55,9 @@ module DataTable
     def self.locate_panel(island, dashboard_uuid, panel_key)
       return nil if dashboard_uuid.blank? || panel_key.blank?
 
-      dash = island.metric_dashboards.find_by(uuid: dashboard_uuid.to_s)
+      # Dashboards are org-level now (M2); look up via the island's org so an
+      # http panel's stored config still re-resolves server-side.
+      dash = island.org.metric_dashboards.find_by(uuid: dashboard_uuid.to_s)
       return nil unless dash
 
       Array(dash.panels)[panel_key.to_s.delete_prefix("k").to_i]

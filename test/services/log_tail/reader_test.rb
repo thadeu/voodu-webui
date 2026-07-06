@@ -8,7 +8,7 @@ require "test_helper"
 # surrounding modal / export never show `[m` litter. Clean lines pass through
 # untouched, and only matched lines pay the scrub — not the whole scan.
 class LogTail::ReaderTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   ESC = "\e"
 

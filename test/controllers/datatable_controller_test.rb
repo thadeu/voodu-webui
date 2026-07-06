@@ -7,7 +7,7 @@ require "test_helper"
 # (errors filters to 4xx/5xx), raw_sip exclusion, and the 404 for an
 # unknown source.
 class DatatableControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -103,6 +103,40 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
     ts = time.strftime("%Y-%m-%d %H:%M:%S.%6N")
     payload = {ts: ts, call_id: "w", x_cid: "", method: "INVITE", response_code: 0, from_user: from_user}.to_json
     {tenant_id: @island.id, scope: "fsw", name: "hep3-api", payload: payload}
+  end
+
+  test "island_id routes rows to THAT server's tenant — a cross-server table in the org reads the right data" do
+    beta = islands(:beta) # same org (acme) as alpha
+    HepMessage.bulk_insert([reader_row(beta, from_user: "beta-only")])
+
+    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+      view: "messages", island_id: beta.id)
+
+    assert_response :success
+    froms = JSON.parse(@response.body)["rows"].map { |r| r["from_user"] }
+
+    assert_includes froms, "beta-only", "island_id=beta reads beta's tenant even though the URL server is alpha"
+    assert_not_includes froms, "a", "alpha's own rows must NOT appear when the panel targets beta"
+  end
+
+  test "a forged island_id for a server OUTSIDE the org falls back to the URL's server (cross-org guard)" do
+    gamma = islands(:gamma) # globex — a DIFFERENT org
+    HepMessage.bulk_insert([reader_row(gamma, from_user: "gamma-secret")])
+
+    get metrics_datatable_rows_path(tenant_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+      view: "messages", island_id: gamma.id)
+
+    assert_response :success
+    froms = JSON.parse(@response.body)["rows"].map { |r| r["from_user"] }
+
+    assert_not_includes froms, "gamma-secret", "a cross-org island_id must NEVER leak another org's tenant"
+  end
+
+  # reader_row — a hep3 message under `island`'s tenant, tagged via from_user.
+  def reader_row(island, from_user:)
+    payload = {ts: "2026-06-30 10:00:05.000000", call_id: "x", x_cid: "", method: "INVITE",
+               response_code: 0, from_user: from_user, raw_sip: "R"}.to_json
+    {tenant_id: island.id, scope: "fsw", name: "hep3-api", payload: payload}
   end
 
   test "404 for an unknown source" do

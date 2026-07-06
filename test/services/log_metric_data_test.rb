@@ -9,7 +9,7 @@ require "test_helper"
 #
 # Time is pinned just after the seeded buckets so they fall inside the range.
 class LogMetricDataTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

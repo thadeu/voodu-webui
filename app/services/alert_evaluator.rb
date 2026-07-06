@@ -144,6 +144,7 @@ class AlertEvaluator
       return false unless AlertRule.where(id: rule.id, enabled: true).exists?
 
       event = rule.alert_events.create!(
+        org: rule.org,
         island: @island,
         state: "firing",
         started_at: started_at,

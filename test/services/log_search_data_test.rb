@@ -13,7 +13,7 @@ require "test_helper"
 # no test override) and torn down per-test, scoped to the fixture
 # island's id so we never touch another island's tree.
 class LogSearchDataTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

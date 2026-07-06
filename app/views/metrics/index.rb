@@ -263,10 +263,10 @@ class Views::Metrics::Index < Views::Base
     end
   end
 
-  # all_dashboards — the island's saved dashboards (for the switcher
-  # dropdown list).
+  # all_dashboards — the ORG's saved dashboards (M2: dashboards are org-level,
+  # so the switcher lists every dashboard in the org, not just this server's).
   def all_dashboards
-    @all_dashboards ||= @current_island ? @current_island.metric_dashboards.order(:name).to_a : []
+    @all_dashboards ||= current_org ? current_org.metric_dashboards.order(:name).to_a : []
   end
 
   # current_pids — the uuids currently in ?pid=, in order. Drives which
@@ -886,6 +886,7 @@ class Views::Metrics::Index < Views::Base
       default_visible: c.fetch(:default_visible, true),
       row_action: c[:row_action],
       dashboard_uuid: c[:dashboard_uuid],
+      island_id: c[:island_id],
       **table_window
     )
   end
@@ -952,6 +953,10 @@ class Views::Metrics::Index < Views::Base
       label: chart[:label],
       color: chart[:color],
       unit: chart[:unit],
+      # island_id → the expand modal drills into the SAME server this panel
+      # reads from (a cross-server dashboard panel expands its own server, not
+      # the URL's). Omitted on scope-mode charts (they inherit current_island).
+      island_id: chart[:island_id],
       # Carry the panel's chart type so the expand modal renders the same
       # shape (a gauge stays a gauge). Omitted for the default area.
       chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
@@ -969,6 +974,8 @@ class Views::Metrics::Index < Views::Base
       filter_query: chart[:filter_query].presence,
       chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
       label: chart[:label], color: chart[:color],
+      # island_id → re-aggregate against the panel's own server in the modal.
+      island_id: chart[:island_id],
       range: custom_window? ? "custom" : (data&.range || "1h"),
       from: custom_window? ? request.query_parameters[:from] : nil,
       until: custom_window? ? request.query_parameters[:until] : nil,

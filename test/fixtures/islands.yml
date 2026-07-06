@@ -11,6 +11,7 @@
 alpha:
   name: alpha
   key: aaaaaa
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
   endpoint: http://10.0.0.1:8687
   pat_ciphertext: pat-alpha-secret
   created_at: <%= Time.current %>
@@ -19,7 +20,19 @@ alpha:
 beta:
   name: beta
   key: bbbbbb
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
   endpoint: http://10.0.0.2:8687
   pat_ciphertext: pat-beta-secret
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+# gamma lives in a DIFFERENT org (globex) — for cross-org tests. alpha + beta
+# share the acme org (for cross-server dashboards spanning two servers).
+gamma:
+  name: gamma
+  key: cccccc
+  org_id: "019f0000-0000-7000-8000-0000000000b2"
+  endpoint: http://10.0.0.3:8687
+  pat_ciphertext: pat-gamma-secret
   created_at: <%= Time.current %>
   updated_at: <%= Time.current %>

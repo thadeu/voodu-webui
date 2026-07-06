@@ -26,6 +26,11 @@ export default class extends Controller {
     // rows endpoint re-resolve an http panel's stored request config server-
     // side (the URL + auth headers never ride the query string).
     dashboard: String,
+    // island — the server this reader lives on (M2). Forwarded so the rows
+    // endpoint queries the right server's warehouse tenant (a cross-server
+    // dashboard's table reads another org server's data). Resolved on the
+    // server WITHIN the org, so a forged id can't reach outside it.
+    island: String,
     // range/from/until — the page's time window, forwarded on every fetch so
     // the table scopes to the same span as the charts.
     range: String,
@@ -203,6 +208,10 @@ export default class extends Controller {
     if (this.rangeValue) params.set("range", this.rangeValue)
     if (this.fromValue) params.set("from", this.fromValue)
     if (this.untilValue) params.set("until", this.untilValue)
+
+    // island — the server this reader lives on (M2). The endpoint resolves it
+    // within the org, so a cross-server table reads the right warehouse tenant.
+    if (this.islandValue) params.set("island_id", this.islandValue)
 
     // An http source resolves its config from the panel; hand the endpoint the
     // reference so it can look it up (harmless no-op for hep3/logs).
@@ -687,6 +696,7 @@ export default class extends Controller {
         scope: this.scopeValue,
         name: this.nameValue,
         view: this.viewValue,
+        island: this.islandValue,
       },
     }))
   }

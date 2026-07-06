@@ -9,7 +9,7 @@ require "test_helper"
 # contract only: order, declared-only filtering, and the empty/defensive
 # shapes the view gates on (#any?).
 class PodDetailDataProbesTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

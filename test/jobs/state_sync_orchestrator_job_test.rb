@@ -3,7 +3,7 @@
 require "test_helper"
 
 class StateSyncOrchestratorJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   teardown do
     ENV.delete("POLLER_SPAWN")

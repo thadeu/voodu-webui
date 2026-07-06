@@ -11,7 +11,7 @@ require "test_helper"
 #   2. An inclusive `ts <= watermark` boundary guard dropping a DISTINCT
 #      line that shares the watermark's exact millisecond.
 class LogTailIslandJobTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   WATERMARK = "2026-06-09T12:00:00.000Z"
 

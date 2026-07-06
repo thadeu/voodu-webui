@@ -9,7 +9,7 @@ require "test_helper"
 # passed through unparsed (it's NDJSON, not JSON), and HTTP errors map to
 # the typed Client errors the poller discards on.
 class Voodu::ClientHepExportTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 

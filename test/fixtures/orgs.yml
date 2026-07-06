@@ -1,0 +1,29 @@
+# Fixtures for Org (the tenant/grouping layer above servers).
+#
+# UUIDv7 string PK: fixtures don't run the before_create callback, so `id`
+# is set explicitly here. islands.yml references it via an explicit `org_id`
+# (string PK associations can't use fixture-label resolution — that yields
+# an integer that wouldn't match the string id).
+acme:
+  id: "019f0000-0000-7000-8000-0000000000a1"
+  short_id: acmeorg1
+  name: Acme
+  description: Primary test org
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+globex:
+  id: "019f0000-0000-7000-8000-0000000000b2"
+  short_id: globex22
+  name: Globex
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+# voidco owns NO servers — for the "an empty org is deletable" tests (globex now
+# owns gamma, for cross-org isolation tests, so it's no longer empty).
+voidco:
+  id: "019f0000-0000-7000-8000-0000000000c3"
+  short_id: voidco33
+  name: Voidco
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

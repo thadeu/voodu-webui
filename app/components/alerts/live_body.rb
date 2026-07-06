@@ -151,7 +151,7 @@ class Components::Alerts::LiveBody < Components::Base
 
       div(class: "flex flex-col vmd:flex-row items-stretch vmd:items-center gap-2 mt-1") do
         defaults_button
-        render Components::UI::Button.new(variant: :primary, size: :md, tag: :a, href: new_alert_rule_path) do
+        render Components::UI::Button.new(variant: :primary, size: :md, tag: :a, href: new_alert_rule_path(return_to: alerts_path(tab: "rules"))) do
           render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
           span { "New rule" }
         end
@@ -165,6 +165,7 @@ class Components::Alerts::LiveBody < Components::Base
   def defaults_button
     form(action: defaults_alert_rules_path, method: "post", data: {turbo: false}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "return_to", value: alerts_path(tab: "rules"))
       render Components::UI::Button.new(variant: :secondary, size: :md, type: :submit, class: "w-full vmd:w-auto") do
         render Icon::SparklesOutline.new(class: "w-3.5 h-3.5")
         span { "Create default rules" }

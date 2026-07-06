@@ -32,7 +32,7 @@ class IslandsController < ApplicationController
 
   def new
     @island = Island.new
-    render Views::Islands::New.new(current_path: current_path, island: @island)
+    render Views::Islands::New.new(current_path: current_path, island: @island, orgs: sorted_orgs)
   end
 
   def create
@@ -43,7 +43,7 @@ class IslandsController < ApplicationController
     # avoids spending a network round-trip telling the operator
     # they typed an empty endpoint.
     unless @island.valid?
-      render Views::Islands::New.new(current_path: current_path, island: @island),
+      render Views::Islands::New.new(current_path: current_path, island: @island, orgs: sorted_orgs),
         status: :unprocessable_entity
       return
     end
@@ -58,6 +58,7 @@ class IslandsController < ApplicationController
       render Views::Islands::New.new(
         current_path: current_path,
         island: @island,
+        orgs: sorted_orgs,
         connection_error: probe_error
       ), status: :unprocessable_entity
       return
@@ -69,10 +70,10 @@ class IslandsController < ApplicationController
       # call on the next page render.
       IslandHealth.warm(@island, online: true)
 
-      redirect_to tenant_root_path(tenant_key: @island.key),
+      redirect_to tenant_root_path(org_id: @island.org.short_id, tenant_key: @island.key),
         notice: "Server #{@island.name} registered."
     else
-      render Views::Islands::New.new(current_path: current_path, island: @island),
+      render Views::Islands::New.new(current_path: current_path, island: @island, orgs: sorted_orgs),
         status: :unprocessable_entity
     end
   end
@@ -81,6 +82,7 @@ class IslandsController < ApplicationController
     render Views::Islands::Edit.new(
       current_path: current_path,
       island: @island,
+      orgs: sorted_orgs,
       return_to: safe_return_to
     )
   end
@@ -96,7 +98,7 @@ class IslandsController < ApplicationController
     @island.assign_attributes(attrs)
 
     unless @island.valid?
-      render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
+      render Views::Islands::Edit.new(current_path: current_path, island: @island, orgs: sorted_orgs, return_to: safe_return_to),
         status: :unprocessable_entity
       return
     end
@@ -107,6 +109,7 @@ class IslandsController < ApplicationController
       render Views::Islands::Edit.new(
         current_path: current_path,
         island: @island,
+        orgs: sorted_orgs,
         return_to: safe_return_to,
         connection_error: probe_error
       ), status: :unprocessable_entity
@@ -117,7 +120,7 @@ class IslandsController < ApplicationController
       IslandHealth.warm(@island, online: true)
       redirect_to (safe_return_to || islands_path), notice: "Server #{@island.name} updated."
     else
-      render Views::Islands::Edit.new(current_path: current_path, island: @island, return_to: safe_return_to),
+      render Views::Islands::Edit.new(current_path: current_path, island: @island, orgs: sorted_orgs, return_to: safe_return_to),
         status: :unprocessable_entity
     end
   end
@@ -154,7 +157,14 @@ class IslandsController < ApplicationController
     # registration — they don't drive any controller behavior, they
     # just decorate the topbar ("fra1 · hetzner"). Both nullable;
     # the topbar collapses chips that are blank.
-    params.require(:island).permit(:name, :endpoint, :pat_ciphertext, :region, :infra)
+    params.require(:island).permit(:name, :endpoint, :pat_ciphertext, :region, :infra, :org_id)
+  end
+
+  # sorted_orgs — the org list feeding the registration form's dropdown +
+  # the inline org manager. Empty on first run (the form shows the "create
+  # your first org" CTA).
+  def sorted_orgs
+    Org.order(:name).to_a
   end
 
   # status_tab_param — coerce ?status= into the symbol the view

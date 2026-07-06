@@ -49,6 +49,10 @@ class Components::Base < Phlex::HTML
   # its System row + parsed payload are all memoised, so a per-row check
   # stays free.
   register_value_helper :current_island
+  # current_org / all_orgs — the tenant layer above servers, for the topbar
+  # org switcher + breadcrumb (org › servers › <server>).
+  register_value_helper :current_org
+  register_value_helper :all_orgs
 
   Icon = PhlexIcons::Hero
 

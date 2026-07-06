@@ -9,7 +9,7 @@ require "test_helper"
 # job re-fetches an overlapping batch, byte-identical lines hit the
 # warehouse at most once.
 class LogTail::WriterTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

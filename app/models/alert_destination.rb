@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# AlertDestination — a shared, island-scoped notification target that
-# alert rules fire requests to when they transition firing/resolved.
+# AlertDestination — a shared, ORG-scoped notification target (M3) that alert
+# rules fire requests to when they transition firing/resolved. One webhook is
+# reusable by every rule in the org, targeting any of its servers.
 #
 # One generic kind: a webhook. We POST to an operator-supplied URL
 # with an OPTIONAL custom auth header and an OPTIONAL custom JSON body
@@ -22,7 +23,10 @@
 # first-class kinds later is additive. It is deliberately NOT `type`,
 # which Rails reserves for STI.
 class AlertDestination < ApplicationRecord
-  belongs_to :island
+  # org-level (M3): a webhook is a shared notification target across the org's
+  # servers, not tied to one — so it belongs to the org, and any rule in the org
+  # (targeting any server) can wire to it.
+  belongs_to :org
   has_many :alert_rule_destinations, dependent: :destroy
   has_many :alert_rules, through: :alert_rule_destinations
 
@@ -35,7 +39,7 @@ class AlertDestination < ApplicationRecord
   alias_attribute :secret, :secret_ciphertext
 
   validates :name, presence: true, length: {maximum: 64},
-    uniqueness: {scope: :island_id}
+    uniqueness: {scope: :org_id}
   validates :kind, inclusion: {in: KINDS}
   validates :endpoint, presence: true
   validate :endpoint_is_http_url

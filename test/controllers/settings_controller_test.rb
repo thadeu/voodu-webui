@@ -7,7 +7,7 @@ require "test_helper"
 # the network). Pins that the card shows the synced plugins and degrades
 # to an empty state — the same list backs the plugin feature gates.
 class SettingsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

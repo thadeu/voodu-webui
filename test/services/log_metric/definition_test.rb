@@ -3,18 +3,22 @@
 require "test_helper"
 
 class LogMetric::DefinitionTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
-  setup { @island = islands(:alpha) }
+  setup do
+    @island = islands(:alpha)
+    @org = @island.org
+  end
 
   def log_panel(scope: "fs", name: "fs", query: "@message like /INVITE/", label: "fs · INVITE")
     {"scope_kind" => "log", "scope" => scope, "name" => name, "query" => query,
+     "island_id" => @island.id,
      "label" => label, "color" => "var(--voodu-orange)", "chart_type" => "number"}
   end
 
   def metric_panel
     {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"}
+     "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "island_id" => @island.id}
   end
 
   test "key_for is stable and varies with each identity field" do
@@ -27,8 +31,8 @@ class LogMetric::DefinitionTest < ActiveSupport::TestCase
   end
 
   test "all_for collects distinct log panels across dashboards, skipping non-log + malformed" do
-    @island.metric_dashboards.create!(name: "a", panels: [metric_panel, log_panel])
-    @island.metric_dashboards.create!(name: "b", panels: [
+    @org.metric_dashboards.create!(name: "a", panels: [metric_panel, log_panel])
+    @org.metric_dashboards.create!(name: "b", panels: [
       log_panel,
       log_panel(query: "@message like /480/", label: "fs · Failed")
     ])

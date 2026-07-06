@@ -14,7 +14,7 @@
 #     side needs nothing but the id.
 class Hep3Controller < ApplicationController
   def call
-    return head(:not_found) if current_island.nil?
+    return head(:not_found) if reader_island.nil?
 
     data = call_flow_data
 
@@ -27,15 +27,32 @@ class Hep3Controller < ApplicationController
 
   private
 
+  # reader_island — the server whose warehouse tenant holds this call (M2). A
+  # cross-server dashboard's hep3 table passes ?island_id=…; resolve it WITHIN
+  # current_org (the isolation guard) so a forged / cross-org id never reads
+  # another org's SIP capture — it falls back to the URL's server.
+  def reader_island
+    return @reader_island if defined?(@reader_island)
+
+    @reader_island =
+      if params[:island_id].present? && current_org
+        current_org.islands.find_by(id: params[:island_id]) || current_island
+      else
+        current_island
+      end
+  end
+
   def call_flow_data
+    island = reader_island
+
     if params[:call_id].present?
       # Logs bridge: find any captured message with this SIP Call-ID → its
       # reader instance + corr_id (which folds x_cid). Not captured → an
       # empty-state modal carrying the id (a dead click still explains itself).
-      message = HepMessage.locate_by_call_id(current_island.id, params[:call_id])
+      message = HepMessage.locate_by_call_id(island.id, params[:call_id])
 
       return Hep3::CallFlowData.new(
-        island: current_island,
+        island: island,
         scope: message&.scope.to_s, name: message&.name.to_s,
         corr_id: message&.corr_id.presence || params[:call_id].to_s
       )
@@ -47,7 +64,7 @@ class Hep3Controller < ApplicationController
     return nil if scope.empty? || name.empty? || corr_id.empty?
 
     Hep3::CallFlowData.new(
-      island: current_island, scope: scope, name: name, corr_id: corr_id,
+      island: island, scope: scope, name: name, corr_id: corr_id,
       focus_id: params[:focus]
     )
   end

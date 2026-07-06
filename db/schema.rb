@@ -10,13 +10,12 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_03_160000) do
   create_table "alert_destinations", force: :cascade do |t|
     t.text "body_template"
     t.datetime "created_at", null: false
     t.boolean "enabled", default: true, null: false
     t.text "endpoint_ciphertext", null: false
-    t.integer "island_id", null: false
     t.string "kind", null: false
     t.datetime "last_delivered_at"
     t.string "last_error"
@@ -24,12 +23,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.string "name", null: false
     t.boolean "on_firing", default: true, null: false
     t.boolean "on_resolved", default: true, null: false
+    t.string "org_id", null: false
     t.text "secret_ciphertext"
     t.string "secret_header"
     t.datetime "updated_at", null: false
-    t.index ["island_id", "enabled"], name: "index_alert_destinations_on_island_id_and_enabled"
-    t.index ["island_id", "name"], name: "index_alert_destinations_on_island_id_and_name", unique: true
-    t.index ["island_id"], name: "index_alert_destinations_on_island_id"
+    t.index ["enabled"], name: "index_alert_destinations_on_island_id_and_enabled"
+    t.index ["org_id", "name"], name: "index_alert_destinations_on_org_id_and_name", unique: true
   end
 
   create_table "alert_events", force: :cascade do |t|
@@ -38,6 +37,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.integer "island_id", null: false
     t.float "last_value"
     t.string "metric_kind", null: false
+    t.string "org_id", null: false
     t.float "peak_value"
     t.datetime "resolved_at"
     t.string "rule_name", null: false
@@ -51,6 +51,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.index ["island_id", "started_at"], name: "index_alert_events_on_island_id_and_started_at"
     t.index ["island_id", "state"], name: "index_alert_events_on_island_id_and_state"
     t.index ["island_id"], name: "index_alert_events_on_island_id"
+    t.index ["org_id", "started_at"], name: "index_alert_events_on_org_id_and_started_at"
+    t.index ["org_id", "state"], name: "index_alert_events_on_org_id_and_state"
   end
 
   create_table "alert_rule_destinations", force: :cascade do |t|
@@ -76,6 +78,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.float "last_value"
     t.string "metric_kind", null: false
     t.string "name", null: false
+    t.string "org_id", null: false
     t.string "target_kind", default: "host", null: false
     t.string "target_name"
     t.string "target_scope"
@@ -85,6 +88,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.index ["island_id", "firing"], name: "index_alert_rules_on_island_id_and_firing"
     t.index ["island_id", "name"], name: "index_alert_rules_on_island_id_and_name", unique: true
     t.index ["island_id"], name: "index_alert_rules_on_island_id"
+    t.index ["org_id", "enabled"], name: "index_alert_rules_on_org_id_and_enabled"
   end
 
   create_table "islands", force: :cascade do |t|
@@ -94,25 +98,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.string "key", null: false
     t.datetime "last_synced_at"
     t.string "name", null: false
+    t.string "org_id", null: false
     t.text "pat_ciphertext", null: false
     t.string "region"
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_islands_on_key", unique: true
     t.index ["name"], name: "index_islands_on_name", unique: true
+    t.index ["org_id"], name: "index_islands_on_org_id"
   end
 
   create_table "metric_dashboards", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.integer "island_id", null: false
     t.string "name", null: false
+    t.string "org_id", null: false
     t.json "panels", default: [], null: false
     t.boolean "pinned", default: false, null: false
     t.datetime "updated_at", null: false
     t.string "uuid", null: false
-    t.index ["island_id", "name"], name: "index_metric_dashboards_on_island_id_and_name", unique: true
-    t.index ["island_id"], name: "index_metric_dashboards_on_island_id"
-    t.index ["island_id"], name: "index_metric_dashboards_one_pinned_per_island", unique: true, where: "pinned = 1"
+    t.index ["org_id", "name"], name: "index_metric_dashboards_on_org_id_and_name", unique: true
+    t.index ["org_id"], name: "index_metric_dashboards_one_pinned_per_org", unique: true, where: "pinned = 1"
     t.index ["uuid"], name: "index_metric_dashboards_on_uuid", unique: true
+  end
+
+  create_table "orgs", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "name", null: false
+    t.string "short_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_orgs_on_name", unique: true
+    t.index ["short_id"], name: "index_orgs_on_short_id", unique: true
   end
 
   create_table "pods", force: :cascade do |t|
@@ -159,13 +174,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_10_160000) do
     t.index ["island_id"], name: "index_systems_on_island_id", unique: true
   end
 
-  add_foreign_key "alert_destinations", "islands", on_delete: :cascade
+  add_foreign_key "alert_destinations", "orgs"
   add_foreign_key "alert_events", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_events", "islands", on_delete: :cascade
+  add_foreign_key "alert_events", "orgs"
   add_foreign_key "alert_rule_destinations", "alert_destinations", on_delete: :cascade
   add_foreign_key "alert_rule_destinations", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_rules", "islands", on_delete: :cascade
-  add_foreign_key "metric_dashboards", "islands", on_delete: :cascade
+  add_foreign_key "alert_rules", "orgs"
+  add_foreign_key "islands", "orgs"
+  add_foreign_key "metric_dashboards", "orgs"
   add_foreign_key "pods", "islands", on_delete: :cascade
   add_foreign_key "systems", "islands", on_delete: :cascade
 end

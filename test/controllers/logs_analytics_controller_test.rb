@@ -8,7 +8,7 @@ require "test_helper"
 # keeps pod-picker resolution off the network; the log lines come from a
 # hand-seeded NDJSON warehouse on disk.
 class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

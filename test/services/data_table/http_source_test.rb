@@ -8,7 +8,7 @@ require "test_helper"
 # and that a failed fetch surfaces (FetchError for rows, [] for a chart). The
 # outbound HTTP is stubbed — these test the mapping, not the network.
 class DataTable::HttpSourceTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 

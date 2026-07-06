@@ -220,7 +220,7 @@ class Views::Islands::Index < Views::Base
   # on the same spot when bouncing between /pods and /islands.
   def server_cell(island)
     a(
-      href: tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
       class: "flex items-baseline gap-2.5 min-w-0 hover:text-voodu-link-2 transition-colors"
     ) do
       span(class: "text-[13px] font-semibold text-voodu-link whitespace-nowrap") { island.name }
@@ -269,7 +269,7 @@ class Views::Islands::Index < Views::Base
       # Header: name+endpoint clickable (opens island), status pill right.
       div(class: "flex items-start gap-3") do
         a(
-          href: tenant_root_path(tenant_key: island.key),
+          href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
           class: "flex flex-col gap-0.5 leading-tight min-w-0 flex-1 no-underline hover:text-voodu-link-2 transition-colors"
         ) do
           span(class: "text-[14px] font-semibold text-voodu-link truncate") { island.name }
@@ -317,7 +317,7 @@ class Views::Islands::Index < Views::Base
 
   def open_btn(island)
     a(
-      href: tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
       title: "Open overview",
       "aria-label": "Open #{island.name}",
       class: action_btn_classes

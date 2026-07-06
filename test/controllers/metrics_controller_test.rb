@@ -7,17 +7,19 @@ require "test_helper"
 # pulse for a "fixed window" badge). Warehouse mode keeps the page render
 # off the network; a pinned dashboard gives the page something to draw.
 class MetricsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
+    @org = @island.org
     @key = @island.key
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
-    @island.metric_dashboards.create!(
+    # Dashboards live at the org (M2); the host panel carries its island_id.
+    @org.metric_dashboards.create!(
       name: "pinned-one", pinned: true,
       panels: [{"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
-                "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%"}]
+                "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "island_id" => @island.id}]
     )
   end
 

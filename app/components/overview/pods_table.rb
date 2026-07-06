@@ -27,11 +27,23 @@ class Components::Overview::PodsTable < Components::Base
   # The dedicated /pods page already shows an H1 "Pods" via its
   # own page_header — passing `show_heading: false` suppresses
   # the redundant H2 there.
-  def initialize(pods:, total:, active_tab: :all, show_heading: true)
-    @pods = pods
+  # PREVIEW_LIMIT — the Overview shows only the first N pods + a "See all" link;
+  # the dedicated /pods page renders the full list with tabs + filter.
+  PREVIEW_LIMIT = 5
+
+  def initialize(pods:, total:, active_tab: :all, show_heading: true, preview: false)
+    @preview = preview
+    # Preview shows the BUSIEST few (highest CPU, then memory) — a glance at
+    # where the pressure is, not an alphabetical slice. The full list (any
+    # order, tabs + filter) lives on /pods.
+    @pods = preview ? busiest(pods).first(PREVIEW_LIMIT) : pods
     @total = total
     @active_tab = active_tab
     @show_heading = show_heading
+  end
+
+  def busiest(pods)
+    pods.sort_by { |p| [-(p[:cpu_pct] || 0).to_f, -(p[:mem_used_mb] || 0).to_f] }
   end
 
   def view_template
@@ -40,11 +52,13 @@ class Components::Overview::PodsTable < Components::Base
     # (<article>). Each row carries `data-key` (the searchable blob:
     # name + scope + resource + image + kind + status) so the
     # controller doesn't have to know about table vs card layout.
-    section(class: "flex flex-col gap-3", data: {controller: "kv-filter"}) do
+    # Preview mode has no filter, so it skips the kv-filter controller.
+    section(class: "flex flex-col gap-3", data: (@preview ? {} : {controller: "kv-filter"})) do
       heading if @show_heading
-      toolbar
+      toolbar unless @preview
       desktop_table
       mobile_list
+      preview_footer if @preview
     end
   end
 
@@ -53,7 +67,25 @@ class Components::Overview::PodsTable < Components::Base
   def heading
     div(class: "flex items-center gap-2") do
       h2(class: "text-base font-semibold text-voodu-text") { "Pods" }
-      span(class: "font-voodu-mono text-[11px] text-voodu-muted") { "#{@pods.size} of #{@total}" }
+      # Preview: the count is the fleet total (we're just showing the top few);
+      # full mode: "shown of total" as the filter narrows.
+      label = @preview ? @total.to_s : "#{@pods.size} of #{@total}"
+      span(class: "font-voodu-mono text-[11px] text-voodu-muted") { label }
+      span(class: "text-[11px] text-voodu-muted-2") { "· busiest" } if @preview && @total > PREVIEW_LIMIT
+    end
+  end
+
+  # preview_footer — "See all N pods →" to the full /pods page. Hidden when the
+  # fleet already fits under the preview cap (nothing more to see).
+  def preview_footer
+    return if @total <= PREVIEW_LIMIT
+
+    a(
+      href: pods_path,
+      class: "inline-flex items-center gap-1.5 self-start text-[12px] text-voodu-link hover:underline"
+    ) do
+      span { "See all #{@total} pods" }
+      render Icon::ArrowRightOutline.new(class: "w-3.5 h-3.5")
     end
   end
 

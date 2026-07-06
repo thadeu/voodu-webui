@@ -63,14 +63,14 @@ class MetricsController < ApplicationController
     respond_to do |format|
       format.html { redirect_to metrics_path(request.query_parameters.except(:metric, :scale, :label, :color, :unit)) }
       format.turbo_stream do
-        if voodu_client.nil?
+        if expand_client.nil?
           head :not_found
           next
         end
 
         data = MetricsPageData.new(
-          voodu_client,
-          current_island,
+          expand_client,
+          expand_island,
           scope_kind: params[:scope_kind],
           scope_id: params[:scope_id],
           range: params[:range],
@@ -108,7 +108,7 @@ class MetricsController < ApplicationController
           # list so the operator can drill from host into a pod
           # without closing the modal first.
           pods: data.all_pods,
-          current_island: current_island,
+          current_island: expand_island,
           # Available metrics for the in-modal MetricPicker. Grouped
           # RESOURCE / HTTP. Pod-scope + ingress-eligible exposes
           # the full set (8 metrics); host gives 3; non-ingress pods
@@ -154,7 +154,7 @@ class MetricsController < ApplicationController
     # exactly the charts on this dashboard. Falls through to the scope
     # path (host/pod fixed metric set) when no dashboard is given.
     if params[:pid].present? &&
-        (dash = current_island.metric_dashboards.find_by(uuid: params[:pid]))
+        (dash = current_org.metric_dashboards.find_by(uuid: params[:pid]))
       render Views::Metrics::DisplaySettings.new(
         kind: "dashboard:#{dash.id}",
         items: dashboard_display_items(dash)
@@ -184,12 +184,40 @@ class MetricsController < ApplicationController
       "source" => "hep3", "scope" => params[:scope].to_s, "name" => params[:name].to_s,
       "view" => params[:view].presence || "messages", "filter_query" => params[:filter_query].to_s,
       "label" => params[:label].to_s, "color" => params[:color].to_s,
-      "percent" => params[:percent].to_s == "true"
+      "percent" => params[:percent].to_s == "true",
+      # island_id → the panel re-aggregates against its OWN server (resolved
+      # within the org by MetricDashboardData). Falls back to the URL's server.
+      "island_id" => expand_island&.id
     }
-    dashboard = current_island.metric_dashboards.new(panels: [panel])
+    dashboard = current_org.metric_dashboards.new(panels: [panel])
 
-    MetricDashboardData.new(voodu_client, current_island, dashboard,
+    MetricDashboardData.new(current_org, dashboard,
       range: params[:range], interval: params[:interval], **custom_window).charts.first
+  end
+
+  # expand_island — the server the chart-expand modal drills into. A dashboard
+  # panel carries its own island_id (?island_id=…, cross-server dashboards), so
+  # the expand must hit THAT server, not the URL's. Resolved WITHIN current_org
+  # (the isolation guard): a forged / cross-org / deleted id falls back to the
+  # URL's current_island, never leaks another org's server. Scope-mode charts
+  # (a pod's "View metrics") carry no island_id → current_island.
+  def expand_island
+    return @expand_island if defined?(@expand_island)
+
+    @expand_island =
+      if params[:island_id].present? && current_org
+        current_org.islands.find_by(id: params[:island_id]) || current_island
+      else
+        current_island
+      end
+  end
+
+  # expand_client — the PAT client for expand_island. nil when no server
+  # resolves (the endpoint heads :not_found).
+  def expand_client
+    return nil if expand_island.nil?
+
+    @expand_client ||= Voodu::Client.new(expand_island)
   end
 
   # build_metrics_data — picks the /metrics data object:
@@ -205,10 +233,10 @@ class MetricsController < ApplicationController
     dashboards = explicit_dashboards
 
     if dashboards.size > 1
-      return MultiDashboardData.new(voodu_client, current_island, dashboards,
+      return MultiDashboardData.new(current_org, dashboards,
         range: params[:range], interval: params[:interval], **custom_window)
     elsif dashboards.size == 1
-      return MetricDashboardData.new(voodu_client, current_island, dashboards.first,
+      return MetricDashboardData.new(current_org, dashboards.first,
         range: params[:range], interval: params[:interval], **custom_window)
     end
 
@@ -218,12 +246,11 @@ class MetricsController < ApplicationController
         range: params[:range], interval: params[:interval], **custom_window)
     end
 
-    pinned = current_island.metric_dashboards.pinned.first
+    pinned = current_org.metric_dashboards.pinned.first
     return nil if pinned.nil?
 
     MetricDashboardData.new(
-      voodu_client,
-      current_island,
+      current_org,
       pinned,
       range: params[:range],
       interval: params[:interval],
@@ -263,7 +290,7 @@ class MetricsController < ApplicationController
     ids = params[:pid].to_s.split(",").map(&:strip).reject(&:blank?).uniq
     return [] if ids.empty?
 
-    ids.filter_map { |id| current_island.metric_dashboards.find_by(uuid: id) }
+    ids.filter_map { |id| current_org.metric_dashboards.find_by(uuid: id) }
   end
 
   # ── Last-view memory ──────────────────────────────────────────────
@@ -289,7 +316,7 @@ class MetricsController < ApplicationController
     raw = Rails.cache.read(key)
     return nil if raw.blank?
 
-    uuids = raw.to_s.split(",").map(&:strip).select { |u| current_island.metric_dashboards.exists?(uuid: u) }
+    uuids = raw.to_s.split(",").map(&:strip).select { |u| current_org.metric_dashboards.exists?(uuid: u) }
     uuids.join(",").presence
   end
 

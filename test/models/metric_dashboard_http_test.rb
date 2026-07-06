@@ -7,12 +7,15 @@ require "test_helper"
 # the validation that lets it save without scope/name, requires a url, and
 # allows the timeseries chart types.
 class MetricDashboardHttpTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
-  setup { @island = islands(:alpha) }
+  setup do
+    @island = islands(:alpha)
+    @org = @island.org
+  end
 
   def dashboard(panel)
-    MetricDashboard.new(island: @island, name: "ext", panels: [panel])
+    MetricDashboard.new(org: @org, name: "ext", panels: [panel])
   end
 
   def http_panel(**over)

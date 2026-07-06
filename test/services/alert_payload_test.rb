@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertPayloadTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -15,7 +15,7 @@ class AlertPayloadTest < ActiveSupport::TestCase
   end
 
   def dest(kind, **attrs)
-    @island.alert_destinations.new({name: "d", kind: kind}.merge(attrs))
+    @island.org.alert_destinations.new({name: "d", kind: kind}.merge(attrs))
   end
 
   test "webhook with a body template renders it to a verbatim JSON string" do

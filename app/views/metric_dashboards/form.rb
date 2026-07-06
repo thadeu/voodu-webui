@@ -35,17 +35,33 @@ class Views::MetricDashboards::Form < Views::Base
     var(--voodu-pink) var(--voodu-red)
   ].freeze
 
-  def initialize(island:, dashboard:, pods: [], embed: true,
+  def initialize(island:, dashboard:, island_pods: nil, embed: true,
     current_path: nil, islands: [], current_island: nil,
     return_to: nil)
     @island = island
     @dashboard = dashboard
-    @pods = pods
+    # island_pods — [[island, [compact pods]], …] for EVERY server in the org
+    # (M2). Every source / log / table / hep3 option enumerates across ALL of
+    # them and carries its island_id, so a panel can read from any server. Falls
+    # back to the single default island for a lone-server org / legacy caller.
+    @island_pods = Array(island_pods).presence || [[island, []]]
     @embed = embed
     @current_path = current_path
     @islands = islands
     @current_island = current_island
     @return_to = return_to
+  end
+
+  # multi_server? — the org has more than one server, so source labels get a
+  # "<server> · …" prefix to disambiguate (single-server orgs stay terse).
+  def multi_server?
+    @island_pods.size > 1
+  end
+
+  # servers_json — { island_id => name } for every org server. The builder uses
+  # it to prefix a re-edited panel's source label with the right server.
+  def servers_json
+    @island_pods.to_h { |island, _| [island.id.to_s, island.name.to_s] }.to_json
   end
 
   def view_template
@@ -124,6 +140,13 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
         dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
         dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
+        # default_island — the server a fresh (host) panel binds to before the
+        # operator picks a source. current_island, so single-server behaviour is
+        # unchanged; a picked source overrides it with its own island_id.
+        dashboard_builder_default_island_value: @island&.id.to_s,
+        # servers — { island_id => name } for every org server, so re-editing a
+        # saved panel can label its source trigger with the right server prefix.
+        dashboard_builder_servers_value: servers_json,
         dashboard_builder_panels_value: existing_panels_json,
         # DS confirm before saving (the singleton confirm-host swaps the
         # native dialog). Submit → confirm → save → reopens the modal.
@@ -909,17 +932,69 @@ class Views::MetricDashboards::Form < Views::Base
     end
   end
 
-  # source_picker — static menu (Host + each workload), rendered server
-  # side. Selecting one updates the trigger label and repopulates the
-  # metric picker for that source's kind.
+  # source_picker — static menu (Host + each workload), rendered server side,
+  # enumerated across EVERY server in the org (M2). Selecting one updates the
+  # trigger label, stamps the panel's island_id (it rides in the option), and
+  # repopulates the metric picker for that source's kind.
   def source_picker
+    sources_count = host_sources.size + workloads.size
+
     div(class: "vmd:flex-1 min-w-0 relative", data: {controller: "dropdown"}) do
-      picker_trigger("Host (system)", :sourceLabel)
+      picker_trigger(default_source_label, :sourceLabel)
       div(hidden: true, data: {dropdown_target: "menu"}, class: menu_classes) do
-        source_option({scope_kind: "host", label: "host"}, "Host (system)")
-        workloads.each { |w| source_option(w, "#{w[:label]} · #{w[:kind]}") }
+        dropdown_filter("Filter servers + pods…") if sources_count > FILTER_THRESHOLD
+        host_sources.each { |h| source_option(h, source_text(h)) }
+        workloads.each { |w| source_option(w, source_text(w)) }
+        dropdown_empty if sources_count > FILTER_THRESHOLD
       end
     end
+  end
+
+  # Show the in-dropdown search box only once a picker holds more rows than this
+  # — a filter on a 3-item list is noise; org-wide pod lists (the reason it
+  # exists) blow well past it.
+  FILTER_THRESHOLD = 6
+
+  # dropdown_filter — a sticky search box at the top of a dropdown menu. Rows
+  # tagged data-dropdown-target="option" filter live as the operator types
+  # (dropdown#filterInput); Enter picks the top match (dropdown#onFilterKey,
+  # which also stops Enter from submitting the builder form).
+  def dropdown_filter(placeholder)
+    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
+      input(
+        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
+        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
+        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
+               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+    end
+  end
+
+  def dropdown_empty
+    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
+  end
+
+  # host_sources — one Host (system) row per server; a host panel binds to that
+  # server's node metrics. island_id rides in the option so buildPanel stamps it.
+  def host_sources
+    @island_pods.map do |island, _|
+      {scope_kind: "host", island_id: island.id.to_s, server: island.name.to_s, label: "host"}
+    end
+  end
+
+  # source_text — a source dropdown row's label. Host → "Host (system)"; pod →
+  # "<pod> · <kind>". Multi-server orgs prefix "<server> · " so the same pod
+  # name on two servers stays distinguishable.
+  def source_text(src)
+    base = (src[:scope_kind] == "host") ? "Host (system)" : "#{src[:label]} · #{src[:kind]}"
+
+    multi_server? ? "#{src[:server]} · #{base}" : base
+  end
+
+  # default_source_label — the source trigger's resting label before a pick:
+  # the default server's host (matches the JS default currentSource).
+  def default_source_label
+    multi_server? ? "#{@island&.name} · Host (system)" : "Host (system)"
   end
 
   # metric_picker — menu filled by the builder controller from the
@@ -1001,7 +1076,7 @@ class Views::MetricDashboards::Form < Views::Base
   def source_option(src, text)
     button(
       type: "button",
-      data: {action: "click->dashboard-builder#selectSource click->dropdown#close", source: src.to_json},
+      data: {action: "click->dashboard-builder#selectSource click->dropdown#close", dropdown_target: "option", source: src.to_json},
       class: option_classes
     ) { text }
   end
@@ -1085,9 +1160,11 @@ class Views::MetricDashboards::Form < Views::Base
       picker_trigger("Select pod", :logSourceLabel)
       div(hidden: true, data: {dropdown_target: "menu"}, class: menu_classes) do
         if workloads.empty?
-          div(class: "px-3 py-2 text-[12px] text-voodu-muted") { "No pods on this island" }
+          div(class: "px-3 py-2 text-[12px] text-voodu-muted") { "No pods in this org" }
         else
-          workloads.each { |w| log_source_option(w, "#{w[:label]} · #{w[:kind]}") }
+          dropdown_filter("Filter pods…") if workloads.size > FILTER_THRESHOLD
+          workloads.each { |w| log_source_option(w, source_text(w)) }
+          dropdown_empty if workloads.size > FILTER_THRESHOLD
         end
       end
     end
@@ -1096,7 +1173,7 @@ class Views::MetricDashboards::Form < Views::Base
   def log_source_option(src, text)
     button(
       type: "button",
-      data: {action: "click->dashboard-builder#selectLogSource click->dropdown#close", source: src.to_json},
+      data: {action: "click->dashboard-builder#selectLogSource click->dropdown#close", dropdown_target: "option", source: src.to_json},
       class: option_classes
     ) { text }
   end
@@ -1169,21 +1246,26 @@ class Views::MetricDashboards::Form < Views::Base
     @dashboard.persisted? ? metric_dashboard_path(@dashboard) : metric_dashboards_path
   end
 
-  # workloads — unique (scope, resource_name, kind) tuples from the
-  # compact pod list. Panels bind to the WORKLOAD, not a replica, so
-  # the picker offers one row per workload regardless of replica count.
+  # workloads — unique (island_id, scope, resource_name, kind) tuples across
+  # EVERY server in the org (M2). Panels bind to the WORKLOAD, not a replica, so
+  # the picker offers one row per workload regardless of replica count; each
+  # row carries the island_id it lives on (the same workload name on two servers
+  # stays two distinct rows). `server` labels it when the org is multi-server.
   def workloads
-    Array(@pods).map do |p|
-      {
-        scope_kind: "pod",
-        scope: (p["scope"] || p[:scope]).to_s,
-        name: (p["resource_name"] || p[:resource_name]).to_s,
-        kind: (p["kind"] || p[:kind]).to_s.presence || "pod",
-        label: (p["resource_name"] || p[:resource_name]).to_s
-      }
-    end.reject { |w| w[:scope].empty? || w[:name].empty? }
-      .uniq { |w| [w[:scope], w[:name], w[:kind]] }
-      .sort_by { |w| [w[:scope], w[:name]] }
+    @workloads ||= @island_pods.flat_map do |island, pods|
+      Array(pods).map do |p|
+        {
+          scope_kind: "pod",
+          island_id: island.id.to_s,
+          server: island.name.to_s,
+          scope: (p["scope"] || p[:scope]).to_s,
+          name: (p["resource_name"] || p[:resource_name]).to_s,
+          kind: (p["kind"] || p[:kind]).to_s.presence || "pod",
+          label: (p["resource_name"] || p[:resource_name]).to_s
+        }
+      end.reject { |w| w[:scope].empty? || w[:name].empty? }
+        .uniq { |w| [w[:island_id], w[:scope], w[:name], w[:kind]] }
+    end.sort_by { |w| [w[:server], w[:scope], w[:name]] }
   end
 
   # catalog_json — { kind => [spec, …] } the builder's metric <select>
@@ -1198,52 +1280,58 @@ class Views::MetricDashboards::Form < Views::Base
     end.to_json
   end
 
-  # table_sources — DataSources the island offers for Table panels
-  # ([{key:, label:, views:[…]}], from DataTable::Registry). Empty when no
-  # source applies (e.g. the hep3 plugin isn't installed) → the Table type
-  # card is hidden and the builder offers only Metric / Log count.
+  # table_sources — DataSources offered for Table panels across the org's
+  # servers ([{key:, label:, views:[…]}], from DataTable::Registry), deduped by
+  # key (a source's shape is server-independent; only availability varies). The
+  # Table/HEP3/HTTP type card shows when ANY server offers that source.
   def table_sources
-    @table_sources ||= DataTable::Registry.available(@island)
+    @table_sources ||= @island_pods
+      .flat_map { |island, _| DataTable::Registry.available(island) }
+      .uniq { |s| s[:key] }
   end
 
-  # hep3_readers — the SIP-capture reader instances on this island, detected
-  # by their image (`voodu-hep3-api*`). This is what folds INTO the source·view
-  # options so a HEP3 panel needs no pod picker: each option already carries
-  # the reader's (scope, name). Empty → the HEP3 type card hides.
+  # hep3_readers — the SIP-capture reader instances across EVERY server in the
+  # org (M2), detected by image (`voodu-hep3-api*`). Each folds INTO the
+  # source·view options carrying its island_id + (scope, name), so a HEP3 panel
+  # needs no pod picker. Empty → the HEP3 type card hides.
   def hep3_readers
-    @hep3_readers ||= Array(@pods).filter_map { |p|
-      next unless (p["image"] || p[:image]).to_s.start_with?("voodu-hep3-api")
+    @hep3_readers ||= @island_pods.flat_map { |island, pods|
+      Array(pods).filter_map do |p|
+        next unless (p["image"] || p[:image]).to_s.start_with?("voodu-hep3-api")
 
-      {scope: (p["scope"] || p[:scope]).to_s, name: (p["resource_name"] || p[:resource_name]).to_s}
-    }.reject { |r| r[:scope].empty? || r[:name].empty? }.uniq
+        {island_id: island.id.to_s, server: island.name.to_s,
+         scope: (p["scope"] || p[:scope]).to_s, name: (p["resource_name"] || p[:resource_name]).to_s}
+      end.reject { |r| r[:scope].empty? || r[:name].empty? }
+    }.uniq { |r| [r[:island_id], r[:scope], r[:name]] }
   end
 
   # hep3_source_views — the HEP3 kind's picker options: one entry per
-  # (reader, view), each carrying the reader's scope/name so the HEP3 panel
-  # needs no separate pod picker. Label is "HEP3 — Messages" with a single
-  # reader, "<reader> — Messages" when there are several.
+  # (reader, view), each carrying the reader's island_id + scope/name so the
+  # HEP3 panel needs no separate pod picker. Label prefixes the server (multi-
+  # server) or reader name (several readers) so options stay distinguishable.
   def hep3_source_views
     multi = hep3_readers.size > 1
 
     table_sources.select { |src| src[:key] == "hep3" }.flat_map do |src|
       hep3_readers.flat_map do |reader|
-        prefix = multi ? reader[:name] : src[:short_label]
+        base = multi ? reader[:name] : src[:short_label]
+        prefix = multi_server? ? "#{reader[:server]} · #{base}" : base
 
         src[:views].map do |v|
-          {source: src[:key], scope: reader[:scope], name: reader[:name], view: v[:key],
-           label: "#{prefix} — #{v[:label]}", fields: v[:fields]}
+          {source: src[:key], island_id: reader[:island_id], scope: reader[:scope], name: reader[:name],
+           view: v[:key], label: "#{prefix} — #{v[:label]}", fields: v[:fields]}
         end
       end
     end
   end
 
   # logs_source_views — the Table kind's picker options: one entry per pod
-  # (workload), each carrying the pod's scope/name. The generic Table tabulates
-  # that pod's logs (DataTable::LogsSource), so the operator picks a pod here.
+  # (workload) across the org, each carrying its island_id + scope/name. The
+  # generic Table tabulates that pod's logs (DataTable::LogsSource).
   def logs_source_views
     workloads.map do |w|
-      {source: "logs", scope: w[:scope], name: w[:name], view: "lines",
-       label: "#{w[:label]} · #{w[:kind]}", fields: DataTable::LogsSource::FIELDS}
+      {source: "logs", island_id: w[:island_id], scope: w[:scope], name: w[:name], view: "lines",
+       label: source_text(w), fields: DataTable::LogsSource::FIELDS}
     end
   end
 

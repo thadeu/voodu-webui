@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertNotifierTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -16,18 +16,29 @@ class AlertNotifierTest < ActiveJob::TestCase
       threshold: 90, rule_name: @rule.name, metric_kind: "cpu",
       target_label: @rule.target_label
     )
-    @firing_only = @island.alert_destinations.create!(
+    @firing_only = @island.org.alert_destinations.create!(
       name: "pager", kind: "webhook", endpoint: "https://a.example/h",
       on_firing: true, on_resolved: false
     )
-    @both = @island.alert_destinations.create!(
+    @both = @island.org.alert_destinations.create!(
       name: "slack", kind: "webhook", endpoint: "https://hooks.slack.com/services/T/B/X",
       on_firing: true, on_resolved: true
     )
+    # Wire both to the rule — a rule only notifies the destinations it selects
+    # (empty = don't send). The tests below vary the selection + toggles.
+    @rule.update!(alert_destinations: [@firing_only, @both])
   end
 
-  test "default (no selection) fans out to all enabled destinations that want the transition" do
+  test "notifies the selected destinations that want the transition" do
     assert_enqueued_jobs 2, only: DeliverAlertNotificationJob do
+      AlertNotifier.enqueue(@event, "firing")
+    end
+  end
+
+  test "no destinations selected sends nowhere (the don't-send default)" do
+    @rule.update!(alert_destinations: [])
+
+    assert_no_enqueued_jobs only: DeliverAlertNotificationJob do
       AlertNotifier.enqueue(@event, "firing")
     end
   end

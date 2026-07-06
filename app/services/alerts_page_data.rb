@@ -4,21 +4,27 @@
 # builds it once, the Index/Frame views consume it. Everything is
 # primary-DB reads (rules + events + pod snapshot); the page renders
 # instantly even with the controller offline.
+#
+# M3: alerts are ORG-level. Data (rules / events / destinations / targets) spans
+# every server in the org; `island` is only the CURRENT server the /alerts URL
+# is under — the default target when adding a rule and the "add to this server"
+# context. A rule/event carries the server it targets/fired on.
 class AlertsPageData
-  # Cap on the windowed history list — a 30d window on a noisy island
+  # Cap on the windowed history list — a 30d window on a noisy org
   # could be thousands of rows; the timeline shows the most recent
   # MAX_HISTORY and notes the truncation.
   MAX_HISTORY = 200
 
-  attr_reader :island, :history_filter
+  attr_reader :org, :island, :history_filter
 
-  def initialize(island, history_filter: AlertHistoryFilter.new)
+  def initialize(org, island = nil, history_filter: AlertHistoryFilter.new)
+    @org = org
     @island = island
     @history_filter = history_filter
   end
 
   def rules
-    @rules ||= island.alert_rules.order(:name).to_a
+    @rules ||= org.alert_rules.includes(:island).order(:name).to_a
   end
 
   # Open episodes, newest first — the red cards at the top.
@@ -30,9 +36,9 @@ class AlertsPageData
   # includes(:alert_rule) kills the per-card N+1 from FiringCard
   # reading the live comparator.
   def firing_events
-    @firing_events ||= island.alert_events.firing
+    @firing_events ||= org.alert_events.firing
       .joins(:alert_rule).where(alert_rules: {enabled: true})
-      .includes(:alert_rule)
+      .includes(:alert_rule, :island)
       .order(started_at: :desc).to_a
   end
 
@@ -57,47 +63,53 @@ class AlertsPageData
   # events and vice-versa. The row loaders above stay lazy, so only
   # the active tab's rows are ever materialised.
   def firing_count
-    @firing_count ||= island.alert_events.firing
+    @firing_count ||= org.alert_events.firing
       .joins(:alert_rule).where(alert_rules: {enabled: true})
       .count
   end
 
   def rules_count
-    @rules_count ||= island.alert_rules.count
+    @rules_count ||= org.alert_rules.count
   end
 
   def destinations
-    @destinations ||= island.alert_destinations.order(:name).to_a
+    @destinations ||= org.alert_destinations.order(:name).to_a
   end
 
   def destinations_count
-    @destinations_count ||= island.alert_destinations.count
+    @destinations_count ||= org.alert_destinations.count
   end
 
   def history_count
-    @history_count ||= island.alert_events.resolved.count
+    @history_count ||= org.alert_events.resolved.count
   end
 
   def rules?
     rules_count.positive?
   end
 
-  # Form targets — distinct workloads from the state-sync pod
-  # snapshot, the same (scope, resource_name) addressing the /metrics
-  # PodPicker uses. `kind` rides along so the form can keep req/s
-  # rules on deployments (the only workloads ingress samples carry).
+  # Form targets — distinct workloads across EVERY server in the org (M3), each
+  # carrying its island_id + server name so the rule form's server-picker offers
+  # a host + that server's pods. Same (scope, resource_name) addressing the
+  # /metrics PodPicker uses; `kind` rides along so the form can keep req/s rules
+  # on deployments (the only workloads ingress samples carry).
   def targets
-    @targets ||= island.pods
-      .distinct
-      .pluck(:scope, :resource_name, :kind)
-      .reject { |scope, name, _kind| scope.blank? || name.blank? }
-      .sort
-      .map { |scope, name, kind| {scope: scope, name: name, kind: kind.to_s} }
+    @targets ||= org.islands.order(:name).flat_map do |isl|
+      isl.pods.distinct.pluck(:scope, :resource_name, :kind)
+        .reject { |scope, name, _kind| scope.blank? || name.blank? }
+        .map { |scope, name, kind| {island_id: isl.id, server: isl.name, scope: scope, name: name, kind: kind.to_s} }
+    end.sort_by { |t| [t[:server], t[:scope], t[:name]] }
+  end
+
+  # servers — the org's servers, for the rule form's server-picker (host target
+  # per server) + labelling which server each rule watches.
+  def servers
+    @servers ||= org.islands.order(:name).to_a
   end
 
   private
 
   def history_scope
-    island.alert_events.resolved.where(resolved_at: history_filter.window.first..history_filter.window.last)
+    org.alert_events.resolved.where(resolved_at: history_filter.window.first..history_filter.window.last)
   end
 end

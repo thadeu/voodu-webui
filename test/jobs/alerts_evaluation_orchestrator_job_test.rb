@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertsEvaluationOrchestratorJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   test "fans out only to islands with enabled rules" do
     with_rule = islands(:alpha)

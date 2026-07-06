@@ -23,6 +23,11 @@ class Island < ApplicationRecord
   # decrypts on read. Operator never has to think about it.
   encrypts :pat_ciphertext
 
+  # Every server belongs to exactly one Org (the tenant/grouping layer above
+  # servers). Required — no orphan servers; the registration form always
+  # picks or creates an org. See app/models/org.rb.
+  belongs_to :org
+
   # Local snapshots maintained by `StateSyncIslandJob` (every 10s).
   # Pages read from these instead of making a fresh HTTP call to
   # the controller — page-instant render + offline resilience. See
@@ -36,17 +41,12 @@ class Island < ApplicationRecord
   has_many :pods, dependent: :destroy
   has_one :system, dependent: :destroy
 
-  # Saved metric dashboards (named multi-panel views on /metrics).
-  # `dependent: :destroy` reaps them with the island; the DB foreign
-  # key cascades too.
-  has_many :metric_dashboards, dependent: :destroy
-
-  # Alert rules + their firing episodes. Events also cascade through
-  # alert_rules, but the direct association lets the /alerts history
-  # render island-wide without joining rules.
+  # Alert rules + their firing episodes. island_id on both is the TARGET server
+  # (a rule monitors this island; an event fired on it), so these stay direct.
+  # Destinations moved to the org (M3) — a webhook is shared org-wide, not per
+  # server — so there's no island→destinations association any more.
   has_many :alert_rules, dependent: :destroy
   has_many :alert_events, dependent: :destroy
-  has_many :alert_destinations, dependent: :destroy
 
   before_validation :normalize_endpoint
   before_validation :ensure_key, on: :create

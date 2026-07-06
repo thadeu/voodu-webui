@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertsPageDataTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   NOW = Time.utc(2026, 6, 10, 12, 0, 0)
 
@@ -21,7 +21,7 @@ class AlertsPageDataTest < ActiveSupport::TestCase
   test "history is scoped to the filter window, newest first" do
     resolved_at([2.hours, 2.days, 10.days])
 
-    data = AlertsPageData.new(@island, history_filter: AlertHistoryFilter.new(range: "7d"))
+    data = AlertsPageData.new(@island.org, @island, history_filter: AlertHistoryFilter.new(range: "7d"))
 
     assert_equal 2, data.history.size, "10d-old event is outside the 7d window"
     assert_equal 2, data.history_window_count
@@ -31,7 +31,7 @@ class AlertsPageDataTest < ActiveSupport::TestCase
   test "24h window excludes a 2-day-old event" do
     resolved_at([1.hour, 2.days])
 
-    data = AlertsPageData.new(@island, history_filter: AlertHistoryFilter.new(range: "24h"))
+    data = AlertsPageData.new(@island.org, @island, history_filter: AlertHistoryFilter.new(range: "24h"))
 
     assert_equal 1, data.history.size
   end
@@ -39,7 +39,7 @@ class AlertsPageDataTest < ActiveSupport::TestCase
   test "history_count is the all-time total, independent of the window" do
     resolved_at([1.hour, 2.days, 40.days])
 
-    data = AlertsPageData.new(@island, history_filter: AlertHistoryFilter.new(range: "24h"))
+    data = AlertsPageData.new(@island.org, @island, history_filter: AlertHistoryFilter.new(range: "24h"))
 
     assert_equal 1, data.history.size, "window holds only the recent one"
     assert_equal 3, data.history_count, "tab badge counts everything"
@@ -49,7 +49,7 @@ class AlertsPageDataTest < ActiveSupport::TestCase
     stub_const(AlertsPageData, :MAX_HISTORY, 2) do
       resolved_at([1.hour, 2.hours, 3.hours])
 
-      data = AlertsPageData.new(@island, history_filter: AlertHistoryFilter.new(range: "24h"))
+      data = AlertsPageData.new(@island.org, @island, history_filter: AlertHistoryFilter.new(range: "24h"))
 
       assert_equal 2, data.history.size
       assert_equal 3, data.history_window_count

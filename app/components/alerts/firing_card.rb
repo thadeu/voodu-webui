@@ -50,7 +50,7 @@ class Components::Alerts::FiringCard < Components::Base
         "Open metrics for #{@event.target_label}", :ChartBarOutline, "Open metrics"
       )
       if rule
-        pill_link(edit_alert_rule_path(rule), "Edit #{rule.name}", :PencilSquareOutline, "Open rule")
+        pill_link(edit_alert_rule_path(rule, return_to: alerts_path), "Edit #{rule.name}", :PencilSquareOutline, "Open rule")
       end
     end
   end

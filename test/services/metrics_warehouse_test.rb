@@ -6,7 +6,7 @@ require "test_helper"
 # explicit from/until_ pin an absolute window; without them the query falls
 # back to `range` relative to now.
 class MetricsWarehouseTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

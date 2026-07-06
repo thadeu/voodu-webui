@@ -8,7 +8,7 @@ require "test_helper"
 # and old controllers (no `plugins` key) gate OFF, and the gate resolves
 # off the locally-synced row with no live call.
 class SystemPluginsTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 

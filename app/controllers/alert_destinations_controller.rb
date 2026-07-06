@@ -13,14 +13,14 @@ class AlertDestinationsController < ApplicationController
   before_action :set_destination, only: [:edit, :update, :destroy, :test]
 
   def new
-    @destination = current_island.alert_destinations.new(
+    @destination = current_org.alert_destinations.new(
       kind: "webhook", on_firing: true, on_resolved: true, enabled: true
     )
     render_form
   end
 
   def create
-    @destination = current_island.alert_destinations.new(destination_attributes)
+    @destination = current_org.alert_destinations.new(destination_attributes)
 
     if @destination.save
       redirect_to alerts_path(tab: "destinations"), notice: "Destination #{@destination.name} created."
@@ -65,7 +65,7 @@ class AlertDestinationsController < ApplicationController
   private
 
   def set_destination
-    @destination = current_island.alert_destinations.find_by(id: params[:id])
+    @destination = current_org.alert_destinations.find_by(id: params[:id])
     redirect_to alerts_path(tab: "destinations"), alert: "Destination was not found." if @destination.nil?
   end
 
@@ -97,6 +97,7 @@ class AlertDestinationsController < ApplicationController
   # payload looks like a real one without writing history.
   def sample_event
     AlertEvent.new(
+      org: current_org,
       island: current_island,
       state: "firing",
       started_at: Time.current,

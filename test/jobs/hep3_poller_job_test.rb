@@ -7,7 +7,7 @@ require "test_helper"
 # cursor, NEVER re-reads across ticks (the cardinal sin — duplicates),
 # and a malformed line is skipped without stalling the cursor.
 class Hep3PollerJobTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   # FakeHepReader models the reader's /export as a byte-offset tail: the
   # cursor is an integer index into the line array, exactly like the real

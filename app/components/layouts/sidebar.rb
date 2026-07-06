@@ -30,21 +30,28 @@
 # is communicated to children via Tailwind's `vmd:group-data-[collapsed]`
 # variants on the aside root — no per-child JS, no Phlex branching.
 class Components::Layouts::Sidebar < Components::Base
-  # NAV_ITEMS — the :path key maps to a route HELPER name (resolved
-  # at render-time against the current request's tenant_key via
-  # ApplicationController#default_url_options). Keeping helpers
-  # instead of literal strings means future renames (`/metrics` →
-  # `/observe/metrics`) are a one-line routes.rb change.
-  NAV_ITEMS = [
+  # Nav is split into two groups. The :path key maps to a route HELPER name
+  # (resolved at render-time against the current request's org_id + tenant_key
+  # via ApplicationController#default_url_options) — helpers not literal strings,
+  # so a route rename is a one-line routes.rb change.
+  #
+  # SERVER_NAV — scoped to THE CURRENT server (overview/pods/logs/settings read
+  # one island). ORG_NAV — org-level surfaces that span every server in the org
+  # (Metrics + Alerts became cross-server in M2/M3), so they sit in their own
+  # group under an "Org" heading.
+  SERVER_NAV = [
     {id: :overview, label: "Overview", icon: :Squares2x2Outline, path: :tenant_root},
     {id: :pods, label: "Pods", icon: :CubeOutline, path: :pods},
-    {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
     # Logs lands on Analytics (the primary surface); `active_prefix`
     # keeps the item highlighted across the whole /logs/* family
     # (Analytics AND Follow), since the href no longer equals the prefix.
     {id: :logs, label: "Logs", icon: :DocumentTextOutline, path: :logs_analytics, active_prefix: :logs},
-    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
     {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings}
+  ].freeze
+
+  ORG_NAV = [
+    {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
+    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count}
   ].freeze
 
   def initialize(current_path: "/", islands: [], recent_islands: nil, current_island: nil)
@@ -221,7 +228,7 @@ class Components::Layouts::Sidebar < Components::Base
     letters = avatar_letters_for(island.name)
 
     a(
-      href: tenant_root_path(tenant_key: island.key),
+      href: tenant_root_path(org_id: island.org.short_id, tenant_key: island.key),
       title: "#{island.name} · #{island.host}",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
@@ -295,45 +302,73 @@ class Components::Layouts::Sidebar < Components::Base
   # expanded-state's accent border so collapsed/expanded both read
   # as "this is your active context" without ambiguity.
   def avatar_style_for(status, selected: false)
+    # Selected: a FILLED accent tile — the only filled avatar in the rail, so
+    # the active server pops. (The theme accent is green, same hue as the
+    # online-status tint, so a filled unselected tile would read identically —
+    # hence unselected tiles drop the fill entirely.)
     if selected
-      return "background: var(--voodu-accent-dim); color: var(--voodu-accent-2); " \
+      return "background: var(--voodu-accent); color: var(--voodu-on-accent); " \
              "box-shadow: inset 0 0 0 1px var(--voodu-accent-line);"
     end
 
-    case status
-    when :online, :running
-      "background: var(--voodu-green-dim); color: var(--voodu-green); " \
-        "box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voodu-green) 35%, transparent);"
-    when :restarting
-      "background: var(--voodu-amber-dim); color: var(--voodu-amber); " \
-        "box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voodu-amber) 35%, transparent);"
-    when :offline, :error
-      "background: var(--voodu-red-dim); color: var(--voodu-red); " \
-        "box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--voodu-red) 35%, transparent);"
-    else
-      "background: var(--voodu-surface-2); color: var(--voodu-muted); " \
-        "box-shadow: inset 0 0 0 1px var(--voodu-border);"
-    end
+    # Unselected: NO fill (transparent) so it recedes against the active tile.
+    # Status still tints the letters + a faint border, so a down/restarting
+    # server is still legible at a glance without an expand.
+    color, border =
+      case status
+      when :online, :running then ["var(--voodu-green)", "color-mix(in srgb, var(--voodu-green) 30%, transparent)"]
+      when :restarting then ["var(--voodu-amber)", "color-mix(in srgb, var(--voodu-amber) 30%, transparent)"]
+      when :offline, :error then ["var(--voodu-red)", "color-mix(in srgb, var(--voodu-red) 30%, transparent)"]
+      else ["var(--voodu-muted)", "var(--voodu-border)"]
+      end
+
+    "background: transparent; color: #{color}; box-shadow: inset 0 0 0 1px #{border};"
   end
 
   def nav_section
     return if nav_tenant_key.nil?
 
     nav(
-      class: "flex flex-col gap-1.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
+      class: "flex flex-col gap-3.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
       aria: {label: "Primary"}
     ) do
-      div(class: "px-2 pt-1 pb-0.5 vmd:group-data-[collapsed]:hidden") do
-        span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { "Navigation" }
+      nav_group("Server", SERVER_NAV)
+      nav_divider
+      nav_group("Org", ORG_NAV)
+    end
+  end
+
+  # nav_divider — a short rule between the Server + Org blocks, shown ONLY when
+  # the sidebar is collapsed (icons-only) — expanded, the "Org" heading already
+  # separates them. display:none while expanded, so it reserves no flex gap.
+  def nav_divider
+    div(class: "hidden vmd:group-data-[collapsed]:block border-t border-voodu-border w-7 mx-auto")
+  end
+
+  # nav_group — one labelled block of nav items. The heading hides when the
+  # sidebar is collapsed (icons only); a thin divider-like gap (the nav's
+  # `gap-3.5`) separates the Server + Org blocks.
+  def nav_group(label, items)
+    div(class: "flex flex-col gap-1.5") do
+      div(class: "px-2 pb-0.5 vmd:group-data-[collapsed]:hidden") do
+        span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { label }
       end
       div(class: "flex flex-col gap-px") do
-        NAV_ITEMS.each { |item| nav_item(item) }
+        items.each { |item| nav_item(item) }
       end
     end
   end
 
   def nav_tenant_key
-    (@current_island || @islands.first)&.key
+    nav_island&.key
+  end
+
+  # nav_org_id — the org short_id for the nav's tenant-scoped path helpers (M1
+  # routes are `/:org_id/:tenant_key/…`, so every per-server link needs it).
+  # Derived from the island the nav points at, so on the tenant-less /islands
+  # page (no current_org) the links still resolve to that server's org.
+  def nav_org_id
+    nav_island&.org&.short_id
   end
 
   # nav_item — collapsed view: icon centered, label hidden, badge
@@ -343,7 +378,7 @@ class Components::Layouts::Sidebar < Components::Base
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
-    href = public_send("#{item[:path]}_path", tenant_key: nav_tenant_key)
+    href = public_send("#{item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key)
 
     a(
       href: href,
@@ -403,12 +438,12 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def nav_active?(item)
-    return @current_path == public_send("#{item[:path]}_path", tenant_key: nav_tenant_key) if item[:path] == :tenant_root
+    return @current_path == public_send("#{item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key) if item[:path] == :tenant_root
 
     # `active_prefix` lets an item highlight across a URL family wider
     # than its href (e.g. Logs links to /logs/analytics but stays active
     # on /logs too). Falls back to the item's own path.
-    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", tenant_key: nav_tenant_key)
+    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", org_id: nav_org_id, tenant_key: nav_tenant_key)
     @current_path.start_with?(prefix)
   end
 

@@ -12,16 +12,22 @@ class Views::Islands::Edit < Views::Base
   # redirect should land on (Settings page uses this to keep the
   # operator's flow on Settings instead of bouncing them back to
   # the /islands registry).
-  def initialize(current_path:, island:, connection_error: nil, return_to: nil)
+  def initialize(current_path:, island:, orgs: [], connection_error: nil, return_to: nil)
     @current_path = current_path
     @island = island
+    @orgs = orgs
     @connection_error = connection_error
     @return_to = return_to
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{label: "Servers"}]) do
-      render(modal) { form_body }
+      render(modal) do
+        div(data: {controller: "org-manager"}) do
+          form_body
+          render Components::Orgs::Overlay.new(orgs: @orgs)
+        end
+      end
     end
   end
 
@@ -62,6 +68,8 @@ class Views::Islands::Edit < Views::Base
       field(label: "Name", error: @island.errors[:name].first) do
         text_input(name: "island[name]", value: @island.name)
       end
+
+      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @island.org_id)
 
       field(label: "Server endpoint", error: @island.errors[:endpoint].first) do
         text_input(

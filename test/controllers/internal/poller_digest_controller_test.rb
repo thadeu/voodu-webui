@@ -4,7 +4,7 @@ require "test_helper"
 
 module Internal
   class PollerDigestControllerTest < ActionDispatch::IntegrationTest
-    fixtures :islands
+    fixtures :orgs, :islands
 
     INTERNAL_TOKEN = "test-internal-token-aaaaaaaaaaaaaaaa"
     VALID_HASH = "0123456789abcdef"

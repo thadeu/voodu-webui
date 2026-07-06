@@ -13,15 +13,24 @@
 # it; the operator's only meaningful action is the form. After save
 # IslandsController#create redirects to /<key>/.
 class Views::Islands::New < Views::Base
-  def initialize(current_path:, island:, connection_error: nil)
+  def initialize(current_path:, island:, orgs: [], connection_error: nil)
     @current_path = current_path
     @island = island
+    @orgs = orgs
     @connection_error = connection_error
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{label: "Servers"}]) do
-      render(modal) { form_body }
+      # The org-manager controller wraps the form + the overlay (siblings) so
+      # the "New org" trigger inside the form reaches it and the overlay's CRUD
+      # forms aren't nested in the add-server form.
+      render(modal) do
+        div(data: {controller: "org-manager"}) do
+          form_body
+          render Components::Orgs::Overlay.new(orgs: @orgs)
+        end
+      end
     end
   end
 
@@ -54,6 +63,8 @@ class Views::Islands::New < Views::Base
       ) do
         text_input(name: "island[name]", value: @island.name, placeholder: "prod-edge-02")
       end
+
+      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @island.org_id)
 
       field(
         label: "Server endpoint",

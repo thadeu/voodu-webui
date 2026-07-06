@@ -9,7 +9,7 @@ module Internal
   # (covered in poller_controller_test); here we pin the watermark math +
   # per-island isolation.
   class PollerMetricsWatermarkTest < ActionDispatch::IntegrationTest
-    fixtures :islands
+    fixtures :orgs, :islands
 
     INTERNAL_TOKEN = "test-internal-token-aaaaaaaaaaaaaaaa"
 

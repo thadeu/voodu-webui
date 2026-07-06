@@ -7,7 +7,7 @@ require "test_helper"
 # (id + corr_id, no raw_sip), errors = only 4xx/5xx, calls = one grouped
 # row per corr_id with a message count.
 class DataTable::Hep3SourceTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

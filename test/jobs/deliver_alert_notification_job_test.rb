@@ -3,7 +3,7 @@
 require "test_helper"
 
 class DeliverAlertNotificationJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   PUBLIC = "93.184.216.34"
 
@@ -18,7 +18,7 @@ class DeliverAlertNotificationJobTest < ActiveJob::TestCase
       threshold: 90, rule_name: @rule.name, metric_kind: "cpu",
       target_label: @rule.target_label, peak_value: 95, last_value: 95
     )
-    @dest = @island.alert_destinations.create!(
+    @dest = @island.org.alert_destinations.create!(
       name: "hook", kind: "webhook", endpoint: "https://#{PUBLIC}/h"
     )
   end

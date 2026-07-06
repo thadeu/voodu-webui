@@ -21,6 +21,9 @@
 # + renders the island switcher) can be rendered without each
 # controller having to re-derive them.
 class ApplicationController < ActionController::Base
+  # `return_to_path` — a safe "come back here" target for modals/drawers.
+  include Returnable
+
   # Only allow modern browsers supporting webp images, web push, badges,
   # import maps, CSS nesting, and CSS :has.
   allow_browser versions: :modern, with: :webp
@@ -58,8 +61,11 @@ class ApplicationController < ActionController::Base
   # switcher building a URL for a DIFFERENT island) win — caller's
   # value wins over the default.
   def default_url_options
-    key = request.path_parameters[:tenant_key]
-    key.present? ? {tenant_key: key} : {}
+    path = request.path_parameters
+    opts = {}
+    opts[:org_id] = path[:org_id] if path[:org_id].present?
+    opts[:tenant_key] = path[:tenant_key] if path[:tenant_key].present?
+    opts
   end
 
   private
@@ -71,11 +77,26 @@ class ApplicationController < ActionController::Base
     request.path
   end
 
-  # all_islands — every island the operator has registered. Sorted
-  # by name so sidebar order is deterministic. Used by every screen
-  # that renders the dashboard layout (the sidebar list).
+  # current_org — the Org from the URL's :org_id segment (its short_id).
+  # Memoised; nil on tenant-less routes. Every island lookup + the sidebar
+  # server list scope through this, so the Org is the isolation boundary.
+  def current_org
+    return @current_org if defined?(@current_org)
+
+    @current_org = params[:org_id].present? ? Org.find_by(short_id: params[:org_id]) : nil
+  end
+
+  # all_islands — the servers of the CURRENT ORG, feeding the sidebar list +
+  # the recent-server LRU. Scoped to current_org so one org never sees
+  # another org's servers. Empty on tenant-less pages (no org in the URL).
   def all_islands
-    @all_islands ||= Island.order(:name).to_a
+    @all_islands ||= current_org ? current_org.islands.order(:name).to_a : []
+  end
+
+  # all_orgs — every Org, for the topbar org switcher. Small table; a full
+  # scan per render is cheap.
+  def all_orgs
+    @all_orgs ||= Org.order(:name).to_a
   end
 
   # current_island — the island the operator is currently focused on.
@@ -89,7 +110,12 @@ class ApplicationController < ActionController::Base
   def current_island
     return @current_island if defined?(@current_island)
 
-    @current_island = params[:tenant_key].present? ? Island.find_by(key: params[:tenant_key]) : nil
+    # SCOPED to current_org — a server key only resolves within its own org,
+    # so a URL pairing an org with another org's server key 404s (via
+    # require_tenant!) instead of leaking cross-org data.
+    @current_island = if params[:tenant_key].present? && current_org
+      current_org.islands.find_by(key: params[:tenant_key])
+    end
     track_recent_island!(@current_island) if @current_island
     @current_island
   end
@@ -144,14 +170,12 @@ class ApplicationController < ActionController::Base
   def require_tenant!
     return if current_island
 
-    # Pass `tenant_key: nil` explicitly so default_url_options
-    # doesn't leak the bogus key from params back into the redirect
-    # URL (otherwise `/zzzzzz/pods` redirects to `/islands?tenant_key=zzzzzz`).
-    if params[:tenant_key].present?
-      redirect_to islands_path(tenant_key: nil), alert: "Island '#{params[:tenant_key]}' was not found."
-    else
-      redirect_to root_path(tenant_key: nil)
-    end
+    # A bogus / cross-org server key (or an unknown org) → bounce to the
+    # top-level landing, which re-routes to a valid org+server or onboarding.
+    # org_id/tenant_key nil so default_url_options doesn't re-leak the bad
+    # segments into the redirect URL.
+    alert = params[:tenant_key].present? ? "Server '#{params[:tenant_key]}' was not found." : nil
+    redirect_to root_path(org_id: nil, tenant_key: nil), alert: alert
   end
 
   # drawer_embed? — true when this request was fetched by
@@ -197,5 +221,5 @@ class ApplicationController < ActionController::Base
     }
   end
 
-  helper_method :current_path, :all_islands, :recent_islands, :current_island, :voodu_client, :dashboard_context
+  helper_method :current_path, :all_islands, :recent_islands, :current_island, :current_org, :all_orgs, :voodu_client, :dashboard_context
 end

@@ -4,7 +4,7 @@ require "test_helper"
 
 module Internal
   class PollerControllerTest < ActionDispatch::IntegrationTest
-    fixtures :islands
+    fixtures :orgs, :islands
 
     INTERNAL_TOKEN = "test-internal-token-aaaaaaaaaaaaaaaa"
 

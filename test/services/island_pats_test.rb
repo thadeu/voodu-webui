@@ -8,7 +8,7 @@ require "test_helper"
 # WebMock (test_helper) times out the outbound call, which Voodu::Client
 # wraps as a TransportError.
 class IslandPatsTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 

@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertRuleTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -16,6 +16,26 @@ class AlertRuleTest < ActiveSupport::TestCase
     )
 
     assert rule.valid?, rule.errors.full_messages.join(", ")
+  end
+
+  test "org is derived from the target server" do
+    rule = @island.alert_rules.create!(
+      name: "cpu", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+
+    assert_equal @island.org_id, rule.org_id, "a rule's org is its target server's org"
+  end
+
+  test "a rule targeting a server in ANOTHER org is rejected (cross-org guard)" do
+    gamma = islands(:gamma) # globex — a different org from alpha's (acme)
+    rule = @island.org.alert_rules.new(
+      island: gamma, name: "forged", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+
+    assert_not rule.valid?, "a rule can't watch a server outside its org"
+    assert rule.errors[:island].present?
   end
 
   test "pod target requires scope and name" do
@@ -168,36 +188,37 @@ class AlertRuleTest < ActiveSupport::TestCase
     assert_equal({scope_kind: "host"}, rule.metrics_link_params)
   end
 
-  test "destinations_for: no selection notifies all enabled destinations wanting the transition" do
+  test "destinations_for: no selection notifies nobody (the don't-send default)" do
     rule = @island.alert_rules.create!(
       name: "cpu", metric_kind: "cpu", target_kind: "host",
       comparator: "gte", threshold: 90, duration_seconds: 300
     )
-    firing_only = @island.alert_destinations.create!(
+    # A destination exists in the org, but the rule wired none — so it sends
+    # nowhere (no surprise fan-out).
+    @island.org.alert_destinations.create!(name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true)
+
+    assert_empty rule.destinations_for("firing")
+  end
+
+  test "destinations_for: only the selected ones, filtered by enabled + the transition toggle" do
+    rule = @island.alert_rules.create!(
+      name: "cpu", metric_kind: "cpu", target_kind: "host",
+      comparator: "gte", threshold: 90, duration_seconds: 300
+    )
+    firing_only = @island.org.alert_destinations.create!(
       name: "a", kind: "webhook", endpoint: "https://a.example/h", on_firing: true, on_resolved: false
     )
-    both = @island.alert_destinations.create!(
+    both = @island.org.alert_destinations.create!(
       name: "b", kind: "webhook", endpoint: "https://b.example/h", on_firing: true, on_resolved: true
     )
-    disabled = @island.alert_destinations.create!(
+    disabled = @island.org.alert_destinations.create!(
       name: "c", kind: "webhook", endpoint: "https://c.example/h", enabled: false
     )
+    rule.update!(alert_destinations: [firing_only, both, disabled])
 
     assert_equal [firing_only.id, both.id].sort, rule.destinations_for("firing").map(&:id).sort
     assert_equal [both.id], rule.destinations_for("resolved").map(&:id)
     assert_not_includes rule.destinations_for("firing").map(&:id), disabled.id
-  end
-
-  test "destinations_for: an explicit subset overrides the all-default" do
-    rule = @island.alert_rules.create!(
-      name: "cpu", metric_kind: "cpu", target_kind: "host",
-      comparator: "gte", threshold: 90, duration_seconds: 300
-    )
-    a = @island.alert_destinations.create!(name: "a", kind: "webhook", endpoint: "https://a.example/h")
-    @island.alert_destinations.create!(name: "b", kind: "webhook", endpoint: "https://b.example/h")
-    rule.update!(alert_destinations: [a])
-
-    assert_equal [a.id], rule.destinations_for("firing").map(&:id)
   end
 
   test "condition_label composes comparator, value and duration" do

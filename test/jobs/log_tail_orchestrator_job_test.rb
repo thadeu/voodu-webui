@@ -3,7 +3,7 @@
 require "test_helper"
 
 class LogTailOrchestratorJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   teardown do
     ENV.delete("POLLER_SPAWN")

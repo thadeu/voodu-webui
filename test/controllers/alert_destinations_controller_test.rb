@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   PUBLIC = "93.184.216.34"
 
@@ -56,7 +56,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "edit keeps the secret value when blank but clears the header name when emptied" do
-    d = @island.alert_destinations.create!(
+    d = @island.org.alert_destinations.create!(
       name: "hdr", kind: "webhook", endpoint: "https://#{PUBLIC}/h",
       secret_header: "Authorization", secret: "Bearer keep"
     )
@@ -108,7 +108,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "edit re-saves the (pre-filled, revealable) endpoint" do
-    d = @island.alert_destinations.create!(
+    d = @island.org.alert_destinations.create!(
       name: "keep", kind: "webhook", endpoint: "https://#{PUBLIC}/keep"
     )
 
@@ -122,7 +122,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "test action delivers and records ok" do
-    d = @island.alert_destinations.create!(name: "t", kind: "webhook", endpoint: "https://#{PUBLIC}/t")
+    d = @island.org.alert_destinations.create!(name: "t", kind: "webhook", endpoint: "https://#{PUBLIC}/t")
     stub = stub_request(:post, "https://#{PUBLIC}/t").to_return(status: 200)
 
     post test_alert_destination_path(tenant_key: @key, id: d.id)
@@ -133,7 +133,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "test action records failure on error" do
-    d = @island.alert_destinations.create!(name: "t", kind: "webhook", endpoint: "https://#{PUBLIC}/t")
+    d = @island.org.alert_destinations.create!(name: "t", kind: "webhook", endpoint: "https://#{PUBLIC}/t")
     stub_request(:post, "https://#{PUBLIC}/t").to_return(status: 500)
 
     post test_alert_destination_path(tenant_key: @key, id: d.id)
@@ -143,20 +143,29 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "destroy removes the destination" do
-    d = @island.alert_destinations.create!(name: "gone", kind: "webhook", endpoint: "https://#{PUBLIC}/g")
+    d = @island.org.alert_destinations.create!(name: "gone", kind: "webhook", endpoint: "https://#{PUBLIC}/g")
 
     assert_difference("AlertDestination.count", -1) do
       delete alert_destination_path(tenant_key: @key, id: d.id)
     end
   end
 
-  test "one island cannot address another island's destination" do
-    d = @island.alert_destinations.create!(name: "mine", kind: "webhook", endpoint: "https://#{PUBLIC}/m")
-    other = islands(:beta).key
+  test "a sibling server in the SAME org CAN address the destination (they're org-shared)" do
+    d = @island.org.alert_destinations.create!(name: "mine", kind: "webhook", endpoint: "https://#{PUBLIC}/m")
+    beta_key = islands(:beta).key # same org (acme)
 
-    delete alert_destination_path(tenant_key: other, id: d.id)
+    delete alert_destination_path(tenant_key: beta_key, id: d.id)
 
-    assert_redirected_to alerts_path(tenant_key: other, tab: "destinations")
-    assert AlertDestination.exists?(d.id), "cross-tenant destroy must not delete it"
+    assert_redirected_to alerts_path(tenant_key: beta_key, tab: "destinations")
+    assert_not AlertDestination.exists?(d.id), "an org's destination is reachable from any of its servers"
+  end
+
+  test "a server in ANOTHER org cannot address the destination (cross-org guard)" do
+    d = @island.org.alert_destinations.create!(name: "mine", kind: "webhook", endpoint: "https://#{PUBLIC}/m")
+    gamma = islands(:gamma) # globex — a different org
+
+    delete alert_destination_path(org_id: gamma.org.short_id, tenant_key: gamma.key, id: d.id)
+
+    assert AlertDestination.exists?(d.id), "cross-org destroy must never delete another org's destination"
   end
 end

@@ -17,11 +17,23 @@ class DashboardController < ApplicationController
   # to the first available island, or to /islands/new if they haven't
   # registered any yet. Keeps `/` a meaningful URL without having to
   # encode "no island context" all over the dashboard.
-  skip_before_action :require_tenant!, only: :redirect_to_default
+  skip_before_action :require_tenant!, only: [:redirect_to_default, :org_root]
 
   def redirect_to_default
     if (island = Island.order(:name).first)
-      redirect_to tenant_root_path(tenant_key: island.key)
+      redirect_to tenant_root_path(org_id: island.org.short_id, tenant_key: island.key)
+    else
+      redirect_to new_island_path
+    end
+  end
+
+  # org_root — /<org8>/ (org in the URL, no server). Lands on the org's first
+  # server overview, or the add-server form when the org has no servers yet.
+  def org_root
+    return redirect_to(root_path(org_id: nil, tenant_key: nil)) if current_org.nil?
+
+    if (island = current_org.islands.order(:name).first)
+      redirect_to tenant_root_path(org_id: current_org.short_id, tenant_key: island.key)
     else
       redirect_to new_island_path
     end
@@ -37,7 +49,13 @@ class DashboardController < ApplicationController
       **dashboard_context.merge(
         data: @data,
         active_tab: tab_param,
-        updated_at: @data.updated_at
+        updated_at: @data.updated_at,
+        # Org-level summaries (M2/M3), surfaced on every server's Overview:
+        # recently CONFIGURED alert rules + dashboards, and recent alert
+        # EPISODES (what actually fired) across the whole org.
+        recent_alerts: current_org.alert_rules.includes(:island).order(created_at: :desc).limit(5).to_a,
+        recent_dashboards: current_org.metric_dashboards.order(created_at: :desc).limit(5).to_a,
+        recent_events: current_org.alert_events.includes(:island).order(started_at: :desc).limit(6).to_a
       )
     )
   end

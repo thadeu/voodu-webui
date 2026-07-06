@@ -3,7 +3,7 @@
 require "test_helper"
 
 class MetricsDigestServiceTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     MetricSample.delete_all

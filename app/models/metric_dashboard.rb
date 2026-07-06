@@ -16,7 +16,10 @@
 # what /metrics opens to. `pin!` clears siblings in the same transaction
 # (the partial unique index is the DB backstop).
 class MetricDashboard < ApplicationRecord
-  belongs_to :island
+  # M2: a dashboard belongs to the ORG, not a single server. Each panel
+  # carries its own `island_id` (any server in the org), so one dashboard
+  # mixes panels from different servers.
+  belongs_to :org
 
   # Required keys every panel must carry (non-blank). `unit` is NOT here
   # — several metrics are legitimately unit-less (Requests, Net Rx/Tx,
@@ -61,7 +64,7 @@ class MetricDashboard < ApplicationRecord
   MAX_PANELS = 12
 
   validates :name, presence: true, length: {maximum: 128},
-    uniqueness: {scope: :island_id}
+    uniqueness: {scope: :org_id}
   validate :panels_well_formed
 
   before_create :ensure_uuid
@@ -74,12 +77,12 @@ class MetricDashboard < ApplicationRecord
 
   scope :pinned, -> { where(pinned: true) }
 
-  # pin! — make this the island's single pinned dashboard. Clears any
-  # sibling's pinned flag BEFORE setting this one so the partial unique
-  # index ("one pinned per island") is never momentarily violated.
+  # pin! — make this the org's single pinned dashboard. Clears any sibling's
+  # pinned flag BEFORE setting this one so the partial unique index ("one
+  # pinned per org") is never momentarily violated.
   def pin!
     transaction do
-      island.metric_dashboards.where.not(id: id).update_all(pinned: false)
+      org.metric_dashboards.where.not(id: id).update_all(pinned: false)
       update!(pinned: true)
     end
   end
@@ -105,14 +108,15 @@ class MetricDashboard < ApplicationRecord
     "k#{index}"
   end
 
-  # table_readers_for — distinct (scope, name) reader pods that table
-  # panels on this island reference for `source`. The Hep3 poller tails
-  # exactly these (demand-driven), so adding a Table panel IS the
-  # poller's configuration — no separate readers setting.
+  # table_readers_for — distinct (scope, name) reader pods that table panels
+  # POINTED AT THIS SERVER reference for `source`, across all the org's
+  # dashboards. The Hep3 poller tails exactly these (demand-driven), so adding
+  # a Table panel IS the poller's configuration — no separate readers setting.
+  # Filters on panel["island_id"] now that dashboards are org-level.
   def self.table_readers_for(island, source:)
-    where(island_id: island.id)
+    island.org.metric_dashboards
       .flat_map { |dash| Array(dash.panels) }
-      .select { |p| p.is_a?(Hash) && p["scope_kind"] == "table" && p["source"].to_s == source.to_s }
+      .select { |p| p.is_a?(Hash) && p["scope_kind"] == "table" && p["source"].to_s == source.to_s && p["island_id"].to_s == island.id.to_s }
       .map { |p| {scope: p["scope"].to_s, name: p["name"].to_s} }
       .reject { |r| r[:scope].empty? || r[:name].empty? }
       .uniq
@@ -122,6 +126,12 @@ class MetricDashboard < ApplicationRecord
 
   def ensure_uuid
     self.uuid ||= SecureRandom.uuid
+  end
+
+  # org_island_ids — the ids (as strings) of the servers in this dashboard's
+  # org, for the per-panel island_id guard. Memoised per validation pass.
+  def org_island_ids
+    @org_island_ids ||= org&.islands&.pluck(:id)&.map(&:to_s) || []
   end
 
   # panels_well_formed — panels must be an Array (≤ MAX_PANELS) of
@@ -165,6 +175,20 @@ class MetricDashboard < ApplicationRecord
         end
       missing = required.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "panel #{i + 1} is missing #{missing.join(", ")}") if missing.any?
+
+      # island_id — which server this panel reads from. Required for every panel
+      # that reads a server; an http (external-API) panel has no server. Guard:
+      # the referenced server MUST belong to this dashboard's org — a forged id
+      # for another org's server is rejected (anti cross-org injection).
+      unless http
+        iid = panel["island_id"].to_s
+
+        if iid.blank?
+          errors.add(:panels, "panel #{i + 1} is missing a server")
+        elsif org_island_ids.exclude?(iid)
+          errors.add(:panels, "panel #{i + 1} references a server outside this org")
+        end
+      end
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)

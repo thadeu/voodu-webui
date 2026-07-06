@@ -9,7 +9,7 @@ require "test_helper"
 class IslandUptimeTest < ActiveSupport::TestCase
   include ActiveSupport::Testing::TimeHelpers
 
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

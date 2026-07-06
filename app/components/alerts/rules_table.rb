@@ -27,7 +27,7 @@ class Components::Alerts::RulesTable < Components::Base
   def empty_row
     div(class: "flex items-center justify-between gap-3 px-3.5 py-4 border border-voodu-border bg-voodu-surface") do
       span(class: "text-[12.5px] text-voodu-muted") { "No alert rules yet." }
-      render Components::UI::Button.new(variant: :primary, size: :sm, tag: :a, href: new_alert_rule_path) do
+      render Components::UI::Button.new(variant: :primary, size: :sm, tag: :a, href: new_alert_rule_path(return_to: alerts_path(tab: "rules"))) do
         render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
         span(class: "hidden vmd:inline") { "New rule" }
       end
@@ -90,7 +90,7 @@ class Components::Alerts::RulesTable < Components::Base
 
       render Components::UI::Button.new(
         variant: :ghost, size: :sm, tag: :a,
-        href: edit_alert_rule_path(rule),
+        href: edit_alert_rule_path(rule, return_to: alerts_path(tab: "rules")),
         title: "Edit rule"
       ) do
         render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5")
@@ -107,7 +107,9 @@ class Components::Alerts::RulesTable < Components::Base
   def metrics_link(rule)
     render Components::UI::Button.new(
       variant: :ghost, size: :sm, tag: :a,
-      href: metrics_path(rule.metrics_link_params),
+      # tenant_key → the TARGET server's /metrics (M3: a rule may watch a server
+      # other than the one whose /alerts URL we're on).
+      href: metrics_path(rule.metrics_link_params.merge(tenant_key: rule.island.key)),
       title: "Open metrics for #{rule.target_label}"
     ) do
       render Icon::ChartBarOutline.new(class: "w-3.5 h-3.5")
@@ -120,6 +122,7 @@ class Components::Alerts::RulesTable < Components::Base
   def toggle_button(rule)
     form(action: toggle_alert_rule_path(rule), method: "post", data: {turbo: false}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "return_to", value: alerts_path(tab: "rules"))
       render Components::UI::Button.new(
         variant: :ghost, size: :sm, type: :submit,
         title: rule.enabled? ? "Pause rule" : "Resume rule"
@@ -143,7 +146,7 @@ class Components::Alerts::RulesTable < Components::Base
       danger: true,
       icon: :TrashOutline,
       form: {
-        action: alert_rule_path(rule),
+        action: alert_rule_path(rule, return_to: alerts_path(tab: "rules")),
         method: :delete
       },
       trigger: {

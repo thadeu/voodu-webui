@@ -9,10 +9,11 @@ require "test_helper"
 # logic: workload→replica resolution, the missing placeholder, and the
 # range/interval guards.
 class MetricDashboardDataTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
+    @org = @island.org
     @prev_wh = ENV["WAREHOUSE"]
     ENV["WAREHOUSE"] = "1"
   end
@@ -38,7 +39,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_running_web_pod
     dash = make_dashboard([HOST, WEB_MEM])
 
-    charts = MetricDashboardData.new(client, @island, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
 
     assert_equal 2, charts.size
     assert_equal "CPU", charts[0][:label]
@@ -49,10 +50,26 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_equal "pod", charts[1][:scope_kind]
   end
 
+  test "a panel forged to read a server in ANOTHER org resolves to a placeholder, never a cross-org read" do
+    # gamma lives in globex, NOT @org (acme). A panel whose island_id points at
+    # it must NOT resolve — the read-path only resolves islands WITHIN @org
+    # (islands_by_id is org-scoped), so a forged/cross-org id is a dead panel.
+    gamma = islands(:gamma)
+    assert_not_equal @org.id, gamma.org_id, "gamma must be in a different org for this to test isolation"
+
+    forged = HOST.merge("island_id" => gamma.id, "label" => "forged")
+    dash = @org.metric_dashboards.new(name: "forged", panels: [forged])
+
+    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
+
+    assert_equal 1, charts.size
+    assert charts[0][:missing], "a cross-org panel must be a missing placeholder, never a cross-org read"
+  end
+
   test "pod panel becomes a missing placeholder when no replica is running" do
     dash = make_dashboard([HOST, WEB_MEM])
 
-    charts = MetricDashboardData.new(client, @island, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
 
     assert_equal 2, charts.size
     assert_not charts[0][:missing], "host panel should still render"
@@ -70,7 +87,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # latest bucket = 3 (count)
 
-    charts = MetricDashboardData.new(client, @island, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
 
     assert_equal 1, charts.size
     c = charts.first
@@ -87,7 +104,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("show_chart" => false)])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # same data as the chart case
 
-    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
 
     assert_equal :number, c[:kind]
     assert_equal 3, c[:value], "count is still computed — only the chart is hidden"
@@ -98,7 +115,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("show_chart" => true)])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
 
-    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
 
     assert c[:series].any?, "show_chart true → timeline series present"
   end
@@ -106,7 +123,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "log panel with no counted data yet reads zero" do
     dash = make_dashboard([FS_CALLS])
 
-    c = MetricDashboardData.new(client, @island, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
 
     assert_equal :number, c[:kind]
     assert_equal 0, c[:value]
@@ -122,7 +139,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_log_at(q, base + 5.minutes, 7)  # inside
     seed_log_at(q, base + 2.hours, 50)   # after the window
 
-    data = MetricDashboardData.new(client, @island, dash, range: "1h",
+    data = MetricDashboardData.new(@org, dash, range: "1h",
       from: base - 1.minute, until_: base + 10.minutes)
 
     assert data.custom?, "explicit from+until → custom mode"
@@ -136,7 +153,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     base = Time.zone.local(2026, 6, 19, 12, 0, 0)
     dash = make_dashboard([HOST])
 
-    data = MetricDashboardData.new(client, @island, dash, range: "1h",
+    data = MetricDashboardData.new(@org, dash, range: "1h",
       from: base - 30.minutes, until_: base)
 
     assert data.custom?
@@ -145,7 +162,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   test "invalid range/interval fall back to defaults; range_ms derived" do
     dash = make_dashboard([HOST])
-    data = MetricDashboardData.new(client, @island, dash, range: "zzz", interval: "bogus")
+    data = MetricDashboardData.new(@org, dash, range: "zzz", interval: "bogus")
 
     assert_equal MetricsPageData::DEFAULT_RANGE, data.range
     assert_equal "auto", data.interval
@@ -156,16 +173,13 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   private
 
-  # A real client object (no network at construction). In warehouse
-  # mode MetricsData never uses it, but MetricsPageData#single_chart
-  # guards on client presence — the controller always supplies a
-  # non-nil voodu_client, so the service does too.
-  def client
-    @client ||= Voodu::Client.new(@island)
-  end
-
+  # make_dashboard — an org dashboard whose server panels bind to @island (M2:
+  # every non-http panel carries its island_id; the read-path resolves each
+  # panel's server WITHIN the org). http panels are external — no island_id.
   def make_dashboard(panels)
-    @island.metric_dashboards.create!(name: "d-#{panels.size}-#{panels.object_id}", panels: panels)
+    with_island = panels.map { |p| (p["source"].to_s == "http") ? p : p.merge("island_id" => @island.id) }
+
+    @org.metric_dashboards.create!(name: "d-#{panels.size}-#{panels.object_id}", panels: with_island)
   end
 
   def seed_running_web_pod

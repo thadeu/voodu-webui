@@ -10,6 +10,14 @@ require "webmock/minitest"
 # test server + Chrome CDP work.
 WebMock.disable_net_connect!(allow_localhost: true)
 
+# Org routing (M1): every per-server route now nests under /:org_id. Rather
+# than thread `org_id:` through the hundreds of existing `*_path(tenant_key:)`
+# call sites, default it globally for the TEST env — every island fixture
+# (alpha, beta) belongs to the `acme` org (short_id below). Real requests still
+# override this from the URL's :org_id path segment, so the app's own routing
+# isn't masked; this only fills in the segment for bare helper calls in tests.
+Rails.application.routes.default_url_options[:org_id] = "acmeorg1"
+
 module ActiveSupport
   class TestCase
     # Tests opt in to fixtures via `fixtures :islands` etc. — no

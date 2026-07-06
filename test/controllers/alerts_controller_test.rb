@@ -6,7 +6,7 @@ require "test_helper"
 # Index/Frame views and the alerts components (a render error
 # surfaces as a 500 here).
 class AlertsControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -161,7 +161,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "destinations tab renders the destinations table" do
-    @island.alert_destinations.create!(
+    @island.org.alert_destinations.create!(
       name: "ops-slack", kind: "webhook", endpoint: "https://hooks.slack.com/services/T/B/X"
     )
 
@@ -173,7 +173,7 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "rule form lists the destinations to notify" do
-    @island.alert_destinations.create!(name: "ops", kind: "webhook", endpoint: "https://x.example/h")
+    @island.org.alert_destinations.create!(name: "ops", kind: "webhook", endpoint: "https://x.example/h")
 
     get new_alert_rule_path(tenant_key: @key)
 

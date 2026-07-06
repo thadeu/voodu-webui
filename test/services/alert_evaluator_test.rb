@@ -10,7 +10,7 @@ require "test_helper"
 # All tests freeze time at a 15s-aligned instant so seeded sample
 # epochs land exactly on warehouse bucket boundaries.
 class AlertEvaluatorTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   NOW = Time.utc(2026, 6, 9, 12, 0, 0)
 

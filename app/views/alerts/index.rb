@@ -3,11 +3,11 @@
 # Views::Alerts::Index — the /alerts page. Firing episodes up top
 # (red cards), then the rules table, then resolved history.
 #
-# Liveness: the page subscribes to `alerts-#{island.id}`; every
-# fire/resolve transition broadcasts an `alerts_tick` action (see
-# turbo_actions/alerts.js) that reloads the `alerts-live` frame —
-# the same body Views::Alerts::Frame returns, so the swap is
-# DOM-stable.
+# Liveness: the page subscribes to `alerts-org-#{org.id}` (org-level
+# since M3); every fire/resolve transition on ANY server in the org
+# broadcasts an `alerts_tick` action (see turbo_actions/alerts.js)
+# that reloads the `alerts-live` frame — the same body
+# Views::Alerts::Frame returns, so the swap is DOM-stable.
 class Views::Alerts::Index < Views::Base
   def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :active)
     @current_path = current_path
@@ -39,7 +39,7 @@ class Views::Alerts::Index < Views::Base
       # page_head, pushing the title ~20px lower than the Logs page. The
       # custom element still connects (connectedCallback fires for
       # display:none nodes), so the alerts_tick live reload is unaffected.
-      turbo_stream_from "alerts-#{@current_island.id}", class: "hidden"
+      turbo_stream_from "alerts-org-#{current_org.id}", class: "hidden"
 
       page_head
 
@@ -94,7 +94,7 @@ class Views::Alerts::Index < Views::Base
 
   def head_actions
     render Components::UI::Button.new(
-      variant: :primary, size: :md, tag: :a, href: new_alert_rule_path
+      variant: :primary, size: :md, tag: :a, href: new_alert_rule_path(return_to: alerts_path(tab: "rules"))
     ) do
       render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
       span(class: "hidden vmd:inline") { "New rule" }

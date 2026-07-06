@@ -7,13 +7,17 @@
 #   - controller err  → ErrorState banner inline above the (mocked) body
 #   - happy           → header + stat cards (auto-fit grid) + pods section
 class Views::Dashboard::Index < Views::Base
-  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil)
+  def initialize(current_path:, islands: [], current_island: nil, data: nil, active_tab: :all, updated_at: nil,
+    recent_alerts: [], recent_dashboards: [], recent_events: [])
     @current_path = current_path
     @islands = islands
     @current_island = current_island
     @data = data
     @active_tab = active_tab
     @updated_at = updated_at
+    @recent_alerts = recent_alerts
+    @recent_dashboards = recent_dashboards
+    @recent_events = recent_events
   end
 
   def view_template
@@ -71,6 +75,7 @@ class Views::Dashboard::Index < Views::Base
         page_header
         stat_cards
         pods_section
+        org_section
       end
     end
   end
@@ -179,17 +184,27 @@ class Views::Dashboard::Index < Views::Base
     end
   end
 
+  # pods_section — Overview shows a PREVIEW (top few + "See all"); the full
+  # list with status tabs + filter lives on /pods.
   def pods_section
     render Components::Overview::PodsTable.new(
-      pods: @data.pods(filter_status: tab_to_status),
+      pods: @data.pods,
       total: @data.pods_total,
-      active_tab: @active_tab
+      preview: true
     )
   end
 
-  def tab_to_status
-    return nil if @active_tab == :all
+  # org_section — org-level (M2/M3) summaries surfaced on every server's
+  # Overview: recent alert EPISODES (what fired, full-width for the extra
+  # columns) over the CONFIGURED alert rules + dashboards pair.
+  def org_section
+    div(class: "flex flex-col gap-4 vmd:gap-5") do
+      render Components::Overview::IncidentsPreview.new(events: @recent_events)
 
-    @active_tab
+      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5") do
+        render Components::Overview::AlertsPreview.new(rules: @recent_alerts)
+        render Components::Overview::DashboardsPreview.new(dashboards: @recent_dashboards)
+      end
+    end
   end
 end

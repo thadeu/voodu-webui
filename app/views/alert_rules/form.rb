@@ -14,13 +14,20 @@
 # req/s = deployments-only) and swaps the unit suffix. Server-side
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
-  def initialize(current_path:, rule:, targets: [], destinations: [], islands: [], current_island: nil)
+  def initialize(current_path:, rule:, targets: [], servers: [], destinations: [], islands: [], current_island: nil, return_to: nil)
     @current_path = current_path
     @islands = islands
     @current_island = current_island
     @rule = rule
     @targets = targets
+    # servers — the org's servers (M3), so the Target select offers a Host per
+    # server + that server's pods. A rule targets exactly one (server, host|pod).
+    @servers = servers
     @destinations = destinations
+    # return_to — the path cancel/close/save go back to (a full route, already
+    # validated by the controller). Carried through the form as a hidden field so
+    # the POST preserves it. Defaults to /alerts when the caller had no origin.
+    @return_to = return_to || alerts_path
   end
 
   def view_template
@@ -44,7 +51,7 @@ class Views::AlertRules::Form < Views::Base
       subtitle: "Fires when the metric holds past the threshold for the whole window",
       icon: :BellOutline,
       size: :md,
-      close_to: alerts_path
+      close_to: @return_to
     ).with_footer { footer_actions }
   end
 
@@ -58,6 +65,7 @@ class Views::AlertRules::Form < Views::Base
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "patch") if persisted?
+      input(type: "hidden", name: "return_to", value: @return_to)
 
       field(label: "Name", error: @rule.errors[:name].first) do
         text_input(name: "alert_rule[name]", value: @rule.name, placeholder: "Host CPU ≥ 90%")
@@ -97,13 +105,13 @@ class Views::AlertRules::Form < Views::Base
     end
   end
 
-  # Which destinations this rule notifies. Empty = all (server-side
-  # default). Rendered as an inline scrollable checkbox list — NOT an
-  # absolute dropdown — because inside the modal an absolute menu gets
-  # clipped by the modal/footer edge. When no destinations exist yet,
-  # point the operator at the Destinations tab instead of an empty box.
+  # Which destinations this rule notifies. Empty selection = DON'T SEND (the
+  # honest default — the rule fires but notifies nowhere); "Select all" opts
+  # into every destination. A DS multi-select dropdown backed by real checkboxes
+  # (same submit shape as a plain checkbox group). When no destinations exist
+  # yet, point the operator at the Destinations tab instead of an empty box.
   def destinations_field
-    field(label: "Notify destinations", hint: "Leave empty to notify all destinations.") do
+    field(label: "Notify destinations", hint: "Leave empty to send nowhere; “Select all” notifies every destination.") do
       if @destinations.empty?
         div(class: "text-[12px] text-voodu-muted") do
           plain "No destinations configured. "
@@ -117,24 +125,55 @@ class Views::AlertRules::Form < Views::Base
   end
 
   def destinations_list
-    selected = @rule.alert_destination_ids
+    selected = @rule.alert_destination_ids & @destinations.map(&:id)
 
-    div(class: "border border-voodu-border bg-voodu-surface max-h-[150px] overflow-y-auto") do
-      # Empty sentinel so an all-unchecked submit clears the
-      # association (a checkbox group with nothing checked otherwise
-      # omits the key and would leave it unchanged on update).
-      input(type: "hidden", name: "alert_rule[alert_destination_ids][]", value: "")
+    div(class: "relative", data: {controller: "dropdown ds-multiselect", ds_multiselect_empty_label_value: "Don't send", ds_multiselect_all_label_value: "All destinations"}) do
+      button(
+        type: "button", data: {action: "click->dropdown#toggle"},
+        class: tokens(input_classes, "flex items-center gap-2 text-[13px] cursor-pointer")
+      ) do
+        span(data: {ds_multiselect_target: "label"}, class: "flex-1 min-w-0 truncate text-left") { destinations_trigger_label(selected) }
+        render Icon::ChevronDownOutline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
+      end
 
-      @destinations.each { |dest| destination_row(dest, selected.include?(dest.id)) }
+      div(hidden: true, data: {dropdown_target: "menu"}, class: target_menu_classes) do
+        # Empty sentinel so an all-unchecked submit CLEARS the association (a
+        # checkbox group with nothing checked otherwise omits the key entirely,
+        # leaving it unchanged on update).
+        input(type: "hidden", name: "alert_rule[alert_destination_ids][]", value: "")
+
+        button(
+          type: "button", data: {action: "ds-multiselect#toggleAll"},
+          class: "flex items-center justify-between gap-2 w-full px-3 py-2 border-b border-voodu-border-2 text-left text-[11.5px] text-voodu-text-2 hover:bg-voodu-surface-2 sticky top-0 bg-voodu-surface"
+        ) do
+          span(class: "uppercase tracking-[0.05em] text-voodu-muted-2") { "Destinations" }
+          span(data: {ds_multiselect_target: "selectAllLabel"}, class: "text-voodu-link") { "Select all" }
+        end
+
+        @destinations.each { |dest| destination_row(dest, selected.include?(dest.id)) }
+      end
     end
+  end
+
+  # destinations_trigger_label — server-rendered so there's no flash before
+  # ds-multiselect#connect recomputes it: "Don't send" (none picked = the
+  # default, notifies nowhere), "All destinations" (every one picked), the
+  # single name, or "N selected".
+  def destinations_trigger_label(selected)
+    return "Don't send" if selected.empty?
+    return "All destinations" if selected.size == @destinations.size
+    return @destinations.find { |d| d.id == selected.first }&.name.to_s if selected.size == 1
+
+    "#{selected.size} selected"
   end
 
   def destination_row(dest, checked)
     label(class: "flex items-center gap-2.5 w-full px-3 py-2 cursor-pointer hover:bg-voodu-surface-2 " \
                  "text-[12.5px] text-voodu-text-2 border-b border-voodu-border-2 last:border-b-0") do
       input(
-        type: "checkbox", name: "alert_rule[alert_destination_ids][]", value: dest.id,
-        checked: checked, class: "w-3.5 h-3.5 accent-voodu-accent"
+        type: "checkbox", name: "alert_rule[alert_destination_ids][]", value: dest.id, checked: checked,
+        data: {ds_multiselect_target: "option", label: dest.name, action: "change->ds-multiselect#sync"},
+        class: "w-3.5 h-3.5 accent-voodu-accent"
       )
       span(class: "truncate") { dest.name }
       span(class: "text-[10px] uppercase tracking-[0.05em] text-voodu-muted-2 ml-auto shrink-0") { dest.kind }
@@ -142,11 +181,12 @@ class Views::AlertRules::Form < Views::Base
   end
 
   def metric_select
-    select_input(name: "alert_rule[metric_kind]", data: {alert_rule_form_target: "metric", action: "change->alert-rule-form#metricChanged"}) do
-      metric_options.each do |value, label|
-        option(value: value, selected: (@rule.metric_kind == value) || nil) { label }
-      end
-    end
+    ds_select(
+      name: "alert_rule[metric_kind]", selected: @rule.metric_kind, options: metric_options,
+      # Metric drives the target constraint + unit — its pick dispatches change,
+      # which alert-rule-form listens for on the hidden input.
+      input_data: {alert_rule_form_target: "metric", action: "change->alert-rule-form#metricChanged"}
+    )
   end
 
   def metric_options
@@ -158,58 +198,140 @@ class Views::AlertRules::Form < Views::Base
     ]
   end
 
+  # target_select — the DS custom dropdown (trigger + hidden input + filterable
+  # menu), NOT a native <select>. One flat, server-prefixed list of targets
+  # across the org (M3): a Host per server + that server's pods. The hidden
+  # input carries the encoded value (`host|<island_id>` / `pod|<id>|<scope>|
+  # <name>`); alert_rule_form#pickTarget syncs it + the trigger label + the
+  # metric↔kind constraint. Org-wide pod lists get an in-menu search box.
   def target_select
-    select_input(name: "alert_rule[target]", data: {alert_rule_form_target: "target"}) do
-      option(
-        value: "host",
-        selected: @rule.host_target? || nil,
-        data: {kind: "host"}
-      ) { "Host (entire server)" }
+    rows = target_rows
 
-      grouped_targets.each do |scope, entries|
-        optgroup(label: scope) do
-          entries.each do |entry|
-            value = encode_target(entry[:scope], entry[:name])
-            option(
-              value: value,
-              selected: (current_target_value == value) || nil,
-              data: {kind: entry[:kind]}
-            ) { entry[:name] }
-          end
-        end
+    div(class: "relative", data: {controller: "dropdown"}) do
+      input(type: "hidden", name: "alert_rule[target]", value: current_target_value,
+        data: {alert_rule_form_target: "target"})
+
+      button(
+        type: "button", data: {action: "click->dropdown#toggle"},
+        class: tokens(input_classes, "flex items-center gap-2 text-[13px] cursor-pointer")
+      ) do
+        span(data: {alert_rule_form_target: "targetLabel"}, class: "flex-1 min-w-0 truncate text-left") { current_target_label(rows) }
+        render Icon::ChevronDownOutline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
       end
 
-      orphaned_target_option
+      div(hidden: true, data: {dropdown_target: "menu"}, class: target_menu_classes) do
+        dropdown_filter("Filter servers + pods…") if rows.size > 6
+        rows.each { |row| target_option(row) }
+        dropdown_empty
+      end
     end
   end
 
-  # An edited rule may point at a workload that has since left the
-  # snapshot (scaled away, renamed). Keep it selectable — silently
-  # retargeting the rule on edit would be worse than showing the
-  # truth — but label it as gone.
-  def orphaned_target_option
+  # target_rows — flat [{value, kind, label}] across the org: a Host per server
+  # + its pods, each label server-prefixed when the org has >1 server (matches
+  # the metrics builder). A gone-but-saved target (edited rule) is appended.
+  def target_rows
+    @target_rows ||= begin
+      rows = servers_for_select.flat_map do |server|
+        host = {value: "host|#{server.id}", kind: "host", label: target_label_for(server, "Host (entire server)")}
+        pods = targets_for(server).map do |t|
+          {value: encode_target(t[:island_id], t[:scope], t[:name]), kind: t[:kind],
+           label: target_label_for(server, "#{t[:scope]}/#{t[:name]}")}
+        end
+        [host, *pods]
+      end
+      orphan = orphaned_target_row
+      orphan ? rows + [orphan] : rows
+    end
+  end
+
+  def multi_server?
+    servers_for_select.size > 1
+  end
+
+  def target_label_for(server, base)
+    multi_server? ? "#{server.name} · #{base}" : base
+  end
+
+  # target_option — a menu row. data-value/kind feed pickTarget + the metric↔kind
+  # constraint; data-dropdown-target="option" makes it filterable; data-active
+  # rings the current pick, data-disabled dims an incompatible kind.
+  def target_option(row)
+    active = row[:value] == current_target_value
+
+    button(
+      type: "button",
+      data: {
+        action: "click->alert-rule-form#pickTarget click->dropdown#close",
+        dropdown_target: "option", alert_rule_form_target: "option",
+        value: row[:value], kind: row[:kind], label: row[:label], active: active.to_s
+      },
+      class: "flex items-center gap-2 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text " \
+             "hover:bg-voodu-hover data-[active=true]:text-voodu-accent-2 " \
+             "data-[disabled=true]:opacity-40 data-[disabled=true]:pointer-events-none"
+    ) do
+      span(class: "w-3.5 shrink-0 text-voodu-accent-2", data: {alert_rule_form_target: "optionCheck"}) { active ? "✓" : "" }
+      span(class: "truncate") { row[:label] }
+    end
+  end
+
+  # servers_for_select — the org's servers; falls back to the current server so
+  # the menu is never empty (a lone-server org / pre-servers state).
+  def servers_for_select
+    @servers.presence || [@current_island].compact
+  end
+
+  # targets_for — a server's pod targets (workloads), sorted by scope+name.
+  def targets_for(server)
+    @targets.select { |t| t[:island_id] == server.id }.sort_by { |t| [t[:scope], t[:name]] }
+  end
+
+  # An edited rule may point at a workload that has since left the snapshot
+  # (scaled away, renamed). Keep it selectable — silently retargeting the rule on
+  # edit would be worse than showing the truth — but label it as gone.
+  def orphaned_target_row
     return if @rule.host_target?
     return if current_target_value.blank?
-    return if @targets.any? { |t| encode_target(t[:scope], t[:name]) == current_target_value }
+    return if @targets.any? { |t| encode_target(t[:island_id], t[:scope], t[:name]) == current_target_value }
 
-    option(value: current_target_value, selected: true, data: {kind: "deployment"}) do
-      "#{@rule.target_scope}/#{@rule.target_name} (not running)"
+    {value: current_target_value, kind: "deployment", label: "#{@rule.target_scope}/#{@rule.target_name} (not running)"}
+  end
+
+  def current_target_label(rows)
+    rows.find { |r| r[:value] == current_target_value }&.dig(:label) || "Select a target"
+  end
+
+  def target_menu_classes
+    "absolute left-0 top-[calc(100%+4px)] z-30 min-w-full w-max max-w-[320px] max-h-[300px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+  end
+
+  # dropdown_filter / dropdown_empty — the shared in-menu search box (sticky top)
+  # + "no matches" row the dropdown controller drives (same as the metrics
+  # builder's source pickers).
+  def dropdown_filter(placeholder)
+    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
+      input(
+        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
+        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
+        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
+               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
     end
   end
 
-  def grouped_targets
-    @targets.group_by { |t| t[:scope] }.sort
+  def dropdown_empty
+    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
   end
 
-  def encode_target(scope, name)
-    "pod|#{scope}|#{name}"
+  def encode_target(island_id, scope, name)
+    "pod|#{island_id}|#{scope}|#{name}"
   end
 
   def current_target_value
-    return "host" if @rule.host_target?
+    return "host|#{@rule.island_id}" if @rule.host_target?
     return nil if @rule.target_scope.blank?
 
-    encode_target(@rule.target_scope, @rule.target_name)
+    encode_target(@rule.island_id, @rule.target_scope, @rule.target_name)
   end
 
   def target_error
@@ -221,10 +343,11 @@ class Views::AlertRules::Form < Views::Base
   def condition_inputs
     div(class: "flex items-stretch gap-2") do
       div(class: "w-20 shrink-0") do
-        select_input(name: "alert_rule[comparator]") do
-          option(value: "gte", selected: (@rule.comparator != "lte") || nil) { "≥" }
-          option(value: "lte", selected: (@rule.comparator == "lte") || nil) { "≤" }
-        end
+        ds_select(
+          name: "alert_rule[comparator]",
+          selected: (@rule.comparator == "lte") ? "lte" : "gte",
+          options: [["gte", "≥"], ["lte", "≤"]]
+        )
       end
 
       div(class: "relative flex-1") do
@@ -248,12 +371,58 @@ class Views::AlertRules::Form < Views::Base
   end
 
   def duration_select
-    select_input(name: "alert_rule[duration_seconds]") do
-      AlertRule::DURATIONS.each do |secs|
-        option(value: secs, selected: (@rule.duration_seconds == secs) || nil) do
-          (secs >= 60) ? "#{secs / 60} minute#{"s" if secs >= 120}" : "#{secs} seconds"
-        end
+    ds_select(
+      name: "alert_rule[duration_seconds]",
+      selected: @rule.duration_seconds,
+      options: AlertRule::DURATIONS.map { |secs| [secs, duration_option_label(secs)] }
+    )
+  end
+
+  def duration_option_label(secs)
+    (secs >= 60) ? "#{secs / 60} minute#{"s" if secs >= 120}" : "#{secs} seconds"
+  end
+
+  # ds_select — a DS single-select dropdown (trigger + hidden input + menu),
+  # replacing a native <select> so every picker in the form matches the design
+  # system. `dropdown` handles open/close (+ the shared filter once options pass
+  # the threshold); `ds-select` syncs the pick → hidden input + label + ✓ and
+  # dispatches `change` (so metric's constraint hook still fires). `selected` is
+  # compared to each option value with `==`, so integer values (durations) work.
+  def ds_select(name:, selected:, options:, input_data: {})
+    current = options.find { |value, _| value == selected }
+
+    div(class: "relative", data: {controller: "dropdown ds-select"}) do
+      input(type: "hidden", name: name, value: selected, data: {ds_select_target: "input"}.merge(input_data))
+
+      button(
+        type: "button", data: {action: "click->dropdown#toggle"},
+        class: tokens(input_classes, "flex items-center gap-2 text-[13px] cursor-pointer")
+      ) do
+        span(data: {ds_select_target: "label"}, class: "flex-1 min-w-0 truncate text-left") { current ? current[1] : "Select…" }
+        render Icon::ChevronDownOutline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
       end
+
+      div(hidden: true, data: {dropdown_target: "menu"}, class: target_menu_classes) do
+        dropdown_filter("Filter…") if options.size > 6
+        options.each { |value, text| ds_option(value, text, value == selected) }
+        dropdown_empty if options.size > 6
+      end
+    end
+  end
+
+  def ds_option(value, text, active)
+    button(
+      type: "button",
+      data: {
+        action: "click->ds-select#pick click->dropdown#close",
+        dropdown_target: "option", ds_select_target: "option",
+        value: value, label: text, active: active.to_s
+      },
+      class: "group flex items-center gap-2 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] " \
+             "text-voodu-text hover:bg-voodu-hover data-[active=true]:text-voodu-accent-2"
+    ) do
+      span(class: "w-3.5 shrink-0 text-voodu-accent-2 opacity-0 group-data-[active=true]:opacity-100") { "✓" }
+      span(class: "truncate") { text }
     end
   end
 
@@ -284,14 +453,6 @@ class Views::AlertRules::Form < Views::Base
     )
   end
 
-  def select_input(name:, extra_class: nil, data: nil)
-    select(
-      name: name,
-      data: data,
-      class: tokens(input_classes, "text-[13px] appearance-none cursor-pointer", extra_class)
-    ) { yield }
-  end
-
   def input_classes
     "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
       "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
@@ -305,7 +466,7 @@ class Views::AlertRules::Form < Views::Base
     div(class: "flex-1")
 
     a(
-      href: alerts_path,
+      href: @return_to,
       class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) { "Cancel" }
 

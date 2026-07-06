@@ -8,7 +8,7 @@ require "test_helper"
 # being installed. These pin that gate + the demand wiring — adding a
 # hep3 Table panel is what turns the poller on for that reader.
 class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   def install_hep3(island)
     System.create!(
@@ -18,10 +18,12 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
     )
   end
 
-  def table_panel(scope:, name:, source: "hep3")
+  # table_panel — a hep3 Table panel bound to `island` (M2: the poller demand
+  # follows panel["island_id"], so the reader is enqueued for THAT server).
+  def table_panel(island:, scope:, name:, source: "hep3")
     {
       "scope_kind" => "table", "chart_type" => "table", "source" => source,
-      "scope" => scope, "name" => name, "view" => "messages",
+      "island_id" => island.id, "scope" => scope, "name" => name, "view" => "messages",
       "label" => "SIP", "color" => "var(--voodu-accent)"
     }
   end
@@ -29,7 +31,7 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
   test "enqueues a poller per hep3 table reader, only with the plugin installed" do
     alpha = islands(:alpha)
     install_hep3(alpha)
-    alpha.metric_dashboards.create!(name: "sip", panels: [table_panel(scope: "fsw", name: "hep3-api")])
+    alpha.org.metric_dashboards.create!(name: "sip", panels: [table_panel(island: alpha, scope: "fsw", name: "hep3-api")])
 
     assert_enqueued_with(job: Hep3PollerJob, args: [alpha.id, "fsw", "hep3-api"]) do
       Hep3SyncOrchestratorJob.perform_now
@@ -41,8 +43,8 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
   test "dedups a reader referenced by panels on multiple dashboards" do
     alpha = islands(:alpha)
     install_hep3(alpha)
-    alpha.metric_dashboards.create!(name: "a", panels: [table_panel(scope: "fsw", name: "hep3-api")])
-    alpha.metric_dashboards.create!(name: "b", panels: [table_panel(scope: "fsw", name: "hep3-api")])
+    alpha.org.metric_dashboards.create!(name: "a", panels: [table_panel(island: alpha, scope: "fsw", name: "hep3-api")])
+    alpha.org.metric_dashboards.create!(name: "b", panels: [table_panel(island: alpha, scope: "fsw", name: "hep3-api")])
 
     assert_enqueued_jobs 1, only: Hep3PollerJob do
       Hep3SyncOrchestratorJob.perform_now
@@ -50,7 +52,7 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
   end
 
   test "skips a hep3 table panel when the plugin is not installed" do
-    islands(:alpha).metric_dashboards.create!(name: "sip", panels: [table_panel(scope: "fsw", name: "hep3-api")])
+    islands(:alpha).then { |a| a.org.metric_dashboards.create!(name: "sip", panels: [table_panel(island: a, scope: "fsw", name: "hep3-api")]) }
     # no System snapshot → plugin_installed?("hep3") is false
 
     assert_no_enqueued_jobs only: Hep3PollerJob do
@@ -61,10 +63,11 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
   test "ignores non-hep3 table panels and non-table panels" do
     alpha = islands(:alpha)
     install_hep3(alpha)
-    metric = {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent", "label" => "CPU", "color" => "c"}
-    alpha.metric_dashboards.create!(
+    metric = {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+              "label" => "CPU", "color" => "c", "island_id" => alpha.id}
+    alpha.org.metric_dashboards.create!(
       name: "mix",
-      panels: [metric, table_panel(scope: "fsw", name: "other", source: "elsewhere")]
+      panels: [metric, table_panel(island: alpha, scope: "fsw", name: "other", source: "elsewhere")]
     )
 
     assert_no_enqueued_jobs only: Hep3PollerJob do

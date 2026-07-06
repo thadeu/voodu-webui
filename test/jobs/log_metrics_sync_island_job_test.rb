@@ -8,7 +8,7 @@ require "test_helper"
 # IslandPods.compact reads the local pods table (no live controller), mirroring
 # MetricDashboardDataTest.
 class LogMetricsSyncIslandJobTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -128,9 +128,10 @@ class LogMetricsSyncIslandJobTest < ActiveSupport::TestCase
 
   def make_log_dashboard(query, scope: "fs", name: "fs")
     panel = {"scope_kind" => "log", "scope" => scope, "name" => name, "query" => query,
+             "island_id" => @island.id,
              "label" => "#{name} · count", "color" => "var(--voodu-orange)", "chart_type" => "number"}
 
-    @island.metric_dashboards.create!(name: "d-#{SecureRandom.hex(4)}", panels: [panel])
+    @island.org.metric_dashboards.create!(name: "d-#{SecureRandom.hex(4)}", panels: [panel])
   end
 
   def seed_running_fs_pod(container)

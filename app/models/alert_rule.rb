@@ -18,6 +18,10 @@
 # `firing`/`last_*` are evaluator-cached state for cheap rendering;
 # the open AlertEvent row is the source of truth for the episode.
 class AlertRule < ApplicationRecord
+  # org — the owner (M3). island — the TARGET server this rule monitors (∈ org).
+  # A rule is org-level (listed on the org's /alerts) but watches exactly one
+  # server, so `island` stays the addressing target the evaluator runs against.
+  belongs_to :org
   belongs_to :island
   has_many :alert_events, dependent: :destroy
   has_many :alert_rule_destinations, dependent: :destroy
@@ -48,8 +52,15 @@ class AlertRule < ApplicationRecord
   validates :target_scope, :target_name, presence: true,
     if: -> { target_kind == "pod" }
 
+  # org is canonically the TARGET server's org — a rule can't watch a server in
+  # a different org (target_island_in_org enforces it). Derive it so building a
+  # rule off `island.alert_rules` (or any island) never needs org spelled out;
+  # `||=` leaves an explicitly-set (possibly forged) org for the guard to reject.
+  before_validation :derive_org_from_island
+
   validate :disk_is_host_only
   validate :req_s_is_deployment_only
+  validate :target_island_in_org
 
   scope :enabled, -> { where(enabled: true) }
 
@@ -71,6 +82,8 @@ class AlertRule < ApplicationRecord
   def self.create_defaults!(island)
     DEFAULTS.map do |attrs|
       island.alert_rules.find_or_create_by!(name: attrs[:name]) do |rule|
+        # org — the rule is owned by the target server's org (M3).
+        rule.org = island.org
         rule.metric_kind = attrs[:metric_kind]
         rule.target_kind = "host"
         rule.comparator = "gte"
@@ -91,11 +104,12 @@ class AlertRule < ApplicationRecord
   # wants this transition; a rule with rows uses exactly that subset
   # (still filtered by enabled + the destination's firing/resolved
   # toggle).
+  # destinations_for — the enabled destinations to notify for `transition`. An
+  # empty selection means DON'T SEND (the honest default) — a rule notifies only
+  # the destinations explicitly wired to it, never a surprise fan-out. Checking
+  # "Select all" is how the operator opts into every destination.
   def destinations_for(transition)
-    chosen = alert_destinations.select(&:enabled?)
-    pool = chosen.any? ? chosen : island.alert_destinations.enabled.to_a
-
-    pool.select { |d| d.notifies?(transition) }
+    alert_destinations.select { |d| d.enabled? && d.notifies?(transition) }
   end
 
   # Params to deep-link this rule's target into /metrics so the
@@ -118,8 +132,12 @@ class AlertRule < ApplicationRecord
     target_kind == "host"
   end
 
+  # target_label — human "what this watches". Both shapes name the SERVER (M3:
+  # rules are org-level, so "web/web" alone is ambiguous across servers). Host →
+  # "host <server>"; pod → "<server> · <scope>/<name>". Snapshotted onto events
+  # at fire time, so history says which server fired.
   def target_label
-    host_target? ? "host #{island.name}" : "#{target_scope}/#{target_name}"
+    host_target? ? "host #{island.name}" : "#{island.name} · #{target_scope}/#{target_name}"
   end
 
   def unit
@@ -198,6 +216,21 @@ class AlertRule < ApplicationRecord
   end
 
   private
+
+  def derive_org_from_island
+    self.org ||= island&.org
+  end
+
+  # target_island_in_org — the monitored server MUST belong to this rule's org
+  # (M3 anti cross-org injection): a rule can never watch a server outside the
+  # org it's listed under, so a forged island_id for another org's server is
+  # rejected at save (mirrors the dashboard panel island_id guard).
+  def target_island_in_org
+    return if island_id.blank? || org_id.blank?
+    return if island&.org_id == org_id
+
+    errors.add(:island, "must be a server in this org")
+  end
 
   def disk_is_host_only
     return unless metric_kind == "disk" && target_kind == "pod"

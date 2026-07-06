@@ -7,7 +7,7 @@ require "test_helper"
 # messages, a not-found call still renders the in-overlay empty state
 # (never a dead click), and missing params 404.
 class Hep3ControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)

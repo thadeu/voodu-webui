@@ -3,12 +3,12 @@
 require "test_helper"
 
 class AlertDestinationTest < ActiveSupport::TestCase
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup { @island = islands(:alpha) }
 
   def build(**attrs)
-    @island.alert_destinations.new({
+    @island.org.alert_destinations.new({
       name: "d", kind: "webhook", endpoint: "https://example.com/h",
       on_firing: true, on_resolved: true
     }.merge(attrs))
@@ -39,14 +39,17 @@ class AlertDestinationTest < ActiveSupport::TestCase
     assert d.errors[:base].any?
   end
 
-  test "name unique per island, reusable across islands" do
-    @island.alert_destinations.create!(name: "ops", kind: "webhook", endpoint: "https://a.com/h")
+  test "name unique per org, reusable across orgs" do
+    @island.org.alert_destinations.create!(name: "ops", kind: "webhook", endpoint: "https://a.com/h")
     assert_not build(name: "ops").valid?
-    assert islands(:beta).alert_destinations.new(name: "ops", kind: "webhook", endpoint: "https://a.com/h").valid?
+    # beta shares alpha's org (acme) → "ops" collides; gamma is a different org
+    # (globex) → the same name is free there.
+    assert_not islands(:beta).org.alert_destinations.new(name: "ops", kind: "webhook", endpoint: "https://a.com/h").valid?
+    assert islands(:gamma).org.alert_destinations.new(name: "ops", kind: "webhook", endpoint: "https://a.com/h").valid?
   end
 
   test "endpoint and secret round-trip through encryption" do
-    d = @island.alert_destinations.create!(
+    d = @island.org.alert_destinations.create!(
       name: "enc", kind: "webhook", endpoint: "https://example.com/secret", secret: "shh"
     )
     assert_equal "https://example.com/secret", d.reload.endpoint

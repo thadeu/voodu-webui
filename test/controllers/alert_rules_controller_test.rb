@@ -3,7 +3,7 @@
 require "test_helper"
 
 class AlertRulesControllerTest < ActionDispatch::IntegrationTest
-  fixtures :islands
+  fixtures :orgs, :islands
 
   setup do
     @island = islands(:alpha)
@@ -21,17 +21,19 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "New alert rule"
   end
 
-  test "create decodes a pod target and redirects" do
+  test "create decodes a pod target (with its server) and redirects" do
     assert_difference("AlertRule.count", 1) do
       post alert_rules_path(tenant_key: @key), params: {
         alert_rule: {
-          name: "web reqs", metric_kind: "req_s", target: "pod|clowk|web",
+          name: "web reqs", metric_kind: "req_s", target: "pod|#{@island.id}|clowk|web",
           comparator: "gte", threshold: "50", duration_seconds: "120"
         }
       }
     end
 
     rule = AlertRule.order(:id).last
+    assert_equal @island.id, rule.island_id, "the target server rides in the encoded value"
+    assert_equal @island.org_id, rule.org_id, "org derived from the target server"
     assert_equal "pod", rule.target_kind
     assert_equal "clowk", rule.target_scope
     assert_equal "web", rule.target_name
@@ -42,13 +44,14 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
   test "create with host target nils the pod columns" do
     post alert_rules_path(tenant_key: @key), params: {
       alert_rule: {
-        name: "host cpu", metric_kind: "cpu", target: "host",
+        name: "host cpu", metric_kind: "cpu", target: "host|#{@island.id}",
         comparator: "gte", threshold: "90", duration_seconds: "300"
       }
     }
 
     rule = AlertRule.order(:id).last
     assert_equal "host", rule.target_kind
+    assert_equal @island.id, rule.island_id
     assert_nil rule.target_scope
     assert_nil rule.target_name
   end
@@ -173,14 +176,85 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "one island cannot address another island's rule" do
+  test "editing a rule from the Rules tab returns there (return_to threaded through)" do
     rule = create_rule
-    other_key = islands(:beta).key
+    origin = alerts_path(tenant_key: @key, tab: "rules")
 
-    post toggle_alert_rule_path(tenant_key: other_key, id: rule.id)
+    get edit_alert_rule_path(tenant_key: @key, id: rule.id, return_to: origin)
 
-    assert_redirected_to alerts_path(tenant_key: other_key)
-    assert rule.reload.enabled, "cross-tenant toggle must not touch the rule"
+    assert_response :success
+    # The form must carry the origin forward: a hidden field for the PATCH, and
+    # the Cancel / close links pointing back at it (not the default /alerts).
+    assert_includes response.body, "name=\"return_to\" value=\"#{origin}\""
+  end
+
+  test "update honours return_to and lands back on that path" do
+    rule = create_rule
+    origin = alerts_path(tenant_key: @key, tab: "rules")
+
+    patch alert_rule_path(tenant_key: @key, id: rule.id), params: {
+      return_to: origin,
+      alert_rule: {
+        name: rule.name, metric_kind: "cpu", target: "host",
+        comparator: "gte", threshold: "95", duration_seconds: "300"
+      }
+    }
+
+    assert_redirected_to origin
+  end
+
+  test "create honours return_to" do
+    origin = alerts_path(tenant_key: @key, tab: "rules")
+
+    post alert_rules_path(tenant_key: @key), params: {
+      return_to: origin,
+      alert_rule: {
+        name: "reqs", metric_kind: "req_s", target: "pod|#{@island.id}|clowk|web",
+        comparator: "gte", threshold: "50", duration_seconds: "120"
+      }
+    }
+
+    assert_redirected_to origin
+  end
+
+  test "toggle honours return_to" do
+    rule = create_rule
+    origin = alerts_path(tenant_key: @key, tab: "rules")
+
+    post toggle_alert_rule_path(tenant_key: @key, id: rule.id), params: {return_to: origin}
+
+    assert_redirected_to origin
+  end
+
+  test "an off-site return_to is rejected (no open redirect) and falls back to /alerts" do
+    rule = create_rule
+
+    post toggle_alert_rule_path(tenant_key: @key, id: rule.id),
+      params: {return_to: "https://evil.example.com/phish"}
+
+    # url_from refuses a cross-host target, so we land on the safe default —
+    # NEVER redirect the operator off-site because a link said so.
+    assert_redirected_to alerts_path(tenant_key: @key)
+    assert_not_equal "https://evil.example.com/phish", response.location
+  end
+
+  test "another island in the SAME org CAN address the rule (alerts are org-level)" do
+    rule = create_rule # targets alpha, owned by acme
+    beta_key = islands(:beta).key # beta is in acme too
+
+    post toggle_alert_rule_path(tenant_key: beta_key, id: rule.id)
+
+    assert_redirected_to alerts_path(tenant_key: beta_key)
+    assert_not rule.reload.enabled, "a sibling server in the org shares the org's rules"
+  end
+
+  test "a server in ANOTHER org cannot address the rule (cross-org guard)" do
+    rule = create_rule # acme
+    gamma = islands(:gamma) # globex — a different org
+
+    post toggle_alert_rule_path(org_id: gamma.org.short_id, tenant_key: gamma.key, id: rule.id)
+
+    assert rule.reload.enabled, "cross-org toggle must never touch another org's rule"
   end
 
   private
