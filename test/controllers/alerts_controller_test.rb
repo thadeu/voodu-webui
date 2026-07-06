@@ -34,6 +34,18 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Create default rules"
   end
 
+  test "the tab bar stays reachable with no rules (so Destinations can be set up first)" do
+    # Onboarding must NOT hide the tabs — a fresh server needs to reach the
+    # Destinations tab to configure a first notification target before any
+    # rule exists. (Regression: the empty state used to take over the page.)
+    get alerts_path(server_key: @key)
+
+    assert_response :success
+    assert_includes response.body, "No alert rules yet", "onboarding still shows on the Active tab"
+    assert_includes response.body, "tab=destinations", "the Destinations tab must be reachable"
+    assert_includes response.body, "tab=rules"
+  end
+
   test "default tab is active and renders firing cards" do
     rule = create_rule(firing: true)
 

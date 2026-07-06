@@ -24,16 +24,13 @@ class Components::Alerts::LiveBody < Components::Base
   end
 
   def view_template
-    # Show the tabbed UI once anything exists — rules OR destinations.
-    # Destinations are configured independently of rules, so a fresh
-    # server with a Slack target but no rules yet still reaches the
-    # Destinations tab instead of the rules-onboarding empty state.
-    if @data.rules? || @data.destinations_count.positive?
-      tab_bar
-      active_panel
-    else
-      empty_state
-    end
+    # The tab bar is ALWAYS rendered so every tab is reachable on a fresh
+    # server — notably Destinations, which is configured independently of
+    # rules (you may want a Slack target before any rule exists). The
+    # rules-onboarding empty state lives INSIDE the Active tab now (see
+    # active_tab_panel), not as a whole-page takeover that hid the tabs.
+    tab_bar
+    active_panel
   end
 
   private
@@ -127,8 +124,12 @@ class Components::Alerts::LiveBody < Components::Base
           render Components::Alerts::FiringCard.new(event: event)
         end
       end
-    else
+    elsif @data.rules?
       all_clear_strip
+    else
+      # No rules at all — the first-run onboarding (Create default rules /
+      # New rule). Sits under the tab bar so Destinations stays reachable.
+      empty_state
     end
   end
 
