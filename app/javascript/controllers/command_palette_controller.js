@@ -60,6 +60,13 @@ const GROUP_BOOST = {
   Servers:  2
 }
 
+// GROUP_ORDER — the FIXED section order in search results (independent of
+// per-row score). Resource groups first in the order you'd drill down —
+// Pods → Logs → Metrics — then Servers, with Actions (restart / add / manage)
+// last since they're the heavier, less-frequent operations. Groups not listed
+// sort to the end.
+const GROUP_ORDER = ["Navigate", "Pods", "Logs", "Metrics", "Servers", "Actions"]
+
 export default class extends Controller {
   static targets = ["backdrop", "dialog", "input", "clear", "results", "count"]
 
@@ -668,7 +675,15 @@ function groupCommands(commands) {
     m.get(c.group).push(c)
   }
 
-  return Array.from(m.entries()).map(([label, items]) => ({ label, items }))
+  const rank = (g) => {
+    const i = GROUP_ORDER.indexOf(g)
+
+    return i === -1 ? GROUP_ORDER.length : i
+  }
+
+  return Array.from(m.entries())
+    .sort((a, b) => rank(a[0]) - rank(b[0]))
+    .map(([label, items]) => ({ label, items }))
 }
 
 // ── icon map ──────────────────────────────────────────────────────
