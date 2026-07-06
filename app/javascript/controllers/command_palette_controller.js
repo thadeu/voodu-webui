@@ -41,11 +41,15 @@ import { Controller } from "@hotwired/stimulus"
 // over icon — a pod row with cmd.status="running" gets the green dot,
 // not the cube glyph.
 
-const CACHE_KEY      = "voodu:cmd-palette:v1"
+const CACHE_KEY      = "voodu:cmd-palette:v2"
 const CACHE_TTL_MS   = 30_000
 const LRU_KEY        = "voodu:cmd-palette:recent"
 const LRU_CAP        = 8
-const TENANT_KEY_RE  = /^\/([A-Za-z0-9]{6})(?:\/|$)/
+// URLs are /:org_id(8)/:tenant_key(6)/… — the org short_id is the FIRST
+// segment, the server key the SECOND. (Pre-org URLs were /:tenant_key(6)/…;
+// reading the first segment as the key is the bug that emptied the palette.)
+const ORG_ID_RE      = /^\/([A-Za-z0-9]{8})(?:\/|$)/
+const TENANT_KEY_RE  = /^\/[A-Za-z0-9]{8}\/([A-Za-z0-9]{6})(?:\/|$)/
 
 const GROUP_BOOST = {
   Navigate: 5,
@@ -523,9 +527,15 @@ export default class extends Controller {
 // readCache — returns the FULL envelope { ts, commands } regardless
 // of TTL, or null when malformed/absent. SWR-friendly: the caller
 // decides what to do with stale data via isFresh().
+// cacheKey — scoped per org so switching orgs never surfaces the previous
+// org's servers from a warm cache (the feed itself is org-scoped now).
+function cacheKey() {
+  return `${CACHE_KEY}:${detectCurrentOrgId() || "none"}`
+}
+
 function readCache() {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY)
+    const raw = sessionStorage.getItem(cacheKey())
 
     if (!raw) return null
     const env = JSON.parse(raw)
@@ -546,7 +556,7 @@ function isFresh(env) {
 
 function writeCache(commands) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), commands }))
+    sessionStorage.setItem(cacheKey(), JSON.stringify({ ts: Date.now(), commands }))
   } catch {
     // QuotaExceeded — palette still works, just not cached.
   }
@@ -580,19 +590,34 @@ function pushLRU(id) {
 
 // ── URL helpers ───────────────────────────────────────────────────
 
+function detectCurrentOrgId() {
+  const m = location.pathname.match(ORG_ID_RE)
+
+  return m ? m[1] : null
+}
+
 function detectCurrentTenantKey() {
   const m = location.pathname.match(TENANT_KEY_RE)
 
   return m ? m[1] : null
 }
 
+// appendCurrent — tell the (tenant-less) endpoint which org to scope the feed
+// to (`org`, required to list anything) and which server the operator is on
+// (`current`, to exclude it from the switcher). Both come from the URL.
 function appendCurrent(endpoint) {
+  const params = new URLSearchParams()
+  const org = detectCurrentOrgId()
   const cur = detectCurrentTenantKey()
 
-  if (!cur) return endpoint
-  const sep = endpoint.includes("?") ? "&" : "?"
+  if (org) params.set("org", org)
+  if (cur) params.set("current", cur)
 
-  return `${endpoint}${sep}current=${encodeURIComponent(cur)}`
+  const qs = params.toString()
+
+  if (!qs) return endpoint
+
+  return `${endpoint}${endpoint.includes("?") ? "&" : "?"}${qs}`
 }
 
 // ── scoring ───────────────────────────────────────────────────────

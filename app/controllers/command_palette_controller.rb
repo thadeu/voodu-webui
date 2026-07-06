@@ -28,23 +28,29 @@
 #     blob in the page HTML" win the operator asked for: the
 #     palette payload only ever travels via XHR, never inlined.
 #
+# `?org=<short_id>` scopes the feed to the current org's servers (the
+# JS reads it off the URL). Required to list anything — the endpoint is
+# tenant-less, so it can't infer the org itself; org-less surfaces send
+# none and get only the global actions.
+#
 # `?current=<tenant_key>` lets the JS tell the server which island
 # the operator is on RIGHT NOW so the global server-switch list
-# can exclude the active one. Optional — when absent, ALL islands
-# appear in the switcher.
+# can exclude the active one. Optional — when absent, ALL of the org's
+# islands appear in the switcher.
 class CommandPaletteController < ApplicationController
   skip_before_action :require_tenant!
 
   def commands
-    current = lookup_island(params[:current])
+    islands = palette_islands
+    current = params[:current].present? ? islands.find { |i| i.key == params[:current] } : nil
 
-    per_island = all_islands.flat_map do |island|
+    per_island = islands.flat_map do |island|
       pods = IslandPods.compact(safe_client(island), island)
       CommandSet.for(island: island, pods: pods, helpers: helpers)
     end
 
     globals = CommandSet.globals(
-      islands: all_islands,
+      islands: islands,
       current_island: current,
       helpers: helpers
     )
@@ -55,10 +61,16 @@ class CommandPaletteController < ApplicationController
 
   private
 
-  def lookup_island(key)
-    return nil if key.blank?
+  # palette_islands — the servers the palette can navigate/act on: the CURRENT
+  # org's, resolved from `?org=<short_id>` (the JS reads it off the URL). The
+  # endpoint is tenant-less, so current_org is nil here — we can't use the
+  # org-scoped `all_islands`. Scoping to the passed org keeps the palette inside
+  # the same isolation boundary as the sidebar. Org-less surfaces (/islands, /)
+  # send no org → only the global actions (add / manage server) show.
+  def palette_islands
+    org = params[:org].present? ? Org.find_by(short_id: params[:org]) : nil
 
-    all_islands.find { |i| i.key == key }
+    org ? org.islands.order(:name).to_a : []
   end
 
   # safe_client — Voodu::Client construction can raise if the island

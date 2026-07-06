@@ -14,10 +14,10 @@
 #     servers). Independent of any single island. Endpoint appends
 #     these once after the per-island loop.
 #
-# Every href is built with EXPLICIT `tenant_key: island.key` — the
-# palette is a multi-server surface, so each command must point at
-# the specific island it was generated for (not the current request's
-# island via default_url_options).
+# Every href is built with EXPLICIT `org_id: island.org.short_id` +
+# `tenant_key: island.key` (see #loc) — the palette is a tenant-LESS
+# endpoint (no default_url_options injection) and a multi-server surface,
+# so each command must fully name the org + island it points at.
 #
 # Subtitle convention: pod-bound commands include the SERVER name
 # (e.g. "data · postgres:16 · @debian"). Lets the operator scan
@@ -73,6 +73,15 @@ class CommandSet
 
   private
 
+  # loc — a route's path for `island`, carrying org_id + tenant_key
+  # EXPLICITLY. The palette endpoint is tenant-less (no org/tenant in its
+  # URL → default_url_options injects nothing) and cross-server (each row
+  # targets its own island), so every href must name both. `island.org` is
+  # free here — islands come from `org.islands`, so the inverse is preloaded.
+  def loc(route, island, **extra)
+    @h.public_send("#{route}_path", org_id: island.org.short_id, tenant_key: island.key, **extra)
+  end
+
   # ── Navigate (6 per island) ─────────────────────────────────────
 
   def navigate_commands
@@ -101,7 +110,7 @@ class CommandSet
       subtitle: "@ #{@island.name}",
       icon: icon.to_s,
       match: "#{match} #{@island.name}",
-      href: @h.public_send("#{route}_path", tenant_key: @island.key)
+      href: loc(route, @island)
     }
   end
 
@@ -117,7 +126,7 @@ class CommandSet
         subtitle: "#{p["scope"]} · #{p["image"]} · @#{@island.name}",
         match: "#{pod_match_corpus(p)} #{@island.name}",
         status: normalised_status(p),
-        href: @h.pod_path(name: p["name"], tenant_key: @island.key)
+        href: loc(:pod, @island, name: p["name"])
       }
     end
   end
@@ -134,7 +143,7 @@ class CommandSet
         subtitle: "live tail · #{p["scope"]} · @#{@island.name}",
         icon: "DocumentTextOutline",
         match: "logs tail stream #{pod_match_corpus(p)} #{@island.name}",
-        href: @h.pod_logs_path(name: p["name"], tenant_key: @island.key)
+        href: loc(:pod_logs, @island, name: p["name"])
       }
     end
   end
@@ -151,7 +160,7 @@ class CommandSet
         subtitle: "last 1h · #{p["scope"]} · @#{@island.name}",
         icon: "ChartBarOutline",
         match: "metrics charts #{pod_match_corpus(p)} #{@island.name}",
-        href: "#{@h.metrics_path(tenant_key: @island.key)}?scope_kind=pod&scope_id=#{CGI.escape(p["name"])}"
+        href: "#{loc(:metrics, @island)}?scope_kind=pod&scope_id=#{CGI.escape(p["name"])}"
       }
     end
   end
@@ -168,7 +177,7 @@ class CommandSet
         subtitle: "saved query · @#{@island.name}",
         icon: "DocumentTextOutline",
         match: "#{q[:match]} #{@island.name}",
-        href: @h.logs_path(tenant_key: @island.key)
+        href: loc(:logs, @island)
       }
     end
   end
@@ -188,7 +197,7 @@ class CommandSet
         icon: "ArrowPathOutline",
         match: "restart kill cycle bounce #{pod_match_corpus(p)} #{@island.name}",
         destructive: true,
-        href: @h.restart_pod_path(name: p["name"], tenant_key: @island.key),
+        href: loc(:restart_pod, @island, name: p["name"]),
         method: "POST",
         confirm: "Restart #{pod_title(p)} on #{@island.name}?"
       }
@@ -208,7 +217,7 @@ class CommandSet
         subtitle: s.host.to_s,
         status: (s.status || :unknown).to_s,
         match: "server host switch select #{s.name} #{s.host}",
-        href: @h.tenant_root_path(tenant_key: s.key)
+        href: loc(:tenant_root, s)
       }
     end
   end
