@@ -23,7 +23,10 @@ class AlertHistoryFilter
   # `from` falls back a day before `until` (incidents span days, not minutes).
   def initialize(params = {})
     @window = TimeWindowParser.new(
-      params, ranges: RANGES, default_range: DEFAULT_RANGE, custom_blank_from: 1.day
+      params,
+      ranges: RANGES,
+      default_range: DEFAULT_RANGE,
+      custom_blank_from: 1.day
     )
   end
 
