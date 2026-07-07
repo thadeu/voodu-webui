@@ -16,6 +16,11 @@
 # carries an inline [http] badge inside its header so the visual
 # cue remains without breaking the grid.
 class Views::Metrics::Frame < Views::Base
+  # Same maximize-button URL logic as Views::Metrics::Index — shared so a poll
+  # re-render of the grid can't drift from first paint (it used to: the modal
+  # dropped the brushed window after the first tick).
+  include Views::Metrics::ExpandUrl
+
   def initialize(data: nil)
     @data = data
   end
@@ -227,51 +232,5 @@ class Views::Metrics::Frame < Views::Base
         plain "no running replica for #{c[:source_label]}"
       end
     end
-  end
-
-  # expand_url_for — mirrors Views::Metrics::Index#expand_url_for.
-  # Drift between the two = the maximize button breaks after the
-  # first broadcast tick swap.
-  def expand_url_for(chart, data)
-    return hep3_expand_url(chart, data) if chart[:source] == "hep3"
-
-    sk = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
-    sid = chart[:scope_id] || (data.respond_to?(:scope_id) ? data.scope_id : nil)
-
-    qp = {
-      scope_kind: sk || "host",
-      scope_id: sid,
-      range: data.range || "1h",
-      # Match Views::Metrics::Index#expand_url_for — omit `interval`
-      # when `auto` so URLs stay clean on the default path.
-      interval: (data.interval && data.interval != "auto") ? data.interval : nil,
-      metric: chart[:metric],
-      scale: chart[:scale],
-      label: chart[:label],
-      color: chart[:color],
-      unit: chart[:unit],
-      # server_id → drill into the panel's own server (cross-server dashboards).
-      server_id: chart[:server_id],
-      # Carry the panel's chart type so the expand modal renders the same
-      # shape (a gauge stays a gauge). Omitted for the default area.
-      chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
-    }.compact
-
-    "#{metrics_chart_path}?#{qp.to_query}"
-  end
-
-  # hep3_expand_url — mirrors Views::Metrics::Index#hep3_expand_url.
-  def hep3_expand_url(chart, data)
-    qp = {
-      source: "hep3", scope: chart[:scope], name: chart[:name], view: chart[:view],
-      filter_query: chart[:filter_query].presence,
-      chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
-      label: chart[:label], color: chart[:color],
-      server_id: chart[:server_id],
-      range: data.range || "1h",
-      interval: (data.interval && data.interval != "auto") ? data.interval : nil
-    }.compact
-
-    "#{metrics_chart_path}?#{qp.to_query}"
   end
 end

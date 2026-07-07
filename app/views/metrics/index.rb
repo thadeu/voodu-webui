@@ -7,6 +7,11 @@
 # Logs/Open pod/Refresh actions, toolbar (scope picker + range
 # pills), optional replica chips, 2x2 grid of chart cards.
 class Views::Metrics::Index < Views::Base
+  # expand_url_for / hep3_expand_url / custom_window? — shared with
+  # Views::Metrics::Frame so the maximize button behaves identically on first
+  # paint and on every poll re-render.
+  include Views::Metrics::ExpandUrl
+
   def initialize(current_path:, servers: [], current_server: nil, data: nil)
     @current_path = current_path
     @servers = servers
@@ -423,13 +428,6 @@ class Views::Metrics::Index < Views::Base
         span(class: "font-voodu-mono text-voodu-text-2") { @data&.range || "1h" }
       end
     end
-  end
-
-  # custom_window? — the active data object is pinned to an explicit
-  # from/until window (range=custom), so the page is showing a frozen
-  # past span rather than a rolling "last N".
-  def custom_window?
-    @data.respond_to?(:custom?) && @data.custom?
   end
 
   # fixed_window_indicator — static, non-pulsing counterpart to the
@@ -922,67 +920,6 @@ class Views::Metrics::Index < Views::Base
         plain "no running replica for #{c[:source_label]}"
       end
     end
-  end
-
-  # expand_url_for — URL the maximize button anchors to (turbo_stream
-  # response → opens shared modal). Echoes parent page scope/range
-  # so the modal starts at the same view, layers on metric metadata
-  # so the endpoint rebuilds the right single-chart slice.
-  def expand_url_for(chart, data)
-    return hep3_expand_url(chart, data) if chart[:source] == "hep3"
-
-    # Dashboard charts carry their own resolved scope_kind/scope_id
-    # (each panel resolves to its own pod); scope-mode charts inherit
-    # the page's single scope.
-    sk = chart[:scope_kind] || (data.respond_to?(:scope_kind) ? data.scope_kind : nil)
-    sid = chart[:scope_id] || (data.respond_to?(:scope_id) ? data.scope_id : nil)
-
-    qp = {
-      scope_kind: sk || "host",
-      scope_id: sid,
-      range: custom_window? ? "custom" : (data&.range || "1h"),
-      # Carry the explicit window so the maximized chart opens on the
-      # SAME span the operator is viewing (the endpoint re-resolves it).
-      from: custom_window? ? request.query_parameters[:from] : nil,
-      until: custom_window? ? request.query_parameters[:until] : nil,
-      # `auto` is the default — omit from the URL so default views
-      # have a clean `?range=1h` instead of `?range=1h&interval=auto`.
-      interval: (data&.interval && data.interval != "auto") ? data.interval : nil,
-      metric: chart[:metric],
-      scale: chart[:scale],
-      label: chart[:label],
-      color: chart[:color],
-      unit: chart[:unit],
-      # server_id → the expand modal drills into the SAME server this panel
-      # reads from (a cross-server dashboard panel expands its own server, not
-      # the URL's). Omitted on scope-mode charts (they inherit current_server).
-      server_id: chart[:server_id],
-      # Carry the panel's chart type so the expand modal renders the same
-      # shape (a gauge stays a gauge). Omitted for the default area.
-      chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
-    }.compact
-
-    "#{metrics_chart_path}?#{qp.to_query}"
-  end
-
-  # hep3_expand_url — the maximize URL for a HEP3 count chart. Carries the
-  # panel (source/scope/name/view/filter/chart_type/percent) so /metrics/chart
-  # re-aggregates the same slice in the modal. Mirrored in frame.rb.
-  def hep3_expand_url(chart, data)
-    qp = {
-      source: "hep3", scope: chart[:scope], name: chart[:name], view: chart[:view],
-      filter_query: chart[:filter_query].presence,
-      chart_type: chart[:chart_type], percent: (chart[:percent] ? "true" : nil),
-      label: chart[:label], color: chart[:color],
-      # server_id → re-aggregate against the panel's own server in the modal.
-      server_id: chart[:server_id],
-      range: custom_window? ? "custom" : (data&.range || "1h"),
-      from: custom_window? ? request.query_parameters[:from] : nil,
-      until: custom_window? ? request.query_parameters[:until] : nil,
-      interval: (data&.interval && data.interval != "auto") ? data.interval : nil
-    }.compact
-
-    "#{metrics_chart_path}?#{qp.to_query}"
   end
 
   # current_request_url — request path + query string. Used as the

@@ -60,4 +60,21 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
     assert_match "realtime", @response.body, "inverted window → relative fallback"
     assert_no_match(/fixed window/, @response.body)
   end
+
+  # The maximize button must open the modal on the SAME window the operator is
+  # viewing — including a brushed custom window. Assert it on the FRAME
+  # (poll/broadcast) re-render, which is the path that used to drift: after the
+  # first tick the frame swapped in an expand URL missing from/until, so the
+  # maximized chart snapped back to the default range.
+  test "the maximize link carries the active custom window on the frame re-render" do
+    get metrics_path(server_key: @key, range: "custom",
+      from: "2026-06-19T09:00:00Z", until: "2026-06-19T10:00:00Z"),
+      headers: {"Turbo-Frame" => "metrics-charts"}
+
+    assert_response :success
+    assert_match %r{/metrics/chart\?[^"']*range=custom}, @response.body,
+      "expand URL must pin range=custom"
+    assert_match(/from=2026-06-19/, @response.body, "expand URL must carry the window's from")
+    assert_match(/until=2026-06-19/, @response.body, "expand URL must carry the window's until")
+  end
 end
