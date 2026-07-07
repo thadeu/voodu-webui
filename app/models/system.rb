@@ -15,17 +15,15 @@
 # Schema (see db/migrate/<ts>_create_systems.rb):
 #   id, server_id (unique), payload (JSON text), synced_at, timestamps
 class System < ApplicationRecord
+  include PayloadParsable
+
   belongs_to :server
 
   # payload_hash — lazy-parsed view of the `payload` JSON column.
   # Same memoisation idiom as Pod#payload_hash so callers can read
   # multiple hot fields off a single instance without paying the
   # JSON parse N times.
-  def payload_hash
-    @payload_hash ||= JSON.parse(payload || "{}")
-  rescue JSON::ParserError
-    @payload_hash = {}
-  end
+  alias_method :payload_hash, :parsed_payload
 
   # ── Hot-field accessors ────────────────────────────────────────
   #

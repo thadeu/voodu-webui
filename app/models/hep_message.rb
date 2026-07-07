@@ -11,16 +11,11 @@
 # Server model lives in the primary DB and cross-DB joins are out of
 # scope.
 class HepMessage < HepRecord
-  # bulk_insert — primary write path (Hep3PollerJob). `rows` are Hashes
-  # shaped like the real columns: [{ server_id:, scope:, name:, payload: }].
-  # Generated columns are computed by SQLite. insert_all → one round-trip
-  # per batch instead of per row.
-  def self.bulk_insert(rows)
-    return 0 if rows.blank?
-
-    insert_all(rows)
-    rows.size
-  end
+  # bulk_insert (BulkInsertable): Hep3PollerJob hands column-shaped rows
+  # [{ server_id:, scope:, name:, payload: }]; generated columns are computed
+  # by SQLite. parsed_payload (PayloadParsable) exposes `payload` as a Hash.
+  include BulkInsertable
+  include PayloadParsable
 
   # Filterable fields → the SQL the substring filter runs against. Hot
   # fields use their generated column; the rest fall back to json_extract
@@ -151,9 +146,5 @@ class HepMessage < HepRecord
   # payload_json — parsed view of the raw NDJSON line, for single-row
   # reads (the full SIP record incl. raw_sip). Bulk reads should select
   # the generated columns / json_extract in SQL.
-  def payload_json
-    @payload_json ||= JSON.parse(payload)
-  rescue JSON::ParserError
-    {}
-  end
+  alias_method :payload_json, :parsed_payload
 end

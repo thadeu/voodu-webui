@@ -20,19 +20,12 @@
 # the primary DB and cross-DB ActiveRecord joins are out of scope.
 # Callers pass `server_id` directly to the scopes below.
 class MetricSample < MetricsRecord
-  # bulk_insert — primary write path, called by MetricsSyncServerJob.
-  # `rows` is an Array of Hashes shaped exactly like the columns:
-  #   [{ server_id:, source:, ts_iso:, payload: }, ...]
-  # Generated columns (ts_epoch / scope / name / pod) are computed by
-  # SQLite automatically — STORED at write, VIRTUAL on read. We use
-  # `insert_all` (not `create!`) so a 1000-row batch is one round-trip
-  # instead of one per row.
-  def self.bulk_insert(rows)
-    return 0 if rows.blank?
-
-    insert_all(rows)
-    rows.size
-  end
+  # bulk_insert (BulkInsertable): MetricsSyncServerJob hands column-shaped rows
+  # [{ server_id:, source:, ts_iso:, payload: }]; generated columns (ts_epoch /
+  # scope / name / pod) are computed by SQLite. parsed_payload (PayloadParsable)
+  # exposes `payload` as a Hash.
+  include BulkInsertable
+  include PayloadParsable
 
   # last_ts_for — highest ts_epoch we've persisted for this server.
   # MetricsSyncServerJob uses this as the `?since=<ts>` boundary on
@@ -76,9 +69,5 @@ class MetricSample < MetricsRecord
   #     .pluck(Arel.sql("ts_iso, json_extract(payload, '$.cpu_percent')"))
   #
   # For a single-row lookup, `payload_json[key]` is fine:
-  def payload_json
-    @payload_json ||= JSON.parse(payload)
-  rescue JSON::ParserError
-    {}
-  end
+  alias_method :payload_json, :parsed_payload
 end

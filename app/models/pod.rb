@@ -28,6 +28,8 @@
 # hash per instance — the JSON parse happens once even when the
 # same Pod row drives multiple UI surfaces.
 class Pod < ApplicationRecord
+  include PayloadParsable
+
   belongs_to :server
 
   # payload_hash — lazy-parsed view of the `payload` JSON column.
@@ -35,11 +37,7 @@ class Pod < ApplicationRecord
   # render call share a single parse. Returns {} on garbage input
   # (defensive: the sync job validates JSON before insert, but
   # a corrupted manual write shouldn't take the page down).
-  def payload_hash
-    @payload_hash ||= JSON.parse(payload || "{}")
-  rescue JSON::ParserError
-    @payload_hash = {}
-  end
+  alias_method :payload_hash, :parsed_payload
 
   # ── Hot-field accessors (read from payload_hash) ───────────────
 
