@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
+import { readJSON } from "../lib/storage.js"
+
 // data-table — renders a DataSource page (schema-less) as a table:
 // column picker, per-field substring filter, click-to-sort, infinite
 // scroll (older pages), manual refresh, and OPT-IN live streaming.
@@ -830,11 +832,7 @@ export default class extends Controller {
   }
 
   readSession(key) {
-    try {
-      return JSON.parse(sessionStorage.getItem(key))
-    } catch (_e) {
-      return null
-    }
+    return readJSON(sessionStorage, key)
   }
 
   // prefKey — per-panel localStorage namespace for column visibility / widths /
@@ -850,10 +848,6 @@ export default class extends Controller {
   }
 
   readJson(key) {
-    try {
-      return JSON.parse(localStorage.getItem(key))
-    } catch (_e) {
-      return null
-    }
+    return readJSON(localStorage, key)
   }
 }

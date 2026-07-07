@@ -1,5 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
+import { escapeHtml } from "../lib/html.js"
+import { readJSON, writeJSON } from "../lib/storage.js"
+
 // CommandPaletteController — ⌘K palette behaviour.
 //
 // Lifecycle (stale-while-revalidate):
@@ -531,28 +534,19 @@ export default class extends Controller {
 
 // ── cache helpers (sessionStorage, 30s TTL) ───────────────────────
 
-// readCache — returns the FULL envelope { ts, commands } regardless
-// of TTL, or null when malformed/absent. SWR-friendly: the caller
-// decides what to do with stale data via isFresh().
 // cacheKey — scoped per org so switching orgs never surfaces the previous
 // org's servers from a warm cache (the feed itself is org-scoped now).
 function cacheKey() {
   return `${CACHE_KEY}:${detectCurrentOrgId() || "none"}`
 }
 
+// readCache — returns the FULL envelope { ts, commands } regardless of TTL, or
+// null when malformed/absent. SWR-friendly: the caller decides what to do with
+// stale data via isFresh().
 function readCache() {
-  try {
-    const raw = sessionStorage.getItem(cacheKey())
-
-    if (!raw) return null
-    const env = JSON.parse(raw)
-
-    if (!env || typeof env.ts !== "number" || !Array.isArray(env.commands)) return null
-
-    return env
-  } catch {
-    return null
-  }
+  return readJSON(sessionStorage, cacheKey(), {
+    validate: (env) => env != null && typeof env.ts === "number" && Array.isArray(env.commands)
+  })
 }
 
 // isFresh — boolean check against the TTL. Used to decide whether
@@ -562,37 +556,22 @@ function isFresh(env) {
 }
 
 function writeCache(commands) {
-  try {
-    sessionStorage.setItem(cacheKey(), JSON.stringify({ ts: Date.now(), commands }))
-  } catch {
-    // QuotaExceeded — palette still works, just not cached.
-  }
+  writeJSON(sessionStorage, cacheKey(), { ts: Date.now(), commands })
 }
 
 // ── LRU helpers (localStorage, cap 8) ─────────────────────────────
 
 function readLRU() {
-  try {
-    const raw = localStorage.getItem(LRU_KEY)
+  const arr = readJSON(localStorage, LRU_KEY, { fallback: [] })
 
-    if (!raw) return []
-    const arr = JSON.parse(raw)
-
-    return Array.isArray(arr) ? arr.filter(x => typeof x === "string") : []
-  } catch {
-    return []
-  }
+  return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : []
 }
 
 function pushLRU(id) {
-  try {
-    const cur = readLRU().filter(x => x !== id)
+  const cur = readLRU().filter((x) => x !== id)
 
-    cur.unshift(id)
-    localStorage.setItem(LRU_KEY, JSON.stringify(cur.slice(0, LRU_CAP)))
-  } catch {
-    // QuotaExceeded — silent fall back, palette still works.
-  }
+  cur.unshift(id)
+  writeJSON(localStorage, LRU_KEY, cur.slice(0, LRU_CAP))
 }
 
 // ── URL helpers ───────────────────────────────────────────────────
@@ -836,7 +815,3 @@ function highlight(text, query) {
   return out.join("")
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
-}
