@@ -24,7 +24,13 @@ class Components::Metrics::ChartModal < Components::Base
     div(
       id: "chart-modal",
       hidden: true,
-      data: {controller: "chart-modal"},
+      data: {
+        controller: "chart-modal",
+        # The /metrics/chart endpoint (org/server-scoped). On a refresh with
+        # mx_* params in the URL, the controller rebuilds this URL from them
+        # and re-fetches → the modal re-opens (url-state-first).
+        chart_modal_chart_path_value: metrics_chart_path
+      },
       class: "fixed inset-0 z-[65] flex items-center justify-center"
     ) do
       backdrop
