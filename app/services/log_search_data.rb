@@ -31,6 +31,8 @@
 # results" is "narrow the window" — documented so it isn't read as a
 # bug.
 class LogSearchData
+  extend Forwardable
+
   # Rows rendered per page. Kept modest so the results frame doesn't lay
   # out thousands of grid rows at once (the analytics table dropped
   # content-visibility when it adopted the shared `.log-list` grid, so
@@ -65,52 +67,23 @@ class LogSearchData
     @server = server
     @params = normalize_params(params)
     @page = [@params[:page].to_i, 1].max
+    # range/window parsing is shared with the alert history filter — see
+    # TimeWindowParser. Logs default to 30m and floor `from` at the warehouse
+    # retention (never scan reaped data); a custom blank `from` falls back 1h.
+    @window_parser = TimeWindowParser.new(
+      @params, ranges: RANGES, default_range: DEFAULT_RANGE, custom_blank_from: 1.hour, retention: RETENTION
+    )
   end
+
+  # from_iso / until_iso — the resolved window as unambiguous UTC ISO strings.
+  # The filter bar hands these to the log-analytics controller, which converts
+  # them to the BROWSER's local zone before filling the datetime-local inputs —
+  # so the round-trip is correct even when the server's zone differs from the
+  # operator's. All window methods delegate to TimeWindowParser.
+  def_delegators :@window_parser, :range, :custom?, :window, :from, :until_, :from_iso, :until_iso
 
   # ── Query state (also consumed by the FilterBar so the UI and the
   # scan stay in lockstep) ──────────────────────────────────────────
-
-  # range — preset key, or "custom". Once the operator picks Custom it
-  # STAYS custom even if a from/until is missing — falling back to a
-  # preset there silently discarded the operator's choice (the custom
-  # inputs vanished on reload and the query quietly used 30m). A bare
-  # from/until with no range also reads as custom. Unknown → default.
-  def range
-    @range ||= begin
-      r = @params[:range].to_s
-      if r == "custom" || (r.blank? && parsed_from)
-        "custom"
-      else
-        RANGES.key?(r) ? r : DEFAULT_RANGE
-      end
-    end
-  end
-
-  def custom?
-    range == "custom"
-  end
-
-  def from
-    window.first
-  end
-
-  def until_
-    window.last
-  end
-
-  # from_iso / until_iso — the resolved window as unambiguous UTC ISO
-  # strings. The filter bar hands these to the log-analytics controller,
-  # which converts them to the BROWSER's local zone before filling the
-  # datetime-local inputs — so the round-trip is correct even when the
-  # server's zone differs from the operator's (rendering a server-local
-  # value into datetime-local would drift by the offset on each submit).
-  def from_iso
-    from.utc.iso8601(3)
-  end
-
-  def until_iso
-    until_.utc.iso8601(3)
-  end
 
   def pods
     @pods ||= Array(@params[:pods])
@@ -232,48 +205,6 @@ class LogSearchData
     @all = @all.first(query_limit) if query_limit
     @elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     @loaded = true
-  end
-
-  # window — [from, until] as Time objects, memoised. Custom uses the
-  # parsed inputs; presets are relative to now. `from` is clamped to
-  # the retention floor so we never walk reaped territory.
-  def window
-    @window ||= begin
-      now = Time.current
-      if custom?
-        u = parsed_until || now
-        # Defensive: custom with a blank `from` (operator cleared it, or
-        # the input never captured) defaults to one hour before `until`
-        # rather than crashing on a nil comparison below.
-        f = parsed_from || (u - 1.hour)
-      else
-        f = RANGES.fetch(range).ago
-        u = now
-      end
-
-      floor = RETENTION.ago
-      [[f, floor].max, u]
-    end
-  end
-
-  def parsed_from
-    return @parsed_from if defined?(@parsed_from)
-
-    @parsed_from = parse_time(@params[:from])
-  end
-
-  def parsed_until
-    return @parsed_until if defined?(@parsed_until)
-
-    @parsed_until = parse_time(@params[:until])
-  end
-
-  def parse_time(value)
-    return nil if value.blank?
-
-    Time.zone.parse(value.to_s)
-  rescue ArgumentError, TypeError
-    nil
   end
 
   def normalize(pod, hash)
