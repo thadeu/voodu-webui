@@ -161,8 +161,18 @@ class Components::Metrics::ChartCard < Components::Base
         unit: @unit,
         label: @label,
         range_ms: @range_ms,
-        height: 200
+        height: 200,
+        style: chart_style
       )
+    end
+  end
+
+  # chart_style — Bar / Line / Area for the non-gauge branch.
+  def chart_style
+    case @chart_type.to_s
+    when "bars" then :bars
+    when "line" then :line
+    else :area
     end
   end
 

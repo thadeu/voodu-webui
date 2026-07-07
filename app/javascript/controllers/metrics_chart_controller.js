@@ -39,8 +39,9 @@ export default class extends Controller {
     "area",       
     "clipRect",   
     "hLine",      
-    "xTick",      
-    "bar"         
+    "xTick",
+    "bar",
+    "dot"
   ]
 
   static values  = {
@@ -63,6 +64,10 @@ export default class extends Controller {
     // formatTs uses Intl.DateTimeFormat with this value so the
     // timestamp line reflects Settings → Display preferences.
     timezone:   { type: String,  default: "UTC" },
+    // Path interpolation for the resize rebuild — "step" (area) or "linear"
+    // (Line style, straight point-to-point). Keeps the rebuilt path matching
+    // the server-rendered one.
+    interp:     { type: String,  default: "step" },
     // Set ONLY when the chart is rendered inside the expand modal — the
     // /metrics/chart endpoint URL (carrying this chart's metric/scope/
     // server params). Its presence flips applyZoom from a full-page
@@ -188,6 +193,14 @@ export default class extends Controller {
       if (Number.isFinite(wn)) bar.setAttribute("width", Math.max(0.8, wn * innerW))
     })
 
+    // Line-style dots: cx tracks the new inner width via each dot's normalized
+    // x. cy is value-based, so it doesn't move when only the width changes.
+    this.dotTargets.forEach((dot) => {
+      const xn = parseFloat(dot.dataset.xNorm)
+
+      if (Number.isFinite(xn)) dot.setAttribute("cx", this.padLeftValue + xn * innerW)
+    })
+
     // Recompute each point's absolute x for hover nearest-x
     // lookup. y is unchanged.
     this.points.forEach((p, i) => {
@@ -213,8 +226,10 @@ export default class extends Controller {
       seg.map(([xNorm, y]) => [padL + xNorm * innerW, y])
     )
 
+    const buildLine = this.interpValue === "linear" ? linearPath : segmentPath
+
     const lineD = lineSegs
-      .map((seg) => segmentPath(seg))
+      .map((seg) => buildLine(seg))
       .filter((s) => s)
       .join(" ")
 
@@ -596,6 +611,15 @@ function segmentPath(seg) {
   }
 
   return d
+}
+
+// linearPath — straight diagonal point-to-point ("raio"), the Line style's
+// look. Mirrors Chart#linear_segment_path so a resize rebuild matches the
+// server-rendered stroke.
+function linearPath(seg) {
+  if (seg.length < 2) return ""
+
+  return "M " + seg.map(([x, y]) => `${x} ${y}`).join(" L ")
 }
 
 function areaPath(seg, baselineY) {

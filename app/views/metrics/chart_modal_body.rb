@@ -248,12 +248,23 @@ class Views::Metrics::ChartModalBody < Views::Base
           width: 1600,
           height: 480,
           axes: true,
+          style: chart_style,
           # In the modal, brush-to-zoom re-fetches THIS endpoint at the
           # brushed window instead of navigating away (which tears the
           # modal down). refresh_url already carries every chart param.
           zoom_url: refresh_url
         )
       end
+    end
+  end
+
+  # chart_style — map the panel's chart_type to a Chart draw style. Only the
+  # time-series shapes reach here (gauges branch off in chart_block via gauge?).
+  def chart_style
+    case @chart[:chart_type].to_s
+    when "bars" then :bars
+    when "line" then :line
+    else :area
     end
   end
 

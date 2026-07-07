@@ -54,11 +54,11 @@ class MetricDashboard < ApplicationRecord
   # Optional per-panel chart type. Absent → ChartCard defaults to "area".
   # "number" is the log-count tile (log panels only); "table" is the
   # DataTable panel (table panels only).
-  CHART_TYPES = %w[area gauge_radial gauge_linear number table].freeze
+  CHART_TYPES = %w[area bars line gauge_radial gauge_linear number table].freeze
 
-  # Chart types a "table" (DataTable-family) panel may use. The hep3 source
-  # can be a rows table OR a count viz (Number/Area/Radial/Linear); logs → table.
-  TABLE_CHART_TYPES = %w[table number area gauge_radial gauge_linear].freeze
+  # Chart types a "table" (DataTable-family) panel may use. The hep3 source can
+  # be a rows table OR a count viz (Number/Area/Bar/Line/Radial/Linear); logs → table.
+  TABLE_CHART_TYPES = %w[table number area bars line gauge_radial gauge_linear].freeze
 
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12

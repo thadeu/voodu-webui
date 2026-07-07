@@ -17,9 +17,15 @@
 class Components::Metrics::ChartTypePicker < Components::Base
   DEFAULT = "area"
 
-  # [value, label] — mirrors the dashboard builder's metric shape chips
-  # (Views::MetricDashboards::Form: area / Radial / Linear).
-  OPTIONS = [["area", "Area"], ["gauge_radial", "Radial"], ["gauge_linear", "Linear"]].freeze
+  # [value, label]. Area / Bar / Line are the time-series shapes (shared axes,
+  # hover, brush-to-zoom); Radial / Linear are the gauges.
+  OPTIONS = [
+    ["area", "Area"],
+    ["bars", "Bar"],
+    ["line", "Line"],
+    ["gauge_radial", "Radial"],
+    ["gauge_linear", "Linear"]
+  ].freeze
 
   LABELS = OPTIONS.to_h.freeze
 

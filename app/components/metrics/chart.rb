@@ -51,7 +51,14 @@ class Components::Metrics::Chart < Components::Base
   #       Overview StatCards and Pod show StatCards so all three
   #       chart surfaces (Overview, Pod show, /metrics) share
   #       the same SVG/JS rendering engine.
-  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, bars: false, zoom_url: nil)
+  # style — how the series is drawn, all sharing the same axes / timeline /
+  # hover / restart annotations / brush-to-zoom:
+  #   :area (default) — smoothed curve + gradient fill
+  #   :bars           — one filled column per bucket (discrete counts)
+  #   :line           — smoothed curve + a dot on each point, NO fill
+  STYLES = %i[area bars line].freeze
+
+  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, style: :area, zoom_url: nil)
     @points = Array(points)
     @color = color
     @unit = unit
@@ -60,10 +67,7 @@ class Components::Metrics::Chart < Components::Base
     @height = height
     @width = width
     @axes = axes
-    # bars — draw one filled column per bucket instead of the area+line curve.
-    # The natural viz for DISCRETE counts (log-count sparklines): sparse events
-    # read as visible bars rather than a hairline spike on a flat baseline.
-    @bars = bars
+    @style = STYLES.include?(style&.to_sym) ? style.to_sym : :area
     # zoom_url — the /metrics/chart endpoint URL for THIS chart (with its
     # metric/scope/server params). Present only when the chart lives inside
     # the expand modal: brush-to-zoom then re-fetches the modal body at the
@@ -72,6 +76,12 @@ class Components::Metrics::Chart < Components::Base
     # a full-page Turbo.visit, which is the right behavior there.
     @zoom_url = zoom_url
   end
+
+  def bars? = @style == :bars
+
+  def line? = @style == :line
+
+  def area? = @style == :area
 
   def pad_left
     @axes ? PAD_LEFT_FULL : PAD_LEFT_COMPACT
@@ -132,6 +142,10 @@ class Components::Metrics::Chart < Components::Base
         metrics_chart_pad_top_value: pad_top,
         metrics_chart_pad_bottom_value: pad_bottom,
         metrics_chart_baseline_y_value: baseline_y,
+        # Interpolation for the path REBUILT on resize: "linear" (Line style,
+        # straight point-to-point) vs "step" (area — honest step-after). Must
+        # match the server-rendered path above or a resize would flip the look.
+        metrics_chart_interp_value: (line? ? "linear" : "step"),
         # responsive: client measures actual container width on
         # connect + on resize, then rewrites viewBox to
         # `0 0 <measuredW> <height>` and reprojects path + axis
@@ -188,7 +202,7 @@ class Components::Metrics::Chart < Components::Base
 
           # Bars carry a richer fade (bright top → soft bottom) so a single
           # column still reads as filled, not as a faint sliver.
-          if @bars
+          if bars?
             s.linearGradient(id: bars_gradient_id, x1: 0, y1: 0, x2: 0, y2: 1) do
               s.stop(offset: "0%", "stop-color": @color, "stop-opacity": "0.85")
               s.stop(offset: "100%", "stop-color": @color, "stop-opacity": "0.22")
@@ -221,28 +235,33 @@ class Components::Metrics::Chart < Components::Base
           render_x_axis(s, x_min, x_max)
         end
 
-        # Bars: one filled column per bucket (no line/area targets, so the
-        # responsive controller skips path-reproject — bars just stretch with
-        # the viewBox). Otherwise the area+line curve.
-        if @bars
+        # Style switch — all three share axes/hover/brush; only the mark differs.
+        #   bars → one filled column per bucket
+        #   line → smoothed stroke + a dot per point, NO fill
+        #   area → smoothed stroke + gradient fill
+        if bars?
           render_bars(s, pts, clip_id)
         else
-          d_line = path_for(pts)
-          d_area = area_path_for(pts)
-
-          # Both fill and stroke go through the clip so an overshoot
-          # below the baseline (or above the top) is invisibly cropped.
+          # Stroke (and, for area, the fill) go through the clip so a
+          # Catmull-Rom overshoot below the baseline is invisibly cropped.
           s.g("clip-path": "url(##{clip_id})") do
+            if area?
+              s.path(
+                d: area_path_for(pts), fill: "url(##{gradient_id})",
+                data: {metrics_chart_target: "area"}
+              )
+            end
+
             s.path(
-              d: d_area, fill: "url(##{gradient_id})",
-              data: {metrics_chart_target: "area"}
-            )
-            s.path(
-              d: d_line, fill: "none", stroke: @color, "stroke-width": "1.5",
+              d: path_for(pts), fill: "none", stroke: @color, "stroke-width": "1.5",
               "stroke-linecap": "round", "stroke-linejoin": "round",
               data: {metrics_chart_target: "line"}
             )
           end
+
+          # Line style: a dot on each data point (OUTSIDE the clip so an edge
+          # dot isn't half-cropped). Reprojected on resize via data-x-norm.
+          render_dots(s, pts) if line?
         end
 
         # Frame baseline — solid line at the bottom of the chart
@@ -270,13 +289,10 @@ class Components::Metrics::Chart < Components::Base
           style: "cursor: crosshair;",
           data: {
             metrics_chart_target: "overlay",
-            # Brush-to-zoom (drag a time range → reload at range=custom) is
-            # area/line-only — bar charts are discrete-count buckets where a
-            # sub-range zoom doesn't map cleanly.
-            action: [
-              "mousemove->metrics-chart#move mouseleave->metrics-chart#leave",
-              ("mousedown->metrics-chart#brushStart" unless @bars)
-            ].compact.join(" ")
+            # Brush-to-zoom (drag a time range → reload at range=custom) works
+            # for every style — a time sub-range maps the same whether the mark
+            # is an area, a line, or bars.
+            action: "mousemove->metrics-chart#move mouseleave->metrics-chart#leave mousedown->metrics-chart#brushStart"
           }
         )
       end
@@ -545,7 +561,18 @@ class Components::Metrics::Chart < Components::Base
   # equally dishonest. A real gap breaks the path so the chart
   # shows two disconnected servers of data with empty space between.
   def path_for(pts)
-    segments_of(pts).map { |seg| segment_path(seg) }.reject(&:empty?).join(" ")
+    builder = line? ? :linear_segment_path : :segment_path
+    segments_of(pts).map { |seg| send(builder, seg) }.reject(&:empty?).join(" ")
+  end
+
+  # linear_segment_path — straight diagonal from point to point ("raio"), the
+  # classic line-chart look the Line STYLE wants. area/bar keep the honest
+  # STEP-AFTER (see segment_path); Line trades that for a flowing line the
+  # operator explicitly opted into by picking it.
+  def linear_segment_path(pts)
+    return "" if pts.size < 2
+
+    "M " + pts.map { |x, y| "#{x} #{y}" }.join(" L ")
   end
 
   # area_path_for — like path_for but each segment is independently
@@ -702,6 +729,23 @@ class Components::Metrics::Chart < Components::Base
           data: {metrics_chart_target: "bar", x_norm: x_norm, w_norm: w_norm}
         )
       end
+    end
+  end
+
+  # render_dots — a filled dot on each data point (line style), OUTSIDE the
+  # clip so an edge dot isn't half-cropped. data-x-norm lets the controller
+  # reposition each on resize (same mechanism as bars); cy is value-based and
+  # unchanged by a width change.
+  def render_dots(svg, pts)
+    inner = (@width - pad_left - pad_right).to_f
+
+    pts.each do |x, y|
+      x_norm = (inner.positive? ? (x - pad_left) / inner : 0).round(5)
+
+      svg.circle(
+        cx: x.round(2), cy: y.round(2), r: "2.5", fill: @color,
+        data: {metrics_chart_target: "dot", x_norm: x_norm}
+      )
     end
   end
 

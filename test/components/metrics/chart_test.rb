@@ -32,7 +32,8 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
     {ts: "2026-06-16T12:05:00Z", value: 20}
   ].freeze
 
-  # Brush-to-zoom (drag a range → reload at range=custom) is area/line-only.
+  # Brush-to-zoom (drag a range → reload at range=custom) is inherited by every
+  # draw style — a time sub-range maps the same for area, bar, or line.
   test "area charts wire brush-to-zoom on the hover overlay" do
     html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS)).call
 
@@ -41,12 +42,33 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
     assert_includes html, "metrics-chart#move", "hover stays wired"
   end
 
-  # Bar charts are discrete-count buckets — a sub-range zoom doesn't map, so no brush.
-  test "bar charts do NOT wire brush-to-zoom" do
-    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS, bars: true)).call
+  test "bar charts also wire brush-to-zoom (behavior inherited across styles)" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS, style: :bars)).call
 
-    assert_not_includes html, "mousedown->metrics-chart#brushStart"
-    assert_includes html, "metrics-chart#move", "hover still wired on bars"
+    assert_includes html, "mousedown->metrics-chart#brushStart", "bars must enable brush too"
+    assert_includes html, "metrics-chart#move", "hover wired on bars"
+    assert_includes html, 'data-metrics-chart-target="bar"', "bars render columns"
+  end
+
+  # Line style = straight point-to-point stroke ("raio") + a dot per point,
+  # NO area fill, and LINEAR interpolation (not the area's step-after).
+  test "line charts draw a dot per point + a straight stroke, no fill, linear interp" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS, style: :line)).call
+
+    assert_includes html, 'data-metrics-chart-target="dot"', "line style renders dots"
+    assert_includes html, 'data-metrics-chart-target="line"', "line style renders the stroke"
+    assert_not_includes html, 'data-metrics-chart-target="area"', "line style has NO fill"
+    assert_includes html, 'data-metrics-chart-interp-value="linear"', "line uses straight (raio) interpolation"
+    assert_includes html, "mousedown->metrics-chart#brushStart", "line inherits brush"
+  end
+
+  # Area keeps its fill + step-after (LOCF) interpolation; no stray dots.
+  test "area charts fill, step-after interp, no dots" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS)).call
+
+    assert_includes html, 'data-metrics-chart-target="area"', "area style fills"
+    assert_includes html, 'data-metrics-chart-interp-value="step"', "area keeps honest step-after"
+    assert_not_includes html, 'data-metrics-chart-target="dot"', "area draws no dots"
   end
 
   # In the modal, brush-to-zoom must re-fetch in place instead of navigating

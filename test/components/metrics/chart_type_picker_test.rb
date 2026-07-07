@@ -9,12 +9,21 @@ class Components::Metrics::ChartTypePickerTest < ActiveSupport::TestCase
     Components::Metrics::ChartTypePicker.new(base_path: "/o/s/metrics/chart", **opts).call
   end
 
-  test "offers Area / Radial / Linear" do
+  test "offers Area / Bar / Line / Radial / Linear" do
     html = render_picker(current: "area")
 
     assert_includes html, ">Area<"
+    assert_includes html, ">Bar<"
+    assert_includes html, ">Line<"
     assert_includes html, ">Radial<"
     assert_includes html, ">Linear<"
+  end
+
+  test "bar + line set their chart_type explicitly in the URL" do
+    html = render_picker(current: "area", extra_params: {metric: "cpu_percent"})
+
+    assert_includes html, "chart_type=bars"
+    assert_includes html, "chart_type=line"
   end
 
   test "the trigger shows the active type's label" do
