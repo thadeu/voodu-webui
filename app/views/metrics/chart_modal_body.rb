@@ -73,6 +73,7 @@ class Views::Metrics::ChartModalBody < Views::Base
     div(class: "flex items-center flex-wrap gap-2") do
       metric_picker_slot
       pod_picker_slot
+      chart_type_picker_slot
       span(class: "flex-1")
       range_picker_slot
       interval_picker_slot
@@ -156,6 +157,29 @@ class Views::Metrics::ChartModalBody < Views::Base
   # (otherwise the merge order would clobber the picker's choice).
   def strip_scope_keys(query)
     query.reject { |k, _| %w[scope_kind scope_id].include?(k.to_s) }
+  end
+
+  # chart_type_picker_slot — Area / Radial / Linear. Sits after the pod picker
+  # (Metric → Pod → Chart type) so the operator can flip a stuck gauge back to
+  # a time-series without re-opening. turbo_stream:true swaps the body in place;
+  # the new chart_type rides data-refresh-url, so the url-state sync picks it up.
+  def chart_type_picker_slot
+    render Components::Metrics::ChartTypePicker.new(
+      current: current_chart_type,
+      base_path: metrics_chart_path,
+      extra_params: strip_chart_type_keys(@query),
+      turbo_stream: true
+    )
+  end
+
+  def current_chart_type
+    (@chart[:chart_type] || @query[:chart_type] || @query["chart_type"]).to_s.presence || "area"
+  end
+
+  # strip_chart_type_keys — the picker REPLACES chart_type, so leaving it in
+  # extra_params would let the merge order clobber the picker's choice.
+  def strip_chart_type_keys(query)
+    query.reject { |k, _| k.to_s == "chart_type" }
   end
 
   # range_picker_slot — the SAME control the grid page uses
