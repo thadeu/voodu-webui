@@ -50,7 +50,7 @@ class Components::Metrics::ChartModal < Components::Base
       data: {chart_modal_target: "dialog"},
       class: tokens(
         "relative z-[1]",
-        "w-[min(1100px,calc(100vw-32px))] max-h-[calc(100vh-48px)]",
+        "w-[min(1600px,calc(100vw-48px))] max-h-[calc(100vh-48px)]",
         "flex flex-col min-h-0",
         "bg-voodu-surface-2 border border-voodu-border-2",
         "shadow-[0_28px_56px_rgba(0,0,0,0.65),0_4px_12px_rgba(0,0,0,0.4)]"

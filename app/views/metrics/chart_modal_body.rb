@@ -192,9 +192,11 @@ class Views::Metrics::ChartModalBody < Views::Base
   # ChartCard hides them on the small grid; in the modal there's
   # room).
   #
-  # width: 1100 matches the modal dialog's max-w-[min(1100px,...)].
-  # Chart.rb dropped preserveAspectRatio="none" so the viewBox keeps
-  # its real aspect ratio — text + dots stay round/legible.
+  # width: 1600 matches the modal dialog's w-[min(1600px,...)] so the pre-JS
+  # viewBox is already about the right aspect; the responsive controller then
+  # measures the real container width and refills to fit. Chart.rb dropped
+  # preserveAspectRatio="none" so the viewBox keeps its real aspect ratio —
+  # text + dots stay round/legible.
   def chart_block
     if gauge?
       div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex items-center justify-center min-h-[360px]") do
@@ -219,7 +221,7 @@ class Views::Metrics::ChartModalBody < Views::Base
           unit: @chart[:unit],
           label: @chart[:label],
           range_ms: @range_ms,
-          width: 1100,
+          width: 1600,
           height: 480,
           axes: true,
           # In the modal, brush-to-zoom re-fetches THIS endpoint at the
