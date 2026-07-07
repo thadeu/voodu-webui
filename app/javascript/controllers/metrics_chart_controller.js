@@ -260,13 +260,20 @@ export default class extends Controller {
     // the wrong point and never reach the rightmost peak.
     const t = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
 
+    // Step styles (bars + area) draw each value as a block that STARTS at the
+    // point's x — so the raw point sits at the block's LEFT edge, and hovering
+    // there reads as "in the gap / on the corner". Anchor the hover to the
+    // block CENTER instead (both the nearest-point match AND the drawn marker),
+    // so it lands mid-bar. Line is linear — its point is a vertex, no nudge.
+    const off = this.interpValue === "step" ? this.bucketHalfNorm() : 0
+
     let nearest = this.points[0]
     let best    = Infinity
 
     for (const p of this.points) {
-      const xn = Number.isFinite(p.x_norm) ? p.x_norm : 0
+      const xn = (Number.isFinite(p.x_norm) ? p.x_norm : 0) + off
       const d  = Math.abs(xn - t)
-      
+
       if (d < best) {
         best    = d
         nearest = p
@@ -276,10 +283,33 @@ export default class extends Controller {
     // Crosshair x in CURRENT viewBox units — recomputed from x_norm + the live
     // inner width, never the stale cached p.x.
     const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
-    const x = this.padLeftValue + (Number.isFinite(nearest.x_norm) ? nearest.x_norm : 0) * innerVbW
+    const x = this.padLeftValue + ((Number.isFinite(nearest.x_norm) ? nearest.x_norm : 0) + off) * innerVbW
 
     this.drawCrosshair(x, nearest.y)
     this.positionTooltip({ ...nearest, x }, rect)
+  }
+
+  // bucketHalfNorm — half the typical point spacing (in x_norm units), i.e. how
+  // far right of a point its bucket's center sits. Median-based so a lone
+  // appended "latest" point doesn't skew it; cached (x_norm is width-independent
+  // so it never changes after connect).
+  bucketHalfNorm() {
+    if (this._bucketHalf != null) return this._bucketHalf
+
+    const xs = (this.pointsValue || [])
+      .map((p) => p.x_norm)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)
+
+    const diffs = []
+
+    for (let i = 1; i < xs.length; i++) diffs.push(xs[i] - xs[i - 1])
+
+    if (diffs.length === 0) return (this._bucketHalf = 0)
+
+    diffs.sort((a, b) => a - b)
+
+    return (this._bucketHalf = diffs[Math.floor(diffs.length / 2)] / 2)
   }
 
   leave() {
