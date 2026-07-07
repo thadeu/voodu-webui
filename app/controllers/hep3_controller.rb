@@ -34,12 +34,7 @@ class Hep3Controller < ApplicationController
   def reader_server
     return @reader_server if defined?(@reader_server)
 
-    @reader_server =
-      if params[:server_id].present? && current_org
-        current_org.servers.find_by(id: params[:server_id]) || current_server
-      else
-        current_server
-      end
+    @reader_server = lookup_server
   end
 
   def call_flow_data

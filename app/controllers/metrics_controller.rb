@@ -204,12 +204,7 @@ class MetricsController < ApplicationController
   def expand_server
     return @expand_server if defined?(@expand_server)
 
-    @expand_server =
-      if params[:server_id].present? && current_org
-        current_org.servers.find_by(id: params[:server_id]) || current_server
-      else
-        current_server
-      end
+    @expand_server = lookup_server
   end
 
   # expand_client — the PAT client for expand_server. nil when no server

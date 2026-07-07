@@ -13,7 +13,7 @@ class DatatableController < ApplicationController
   MAX_LIMIT = 500
 
   def rows
-    server = panel_server
+    server = lookup_server
     return head(:not_found) unless server
 
     source = DataTable::Registry.build(
@@ -89,19 +89,6 @@ class DatatableController < ApplicationController
   end
 
   private
-
-  # panel_server — the server a Table panel reads from. A cross-server dashboard
-  # panel passes ?server_id=… (M2); resolve it WITHIN current_org (the isolation
-  # guard) so a forged / cross-org / deleted id never reaches another org's
-  # warehouse — it falls back to the URL's server. No server_id → the
-  # URL's server (single-server / http panels).
-  def panel_server
-    if params[:server_id].present? && current_org
-      current_org.servers.find_by(id: params[:server_id]) || current_server
-    else
-      current_server
-    end
-  end
 
   # parse_mapping — the json-editor's text is posted verbatim; parse it here so
   # a syntax slip surfaces as a clear Test error, not a silent empty mapping.

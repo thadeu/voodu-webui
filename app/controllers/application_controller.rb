@@ -120,6 +120,17 @@ class ApplicationController < ActionController::Base
     @current_server
   end
 
+  # lookup_server — resolve a `?server_id` param to a server WITHIN the current
+  # org (the isolation guard), falling back to current_server when it's absent,
+  # blank, or points at a forged / cross-org / deleted id. The cross-server read
+  # endpoints (datatable / metrics / hep3) use it so a dashboard panel can target
+  # ANY server in the org without ever reaching another org's data.
+  def lookup_server
+    return current_server unless params[:server_id].present? && current_org
+
+    current_org.servers.find_by(id: params[:server_id]) || current_server
+  end
+
   # recent_servers — the LRU-ordered subset of servers surfaced in
   # the sidebar's SERVERS section. Capped at MAX_RECENT_SERVERS so
   # the rail stays short.
