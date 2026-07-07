@@ -67,11 +67,16 @@ class LogSearchData
     @server = server
     @params = normalize_params(params)
     @page = [@params[:page].to_i, 1].max
+
     # range/window parsing is shared with the alert history filter — see
     # TimeWindowParser. Logs default to 30m and floor `from` at the warehouse
     # retention (never scan reaped data); a custom blank `from` falls back 1h.
     @window_parser = TimeWindowParser.new(
-      @params, ranges: RANGES, default_range: DEFAULT_RANGE, custom_blank_from: 1.hour, retention: RETENTION
+      @params,
+      ranges: RANGES,
+      default_range: DEFAULT_RANGE,
+      custom_blank_from: 1.hour,
+      retention: RETENTION
     )
   end
 
