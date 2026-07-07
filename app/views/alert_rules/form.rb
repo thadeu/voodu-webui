@@ -306,23 +306,8 @@ class Views::AlertRules::Form < Views::Base
     "absolute left-0 top-[calc(100%+4px)] z-30 min-w-full w-max max-w-[320px] max-h-[300px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
   end
 
-  # dropdown_filter / dropdown_empty — the shared in-menu search box (sticky top)
-  # + "no matches" row the dropdown controller drives (same as the metrics
-  # builder's source pickers).
-  def dropdown_filter(placeholder)
-    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
-      input(
-        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
-        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
-        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
-               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
-      )
-    end
-  end
-
-  def dropdown_empty
-    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
-  end
+  # dropdown_filter + dropdown_empty live in Views::Base (shared with the
+  # metrics builder's pickers).
 
   def encode_target(server_id, scope, name)
     "pod|#{server_id}|#{scope}|#{name}"

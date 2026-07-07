@@ -959,20 +959,8 @@ class Views::MetricDashboards::Form < Views::Base
   # tagged data-dropdown-target="option" filter live as the operator types
   # (dropdown#filterInput); Enter picks the top match (dropdown#onFilterKey,
   # which also stops Enter from submitting the builder form).
-  def dropdown_filter(placeholder)
-    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
-      input(
-        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
-        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
-        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
-               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
-      )
-    end
-  end
-
-  def dropdown_empty
-    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
-  end
+  # dropdown_filter + dropdown_empty live in Views::Base (shared with the
+  # alert-rule form's pickers).
 
   # host_sources — one Host (system) row per server; a host panel binds to that
   # server's node metrics. server_id rides in the option so buildPanel stamps it.

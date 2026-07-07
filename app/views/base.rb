@@ -52,4 +52,26 @@ class Views::Base < Components::Base
     "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
       "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
   end
+
+  # dropdown_filter / dropdown_empty — the in-menu type-to-filter box (sticky
+  # top) + "no matches" row that the `dropdown` Stimulus controller drives.
+  # Shared by every filterable DS dropdown (the alert-rule form's target /
+  # metric pickers, the metrics builder's source / log pickers). Render inside
+  # the menu; the controller shows/hides options + the empty row as you type.
+  # (The menu container's own width/height classes stay per-caller — they
+  # legitimately differ — so those aren't hoisted here.)
+  def dropdown_filter(placeholder)
+    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
+      input(
+        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
+        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
+        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
+               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+    end
+  end
+
+  def dropdown_empty
+    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
+  end
 end
