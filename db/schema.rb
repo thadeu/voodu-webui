@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_03_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
   create_table "alert_destinations", force: :cascade do |t|
     t.text "body_template"
     t.datetime "created_at", null: false
@@ -109,6 +109,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_03_160000) do
     t.text "description"
     t.string "name", null: false
     t.string "short_id", null: false
+    t.string "timezone"
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_orgs_on_name", unique: true
     t.index ["short_id"], name: "index_orgs_on_short_id", unique: true

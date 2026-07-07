@@ -37,9 +37,27 @@ class Org < ApplicationRecord
   validates :name, presence: true, uniqueness: true, length: {maximum: 64}
   validates :short_id, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{8}\z/}
 
+  # timezone — per-org display preference. Blank means "inherit" (global
+  # Setting, then UTC), so an org isn't forced to carry one. Strip to blank
+  # before validating so trailing spaces don't fail a valid name.
+  normalizes :timezone, with: ->(v) { v.to_s.strip.presence }
+  validate :timezone_is_a_known_zone
+
   # to_param — URLs use the opaque short_id (shorter than the uuid, still
   # non-guessable). The route constraint (M1) matches the 8-char shape.
   def to_param
     short_id
+  end
+
+  private
+
+  # An IANA name ActiveSupport recognises, or blank (inherit). Guards against
+  # a typo silently degrading every chart in the org to UTC — the operator
+  # gets a form error instead of a wrong-but-quiet render.
+  def timezone_is_a_known_zone
+    return if timezone.blank?
+    return if WebTime.valid_zone?(timezone)
+
+    errors.add(:timezone, "must be an IANA name like America/Sao_Paulo or UTC")
   end
 end

@@ -107,59 +107,43 @@ class Views::Settings::Index < Views::Base
     end
   end
 
-  # preferences_card — operator-global display prefs. Today: timezone
-  # only. Saved via POST /settings/preferences which routes through
-  # SettingsController#update_preferences. Persists to the Setting
-  # table; every server-rendered timestamp (chart axes, About card
-  # boot time, sync chips) reads this value through WebTime.
-  #
-  # Sits ABOVE the per-server cards because it's a global pref —
-  # operators shouldn't have to scroll past per-server stuff to
-  # adjust app-wide rendering.
+  # preferences_card — display prefs, READ-ONLY. Timezone is now a per-org
+  # setting (Org#timezone), edited from the org menu (New / Edit org), not
+  # here. This card just SHOWS the zone every timestamp on this server renders
+  # in — resolved through WebTime (org zone, else UTC) — so the operator can
+  # confirm it without hunting. Change it in the org, and this reflects it.
   def preferences_card
-    current_tz = WebTime.zone_name
+    org = Current.org
+    resolved = WebTime.zone_name
+    own = org&.timezone.present?
 
     div(class: "bg-voodu-surface border border-voodu-border") do
       div(class: "px-4 py-3 border-b border-voodu-border flex items-center gap-2") do
         h2(class: "text-[13px] font-semibold text-voodu-text") { "Display preferences" }
-        span(class: "text-[11.5px] text-voodu-muted-2") { "applies globally to every server" }
+        span(class: "text-[11.5px] text-voodu-muted-2") { "timezone is set per organization" }
       end
 
-      form(action: update_preferences_settings_path, method: "post", class: "px-4 py-4 flex flex-col gap-3") do
-        input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      div(class: "px-4 py-4 flex flex-col gap-1.5") do
+        span(class: "text-[11px] font-semibold uppercase tracking-[0.05em] text-voodu-muted-2") { "Timezone" }
 
-        div(class: "flex flex-col gap-1.5") do
-          label(for: "settings-timezone", class: "text-[11px] font-semibold uppercase tracking-[0.05em] text-voodu-muted-2") do
-            "Timezone"
-          end
-          input(
-            type: "text",
-            id: "settings-timezone",
-            name: "timezone",
-            value: (current_tz == "UTC") ? "" : current_tz,
-            placeholder: "America/Sao_Paulo",
-            spellcheck: "false",
-            autocomplete: "off",
-            class: "px-3 h-9 bg-voodu-bg-2 border border-voodu-border text-voodu-text text-[12.5px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
-          )
-          span(class: "text-[11.5px] text-voodu-muted-2") do
-            plain "IANA name (e.g. "
-            span(class: "font-voodu-mono") { "America/Sao_Paulo" }
-            plain ", "
-            span(class: "font-voodu-mono") { "Europe/Lisbon" }
-            plain ", "
-            span(class: "font-voodu-mono") { "UTC" }
-            plain "). Leave blank to use UTC. Current: "
-            span(class: "font-voodu-mono text-voodu-text-2") { current_tz }
-            plain "."
+        div(class: "inline-flex items-center gap-2 h-9 px-3 bg-voodu-bg-2 border border-voodu-border w-fit") do
+          span(class: "font-voodu-mono text-[12.5px] text-voodu-text") { resolved }
+
+          unless own
+            span(class: "text-[11px] text-voodu-muted-2") { "· default — no org timezone set" }
           end
         end
 
-        div(class: "flex items-center justify-end gap-2") do
-          button(
-            type: "submit",
-            class: "inline-flex items-center px-3 h-8 border border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2 text-[12px] font-medium hover:bg-voodu-accent hover:text-voodu-on-accent"
-          ) { "Save preferences" }
+        span(class: "text-[11.5px] text-voodu-muted-2") do
+          plain "Every chart & timestamp for this server renders in "
+
+          if org
+            plain "the "
+            span(class: "text-voodu-text-2 font-medium") { org.name }
+            plain " organization's timezone. Change it from the org menu (New / Edit org)."
+          else
+            plain "the org's timezone. Change it from the org menu."
+          end
         end
       end
     end

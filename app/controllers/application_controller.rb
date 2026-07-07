@@ -45,6 +45,12 @@ class ApplicationController < ActionController::Base
   # stale memo from the previous operator action.
   before_action { WebTime.clear_request_cache }
 
+  # Publish the request's org to Current so WebTime (and anything else that
+  # needs org context off the controller) can resolve the per-org timezone
+  # without threading the org through every render. Rails resets Current at
+  # the end of the request, so there's no cross-request bleed.
+  before_action { Current.org = current_org }
+
   # default_url_options — Rails calls this for EVERY url_for / named
   # route helper. By auto-injecting the current server_key we keep
   # call sites tidy: `metrics_path` Just Works instead of every

@@ -45,30 +45,4 @@ class SettingsController < ApplicationController
       end
     redirect_to settings_path, notice: notice
   end
-
-  # update_preferences — POST endpoint for the operator's global
-  # display prefs (today: timezone only; tomorrow: refresh cadence,
-  # theme, etc.).
-  #
-  # Timezone validation routes through WebTime.valid_zone? so an
-  # IANA-name string that ActiveSupport recognises is the bar.
-  # Blank value clears the preference back to UTC (default).
-  # Garbage input bounces with a flash error, no DB write.
-  def update_preferences
-    tz = params[:timezone].to_s.strip
-
-    if tz.empty?
-      Setting.set(Setting::KEY_TIMEZONE, "")
-      WebTime.clear_request_cache
-      return redirect_to settings_path, notice: "Timezone cleared — using UTC."
-    end
-
-    unless WebTime.valid_zone?(tz)
-      return redirect_to settings_path, alert: "Unknown timezone '#{tz}'. Use an IANA name like America/Sao_Paulo or UTC."
-    end
-
-    Setting.set(Setting::KEY_TIMEZONE, tz)
-    WebTime.clear_request_cache
-    redirect_to settings_path, notice: "Timezone set to #{tz}."
-  end
 end

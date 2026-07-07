@@ -49,4 +49,34 @@ class OrgTest < ActiveSupport::TestCase
     assert server.invalid?
     assert_includes server.errors[:org].join, "must exist"
   end
+
+  test "timezone accepts a valid IANA name" do
+    org = orgs(:acme)
+    org.timezone = "America/Sao_Paulo"
+
+    assert org.valid?
+  end
+
+  test "timezone may be blank — the org inherits the fallback" do
+    org = orgs(:acme)
+    org.timezone = ""
+
+    assert org.valid?
+    org.save!
+    assert_nil org.reload.timezone, "blank normalizes to nil (inherit)"
+  end
+
+  test "timezone rejects an unknown zone instead of silently rendering wrong" do
+    org = orgs(:acme)
+    org.timezone = "Mars/Phobos"
+
+    assert org.invalid?
+    assert_includes org.errors[:timezone].join, "IANA"
+  end
+
+  test "timezone is normalized — trimmed, and set on create" do
+    org = Org.create!(name: "TZ Co", timezone: "  America/Sao_Paulo  ")
+
+    assert_equal "America/Sao_Paulo", org.timezone
+  end
 end

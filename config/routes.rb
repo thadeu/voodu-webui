@@ -215,9 +215,5 @@ Rails.application.routes.draw do
     # per-server context (current_server) flows through naturally.
     post "/settings/reconnect", to: "settings#reconnect", as: :reconnect_settings
     delete "/settings/pats/:pat_id", to: "settings#revoke_pat", as: :revoke_pat_settings
-    # Operator-global display prefs (timezone today; refresh
-    # cadence, theme, etc. later). Singular form post since the
-    # endpoint is "save the prefs blob," not REST CRUD.
-    post "/settings/preferences", to: "settings#update_preferences", as: :update_preferences_settings
   end
 end

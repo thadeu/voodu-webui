@@ -40,6 +40,32 @@ class OrgsControllerTest < ActionDispatch::IntegrationTest
     assert_match "org-opt-#{org.id}", @response.body
   end
 
+  test "create persists the org timezone" do
+    post orgs_path, params: {org: {name: "Tz Co", timezone: "America/Sao_Paulo"}}, as: :turbo_stream
+
+    assert_response :success
+    assert_equal "America/Sao_Paulo", Org.find_by!(name: "Tz Co").timezone
+  end
+
+  test "update sets the org timezone" do
+    org = orgs(:globex)
+
+    patch org_path(org), params: {org: {name: org.name, timezone: "Europe/Lisbon"}}, as: :turbo_stream
+
+    assert_response :success
+    assert_equal "Europe/Lisbon", org.reload.timezone
+  end
+
+  test "an unknown timezone is rejected without saving" do
+    org = orgs(:globex)
+
+    patch org_path(org), params: {org: {name: org.name, timezone: "Mars/Phobos"}}, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+    assert_nil org.reload.timezone
+    assert_match "org-manager-panel", @response.body
+  end
+
   test "destroy removes an org that owns no servers" do
     org = orgs(:voidco) # owns nothing (globex owns gamma)
 

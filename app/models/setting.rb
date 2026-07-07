@@ -6,19 +6,17 @@
 # is a single-operator console, so prefs live anchored to the
 # install, not the active server. If multi-operator ever becomes a
 # thing, this table gets a `user_id` column and the helpers learn
-# `Setting.get(:timezone, user_id:)`.
+# `Setting.get(:key, user_id:)`.
 #
 # Usage:
-#   Setting.get(:timezone)                # → "America/Sao_Paulo" | nil
-#   Setting.set(:timezone, "UTC")         # → upserts
-#   Setting[:timezone]                    # alias for get
+#   Setting.get(:key)                # → "value" | nil
+#   Setting.set(:key, "value")       # → upserts
+#   Setting[:key]                    # alias for get
 #
-# Known keys live as constants below — typoed key names go silently
-# (Setting.get("timezon") returns nil instead of raising), so the
-# constants are the safety net for callers.
+# NOTE: timezone moved to Org#timezone (a per-org display preference), so this
+# table currently has NO keys. It stays as generic k/v infra for the next
+# global pref (refresh cadence, theme, …) — add a KEY_* constant when one lands.
 class Setting < ApplicationRecord
-  KEY_TIMEZONE = "timezone"
-
   validates :key, presence: true, uniqueness: true
 
   # Pull the value for a key, or nil if unset. String returned

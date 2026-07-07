@@ -35,15 +35,19 @@
 class WebTime
   DEFAULT_ZONE_NAME = "UTC"
 
-  # zone_name — the IANA name the operator picked, or "UTC" when
-  # nothing is set / when the stored value isn't a recognised zone.
-  # Reads from Setting on first call per request; subsequent calls
-  # in the same request reuse the cached Ruby string.
+  # zone_name — the IANA name to render timestamps in. The current org's
+  # timezone (a per-org display preference) when it's set to a zone
+  # ActiveSupport recognises, else "UTC". Resolved once per request and
+  # cached as a Ruby string for the rest of the render.
+  #
+  # Org-less pages (servers list, org manager, onboarding) and background
+  # jobs have no org in scope, so they render in UTC — none of them show
+  # metric charts, so there's no timezone to get wrong there.
   def self.zone_name
     cache = request_cache
     return cache[:zone_name] if cache.key?(:zone_name)
 
-    raw = Setting.get(Setting::KEY_TIMEZONE).to_s.strip.presence
+    raw = org_zone_name
     name = (raw && valid_zone?(raw)) ? raw : DEFAULT_ZONE_NAME
     cache[:zone_name] = name
   rescue ActiveRecord::StatementInvalid
@@ -51,6 +55,15 @@ class WebTime
     # rake db:reset between calls). Falling back keeps the app
     # bootable; once the migration lands the lookup succeeds.
     DEFAULT_ZONE_NAME
+  end
+
+  # org_zone_name — the current request's org timezone, or nil when there's
+  # no org in scope (org-less pages, jobs) or it isn't set. Guarded so a
+  # non-request context (Current unset) never raises.
+  def self.org_zone_name
+    Current.org&.timezone.to_s.strip.presence
+  rescue
+    nil
   end
 
   # zone — ActiveSupport::TimeZone instance for the configured
@@ -96,11 +109,9 @@ class WebTime
     in_zone(input)&.iso8601
   end
 
-  # clear_request_cache — call this between requests when the
-  # zone setting might have just changed (the controller does
-  # this on POST /settings/preferences). Without it, the same
-  # request would render with the OLD zone after the operator
-  # saves a new one.
+  # clear_request_cache — reset the per-request zone memo. Called at the
+  # START of every request (ApplicationController before_action) so a thread
+  # recycled across requests doesn't carry a stale zone from a previous org.
   def self.clear_request_cache
     Thread.current[:web_time_cache] = nil
   end
@@ -108,9 +119,9 @@ class WebTime
   # ── private helpers ──────────────────────────────────────────
 
   # request_cache — thread-local hash, reset on each Rails request
-  # via an around_action filter in ApplicationController. Stores
-  # `:zone_name` so we don't re-query Setting for each view that
-  # asks for a TZ conversion.
+  # via a before_action in ApplicationController. Stores `:zone_name`
+  # so we don't re-resolve the org's zone for each view that asks
+  # for a TZ conversion.
   def self.request_cache
     Thread.current[:web_time_cache] ||= {}
   end

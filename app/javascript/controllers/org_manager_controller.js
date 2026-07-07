@@ -34,6 +34,7 @@ export default class extends Controller {
     this.overlay.hidden = false
     this.overlay.addEventListener("click", this.onOverlayClick)
     document.addEventListener("keydown", this.onKey, true)
+    this.fillDetectedTz()
 
     requestAnimationFrame(() => {
       // Focus the visible pane's name field — openAndEdit flips to an edit pane
@@ -89,6 +90,21 @@ export default class extends Controller {
   showNew() {
     this.showPane("new")
     this.railItems().forEach((r) => { r.dataset.active = "false" })
+    this.fillDetectedTz()
+  }
+
+  // fillDetectedTz — pre-fill the New-org timezone with the browser's detected
+  // IANA zone when the operator hasn't typed one, so a fresh org never renders
+  // silently in UTC. Only touches an EMPTY input (never clobbers a value the
+  // operator typed, nor a rejected-create value being re-shown).
+  fillDetectedTz() {
+    const input = (this.overlay || this.element).querySelector("[data-org-tz-detect]")
+
+    if (!input || input.value.trim()) return
+
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+    if (zone) input.value = zone
   }
 
   showPane(key) {

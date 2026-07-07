@@ -114,6 +114,7 @@ class Components::Orgs::Panel < Components::Base
         text_input("org[name]", @create_org.name, "Name — e.g. Production")
         field_error(@create_org, :name)
         text_input("org[description]", @create_org.description, "Description (optional)")
+        tz_field(@create_org, detect: true)
 
         button(type: "submit", class: primary_btn) do
           render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
@@ -139,6 +140,7 @@ class Components::Orgs::Panel < Components::Base
         text_input("org[name]", data.name, "Name")
         field_error(data, :name)
         text_input("org[description]", data.description, "Description (optional)")
+        tz_field(data, detect: false)
 
         button(type: "submit", class: primary_btn) do
           render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
@@ -178,6 +180,25 @@ class Components::Orgs::Panel < Components::Base
       autocomplete: "off", spellcheck: "false",
       class: "w-full h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
     )
+  end
+
+  # tz_field — IANA timezone for the org (mono input + hint). `detect: true`
+  # on the New-org pane tags the input so org_manager fills it with the
+  # browser's detected zone when empty — so a fresh org never silently
+  # renders in UTC (the invisible-gap this whole feature closes). Edit panes
+  # show the stored value verbatim (blank = inherit) without auto-filling.
+  def tz_field(record, detect:)
+    div(class: "flex flex-col gap-1") do
+      input(
+        type: "text", name: "org[timezone]", value: record.timezone,
+        placeholder: "Timezone — e.g. America/Sao_Paulo",
+        autocomplete: "off", spellcheck: "false",
+        data: (detect ? {org_tz_detect: true} : {}),
+        class: "w-full h-9 px-2.5 border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] font-voodu-mono placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+      field_error(record, :timezone)
+      span(class: "text-[11px] text-voodu-muted-2") { "Renders every chart & timestamp for this org's servers. Blank uses UTC." }
+    end
   end
 
   def field_error(record, attr)
