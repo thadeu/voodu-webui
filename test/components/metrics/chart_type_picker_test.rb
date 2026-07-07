@@ -44,7 +44,15 @@ class Components::Metrics::ChartTypePickerTest < ActiveSupport::TestCase
   test "the active option gets the accent chrome + check" do
     html = render_picker(current: "gauge_linear")
 
-    assert_match(/bg-voodu-accent-dim[^"]*"[^>]*>\s*<span[^>]*font-semibold[^>]*>Linear/m, html)
+    assert_includes html, "bg-voodu-accent-dim", "active row is highlighted"
+    assert_match(/font-semibold text-voodu-accent-2">Linear/, html, "active label is accented")
+  end
+
+  test "each row carries the shape glyph before the label" do
+    html = render_picker(current: "area")
+
+    assert_includes html, 'viewBox="0 0 80 40"', "rows render a ChartShape svg"
+    assert_operator html.scan('viewBox="0 0 80 40"').size, :>=, 5, "one glyph per type (+ trigger)"
   end
 
   test "turbo_stream mode emits data-turbo-stream on the rows" do

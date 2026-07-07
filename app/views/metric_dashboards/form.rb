@@ -437,9 +437,9 @@ class Views::MetricDashboards::Form < Views::Base
   def http_viz_chips
     div(class: "flex flex-wrap gap-2.5") do
       http_viz_chip("table", "Table") { table_preview_svg }
-      http_viz_chip("area", "Area") { shape_area_svg }
-      http_viz_chip("bars", "Bar") { shape_bars_svg }
-      http_viz_chip("line", "Line") { shape_line_svg }
+      http_viz_chip("area", "Area") { render Components::Metrics::ChartShape.new(type: "area") }
+      http_viz_chip("bars", "Bar") { render Components::Metrics::ChartShape.new(type: "bars") }
+      http_viz_chip("line", "Line") { render Components::Metrics::ChartShape.new(type: "line") }
       http_viz_chip("number", "Number") { log_preview_svg }
     end
   end
@@ -728,11 +728,11 @@ class Views::MetricDashboards::Form < Views::Base
     div(hidden: true, data: {dashboard_builder_target: "hep3Shapes"}, class: "flex flex-wrap gap-2.5") do
       hep3_shape_chip("table", "Table") { table_preview_svg }
       hep3_shape_chip("number", "Number") { log_preview_svg }
-      hep3_shape_chip("area", "Area") { shape_area_svg }
-      hep3_shape_chip("bars", "Bar") { shape_bars_svg }
-      hep3_shape_chip("line", "Line") { shape_line_svg }
-      hep3_shape_chip("gauge_radial", "Radial") { shape_radial_svg }
-      hep3_shape_chip("gauge_linear", "Linear") { shape_linear_svg }
+      hep3_shape_chip("area", "Area") { render Components::Metrics::ChartShape.new(type: "area") }
+      hep3_shape_chip("bars", "Bar") { render Components::Metrics::ChartShape.new(type: "bars") }
+      hep3_shape_chip("line", "Line") { render Components::Metrics::ChartShape.new(type: "line") }
+      hep3_shape_chip("gauge_radial", "Radial") { render Components::Metrics::ChartShape.new(type: "gauge_radial") }
+      hep3_shape_chip("gauge_linear", "Linear") { render Components::Metrics::ChartShape.new(type: "gauge_linear") }
     end
   end
 
@@ -1005,11 +1005,11 @@ class Views::MetricDashboards::Form < Views::Base
   # the metric has no ceiling. The active card is ringed in JS (highlightShape).
   def shape_chips
     div(class: "flex flex-wrap gap-2.5") do
-      shape_chip("area", "Area") { shape_area_svg }
-      shape_chip("bars", "Bar") { shape_bars_svg }
-      shape_chip("line", "Line") { shape_line_svg }
-      shape_chip("gauge_radial", "Radial", gauge: true) { shape_radial_svg }
-      shape_chip("gauge_linear", "Linear", gauge: true) { shape_linear_svg }
+      Components::Metrics::ChartShape::METRIC_TYPES.each do |t|
+        shape_chip(t[:value], t[:label], gauge: t[:gauge]) do
+          render Components::Metrics::ChartShape.new(type: t[:value])
+        end
+      end
     end
   end
 
@@ -1029,47 +1029,6 @@ class Views::MetricDashboards::Form < Views::Base
         class: "h-[58px] w-full flex items-center justify-center px-3 py-2 border-b border-voodu-border-2 bg-voodu-surface-2/40 text-voodu-muted"
       ) { yield }
       span(class: "block text-[12px] font-medium text-voodu-text px-2.5 py-2") { text }
-    end
-  end
-
-  def shape_area_svg
-    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
-      s.polygon(points: "0,28 20,18 40,22 60,10 80,16 80,40 0,40", fill: "currentColor", opacity: "0.18")
-      s.polyline(points: "0,28 20,18 40,22 60,10 80,16", stroke: "currentColor", "stroke-width": "2.5", "stroke-linejoin": "round", "stroke-linecap": "round")
-    end
-  end
-
-  def shape_radial_svg
-    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
-      s.path(d: "M14 34 A26 26 0 0 1 66 34", stroke: "var(--voodu-border-2)", "stroke-width": "5", "stroke-linecap": "round")
-      s.path(d: "M14 34 A26 26 0 0 1 52 12", stroke: "currentColor", "stroke-width": "5", "stroke-linecap": "round")
-    end
-  end
-
-  def shape_linear_svg
-    svg(viewBox: "0 0 80 40", class: "w-full h-full", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
-      s.rect(x: "8", y: "17", width: "64", height: "7", rx: "3.5", fill: "var(--voodu-border-2)")
-      s.rect(x: "8", y: "17", width: "42", height: "7", rx: "3.5", fill: "currentColor")
-    end
-  end
-
-  # shape_bars_svg — a few bottom-aligned columns (discrete counts).
-  def shape_bars_svg
-    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
-      [[10, 22], [26, 12], [42, 18], [58, 8]].each do |x, y|
-        s.rect(x: x, y: y, width: "9", height: 36 - y, rx: "1.5", fill: "currentColor", opacity: "0.85")
-      end
-    end
-  end
-
-  # shape_line_svg — straight point-to-point stroke + a dot per point (the
-  # Line style's "raio" look; no fill, unlike Area).
-  def shape_line_svg
-    pts = [[8, 29], [30, 15], [52, 23], [72, 9]]
-
-    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
-      s.polyline(points: pts.map { |x, y| "#{x},#{y}" }.join(" "), stroke: "currentColor", "stroke-width": "2.5", "stroke-linejoin": "round", "stroke-linecap": "round")
-      pts.each { |x, y| s.circle(cx: x, cy: y, r: "3", fill: "currentColor") }
     end
   end
 

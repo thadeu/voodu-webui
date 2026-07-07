@@ -17,17 +17,10 @@
 class Components::Metrics::ChartTypePicker < Components::Base
   DEFAULT = "area"
 
-  # [value, label]. Area / Bar / Line are the time-series shapes (shared axes,
-  # hover, brush-to-zoom); Radial / Linear are the gauges.
-  OPTIONS = [
-    ["area", "Area"],
-    ["bars", "Bar"],
-    ["line", "Line"],
-    ["gauge_radial", "Radial"],
-    ["gauge_linear", "Linear"]
-  ].freeze
-
-  LABELS = OPTIONS.to_h.freeze
+  # The type list + labels + glyphs are Components::Metrics::ChartShape's — one
+  # source of truth shared with the dashboard builder's shape chips.
+  OPTIONS = Components::Metrics::ChartShape::METRIC_TYPES
+  LABELS = Components::Metrics::ChartShape::LABELS
 
   # current:      active chart_type (e.g. "area", "gauge_radial")
   # base_path:    URL each row hits (metrics_path or metrics_chart_path)
@@ -56,6 +49,8 @@ class Components::Metrics::ChartTypePicker < Components::Base
       data: {action: "click->dropdown#toggle"},
       class: "inline-flex items-center gap-2 px-2.5 h-9 min-w-[130px] border border-voodu-border bg-voodu-surface text-voodu-text text-[12.5px] hover:bg-voodu-surface-2"
     ) do
+      render Components::Metrics::ChartShape.new(type: @current, css: "w-5 h-4 shrink-0 text-voodu-muted")
+
       span(class: "min-w-0 truncate") do
         span(class: "text-voodu-muted") { "type " }
         span(class: "text-voodu-text") { LABELS[@current] || "Area" }
@@ -72,7 +67,7 @@ class Components::Metrics::ChartTypePicker < Components::Base
       data: {dropdown_target: "menu"},
       class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-[150px] border border-voodu-border-2 bg-voodu-surface shadow-2xl"
     ) do
-      OPTIONS.each { |value, label| option_row(value, label) }
+      OPTIONS.each { |t| option_row(t[:value], t[:label]) }
     end
   end
 
@@ -87,6 +82,8 @@ class Components::Metrics::ChartTypePicker < Components::Base
         active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text hover:bg-voodu-hover"
       )
     ) do
+      render Components::Metrics::ChartShape.new(type: value, css: "w-6 h-4 shrink-0")
+
       span(
         class: tokens(
           "text-[12.5px] truncate flex-1",
