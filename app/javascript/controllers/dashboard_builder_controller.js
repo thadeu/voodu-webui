@@ -362,9 +362,16 @@ export default class extends Controller {
       })
     }
 
-    if (!eligible && this.currentChartType !== "area") this.currentChartType = "area"
+    // Only the GAUGE types need a ceiling. Area / Bar / Line are time-series
+    // shapes any metric can use, so they must survive a switch to a non-gauge
+    // metric — snap back to Area only when the current pick is a gauge.
+    if (!eligible && this.isGaugeType(this.currentChartType)) this.currentChartType = "area"
 
     this.highlightShape()
+  }
+
+  isGaugeType(t) {
+    return t === "gauge_radial" || t === "gauge_linear"
   }
 
   // populateMetrics — rebuild the metric dropdown's menu from the
@@ -606,8 +613,10 @@ export default class extends Controller {
       // Operator's chosen color, falling back to the metric's canonical one.
       color:      this.currentMetricColor || spec.color,
       unit:       spec.unit || "",
-      // Gauge only sticks for a metric with a ceiling; otherwise area.
-      chart_type: spec.gauge ? this.currentChartType : "area"
+      // A GAUGE type only sticks for a metric with a ceiling; a gauge picked on
+      // a ceiling-less metric falls back to Area. Area / Bar / Line are valid
+      // for any metric, so keep the operator's choice.
+      chart_type: (this.isGaugeType(this.currentChartType) && !spec.gauge) ? "area" : this.currentChartType
     }
 
     if (source.scope_kind === "pod") {
@@ -1275,6 +1284,8 @@ export default class extends Controller {
     switch (chartType) {
       case "table": return "Table"
       case "number": return "Number"
+      case "bars": return "Bar"
+      case "line": return "Line"
       case "gauge_radial": return "Radial"
       case "gauge_linear": return "Linear"
       default: return "Area"

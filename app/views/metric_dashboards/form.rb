@@ -438,6 +438,8 @@ class Views::MetricDashboards::Form < Views::Base
     div(class: "flex flex-wrap gap-2.5") do
       http_viz_chip("table", "Table") { table_preview_svg }
       http_viz_chip("area", "Area") { shape_area_svg }
+      http_viz_chip("bars", "Bar") { shape_bars_svg }
+      http_viz_chip("line", "Line") { shape_line_svg }
       http_viz_chip("number", "Number") { log_preview_svg }
     end
   end
@@ -727,6 +729,8 @@ class Views::MetricDashboards::Form < Views::Base
       hep3_shape_chip("table", "Table") { table_preview_svg }
       hep3_shape_chip("number", "Number") { log_preview_svg }
       hep3_shape_chip("area", "Area") { shape_area_svg }
+      hep3_shape_chip("bars", "Bar") { shape_bars_svg }
+      hep3_shape_chip("line", "Line") { shape_line_svg }
       hep3_shape_chip("gauge_radial", "Radial") { shape_radial_svg }
       hep3_shape_chip("gauge_linear", "Linear") { shape_linear_svg }
     end
@@ -1002,6 +1006,8 @@ class Views::MetricDashboards::Form < Views::Base
   def shape_chips
     div(class: "flex flex-wrap gap-2.5") do
       shape_chip("area", "Area") { shape_area_svg }
+      shape_chip("bars", "Bar") { shape_bars_svg }
+      shape_chip("line", "Line") { shape_line_svg }
       shape_chip("gauge_radial", "Radial", gauge: true) { shape_radial_svg }
       shape_chip("gauge_linear", "Linear", gauge: true) { shape_linear_svg }
     end
@@ -1044,6 +1050,26 @@ class Views::MetricDashboards::Form < Views::Base
     svg(viewBox: "0 0 80 40", class: "w-full h-full", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
       s.rect(x: "8", y: "17", width: "64", height: "7", rx: "3.5", fill: "var(--voodu-border-2)")
       s.rect(x: "8", y: "17", width: "42", height: "7", rx: "3.5", fill: "currentColor")
+    end
+  end
+
+  # shape_bars_svg — a few bottom-aligned columns (discrete counts).
+  def shape_bars_svg
+    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      [[10, 22], [26, 12], [42, 18], [58, 8]].each do |x, y|
+        s.rect(x: x, y: y, width: "9", height: 36 - y, rx: "1.5", fill: "currentColor", opacity: "0.85")
+      end
+    end
+  end
+
+  # shape_line_svg — straight point-to-point stroke + a dot per point (the
+  # Line style's "raio" look; no fill, unlike Area).
+  def shape_line_svg
+    pts = [[8, 29], [30, 15], [52, 23], [72, 9]]
+
+    svg(viewBox: "0 0 80 40", class: "w-full h-full", fill: "none", "aria-hidden": "true", preserveAspectRatio: "xMidYMid meet") do |s|
+      s.polyline(points: pts.map { |x, y| "#{x},#{y}" }.join(" "), stroke: "currentColor", "stroke-width": "2.5", "stroke-linejoin": "round", "stroke-linecap": "round")
+      pts.each { |x, y| s.circle(cx: x, cy: y, r: "3", fill: "currentColor") }
     end
   end
 
