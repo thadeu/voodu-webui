@@ -329,21 +329,7 @@ class Views::AlertDestinations::Form < Views::Base
     end
   end
 
-  # ---- shared field plumbing ----
-
-  def field(label:, hint: nil, error: nil)
-    div(class: "flex flex-col gap-1.5") do
-      span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { label }
-
-      yield
-
-      if error
-        error_line(error)
-      elsif hint
-        div(class: "text-[11.5px] text-voodu-muted") { hint }
-      end
-    end
-  end
+  # ---- shared field plumbing (field + input_classes live in Views::Base) ----
 
   def hint_or_error(field, hint)
     err = @destination.errors[field].first
@@ -363,11 +349,6 @@ class Views::AlertDestinations::Form < Views::Base
       autocomplete: "off", spellcheck: "false",
       class: tokens(input_classes, mono ? "font-voodu-mono text-[12.5px]" : "text-[13px]")
     )
-  end
-
-  def input_classes
-    "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
-      "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
   end
 
   def footer_actions

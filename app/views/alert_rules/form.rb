@@ -427,24 +427,7 @@ class Views::AlertRules::Form < Views::Base
     end
   end
 
-  # ---- shared field plumbing (same look as Views::Servers::New) ----
-
-  def field(label:, hint: nil, error: nil)
-    div(class: "flex flex-col gap-1.5") do
-      span(class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2") { label }
-
-      yield
-
-      if error
-        div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
-          span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
-          span { error }
-        end
-      elsif hint
-        div(class: "text-[11.5px] text-voodu-muted") { hint }
-      end
-    end
-  end
+  # field + input_classes live in Views::Base (shared by every modal form).
 
   def text_input(name:, value: nil, placeholder: nil)
     input(
@@ -452,11 +435,6 @@ class Views::AlertRules::Form < Views::Base
       autocomplete: "off",
       class: tokens(input_classes, "text-[13px]")
     )
-  end
-
-  def input_classes
-    "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
-      "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
   end
 
   def footer_actions

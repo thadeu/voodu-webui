@@ -111,23 +111,7 @@ class Views::Servers::Edit < Views::Base
   # otherwise-independent surfaces (new is wizard-y, edit is
   # rotate-y). Drift between the two is welcome.
 
-  def field(label:, hint: nil, error: nil)
-    div(class: "flex flex-col gap-1.5") do
-      label_el = label
-      span(
-        class: "text-[11px] font-semibold uppercase tracking-[0.06em] text-voodu-text-2"
-      ) { label_el }
-      yield
-      if error
-        div(class: "text-[11.5px] text-voodu-red inline-flex items-center gap-1.5") do
-          span(class: "inline-block w-[5px] h-[5px] rounded-full bg-voodu-red", "aria-hidden": "true")
-          span { error }
-        end
-      elsif hint
-        div(class: "text-[11.5px] text-voodu-muted") { hint }
-      end
-    end
-  end
+  # field lives in Views::Base (shared by every modal form).
 
   def text_input(name:, value: nil, placeholder: nil, mono: false, spellcheck: nil)
     input(
