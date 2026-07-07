@@ -26,27 +26,36 @@ class Components::Metrics::RangePicker < Components::Base
   # @param from_iso/until_iso [String] resolved UTC window (custom round-trip)
   # @param extra_params [Hash] query params carried on every submit
   #   (scope_kind/scope_id/pid/interval) — MUST exclude range/from/until.
-  def initialize(range:, custom: false, from_iso: nil, until_iso: nil, extra_params: {})
+  # @param base_path    [String] where the GET form submits. Defaults to
+  #   metrics_path (the grid). The expand modal passes metrics_chart_path.
+  # @param turbo_stream [Boolean] modal mode: submit as a turbo-stream so the
+  #   response swaps #chart-modal-body in place. Default false = the grid's
+  #   full-page `_top` advance. Same knob as IntervalPicker — one range control
+  #   serves both surfaces so the modal has the custom chip too.
+  def initialize(range:, custom: false, from_iso: nil, until_iso: nil, extra_params: {}, base_path: nil, turbo_stream: false)
     @range = range.to_s
     @custom = custom
     @from_iso = from_iso
     @until_iso = until_iso
     @extra_params = extra_params
+    @base_path = base_path
+    @turbo_stream = turbo_stream
   end
 
   def view_template
     form(
       method: "get",
-      action: metrics_path,
+      action: @base_path || metrics_path,
       data: {
         controller: "time-range-filter",
         time_range_filter_target: "form",
         time_range_filter_range_value: active_range,
         time_range_filter_from_value: @from_iso,
         time_range_filter_until_value: @until_iso,
-        turbo_frame: "_top",
-        turbo_action: "advance",
-        action: "submit->time-range-filter#normalizeDates"
+        action: "submit->time-range-filter#normalizeDates",
+        # Modal submits as a turbo-stream (swaps the modal body in place);
+        # the grid advances the whole page in the top frame.
+        **(@turbo_stream ? {turbo_stream: "true"} : {turbo_frame: "_top", turbo_action: "advance"})
       },
       class: "flex items-center gap-2"
     ) do

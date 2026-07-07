@@ -12,16 +12,16 @@
 # overlays, JS portal, per-metric frame ids). Now the layout is:
 #
 #   <div id="chart-modal-body">     ← turbo_stream replace target
-#     <toolbar: pod picker + range pills>
+#     <toolbar: metric + pod picker + range picker + interval>
 #     <chart_block>
 #     <stat_strip: min/avg/max>
 #   </div>
 #
-# Pod picker + range pills are anchors with `data-turbo-stream`
-# pointing at /metrics/chart with updated params. The same
-# endpoint streams a new ChartModalBody — modal lifecycle is
-# entirely server-driven via turbo_stream actions, no Stimulus
-# state to coordinate.
+# The pickers all target /metrics/chart with `data-turbo-stream` (the
+# metric/pod/interval as anchors, the range as the SAME RangePicker GET form
+# the grid uses — so the modal gets the Custom chip too). The endpoint streams
+# a fresh ChartModalBody — modal lifecycle is entirely server-driven via
+# turbo_stream actions, no Stimulus state to coordinate.
 class Views::Metrics::ChartModalBody < Views::Base
   def initialize(chart:, range:, range_ms:, query:, pods: [], current_server: nil, metric_sections: [])
     @chart = chart
@@ -74,7 +74,7 @@ class Views::Metrics::ChartModalBody < Views::Base
       metric_picker_slot
       pod_picker_slot
       span(class: "flex-1")
-      range_pills
+      range_picker_slot
       interval_picker_slot
     end
   end
@@ -158,33 +158,32 @@ class Views::Metrics::ChartModalBody < Views::Base
     query.reject { |k, _| %w[scope_kind scope_id].include?(k.to_s) }
   end
 
-  # Keep aligned with Components::Metrics::RangePicker::RANGES — both
-  # surfaces must offer the same pills so a 1m view in the inline grid
-  # stays 1m when the operator clicks the maximize icon.
-  RANGES = %w[1m 5m 15m 1h 6h 24h 7d].freeze
+  # range_picker_slot — the SAME control the grid page uses
+  # (Components::Metrics::RangePicker): preset pills + a Custom chip with a
+  # From/Until popover. turbo_stream:true so a preset OR an applied custom
+  # window swaps the modal body in place. This is what closes the gap — the
+  # modal used to offer presets only, so a brushed (custom) window couldn't be
+  # seen or edited without leaving the modal.
+  def range_picker_slot
+    render Components::Metrics::RangePicker.new(
+      range: @range,
+      custom: modal_custom_window?,
+      from_iso: @query[:from] || @query["from"],
+      until_iso: @query[:until] || @query["until"],
+      extra_params: strip_range_keys(@query),
+      base_path: metrics_chart_path,
+      turbo_stream: true
+    )
+  end
 
-  def range_pills
-    div(
-      role: "tablist",
-      aria: {label: "Time range"},
-      class: "inline-flex items-stretch border border-voodu-border bg-voodu-surface"
-    ) do
-      RANGES.each_with_index do |r, i|
-        active = r == @range
+  def modal_custom_window?
+    (@query[:range] || @query["range"]).to_s == "custom"
+  end
 
-        a(
-          href: range_url(r),
-          data: {turbo_stream: "true"},
-          role: "tab",
-          aria: {selected: active.to_s},
-          class: tokens(
-            "inline-flex items-center justify-center min-w-9 px-2.5 h-8 font-voodu-mono text-[11px] font-bold",
-            i.positive? ? "border-l border-voodu-border" : nil,
-            active ? "bg-voodu-accent-dim text-voodu-accent-2" : "text-voodu-text-2 hover:bg-voodu-surface-2"
-          )
-        ) { r }
-      end
-    end
+  # strip_range_keys — the RangePicker owns range/from/until (its hidden
+  # inputs), so leaving them in extra_params would double them up on submit.
+  def strip_range_keys(query)
+    query.reject { |k, _| %w[range from until].include?(k.to_s) }
   end
 
   # chart_block — the chart itself. height: 480 is roughly 2.4x
@@ -335,13 +334,5 @@ class Views::Metrics::ChartModalBody < Views::Base
     return "—" if v.nil?
 
     (@chart[:unit].to_s == "%") ? MetricFormat.percent(v) : MetricFormat.number(v)
-  end
-
-  # range_url — same as Components::Metrics::RangePicker but with
-  # the modal endpoint as base. Preserves every other query param
-  # (metric, scope, color, etc.) so Turbo's response carries the
-  # right context.
-  def range_url(r)
-    "#{metrics_chart_path}?#{@query.merge(range: r).to_query}"
   end
 end

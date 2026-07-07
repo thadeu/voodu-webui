@@ -68,4 +68,24 @@ class Components::Metrics::RangePickerTest < ActiveSupport::TestCase
     assert_includes html, 'data-time-range-filter-target="untilHidden"'
     assert_includes html, "time-range-filter#applyCustom"
   end
+
+  # Default (grid) mode: the form advances the whole page in the top frame.
+  test "grid mode advances the top frame, not a turbo-stream" do
+    html = render_picker
+
+    assert_includes html, 'data-turbo-frame="_top"'
+    assert_includes html, 'data-turbo-action="advance"'
+    assert_not_includes html, "data-turbo-stream"
+  end
+
+  # Modal mode: same picker, but submits as a turbo-stream to a custom base
+  # path so the expand modal gets the custom chip while swapping in place.
+  test "modal mode submits as a turbo-stream to the given base path" do
+    html = render_picker(base_path: "/o/s/metrics/chart", turbo_stream: true)
+
+    assert_includes html, 'data-turbo-stream="true"'
+    assert_includes html, 'action="/o/s/metrics/chart"'
+    assert_not_includes html, 'data-turbo-frame="_top"'
+    assert_not_includes html, 'data-turbo-action="advance"'
+  end
 end
