@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { Turbo } from "@hotwired/turbo-rails"
 
 // MetricsChartController — owns the responsive layout + hover
 // crosshair/tooltip for Components::Metrics::Chart.
@@ -61,8 +62,18 @@ export default class extends Controller {
     // when callers don't set it (legacy + tests). The tooltip's
     // formatTs uses Intl.DateTimeFormat with this value so the
     // timestamp line reflects Settings → Display preferences.
-    timezone:   { type: String,  default: "UTC" }
+    timezone:   { type: String,  default: "UTC" },
+    // Set ONLY when the chart is rendered inside the expand modal — the
+    // /metrics/chart endpoint URL (carrying this chart's metric/scope/
+    // server params). Its presence flips applyZoom from a full-page
+    // Turbo.visit (grid) to an in-modal turbo-stream re-fetch that keeps
+    // the modal open.
+    zoomUrl:    { type: String,  default: "" }
   }
+
+  // Minimum drag width (fraction of the plot) to treat as a zoom rather than a
+  // click — below this, a mousedown+up is just a hover, not a range select.
+  MIN_BRUSH = 0.015
 
   connect() {
     this.svg       = this.hasSvgTarget ? this.svgTarget : this.element.querySelector("svg")
@@ -70,6 +81,13 @@ export default class extends Controller {
     this.dot       = null
     this.tooltip   = null
     this.points    = this.pointsValue.map((p) => ({ ...p }))   // working copy with mutable x
+
+    // Brush-to-zoom state. onBrush* are document-level so a drag keeps
+    // tracking even when the cursor leaves the chart mid-select.
+    this.brushing    = false
+    this.brushRect   = null
+    this.onBrushMove = this.brushMove.bind(this)
+    this.onBrushEnd  = this.brushEnd.bind(this)
 
     if (!this.responsiveValue) return
 
@@ -88,6 +106,8 @@ export default class extends Controller {
   disconnect() {
     this.resizeObserver?.disconnect()
     if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf)
+    this.endBrushListeners()
+    this.clearBrush()
     this.clearHover()
     this.tooltip?.remove()
     this.tooltip = null
@@ -210,6 +230,7 @@ export default class extends Controller {
   // ── Hover (largely unchanged from previous version) ─────────
 
   move(event) {
+    if (this.brushing) return
     if (!this.points || this.points.length === 0) return
 
     const overlay = event.currentTarget
@@ -249,6 +270,152 @@ export default class extends Controller {
   leave() {
     this.clearHover()
     if (this.tooltip) this.tooltip.style.opacity = "0"
+  }
+
+  // ── Brush-to-zoom (area/line only; wired from chart.rb) ─────
+  // Drag horizontally to pick a time range; on release, reload the page at
+  // range=custom&from&until for that slice. A click / micro-drag is ignored so
+  // the overlay stays a hover surface.
+  brushStart(event) {
+    if (event.button !== 0) return
+    if (!this.points || this.points.length < 2) return
+
+    event.preventDefault()
+    this.clearHover()
+    if (this.tooltip) this.tooltip.style.opacity = "0"
+
+    this.brushing    = true
+    this.brushOverlay = event.currentTarget
+    this.brushStartT  = this.ratioAt(event)
+    this.drawBrush(this.brushStartT, this.brushStartT)
+
+    document.addEventListener("mousemove", this.onBrushMove)
+    document.addEventListener("mouseup", this.onBrushEnd)
+  }
+
+  brushMove(event) {
+    if (!this.brushing) return
+
+    this.drawBrush(this.brushStartT, this.ratioAt(event))
+  }
+
+  brushEnd(event) {
+    if (!this.brushing) return
+
+    this.endBrushListeners()
+    this.brushing = false
+
+    const endT = this.ratioAt(event)
+    const lo   = Math.min(this.brushStartT, endT)
+    const hi   = Math.max(this.brushStartT, endT)
+
+    this.clearBrush()
+
+    if (hi - lo < this.MIN_BRUSH) return
+
+    this.applyZoom(lo, hi)
+  }
+
+  endBrushListeners() {
+    document.removeEventListener("mousemove", this.onBrushMove)
+    document.removeEventListener("mouseup", this.onBrushEnd)
+  }
+
+  // ratioAt — cursor x as a clamped 0..1 across the overlay's plot area (same
+  // basis as the hover `t`).
+  ratioAt(event) {
+    const rect = this.brushOverlay.getBoundingClientRect()
+
+    if (rect.width <= 0) return 0
+
+    return Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  }
+
+  drawBrush(t1, t2) {
+    const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
+    const lo = Math.min(t1, t2)
+    const hi = Math.max(t1, t2)
+
+    if (!this.brushRect) {
+      const ns = "http://www.w3.org/2000/svg"
+
+      this.brushRect = document.createElementNS(ns, "rect")
+      this.brushRect.setAttribute("y", this.padTopValue)
+      this.brushRect.setAttribute("height", this.heightValue - this.padTopValue - this.padBottomValue)
+      this.brushRect.setAttribute("fill", this.colorValue)
+      this.brushRect.setAttribute("fill-opacity", "0.15")
+      this.brushRect.setAttribute("stroke", this.colorValue)
+      this.brushRect.setAttribute("stroke-opacity", "0.5")
+      this.brushRect.setAttribute("stroke-width", "1")
+      this.brushRect.setAttribute("pointer-events", "none")
+      this.svg.appendChild(this.brushRect)
+    }
+
+    this.brushRect.setAttribute("x", this.padLeftValue + lo * innerVbW)
+    this.brushRect.setAttribute("width", Math.max(0, (hi - lo) * innerVbW))
+  }
+
+  clearBrush() {
+    this.brushRect?.remove()
+    this.brushRect = null
+  }
+
+  // applyZoom — map the [lo, hi] ratio to a UTC [from, until] from the points'
+  // own timestamps and reload at range=custom (which freezes live polling on
+  // the frozen window). metrics reads from/until off the query string.
+  //
+  // Two targets:
+  //   - In the expand modal (zoomUrlValue set): re-fetch the modal body at
+  //     the brushed window as a turbo-stream and render it in place, so the
+  //     modal stays open (a full-page visit would tear it down).
+  //   - On the grid (no zoomUrlValue): navigate the whole /metrics page.
+  applyZoom(lo, hi) {
+    const pts   = this.pointsValue
+    const first = Date.parse(pts[0].ts)
+    const last  = Date.parse(pts[pts.length - 1].ts)
+
+    if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) return
+
+    const span  = last - first
+    const from  = new Date(first + lo * span).toISOString()
+    const until = new Date(first + hi * span).toISOString()
+
+    if (this.zoomUrlValue) {
+      this.zoomInModal(from, until)
+
+      return
+    }
+
+    const url = new URL(window.location.href)
+
+    url.searchParams.set("range", "custom")
+    url.searchParams.set("from", from)
+    url.searchParams.set("until", until)
+
+    Turbo.visit(url.toString())
+  }
+
+  // zoomInModal — re-fetch /metrics/chart (zoomUrlValue) at range=custom for
+  // the brushed [from, until] and let Turbo apply the returned stream. The
+  // endpoint replaces #chart-modal-body (and re-opens the already-open modal
+  // idempotently), so the modal survives the zoom.
+  async zoomInModal(from, until) {
+    const url = new URL(this.zoomUrlValue, window.location.origin)
+
+    url.searchParams.set("range", "custom")
+    url.searchParams.set("from", from)
+    url.searchParams.set("until", until)
+
+    const res = await fetch(url.toString(), {
+      headers:     { Accept: "text/vnd.turbo-stream.html" },
+      credentials: "same-origin"
+    })
+
+    if (!res.ok) return
+
+    const html = await res.text()
+
+    Turbo.renderStreamMessage(html)
   }
 
   drawCrosshair(x, y) {

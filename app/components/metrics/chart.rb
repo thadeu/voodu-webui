@@ -51,7 +51,7 @@ class Components::Metrics::Chart < Components::Base
   #       Overview StatCards and Pod show StatCards so all three
   #       chart surfaces (Overview, Pod show, /metrics) share
   #       the same SVG/JS rendering engine.
-  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, bars: false)
+  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, bars: false, zoom_url: nil)
     @points = Array(points)
     @color = color
     @unit = unit
@@ -64,6 +64,13 @@ class Components::Metrics::Chart < Components::Base
     # The natural viz for DISCRETE counts (log-count sparklines): sparse events
     # read as visible bars rather than a hairline spike on a flat baseline.
     @bars = bars
+    # zoom_url — the /metrics/chart endpoint URL for THIS chart (with its
+    # metric/scope/server params). Present only when the chart lives inside
+    # the expand modal: brush-to-zoom then re-fetches the modal body at the
+    # brushed window (range=custom&from&until) instead of navigating the whole
+    # page — which would tear the modal down. Absent on the grid → brush does
+    # a full-page Turbo.visit, which is the right behavior there.
+    @zoom_url = zoom_url
   end
 
   def pad_left
@@ -137,7 +144,12 @@ class Components::Metrics::Chart < Components::Base
         # Matches the same WebTime.zone_name driving the server-
         # rendered X-axis ticks, so a hover label and the axis
         # tick directly below agree on TZ.
-        metrics_chart_timezone_value: WebTime.zone_name
+        metrics_chart_timezone_value: WebTime.zone_name,
+        # Only emitted in the expand modal (see @zoom_url). Its mere
+        # PRESENCE is what the controller keys on (hasZoomUrlValue) to
+        # pick the in-modal re-fetch over a full-page navigation, so it
+        # must stay absent — not empty — on the grid.
+        **(@zoom_url.present? ? {metrics_chart_zoom_url_value: @zoom_url} : {})
       }
     ) do
       # ── Responsive strategy ────────────────────────────────────
@@ -258,7 +270,13 @@ class Components::Metrics::Chart < Components::Base
           style: "cursor: crosshair;",
           data: {
             metrics_chart_target: "overlay",
-            action: "mousemove->metrics-chart#move mouseleave->metrics-chart#leave"
+            # Brush-to-zoom (drag a time range → reload at range=custom) is
+            # area/line-only — bar charts are discrete-count buckets where a
+            # sub-range zoom doesn't map cleanly.
+            action: [
+              "mousemove->metrics-chart#move mouseleave->metrics-chart#leave",
+              ("mousedown->metrics-chart#brushStart" unless @bars)
+            ].compact.join(" ")
           }
         )
       end

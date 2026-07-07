@@ -222,7 +222,11 @@ class Views::Metrics::ChartModalBody < Views::Base
           range_ms: @range_ms,
           width: 1100,
           height: 480,
-          axes: true
+          axes: true,
+          # In the modal, brush-to-zoom re-fetches THIS endpoint at the
+          # brushed window instead of navigating away (which tears the
+          # modal down). refresh_url already carries every chart param.
+          zoom_url: refresh_url
         )
       end
     end

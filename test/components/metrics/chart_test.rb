@@ -26,4 +26,47 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
 
     assert_equal c.send(:clip_id), c.send(:clip_id)
   end
+
+  POINTS = [
+    {ts: "2026-06-16T12:00:00Z", value: 10},
+    {ts: "2026-06-16T12:05:00Z", value: 20}
+  ].freeze
+
+  # Brush-to-zoom (drag a range → reload at range=custom) is area/line-only.
+  test "area charts wire brush-to-zoom on the hover overlay" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS)).call
+
+    assert_includes html, "mousedown->metrics-chart#brushStart",
+      "area chart overlay must enable brush-to-zoom"
+    assert_includes html, "metrics-chart#move", "hover stays wired"
+  end
+
+  # Bar charts are discrete-count buckets — a sub-range zoom doesn't map, so no brush.
+  test "bar charts do NOT wire brush-to-zoom" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS, bars: true)).call
+
+    assert_not_includes html, "mousedown->metrics-chart#brushStart"
+    assert_includes html, "metrics-chart#move", "hover still wired on bars"
+  end
+
+  # In the modal, brush-to-zoom must re-fetch in place instead of navigating
+  # the whole page (which tears the modal down). The controller keys on the
+  # PRESENCE of the zoom-url value to pick that path — so it must be emitted
+  # when given and ABSENT (not empty) otherwise.
+  test "zoom_url emits the modal re-fetch value when given" do
+    html = Components::Metrics::Chart.new(
+      color: "var(--voodu-green)",
+      zoom_url: "/o/s/metrics/chart?metric=cpu_percent",
+      **BASE.merge(points: POINTS)
+    ).call
+
+    assert_includes html, "data-metrics-chart-zoom-url-value"
+    assert_includes html, "/o/s/metrics/chart?metric=cpu_percent"
+  end
+
+  test "zoom_url is absent on the grid (no in-modal re-fetch)" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS)).call
+
+    assert_not_includes html, "data-metrics-chart-zoom-url-value"
+  end
 end
