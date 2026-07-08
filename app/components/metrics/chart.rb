@@ -942,10 +942,13 @@ class Components::Metrics::Chart < Components::Base
         next if h <= 0.4
 
         x_norm = (inner.positive? ? (x - pad_left) / inner : 0).round(5)
+        # Solid fill (flat look) for now. The bars gradient (bars_gradient_id,
+        # defined in `defs`) is intentionally kept so we can switch back to the
+        # top-bright→bottom-soft fade by swapping this for `url(##{bars_gradient_id})`.
         g.rect(
           x: x.round(2), y: y.round(2),
           width: bw, height: h.round(2),
-          rx: "0.75", fill: "url(##{bars_gradient_id})",
+          rx: "0.75", fill: @color,
           data: {metrics_chart_target: "bar", x_norm: x_norm, w_norm: w_norm}
         )
       end
