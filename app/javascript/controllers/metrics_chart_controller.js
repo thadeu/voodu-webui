@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { Turbo } from "@hotwired/turbo-rails"
+import { panelPref } from "../lib/panel_prefs"
 
 // HIDDEN_SERIES_BY_CHART — legend hide/show selections that must OUTLIVE a
 // realtime Turbo Stream refresh. Each refresh replaces the chart element, so the
@@ -111,6 +112,16 @@ export default class extends Controller {
       this.applySeriesStyles(null)
     }
 
+    // "Show dots" per-panel pref (options menu). Restore it on connect — incl.
+    // after a stream refresh — and react live to the menu's toggle event.
+    this.applyShowDots(panelPref(this.keyValue, "dots", true))
+
+    this.onPanelOptions = (e) => {
+      if (e.detail?.key === this.keyValue) this.applyShowDots(e.detail.dots)
+    }
+
+    window.addEventListener("panel-options:change", this.onPanelOptions)
+
     // Brush-to-zoom state. onBrush* are document-level so a drag keeps
     // tracking even when the cursor leaves the chart mid-select.
     this.brushing    = false
@@ -136,10 +147,20 @@ export default class extends Controller {
     this.resizeObserver?.disconnect()
     if (this.resizeRaf) cancelAnimationFrame(this.resizeRaf)
     this.endBrushListeners()
+    if (this.onPanelOptions) window.removeEventListener("panel-options:change", this.onPanelOptions)
     this.clearBrush()
     this.clearHover()
     this.tooltip?.remove()
     this.tooltip = null
+  }
+
+  // applyShowDots — the options-menu "Show dots" toggle. Uses `display` (not
+  // opacity) so it composes cleanly with the per-series opacity from
+  // applySeriesStyles: dots-off hides every dot regardless of series state, and
+  // dots-on hands control back to the series visibility. The dynamic hover
+  // marker isn't a dot target, so hovering still shows a point either way.
+  applyShowDots(show) {
+    this.dotTargets.forEach((d) => { d.style.display = show ? "" : "none" })
   }
 
   // ── Resize pipeline ──────────────────────────────────────────

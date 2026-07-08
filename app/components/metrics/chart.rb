@@ -172,6 +172,8 @@ class Components::Metrics::Chart < Components::Base
         # rendered X-axis ticks, so a hover label and the axis
         # tick directly below agree on TZ.
         metrics_chart_timezone_value: WebTime.zone_name,
+        # Stable panel id so the "Show dots" pref (options menu) keys correctly.
+        **(@key.present? ? {metrics_chart_key_value: @key} : {}),
         # Only emitted in the expand modal (see @zoom_url). Its mere
         # PRESENCE is what the controller keys on (hasZoomUrlValue) to
         # pick the in-modal re-fetch over a full-page navigation, so it

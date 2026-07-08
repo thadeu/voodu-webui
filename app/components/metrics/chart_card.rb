@@ -181,7 +181,10 @@ class Components::Metrics::ChartCard < Components::Base
         label: @label,
         range_ms: @range_ms,
         height: 200,
-        style: chart_style
+        style: chart_style,
+        # Stable panel id so a single-series Line chart also keys its "Show
+        # dots" pref (options menu). Harmless on area/bars (no menu, no dots).
+        key: @metric
       )
     end
   end
@@ -309,7 +312,47 @@ class Components::Metrics::ChartCard < Components::Base
         end
       end
 
-      maximize_link if @expand_url
+      # Top-right actions: the per-panel options menu (⋮, Line only for now)
+      # sits LEFT of the maximize (⛶), which stays pinned in the corner.
+      div(class: "flex items-center gap-0.5 shrink-0") do
+        options_menu if options_menu?
+        maximize_link if @expand_url
+      end
+    end
+  end
+
+  # options_menu? — which panels get the ⋮ options menu. Today only Line charts
+  # (single or multi), whose sole option is the "Show dots" toggle.
+  def options_menu? = @chart_type.to_s == "line"
+
+  # options_menu — the triple-dot popover. The trigger lives in the header; the
+  # menu (portaled out on open by the popover controller to escape clipping)
+  # carries its own panel-options controller keyed by the panel id, so its
+  # toggle persists + broadcasts to the matching chart. Content must be self-
+  # contained (no data-action bound to an ancestor that won't survive portaling).
+  def options_menu
+    div(class: "relative", data: {controller: "popover"}) do
+      button(
+        type: "button",
+        data: {popover_target: "trigger", action: "popover#toggle"},
+        class: "inline-flex items-center justify-center w-7 h-7 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
+        aria: {label: "Panel options", haspopup: "true"}, title: "Panel options"
+      ) { render Icon::EllipsisVerticalOutline.new(class: "w-4 h-4") }
+
+      div(
+        hidden: true,
+        data: {popover_target: "menu", controller: "panel-options", panel_options_key_value: @metric},
+        class: "min-w-[190px] bg-voodu-surface-2 border border-voodu-border shadow-lg py-1"
+      ) do
+        label(class: "flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
+          input(
+            type: "checkbox", checked: true,
+            data: {panel_options_target: "dots", action: "change->panel-options#toggleDots"},
+            class: "accent-voodu-accent w-3.5 h-3.5 shrink-0"
+          )
+          span { "Show dots" }
+        end
+      end
     end
   end
 
