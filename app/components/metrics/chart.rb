@@ -376,6 +376,15 @@ class Components::Metrics::Chart < Components::Base
           color = ser[:color] || @color
 
           s.g("clip-path": "url(##{clip_id})") do
+            # Area multi = the same raio line + a translucent fill down to the
+            # baseline. Low opacity so up to 5 overlapping fills stay readable.
+            if area?
+              s.path(
+                d: linear_area_path(pts), fill: color, "fill-opacity": "0.14", stroke: "none",
+                data: {metrics_chart_target: "area", series_index: i}
+              )
+            end
+
             s.path(
               d: linear_segment_path(pts), fill: "none", stroke: color, "stroke-width": "1.5",
               "stroke-linecap": "round", "stroke-linejoin": "round",
@@ -774,6 +783,14 @@ class Components::Metrics::Chart < Components::Base
     return "" if pts.size < 2
 
     "M " + pts.map { |x, y| "#{x} #{y}" }.join(" L ")
+  end
+
+  # linear_area_path — the linear (raio) stroke closed down to the baseline, for
+  # the Area multi fill. Mirrors linearPath+baseline in the JS resize rebuild.
+  def linear_area_path(pts)
+    return "" if pts.size < 2
+
+    "#{linear_segment_path(pts)} L #{pts.last[0]} #{baseline_y} L #{pts.first[0]} #{baseline_y} Z"
   end
 
   # area_path_for — like path_for but each segment is independently

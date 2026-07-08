@@ -214,10 +214,14 @@ class MetricDashboardData
       default_visible: true, panel_key: key)
   end
 
-  # multi_series? — a pod panel that draws one line per pod. Pilot: Line only,
+  # MULTI_SERIES_CHART_TYPES — the styles that draw one mark per pod on shared
+  # axes. Line (raio) + Area (line + translucent fill). Bar/gauges stay single.
+  MULTI_SERIES_CHART_TYPES = %w[line area].freeze
+
+  # multi_series? — a pod panel that draws one series per pod (Line or Area),
   # 2+ pods. (One pod falls through to the normal single-series path.)
   def multi_series?(panel)
-    panel["chart_type"].to_s == "line" && Array(panel["pods"]).size >= 2
+    MULTI_SERIES_CHART_TYPES.include?(panel["chart_type"].to_s) && Array(panel["pods"]).size >= 2
   end
 
   # multi_series_chart_for — build a {series: [...]} envelope: one warehouse
@@ -253,7 +257,7 @@ class MetricDashboardData
       metric: metric,
       scale: scale,
       unit: panel["unit"].presence || series_unit(series),
-      chart_type: "line",
+      chart_type: panel["chart_type"].presence || "line",
       multi: true,
       series: series,
       default_visible: true,

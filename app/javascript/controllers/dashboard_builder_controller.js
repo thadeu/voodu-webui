@@ -247,10 +247,15 @@ export default class extends Controller {
 
   // ── Multi-pod selection (Line multi-series) ──────────────────────────────
 
-  // multiEligible — multi-pod is a Line-only pilot. Outside Line, pod pick is
-  // single-select as before.
+  // multiEligible — multi-pod applies to the time-series shapes that draw one
+  // mark per pod: Line + Area. Outside those, pod pick is single-select.
   multiEligible() {
-    return this.currentChartType === "line"
+    return this.isMultiChartType(this.currentChartType)
+  }
+
+  // isMultiChartType — the chart types that support a multi-pod series list.
+  isMultiChartType(t) {
+    return t === "line" || t === "area"
   }
 
   podKey(s) {
@@ -412,9 +417,9 @@ export default class extends Controller {
 
     this.currentChartType = t
 
-    // Line ↔ others: entering Line seeds the multi selection with the current
-    // pod; leaving Line collapses back to single-select.
-    if (t === "line") {
+    // Line/Area ↔ others: entering a multi-capable shape seeds the selection
+    // with the current pod; leaving collapses back to single-select.
+    if (this.isMultiChartType(t)) {
       if (!(this.selectedPods || []).length && this.currentSource?.scope_kind === "pod") {
         this.selectedPods = [this.currentSource]
       }
@@ -778,7 +783,7 @@ export default class extends Controller {
     // "N pods · <metric>" since there's no single source name.
     const pods = this.selectedPods || []
 
-    if (this.currentChartType === "line" && source.scope_kind === "pod" && pods.length >= 2) {
+    if (this.isMultiChartType(this.currentChartType) && source.scope_kind === "pod" && pods.length >= 2) {
       // Carry each pod's workload kind — re-editing rebuilds the metric catalog
       // off the source kind, and the catalog is keyed by kind ("deployment",
       // "statefulset", …), never "pod". Dropping it made a re-opened panel

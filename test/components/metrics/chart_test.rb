@@ -99,7 +99,7 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
   ].freeze
 
   test "series: draws one line + its dots per series, flags multi, and has no fill" do
-    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, **BASE.merge(points: [])).call
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, style: :line, **BASE.merge(points: [])).call
 
     assert_includes html, "data-metrics-chart-multi-value"
     assert_equal 2, html.scan('data-metrics-chart-target="line"').size, "one line per series"
@@ -109,6 +109,18 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
     assert_includes html, 'stroke="var(--voodu-blue)"'
     assert_includes html, 'data-metrics-chart-target="dot"', "per-series dots"
     assert_not_includes html, 'data-metrics-chart-target="area"', "line style = no fill"
+  end
+
+  # Area multi = the Line multi (one raio stroke + dots per series) PLUS a
+  # translucent fill per series, so up to 5 overlapping areas stay readable.
+  test "series with :area style draws a translucent fill + a stroke per series" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, style: :area, **BASE.merge(points: [])).call
+
+    assert_equal 2, html.scan('data-metrics-chart-target="area"').size, "one fill per series"
+    assert_equal 2, html.scan('data-metrics-chart-target="line"').size, "one stroke per series"
+    assert_includes html, 'fill-opacity="0.14"', "fills are translucent for overlap"
+    assert_includes html, 'fill="var(--voodu-purple)"', "fill uses the series color"
+    assert_includes html, 'data-metrics-chart-target="dot"', "keeps per-series dots"
   end
 
   test "a single-series chart carries no multi flag" do

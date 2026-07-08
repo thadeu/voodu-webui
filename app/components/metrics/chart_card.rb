@@ -147,7 +147,8 @@ class Components::Metrics::ChartCard < Components::Base
       return render Components::Metrics::Chart.new(
         points: [], series: @series,
         color: @color, unit: @unit, label: @label,
-        range_ms: @range_ms, height: 200, style: :line,
+        # Line (raio) or Area (raio + translucent fill) — same multi machinery.
+        range_ms: @range_ms, height: 200, style: chart_style,
         # @metric is the panel_key on a dashboard card — a stable id the chart
         # keys its hidden-line state to so it survives realtime stream refreshes.
         key: @metric

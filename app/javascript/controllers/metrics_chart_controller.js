@@ -460,6 +460,8 @@ export default class extends Controller {
       if (line) line.style.opacity = markOpacity
 
       this.dotsForIndex(idx).forEach((d) => { d.style.opacity = markOpacity })
+      // Area multi: the fill dims/hides in lockstep with its line.
+      this.areasForIndex(idx).forEach((a) => { a.style.opacity = markOpacity })
 
       const item = this.legendForIndex(idx)
 
@@ -486,6 +488,10 @@ export default class extends Controller {
 
   legendForIndex(idx) {
     return this.legendItemTargets.find((el) => parseInt(el.dataset.seriesIndex, 10) === idx)
+  }
+
+  areasForIndex(idx) {
+    return this.areaTargets.filter((a) => parseInt(a.dataset.seriesIndex, 10) === idx)
   }
 
   moveMulti(event) {
@@ -582,20 +588,28 @@ export default class extends Controller {
     this.placeTooltip(x, y, overlayRect)
   }
 
-  // rebuildMultiPaths — one line per series, d rebuilt from seriesValue on
-  // resize (each path carries data-series-index). Dots ride dotTargets.
+  // rebuildMultiPaths — one line (+ Area fill) per series, d rebuilt from
+  // seriesValue on resize (each path carries data-series-index). Dots ride
+  // dotTargets.
   rebuildMultiPaths(innerW) {
-    const padL = this.padLeftValue
+    const padL      = this.padLeftValue
+
+    const ptsFor    = (idx) => {
+      const s = this.seriesValue[idx]
+
+      return s ? (s.points || []).map((p) => [padL + p.x_norm * innerW, p.y]) : null
+    }
 
     this.lineTargets.forEach((path) => {
-      const idx = parseInt(path.dataset.seriesIndex, 10)
-      const s   = this.seriesValue[idx]
+      const pts = ptsFor(parseInt(path.dataset.seriesIndex, 10))
 
-      if (!s) return
+      if (pts) path.setAttribute("d", linearPath(pts))
+    })
 
-      const pts = (s.points || []).map((p) => [padL + p.x_norm * innerW, p.y])
+    this.areaTargets.forEach((path) => {
+      const pts = ptsFor(parseInt(path.dataset.seriesIndex, 10))
 
-      path.setAttribute("d", linearPath(pts))
+      if (pts) path.setAttribute("d", linearAreaPath(pts, this.baselineYValue))
     })
   }
 
@@ -959,6 +973,14 @@ function linearPath(seg) {
   if (seg.length < 2) return ""
 
   return "M " + seg.map(([x, y]) => `${x} ${y}`).join(" L ")
+}
+
+// linearAreaPath — the Area multi fill: the raio stroke closed down to the
+// baseline. Mirrors Chart#linear_area_path so a resize rebuild matches paint.
+function linearAreaPath(seg, baselineY) {
+  if (seg.length < 2) return ""
+
+  return `${linearPath(seg)} L ${seg[seg.length - 1][0]} ${baselineY} L ${seg[0][0]} ${baselineY} Z`
 }
 
 function areaPath(seg, baselineY) {

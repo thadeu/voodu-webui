@@ -212,6 +212,13 @@ class MetricDashboardTest < ActiveSupport::TestCase
     assert d.valid?, d.errors.full_messages.join("; ")
   end
 
+  test "an area panel accepts a pod list too (multi-series = line + area)" do
+    panel = multi_pod_panel([pod_entry, pod_entry(@server.id, "api")]).merge("chart_type" => "area")
+    d = @org.metric_dashboards.new(name: "m", panels: [panel])
+
+    assert d.valid?, d.errors.full_messages.join("; ")
+  end
+
   test "more than MAX_SERIES pods is rejected" do
     d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel(Array.new(6) { pod_entry })])
 
