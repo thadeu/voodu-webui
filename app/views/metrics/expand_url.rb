@@ -27,6 +27,7 @@ module Views::Metrics::ExpandUrl
 
   def expand_url_for(chart, data)
     return hep3_expand_url(chart, data) if chart[:source] == "hep3"
+    return multi_expand_url(chart, data) if chart[:multi]
 
     # Dashboard charts carry their own resolved scope_kind/scope_id (each panel
     # resolves to its own pod); scope-mode charts inherit the page's scope.
@@ -56,6 +57,22 @@ module Views::Metrics::ExpandUrl
       # Carry the panel's chart type so the expand modal renders the same shape
       # (a gauge stays a gauge). Omitted for the default area.
       chart_type: ((chart[:chart_type].to_s == "area") ? nil : chart[:chart_type])
+    }.compact
+
+    "#{metrics_chart_path}?#{qp.to_query}"
+  end
+
+  # multi_expand_url — the maximize URL for a multi-series (multi-pod) chart. A
+  # multi chart can't be rebuilt from flat metric/scope params (it's N pods on
+  # shared axes), so it references the panel by dashboard + index; /metrics/chart
+  # reloads the dashboard and rebuilds the series. Same active window as the rest.
+  def multi_expand_url(chart, data)
+    qp = {
+      pid: chart[:dashboard_uuid], panel: chart[:panel_index],
+      range: custom_window? ? "custom" : (data&.range || "1h"),
+      from: custom_window? ? request.query_parameters[:from] : nil,
+      until: custom_window? ? request.query_parameters[:until] : nil,
+      interval: (data&.interval && data.interval != "auto") ? data.interval : nil
     }.compact
 
     "#{metrics_chart_path}?#{qp.to_query}"

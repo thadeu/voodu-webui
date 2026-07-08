@@ -41,9 +41,16 @@ class Views::Metrics::ChartModalBody < Views::Base
     ) do
       toolbar
       chart_block
-      stat_strip
+      # Multi-series shows its per-series legend (with values) inside the chart;
+      # the single min/avg/max strip doesn't apply.
+      stat_strip unless multi?
     end
   end
+
+  # multi? — a multi-pod panel (N series on shared axes). Its pods + metric are
+  # fixed, so the single-scope pickers (metric / pod / chart-type) don't apply;
+  # only the time controls (range + interval) carry over.
+  def multi? = @chart[:multi] == true
 
   # refresh_url — the URL the broadcast tick refetches when the
   # modal is open. Identical to the URL the operator's last
@@ -71,9 +78,11 @@ class Views::Metrics::ChartModalBody < Views::Base
   # gets the leftmost slot.
   def toolbar
     div(class: "flex items-center flex-wrap gap-2") do
-      metric_picker_slot
-      pod_picker_slot
-      chart_type_picker_slot
+      unless multi?
+        metric_picker_slot
+        pod_picker_slot
+        chart_type_picker_slot
+      end
       span(class: "flex-1")
       range_picker_slot
       interval_picker_slot
@@ -222,6 +231,8 @@ class Views::Metrics::ChartModalBody < Views::Base
   # preserveAspectRatio="none" so the viewBox keeps its real aspect ratio —
   # text + dots stay round/legible.
   def chart_block
+    return multi_chart_block if multi?
+
     if gauge?
       div(class: "bg-voodu-surface border border-voodu-border p-3.5 flex items-center justify-center min-h-[360px]") do
         if @chart[:chart_type].to_s == "gauge_radial"
@@ -255,6 +266,22 @@ class Views::Metrics::ChartModalBody < Views::Base
           zoom_url: refresh_url
         )
       end
+    end
+  end
+
+  # multi_chart_block — the big multi-series chart: N lines (+ Area fill) on
+  # shared axes with the interactive legend, reusing Components::Metrics::Chart's
+  # multi mode. Keyed by the panel_key so it shares the grid card's hidden-series
+  # + "show dots" state; zoom_url re-fetches THIS modal endpoint on brush.
+  def multi_chart_block
+    div(class: "bg-voodu-surface border border-voodu-border p-3.5") do
+      render Components::Metrics::Chart.new(
+        points: [], series: @chart[:series],
+        color: @chart[:color] || "var(--voodu-accent)",
+        unit: @chart[:unit], label: @chart[:label],
+        range_ms: @range_ms, width: 1600, height: 480, axes: true,
+        style: chart_style, zoom_url: refresh_url, key: @chart[:panel_key]
+      )
     end
   end
 

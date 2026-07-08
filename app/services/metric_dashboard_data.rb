@@ -114,6 +114,16 @@ class MetricDashboardData
     panels.each_with_index.map { |panel, i| chart_for(panel, i) }.compact
   end
 
+  # chart_at — the chart envelope for ONE panel by index. The maximize modal
+  # needs just the one panel (a multi chart references its dashboard + index),
+  # so this avoids rebuilding the whole grid. nil for an out-of-range index.
+  def chart_at(index)
+    return nil if @dashboard.nil? || @org.nil?
+
+    panel = panels[index]
+    panel && chart_for(panel, index)
+  end
+
   # http_charts — dashboards fold every panel into the single grid;
   # there is no separate HTTP section. Empty so the shared views that
   # call http_charts on the scope path degrade cleanly.
@@ -176,7 +186,7 @@ class MetricDashboardData
     end
 
     if panel["scope_kind"].to_s == "pod"
-      return multi_series_chart_for(panel, key) if multi_series?(panel)
+      return multi_series_chart_for(panel, key, index) if multi_series?(panel)
 
       scope_id = resolve_container(panel, server)
       return missing_card(panel, key) if scope_id.nil?
@@ -228,7 +238,7 @@ class MetricDashboardData
   # fetch per pod (each with its own org-scoped server + resolved container),
   # a palette color + the pod name as the label. Pods that don't resolve (gone /
   # cross-org / no live replica) are simply dropped from the series list.
-  def multi_series_chart_for(panel, key)
+  def multi_series_chart_for(panel, key, index)
     metric = panel["metric"].to_s
     scale = panel["scale"].presence&.to_sym
 
@@ -262,8 +272,13 @@ class MetricDashboardData
       series: series,
       default_visible: true,
       panel_key: key,
-      # scope metadata (from the panel's primary pod) so the card + a FUTURE
-      # maximize URL still have a server to anchor to.
+      # dashboard_uuid + panel_index let the maximize modal reference THIS panel
+      # (a multi chart can't be rebuilt from flat metric/scope params like a
+      # single one — the endpoint reloads the dashboard + rebuilds its series).
+      dashboard_uuid: @dashboard&.uuid,
+      panel_index: index,
+      # scope metadata (from the panel's primary pod) so the card still has a
+      # server to anchor to.
       scope_kind: "pod", scope_id: nil, server_id: panel["server_id"].to_s
     }
   end

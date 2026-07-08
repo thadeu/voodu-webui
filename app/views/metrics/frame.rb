@@ -148,9 +148,7 @@ class Views::Metrics::Frame < Views::Base
             series: c[:series],
             range_ms: data.range_ms,
             current: c[:current],
-            # Multi-series (pilot): expand modal is a future phase, so no
-            # maximize button on a multi card yet.
-            expand_url: c[:multi] ? nil : expand_url_for(c, data),
+            expand_url: expand_url_for(c, data),
             metric: c[:panel_key] || c[:metric],
             section: c[:section],
             default_visible: c.fetch(:default_visible, true),

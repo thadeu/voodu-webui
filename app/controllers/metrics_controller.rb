@@ -63,6 +63,14 @@ class MetricsController < ApplicationController
     respond_to do |format|
       format.html { redirect_to metrics_path(request.query_parameters.except(:metric, :scale, :label, :color, :unit)) }
       format.turbo_stream do
+        # Multi-series panels can't be rebuilt from flat metric/scope params —
+        # they reference their dashboard panel (pid + index) so we reload it and
+        # rebuild the N-pod series here.
+        if params[:panel].present? && params[:pid].present?
+          render_multi_chart_modal
+          next
+        end
+
         if expand_client.nil?
           head :not_found
           next
@@ -132,6 +140,44 @@ class MetricsController < ApplicationController
         ]
       end
     end
+  end
+
+  # render_multi_chart_modal — the maximize target for a multi-series (multi-pod)
+  # panel. Reloads the panel's dashboard (org-scoped: a forged/cross-org uuid
+  # 404s) + rebuilds its N-pod chart, then streams the same modal scaffold the
+  # single path uses — ChartModalBody branches on chart[:multi] to render the
+  # multi chart + legend without the single-scope pickers.
+  def render_multi_chart_modal
+    dashboard = current_org.metric_dashboards.find_by(uuid: params[:pid])
+
+    if dashboard.nil?
+      head :not_found
+      return
+    end
+
+    data = MetricDashboardData.new(
+      current_org, dashboard,
+      range: params[:range], interval: params[:interval], **custom_window
+    )
+    chart = data.chart_at(params[:panel].to_i)
+
+    if chart.nil? || !chart[:multi]
+      head :not_found
+      return
+    end
+
+    body = Views::Metrics::ChartModalBody.new(
+      chart: chart,
+      range: params[:range].presence || "1h",
+      range_ms: data.range_ms,
+      query: request.query_parameters
+    )
+
+    render turbo_stream: [
+      turbo_stream.update("chart-modal-title", chart[:label].to_s),
+      turbo_stream.replace("chart-modal-body", body),
+      turbo_stream.action(:chart_modal_open, "chart-modal")
+    ]
   end
 
   # display_settings — lightweight endpoint for the "Display settings"

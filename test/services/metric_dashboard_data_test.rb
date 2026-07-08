@@ -50,6 +50,17 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_equal "pod", charts[1][:scope_kind]
   end
 
+  # chart_at — the maximize modal's single-panel entry (a multi chart references
+  # its dashboard + index). Returns that panel's chart, nil for an out-of-range
+  # index.
+  test "chart_at returns one panel's chart by index, nil out of range" do
+    dash = make_dashboard([HOST])
+    data = MetricDashboardData.new(@org, dash, range: "1h")
+
+    assert_equal "cpu_percent", data.chart_at(0)[:metric]
+    assert_nil data.chart_at(9)
+  end
+
   test "a panel forged to read a server in ANOTHER org resolves to a placeholder, never a cross-org read" do
     # gamma lives in globex, NOT @org (acme). A panel whose server_id points at
     # it must NOT resolve — the read-path only resolves servers WITHIN @org
