@@ -1047,11 +1047,17 @@ class Views::MetricDashboards::Form < Views::Base
   end
 
   def source_option(src, text)
+    # No `dropdown#close` here — the controller closes it in single-select mode
+    # but keeps it OPEN while multi-selecting pods (Line multi-series). The
+    # data-selected accent + trailing check are toggled by dashboard-builder.
     button(
       type: "button",
-      data: {action: "click->dashboard-builder#selectSource click->dropdown#close", dropdown_target: "option", source: src.to_json},
-      class: option_classes
-    ) { text }
+      data: {action: "click->dashboard-builder#selectSource", dropdown_target: "option", source: src.to_json},
+      class: "#{option_classes} group data-[selected=true]:bg-voodu-accent-dim data-[selected=true]:text-voodu-accent-2"
+    ) do
+      span(class: "flex-1 truncate") { text }
+      span(class: "shrink-0 text-voodu-accent-2 opacity-0 group-data-[selected=true]:opacity-100") { "✓" }
+    end
   end
 
   # add_log_panel_row — the log-count panel builder. A pod source (logs are

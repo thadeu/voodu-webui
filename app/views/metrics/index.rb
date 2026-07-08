@@ -824,9 +824,12 @@ class Views::Metrics::Index < Views::Base
             color: c[:color],
             unit: c[:unit],
             points: c[:points],
+            series: c[:series],
             range_ms: data.range_ms,
             current: c[:current],
-            expand_url: expand_url_for(c, data),
+            # Multi-series (pilot): expand modal is a future phase → no maximize
+            # button on a multi card yet.
+            expand_url: c[:multi] ? nil : expand_url_for(c, data),
             # data-metric-key the Settings/Order drawer matches on. In
             # dashboard mode it's the unique panel_key (charts can share
             # a metric); in scope mode there's one card per metric so the

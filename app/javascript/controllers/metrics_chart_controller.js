@@ -1,6 +1,14 @@
 import { Controller } from "@hotwired/stimulus"
 import { Turbo } from "@hotwired/turbo-rails"
 
+// HIDDEN_SERIES_BY_CHART — legend hide/show selections that must OUTLIVE a
+// realtime Turbo Stream refresh. Each refresh replaces the chart element, so the
+// controller disconnects + a fresh one connects with in-memory state wiped. This
+// module-level map bridges instances: stable chart id → Set of hidden series
+// LABELS (labels survive a data refresh; array indices could shift). Cleared
+// only on a full page reload — exactly the lifetime the operator expects.
+const HIDDEN_SERIES_BY_CHART = new Map()
+
 // MetricsChartController — owns the responsive layout + hover
 // crosshair/tooltip for Components::Metrics::Chart.
 //
@@ -41,7 +49,8 @@ export default class extends Controller {
     "hLine",      
     "xTick",
     "bar",
-    "dot"
+    "dot",
+    "legendItem"
   ]
 
   static values  = {
@@ -68,6 +77,14 @@ export default class extends Controller {
     // (Line style, straight point-to-point). Keeps the rebuilt path matching
     // the server-rendered one.
     interp:     { type: String,  default: "step" },
+    // Multi-series (pilot: Line). When true, `series` drives N lines instead of
+    // the single `points`/`segments`. Each series: {label, color, points:[{ts,
+    // value, formatted, x_norm, y}]} sharing the axes.
+    multi:      { type: Boolean, default: false },
+    series:     { type: Array,   default: [] },
+    // Stable per-chart id (panel_key). Keys the persisted hidden-series set so a
+    // stream refresh restores which lines the operator hid.
+    key:        { type: String,  default: "" },
     // Set ONLY when the chart is rendered inside the expand modal — the
     // /metrics/chart endpoint URL (carrying this chart's metric/scope/
     // server params). Its presence flips applyZoom from a full-page
@@ -85,7 +102,14 @@ export default class extends Controller {
     this.crosshair = null
     this.dot       = null
     this.tooltip   = null
-    this.points    = this.pointsValue.map((p) => ({ ...p }))   // working copy with mutable x
+    this.points    = this.pointsValue.map((p) => ({ ...p }))
+
+    if (this.multiValue) {
+      this.setupMulti()
+      // Re-apply any hidden lines restored from a prior instance (stream refresh)
+      // so the reconnected chart paints them hidden on first frame.
+      this.applySeriesStyles(null)
+    }
 
     // Brush-to-zoom state. onBrush* are document-level so a drag keeps
     // tracking even when the cursor leaves the chart mid-select.
@@ -181,6 +205,10 @@ export default class extends Controller {
     // Rebuild path d-strings from normalized segments.
     this.rebuildPaths(innerW)
 
+    // Multi-series: one line per series, rebuilt from seriesValue. Its dots
+    // ride the shared dotTargets loop below (each carries data-x-norm).
+    if (this.multiValue) this.rebuildMultiPaths(innerW)
+
     // Reposition bars (bars mode has no path to rebuild): each rect carries
     // its normalized x + width, so it tracks the new inner width instead of
     // staying in the server's original coordinate space (which clipped/hid
@@ -246,6 +274,7 @@ export default class extends Controller {
 
   move(event) {
     if (this.brushing) return
+    if (this.multiValue) return this.moveMulti(event)
     if (!this.points || this.points.length === 0) return
 
     const overlay = event.currentTarget
@@ -317,13 +346,286 @@ export default class extends Controller {
     if (this.tooltip) this.tooltip.style.opacity = "0"
   }
 
+  // ── Multi-series (pilot: Line) ─────────────────────────────────────────────
+
+  setupMulti() {
+    this.multiSeries = (this.seriesValue || []).map((s) => ({
+      label: s.label,
+      color: s.color,
+      points: (s.points || []).map((p) => ({ ...p }))
+    }))
+
+    // Series indices the operator hid (legend toggle). Empty = all visible.
+    // Seeded from the module store so a hidden line stays hidden across a stream
+    // refresh; matched by LABEL since a refresh can't be trusted to keep indices.
+    const persisted = HIDDEN_SERIES_BY_CHART.get(this.chartKey())
+
+    this.hiddenSeries = new Set()
+
+    if (persisted) {
+      this.multiSeries.forEach((s, idx) => { if (persisted.has(s.label)) this.hiddenSeries.add(idx) })
+    }
+
+    // Union of buckets by ts, sorted by x_norm — the hover's nearest-x index.
+    const byTs = new Map()
+
+    for (const s of this.multiSeries) {
+      for (const p of s.points) {
+        if (!byTs.has(p.ts)) byTs.set(p.ts, { ts: p.ts, x_norm: p.x_norm })
+      }
+    }
+
+    this.multiIndex = [...byTs.values()].sort((a, b) => a.x_norm - b.x_norm)
+  }
+
+  // ── Legend interaction (hover-spotlight + click-toggle) ────────────────────
+
+  // highlightSeries — legend hover: spotlight the hovered line by dimming every
+  // OTHER visible line (+ its dots + legend entry). Hidden lines stay hidden.
+  highlightSeries(event) {
+    if (!this.multiValue) return
+
+    const idx = parseInt(event.currentTarget.dataset.seriesIndex, 10)
+
+    if (!Number.isInteger(idx)) return
+
+    this.applySeriesStyles(idx)
+  }
+
+  // unhighlightSeries — legend mouseleave: restore every visible line to full
+  // opacity (hidden ones stay hidden).
+  unhighlightSeries() {
+    if (!this.multiValue) return
+
+    this.applySeriesStyles(null)
+  }
+
+  // toggleSeries — legend click: hide/show this line (+ its dots). The cursor is
+  // still on the entry, so re-showing spotlights it; hiding clears the highlight
+  // and drops it from the hover tooltip.
+  toggleSeries(event) {
+    if (!this.multiValue) return
+
+    const idx = parseInt(event.currentTarget.dataset.seriesIndex, 10)
+
+    if (!Number.isInteger(idx)) return
+
+    if (this.hiddenSeries.has(idx)) this.hiddenSeries.delete(idx)
+    else this.hiddenSeries.add(idx)
+
+    this.persistHidden()
+
+    const nowHidden = this.hiddenSeries.has(idx)
+
+    event.currentTarget.setAttribute("aria-pressed", nowHidden ? "false" : "true")
+    this.applySeriesStyles(nowHidden ? null : idx)
+    this.clearHover()
+  }
+
+  // chartKey — the stable id the hidden-series set is stored under. The panel_key
+  // (keyValue) on a dashboard; otherwise the label + the series-label set, which
+  // is stable across a pure data refresh of the same panel.
+  chartKey() {
+    if (this.hasKeyValue && this.keyValue) return this.keyValue
+
+    return `${this.labelValue}::${(this.seriesValue || []).map((s) => s.label).join(",")}`
+  }
+
+  // persistHidden — mirror the current hidden set (as LABELS) into the module
+  // store so the next instance (post stream-refresh) restores it. Drops the entry
+  // when nothing is hidden so the map doesn't grow unbounded.
+  persistHidden() {
+    const labels = new Set()
+
+    this.multiSeries.forEach((s, idx) => { if (this.hiddenSeries.has(idx)) labels.add(s.label) })
+
+    if (labels.size) HIDDEN_SERIES_BY_CHART.set(this.chartKey(), labels)
+    else HIDDEN_SERIES_BY_CHART.delete(this.chartKey())
+  }
+
+  // applySeriesStyles — single source of truth for per-series opacity. A hidden
+  // series is invisible; with a highlight set, non-highlighted VISIBLE series dim
+  // to a faint ghost; otherwise everything visible is full-strength. The legend
+  // entry mirrors the state (dim + strike-through when hidden).
+  applySeriesStyles(highlightIdx = null) {
+    if (!this.multiSeries) return
+
+    this.multiSeries.forEach((s, idx) => {
+      const hidden = this.hiddenSeries.has(idx)
+      const dimmed = !hidden && highlightIdx != null && highlightIdx !== idx
+      const markOpacity = hidden ? "0" : (dimmed ? "0.15" : "1")
+
+      const line = this.lineForIndex(idx)
+
+      if (line) line.style.opacity = markOpacity
+
+      this.dotsForIndex(idx).forEach((d) => { d.style.opacity = markOpacity })
+
+      const item = this.legendForIndex(idx)
+
+      if (!item) return
+
+      item.style.opacity = (hidden || dimmed) ? "0.4" : "1"
+      // Keep aria-pressed truthful on every apply — including a restore after a
+      // stream refresh, where the server re-rendered the button as pressed.
+      item.setAttribute("aria-pressed", hidden ? "false" : "true")
+
+      const label = item.querySelector("[data-legend-label]")
+
+      if (label) label.style.textDecoration = hidden ? "line-through" : "none"
+    })
+  }
+
+  lineForIndex(idx) {
+    return this.lineTargets.find((p) => parseInt(p.dataset.seriesIndex, 10) === idx)
+  }
+
+  dotsForIndex(idx) {
+    return this.dotTargets.filter((d) => parseInt(d.dataset.seriesIndex, 10) === idx)
+  }
+
+  legendForIndex(idx) {
+    return this.legendItemTargets.find((el) => parseInt(el.dataset.seriesIndex, 10) === idx)
+  }
+
+  moveMulti(event) {
+    if (!this.multiIndex || this.multiIndex.length === 0) return
+
+    const overlay = event.currentTarget
+    const rect    = overlay.getBoundingClientRect()
+
+    if (rect.width <= 0) return
+
+    const t = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+
+    let nearest = this.multiIndex[0]
+    let best    = Infinity
+
+    for (const e of this.multiIndex) {
+      const d = Math.abs(e.x_norm - t)
+
+      if (d < best) {
+        best    = d
+        nearest = e
+      }
+    }
+
+    const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
+    const x = this.padLeftValue + nearest.x_norm * innerVbW
+
+    const dots = []
+    const rows = []
+
+    this.multiSeries.forEach((s, idx) => {
+      // A legend-hidden line drops out of the crosshair + tooltip entirely.
+      if (this.hiddenSeries.has(idx)) return
+
+      const p = s.points.find((pp) => pp.ts === nearest.ts)
+
+      if (!p) return
+
+      dots.push({ x, y: p.y, color: s.color })
+      rows.push({ label: s.label, color: s.color, formatted: (p.formatted != null) ? p.formatted : this.formatRaw(p.value) })
+    })
+
+    this.drawCrosshairMulti(x, dots)
+    this.positionTooltipMulti(x, dots[0] ? dots[0].y : this.padTopValue, nearest.ts, rows, rect)
+  }
+
+  drawCrosshairMulti(x, dots) {
+    this.clearHover()
+
+    const ns = "http://www.w3.org/2000/svg"
+    const line = document.createElementNS(ns, "line")
+
+    line.setAttribute("x1", x)
+    line.setAttribute("x2", x)
+    line.setAttribute("y1", this.padTopValue)
+    line.setAttribute("y2", this.heightValue - this.padBottomValue)
+    line.setAttribute("stroke", "var(--voodu-text-2)")
+    line.setAttribute("stroke-opacity", "0.35")
+    line.setAttribute("stroke-width", "1")
+    line.setAttribute("pointer-events", "none")
+    this.svg.appendChild(line)
+    this.crosshair = line
+
+    this.hoverDots = dots.map((d) => {
+      const dot = document.createElementNS(ns, "circle")
+
+      dot.setAttribute("cx", d.x)
+      dot.setAttribute("cy", d.y)
+      dot.setAttribute("r", "3.5")
+      dot.setAttribute("fill", "var(--voodu-bg-2)")
+      dot.setAttribute("stroke", d.color)
+      dot.setAttribute("stroke-width", "2")
+      dot.setAttribute("pointer-events", "none")
+      this.svg.appendChild(dot)
+
+      return dot
+    })
+  }
+
+  positionTooltipMulti(x, y, ts, rows, overlayRect) {
+    this.ensureTooltip()
+
+    const rowsHtml = rows.map((r) => `
+      <div style="color: ${escapeAttr(r.color)}; font-weight: 600; margin-top: 2px;">
+        ${escapeHtml(r.label)}:
+        <span style="font-variant-numeric: tabular-nums;">${escapeHtml(r.formatted)}</span>
+      </div>`).join("")
+
+    this.tooltip.innerHTML = `
+      <div style="color: var(--voodu-muted-2, #6c7790); font-size: 10.5px;">${escapeHtml(this.formatTs(ts))}</div>
+      ${rowsHtml}
+    `
+
+    this.placeTooltip(x, y, overlayRect)
+  }
+
+  // rebuildMultiPaths — one line per series, d rebuilt from seriesValue on
+  // resize (each path carries data-series-index). Dots ride dotTargets.
+  rebuildMultiPaths(innerW) {
+    const padL = this.padLeftValue
+
+    this.lineTargets.forEach((path) => {
+      const idx = parseInt(path.dataset.seriesIndex, 10)
+      const s   = this.seriesValue[idx]
+
+      if (!s) return
+
+      const pts = (s.points || []).map((p) => [padL + p.x_norm * innerW, p.y])
+
+      path.setAttribute("d", linearPath(pts))
+    })
+  }
+
+  // timeBoundsMs — [firstMs, lastMs] across the data (single or multi), for
+  // brush-to-zoom's from/until. null when there aren't 2 distinct timestamps.
+  timeBoundsMs() {
+    const iso = this.multiValue
+      ? (this.seriesValue || []).flatMap((s) => (s.points || []).map((p) => p.ts))
+      : (this.pointsValue || []).map((p) => p.ts)
+
+    const times = iso.map((ts) => Date.parse(ts)).filter(Number.isFinite)
+
+    if (times.length < 2) return null
+
+    const first = Math.min(...times)
+    const last  = Math.max(...times)
+
+    return last > first ? [first, last] : null
+  }
+
   // ── Brush-to-zoom (area/line only; wired from chart.rb) ─────
   // Drag horizontally to pick a time range; on release, reload the page at
   // range=custom&from&until for that slice. A click / micro-drag is ignored so
   // the overlay stays a hover surface.
   brushStart(event) {
     if (event.button !== 0) return
-    if (!this.points || this.points.length < 2) return
+
+    const n = this.multiValue ? (this.multiIndex?.length || 0) : (this.points?.length || 0)
+
+    if (n < 2) return
 
     event.preventDefault()
     this.clearHover()
@@ -415,12 +717,11 @@ export default class extends Controller {
   //     modal stays open (a full-page visit would tear it down).
   //   - On the grid (no zoomUrlValue): navigate the whole /metrics page.
   applyZoom(lo, hi) {
-    const pts   = this.pointsValue
-    const first = Date.parse(pts[0].ts)
-    const last  = Date.parse(pts[pts.length - 1].ts)
+    const bounds = this.timeBoundsMs()
 
-    if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) return
+    if (!bounds) return
 
+    const [first, last] = bounds
     const span  = last - first
     const from  = new Date(first + lo * span).toISOString()
     const until = new Date(first + hi * span).toISOString()
@@ -505,6 +806,11 @@ export default class extends Controller {
     this.dot?.remove()
     this.crosshair = null
     this.dot = null
+
+    if (this.hoverDots) {
+      this.hoverDots.forEach((d) => d.remove())
+      this.hoverDots = null
+    }
   }
 
   positionTooltip(point, overlayRect) {
@@ -521,18 +827,21 @@ export default class extends Controller {
       </div>
     `
 
-    // Convert viewBox point.x/y → CSS px relative to the chart
-    // container. With responsive takeover, viewBox W ≈ overlayRect.width,
-    // so scale collapses to ≈1 — but compute it explicitly so the
-    // pre-takeover snapshot also positions correctly.
+    this.placeTooltip(point.x, point.y, overlayRect)
+  }
+
+  // placeTooltip — convert a viewBox (vbX, vbY) into CSS px relative to the
+  // chart container and position the (already-filled) tooltip near it, flipping
+  // left when it would overflow the right edge. Shared by single + multi.
+  placeTooltip(vbX, vbY, overlayRect) {
     const innerVbW = this.widthValue - this.padLeftValue - this.padRightValue
     const innerVbH = this.heightValue - this.padTopValue - this.padBottomValue
     const scaleX   = overlayRect.width  / innerVbW
     const scaleY   = overlayRect.height / innerVbH
 
     const containerRect = this.element.getBoundingClientRect()
-    const pxX = (overlayRect.left - containerRect.left) + (point.x - this.padLeftValue) * scaleX
-    const pxY = (overlayRect.top  - containerRect.top)  + (point.y - this.padTopValue)  * scaleY
+    const pxX = (overlayRect.left - containerRect.left) + (vbX - this.padLeftValue) * scaleX
+    const pxY = (overlayRect.top  - containerRect.top)  + (vbY - this.padTopValue)  * scaleY
 
     this.tooltip.style.opacity = "1"
     this.tooltip.style.left = "0px"

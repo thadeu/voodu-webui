@@ -58,7 +58,16 @@ class Components::Metrics::Chart < Components::Base
   #   :line           — smoothed curve + a dot on each point, NO fill
   STYLES = %i[area bars line].freeze
 
-  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, style: :area, zoom_url: nil)
+  # series — OPTIONAL multi-series data (pilot: Line only). An array of
+  # {label:, color:, points: [{ts,value,formatted}]}. When present the chart
+  # draws ONE line (+ dots) per series on shared axes (y = max across all
+  # series, x = union of their time range). `points`/`color` are ignored.
+  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, style: :area, zoom_url: nil, series: nil, key: nil)
+    # key — a STABLE per-chart id (the panel_key on a dashboard). Emitted so the
+    # multi-series controller can persist which lines the operator hid ACROSS a
+    # realtime Turbo Stream refresh (which replaces the chart DOM + reconnects).
+    @key = key
+    @series = series.is_a?(Array) ? series : nil
     @points = Array(points)
     @color = color
     @unit = unit
@@ -99,7 +108,11 @@ class Components::Metrics::Chart < Components::Base
     @axes ? PAD_BOTTOM_FULL : PAD_BOTTOM_COMPACT
   end
 
+  def multi? = !@series.nil? && @series.any? { |s| Array(s[:points]).any? }
+
   def view_template
+    return render_multi if multi?
+
     # Truly empty → honest "no data" placeholder (cold boot, no
     # samples on disk or in warehouse for this range yet).
     if @points.empty?
@@ -300,6 +313,194 @@ class Components::Metrics::Chart < Components::Base
   end
 
   private
+
+  # ── Multi-series (pilot: Line) ─────────────────────────────────────────────
+  #
+  # One line + dots per series on SHARED axes (y = nice_ceil of the max value
+  # across all series, x = union time range). Reuses the single-series axes
+  # (render_y_axis/render_x_axis), clip, linear stroke (linear_segment_path),
+  # and the responsive machinery — dots carry x_norm like the single path, and
+  # each line carries a series_index so the resize rebuild targets it.
+
+  def render_multi
+    bounds = multi_bounds
+    inner_w = (@width - pad_left - pad_right).to_f
+
+    div(
+      class: "relative w-full",
+      data: {
+        controller: "metrics-chart",
+        metrics_chart_series_value: multi_series_for_js(bounds).to_json,
+        metrics_chart_multi_value: true,
+        metrics_chart_color_value: @color,
+        metrics_chart_unit_value: @unit,
+        metrics_chart_label_value: @label,
+        metrics_chart_width_value: @width,
+        metrics_chart_height_value: @height,
+        metrics_chart_pad_left_value: pad_left,
+        metrics_chart_pad_right_value: pad_right,
+        metrics_chart_pad_top_value: pad_top,
+        metrics_chart_pad_bottom_value: pad_bottom,
+        metrics_chart_baseline_y_value: baseline_y,
+        metrics_chart_interp_value: "linear",
+        metrics_chart_responsive_value: true,
+        metrics_chart_timezone_value: WebTime.zone_name,
+        # Stable id so hidden-line selections survive a realtime stream refresh.
+        **(@key.present? ? {metrics_chart_key_value: @key} : {})
+      }
+    ) do
+      svg(
+        width: "100%", height: @height, viewBox: "0 0 #{@width} #{@height}",
+        class: "block overflow-visible", style: "touch-action: pan-y;",
+        data: {metrics_chart_target: "svg"}
+      ) do |s|
+        s.defs do
+          s.clipPath(id: clip_id) do
+            s.rect(
+              x: pad_left, y: pad_top,
+              width: @width - pad_left - pad_right, height: @height - pad_top - pad_bottom,
+              data: {metrics_chart_target: "clipRect"}
+            )
+          end
+        end
+
+        if @axes
+          render_y_axis(s, bounds[:y_max])
+          render_x_axis(s, bounds[:x_min], bounds[:x_max])
+        end
+
+        @series.each_with_index do |ser, i|
+          pts = project_series(Array(ser[:points]), bounds)
+          next if pts.empty?
+
+          color = ser[:color] || @color
+
+          s.g("clip-path": "url(##{clip_id})") do
+            s.path(
+              d: linear_segment_path(pts), fill: "none", stroke: color, "stroke-width": "1.5",
+              "stroke-linecap": "round", "stroke-linejoin": "round",
+              data: {metrics_chart_target: "line", series_index: i}
+            )
+          end
+
+          pts.each do |x, y|
+            x_norm = (inner_w.positive? ? (x - pad_left) / inner_w : 0).round(5)
+
+            s.circle(cx: x.round(2), cy: y.round(2), r: "2.5", fill: color,
+              data: {metrics_chart_target: "dot", x_norm: x_norm, series_index: i})
+          end
+        end
+
+        if @axes
+          s.line(
+            x1: pad_left, x2: @width - pad_right, y1: baseline_y, y2: baseline_y,
+            stroke: "var(--voodu-border)", data: {metrics_chart_target: "hLine"}
+          )
+        end
+
+        s.rect(
+          x: pad_left, y: pad_top,
+          width: @width - pad_left - pad_right, height: @height - pad_top - pad_bottom,
+          fill: "transparent", "pointer-events": "all", style: "cursor: crosshair;",
+          data: {
+            metrics_chart_target: "overlay",
+            action: "mousemove->metrics-chart#move mouseleave->metrics-chart#leave mousedown->metrics-chart#brushStart"
+          }
+        )
+      end
+
+      render_multi_legend
+    end
+  end
+
+  # render_multi_legend — the interactive key under a multi-series chart. Each
+  # entry is a BUTTON living INSIDE the metrics-chart controller root (so it can
+  # reach the lines/dots by series_index):
+  #   HOVER  → spotlight this series (the controller dims the others)
+  #   CLICK  → toggle this line's visibility (hide/show)
+  # Wraps on narrow cards; the swatch + label read the same as the old footer
+  # legend, now with pointer affordance + a11y aria-pressed.
+  def render_multi_legend
+    div(class: "flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-voodu-mono mt-2 px-0.5") do
+      @series.each_with_index do |ser, i|
+        color = ser[:color] || @color
+        cur = ser[:current]
+
+        button(
+          type: "button",
+          class: "inline-flex items-center gap-1.5 min-w-0 cursor-pointer select-none transition-opacity",
+          aria: {pressed: "true", label: "Toggle #{ser[:label]} line"},
+          title: "Click to hide/show · hover to highlight",
+          data: {
+            metrics_chart_target: "legendItem",
+            series_index: i,
+            action: "mouseenter->metrics-chart#highlightSeries " \
+                    "mouseleave->metrics-chart#unhighlightSeries " \
+                    "click->metrics-chart#toggleSeries"
+          }
+        ) do
+          span(class: "inline-block w-2.5 h-2.5 rounded-sm shrink-0", style: "background: #{color};")
+          span(class: "text-voodu-text-2 truncate", data: {legend_label: true}) { ser[:label].to_s }
+          span(class: "text-voodu-muted shrink-0") { format_series_current(cur) } unless cur.nil?
+        end
+      end
+    end
+  end
+
+  # format_series_current — the legend's latest value per series. Mirrors
+  # ChartCard#format_current (percent bakes the % in; others go number-only).
+  def format_series_current(v)
+    return "—" if v.nil?
+
+    (@unit == "%") ? MetricFormat.percent(v) : MetricFormat.number(v)
+  end
+
+  # multi_bounds — shared axes: y ceiling = nice_ceil of the max value anywhere;
+  # x = union time range. Every series projects onto these.
+  def multi_bounds
+    values = @series.flat_map { |s| Array(s[:points]).map { |p| p[:value].to_f } }
+    times = @series.flat_map { |s| Array(s[:points]).map { |p| parse_ts_ms(p[:ts]) } }
+
+    {y_max: nice_ceil(values.max || 0), x_min: times.min || 0, x_max: times.max || 0}
+  end
+
+  # project_series — one series' points → [[x,y]] on the shared bounds.
+  def project_series(points, bounds)
+    inner_w = (@width - pad_left - pad_right).to_f
+    inner_h = (@height - pad_top - pad_bottom).to_f
+    x_span = [(bounds[:x_max] - bounds[:x_min]).to_f, 1.0].max
+    y_span = [bounds[:y_max].to_f, 0.0001].max
+
+    points.map do |p|
+      t = parse_ts_ms(p[:ts])
+      x = pad_left + ((t - bounds[:x_min]) / x_span) * inner_w
+      y = pad_top + (1 - (p[:value].to_f / y_span)) * inner_h
+      [x, y]
+    end
+  end
+
+  # multi_series_for_js — per series: color, label, and points with x_norm
+  # (0..1 on the shared x) + y (viewBox units) so the controller rebuilds each
+  # line on resize and drives the shared hover tooltip.
+  def multi_series_for_js(bounds)
+    inner_w = (@width - pad_left - pad_right).to_f
+
+    @series.map do |s|
+      pts = Array(s[:points])
+      proj = project_series(pts, bounds)
+
+      {
+        label: s[:label].to_s,
+        color: s[:color] || @color,
+        points: pts.each_with_index.map do |p, i|
+          x, y = proj[i]
+
+          {ts: p[:ts], value: p[:value], formatted: p[:formatted],
+           x_norm: (inner_w.positive? ? (x - pad_left) / inner_w : 0).round(5), y: y.round(2)}
+        end
+      }
+    end
+  end
 
   # points_for_js — pre-projected points the Stimulus controller
   # consumes for hover nearest-x lookup. Keeps the coordinate math

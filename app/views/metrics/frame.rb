@@ -145,9 +145,12 @@ class Views::Metrics::Frame < Views::Base
             color: c[:color],
             unit: c[:unit],
             points: c[:points],
+            series: c[:series],
             range_ms: data.range_ms,
             current: c[:current],
-            expand_url: expand_url_for(c, data),
+            # Multi-series (pilot): expand modal is a future phase, so no
+            # maximize button on a multi card yet.
+            expand_url: c[:multi] ? nil : expand_url_for(c, data),
             metric: c[:panel_key] || c[:metric],
             section: c[:section],
             default_visible: c.fetch(:default_visible, true),

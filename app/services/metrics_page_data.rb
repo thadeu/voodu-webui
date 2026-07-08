@@ -163,6 +163,19 @@ class MetricsPageData
     end
   end
 
+  # series_points — just the {points, current} for one metric in THIS instance's
+  # scope, no envelope (label/color/capacity/section). One building block for a
+  # multi-series chart: the caller runs this per pod (each with its own scoped
+  # MetricsPageData) and assembles the series list. Mirrors single_chart's fetch.
+  def series_points(metric:, scale:)
+    return {points: [], current: nil} if @client.nil?
+
+    spec = {metric: metric, scale: scale}
+    points = INGRESS_METRICS.include?(metric) ? fetch_ingress_points(metric, scale) : fetch_points(metric, scale)
+
+    {points: points, current: latest_scaled_for(spec)}
+  end
+
   # ingress_eligible? — true when the current pod scope is a
   # `kind=deployment`. KIND-DRIVEN, not data-driven: a brand-new
   # deployment that hasn't received a request yet still shows the

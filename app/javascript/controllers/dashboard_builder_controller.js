@@ -123,6 +123,7 @@ export default class extends Controller {
     // Table (logs) + HEP3 share one block; activate the kind's options + the
     // first source·view so autoCommit can create the panel immediately.
     if (type === "table" || type === "hep3") this.activateTableKind(type)
+
     if (type === "http") { this.highlightHttpChart(); this.highlightHttpColor() }
 
     this.syncWizard()
@@ -226,11 +227,89 @@ export default class extends Controller {
 
     if (!source) return
 
+    // Line multi-series: a pod source toggles in/out of the selection (keep the
+    // dropdown open); everything else is single-select (close on pick).
+    if (this.multiEligible() && source.scope_kind === "pod") {
+      this.togglePod(source)
+
+      return
+    }
+
     this.currentSource = source
+    this.selectedPods = []
+    this.markSelectedSources()
     if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = event.currentTarget.textContent.trim()
 
+    this.closeSourceDropdown(event.currentTarget)
     this.populateMetrics()
     this.autoCommit()
+  }
+
+  // ── Multi-pod selection (Line multi-series) ──────────────────────────────
+
+  // multiEligible — multi-pod is a Line-only pilot. Outside Line, pod pick is
+  // single-select as before.
+  multiEligible() {
+    return this.currentChartType === "line"
+  }
+
+  podKey(s) {
+    return `${s.server_id}/${s.scope}/${s.name}`
+  }
+
+  togglePod(source) {
+    this.selectedPods ||= []
+
+    const key = this.podKey(source)
+    const at  = this.selectedPods.findIndex((p) => this.podKey(p) === key)
+
+    if (at >= 0) {
+      this.selectedPods.splice(at, 1)
+    } else if (this.selectedPods.length < this.maxSeries()) {
+      this.selectedPods.push(source)
+    } else {
+      return
+    }
+
+    // Metric enumeration + the panel's scope anchor ride the first pod.
+    this.currentSource = this.selectedPods[0] || source
+    this.updateSourceLabel()
+    this.markSelectedSources()
+    this.populateMetrics()
+    this.autoCommit()
+  }
+
+  maxSeries() {
+    return 5
+  }
+
+  updateSourceLabel() {
+    if (!this.hasSourceLabelTarget) return
+
+    const n = (this.selectedPods || []).length
+
+    this.sourceLabelTarget.textContent =
+      n >= 2 ? `${n} pods` : (this.selectedPods?.[0]?.name || this.currentSource?.label || "Host (system)")
+  }
+
+  // markSelectedSources — toggle the accent/check on each source row so the
+  // operator sees which pods are in the multi-series selection.
+  markSelectedSources() {
+    const keys = new Set((this.selectedPods || []).map((p) => this.podKey(p)))
+
+    this.element.querySelectorAll("[data-dropdown-target='option'][data-source]").forEach((el) => {
+      const src = this.parse(el.dataset.source)
+
+      el.dataset.selected = src && src.scope_kind === "pod" && keys.has(this.podKey(src)) ? "true" : "false"
+    })
+  }
+
+  closeSourceDropdown(el) {
+    const root = el.closest("[data-controller~='dropdown']")
+
+    if (!root) return
+
+    this.application.getControllerForElementAndIdentifier(root, "dropdown")?.close?.()
   }
 
   selectMetric(event) {
@@ -332,6 +411,19 @@ export default class extends Controller {
     if (!t) return
 
     this.currentChartType = t
+
+    // Line ↔ others: entering Line seeds the multi selection with the current
+    // pod; leaving Line collapses back to single-select.
+    if (t === "line") {
+      if (!(this.selectedPods || []).length && this.currentSource?.scope_kind === "pod") {
+        this.selectedPods = [this.currentSource]
+      }
+    } else {
+      this.selectedPods = []
+    }
+
+    this.updateSourceLabel()
+    this.markSelectedSources()
     this.highlightShape()
     this.autoCommit()
   }
@@ -386,8 +478,18 @@ export default class extends Controller {
     this.metricMenuTarget.innerHTML = ""
     specs.forEach((spec) => this.metricMenuTarget.appendChild(this.metricOption(spec)))
 
-    this.currentMetric = specs[0] || null
-    this.currentMetricColor = this.currentMetric ? this.currentMetric.color : null
+    // Keep the current metric if the new source's catalog still offers it —
+    // otherwise fall back to the first. This is what makes toggling pods in a
+    // multi-series panel non-destructive: same kind → same catalog → the metric
+    // (and its color) survive; only a genuine metric change resets the color.
+    const kept = this.currentMetric && specs.find((s) => s.metric === this.currentMetric.metric)
+    const next = kept || specs[0] || null
+
+    if (!this.currentMetric || !next || this.currentMetric.metric !== next.metric) {
+      this.currentMetricColor = next ? next.color : null
+    }
+
+    this.currentMetric = next
 
     if (this.hasMetricLabelTarget) {
       this.metricLabelTarget.textContent = this.currentMetric ? this.currentMetric.label : "Select metric"
@@ -521,25 +623,60 @@ export default class extends Controller {
     return (multi && name) ? `${name} · ${base}` : base
   }
 
+  // resolvePodKind — a saved pod may not carry its workload kind: older panels
+  // stored only scope/name, and the mirrored panel.kind can also be blank. The
+  // metric catalog is keyed by kind ("deployment"/"statefulset"/…, NEVER "pod"),
+  // so a wrong kind yields an empty catalog → null metric → the metric picker
+  // empties AND the chart-type chips shuffle (gauges gate on the metric). Recover
+  // the real kind from the live source options (which always carry it), then fall
+  // back to the panel's mirrored kind, then a harmless default.
+  resolvePodKind(pod, fallback) {
+    if (pod && pod.kind) return pod.kind
+
+    const match = this.sourceOptionFor(pod)
+
+    return (match && match.kind) || fallback || "pod"
+  }
+
+  // sourceOptionFor — the rendered source option matching a pod by identity, so
+  // its authoritative kind can be read back.
+  sourceOptionFor(pod) {
+    if (!pod) return null
+
+    const opts = this.element.querySelectorAll("[data-dropdown-target='option'][data-source]")
+
+    for (const el of opts) {
+      const s = this.parse(el.dataset.source)
+
+      if (s && s.scope_kind === "pod" && s.scope === pod.scope && s.name === pod.name && String(s.server_id) === String(pod.server_id)) {
+        return s
+      }
+    }
+
+    return null
+  }
+
   // loadMetricPanel — restore source + metric + chart type into the metric
   // block's dropdowns from a saved panel.
   loadMetricPanel(panel) {
     const host = panel.scope_kind === "host"
+    // Resolve the workload kind ONCE (recovering it from source options for old
+    // panels) and reuse it for the source, the metric catalog key, and the label.
+    const kind = host ? "host" : this.resolvePodKind(panel, panel.kind)
 
     this.currentSource = host
       ? { scope_kind: "host", label: "host", server_id: panel.server_id }
-      : { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: panel.kind || "pod", label: panel.name, server_id: panel.server_id }
+      : { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: kind, label: panel.name, server_id: panel.server_id }
 
     if (this.hasSourceLabelTarget) {
-      const base = host ? "Host (system)" : `${panel.name} · ${panel.kind || "pod"}`
+      const base = host ? "Host (system)" : `${panel.name} · ${kind}`
 
       this.sourceLabelTarget.textContent = this.sourceTriggerLabel(panel.server_id, base)
     }
 
     this.populateMetrics()
 
-    const key  = host ? "host" : (panel.kind || "pod")
-    const spec = ((this.catalogValue && this.catalogValue[key]) || []).find((s) => s.metric === panel.metric)
+    const spec = ((this.catalogValue && this.catalogValue[kind]) || []).find((s) => s.metric === panel.metric)
 
     if (spec) {
       this.currentMetric = spec
@@ -553,6 +690,17 @@ export default class extends Controller {
     if (String(panel.color).startsWith("#")) this.applyCustomColor("metric", panel.color)
 
     this.currentChartType = panel.chart_type || "area"
+
+    // Multi-series: restore the selected pods so re-editing shows all lines.
+    // kind must be the REAL workload kind (not literal "pod") or the metric
+    // catalog lookup on the next toggle comes back empty. resolvePodKind recovers
+    // it from the source options for panels saved before per-pod kind existed.
+    this.selectedPods = Array.isArray(panel.pods)
+      ? panel.pods.map((p) => ({ scope_kind: "pod", server_id: p.server_id, scope: p.scope, name: p.name, kind: this.resolvePodKind(p, panel.kind), label: p.name }))
+      : []
+    this.updateSourceLabel()
+    this.markSelectedSources()
+
     this.syncTypeAvailability()
   }
 
@@ -623,6 +771,22 @@ export default class extends Controller {
       panel.scope = source.scope
       panel.name  = source.name
       panel.kind  = source.kind
+    }
+
+    // Line multi-series: 2+ pods → one line each. Store the pod list; mirror the
+    // first into scope/name so the single-series fields stay valid. Relabel to
+    // "N pods · <metric>" since there's no single source name.
+    const pods = this.selectedPods || []
+
+    if (this.currentChartType === "line" && source.scope_kind === "pod" && pods.length >= 2) {
+      // Carry each pod's workload kind — re-editing rebuilds the metric catalog
+      // off the source kind, and the catalog is keyed by kind ("deployment",
+      // "statefulset", …), never "pod". Dropping it made a re-opened panel
+      // resolve to an empty catalog → null metric → the edit silently no-op'd.
+      panel.pods  = pods.map((p) => ({ server_id: p.server_id, scope: p.scope, name: p.name, kind: p.kind }))
+      panel.scope = pods[0].scope
+      panel.name  = pods[0].name
+      panel.label = `${pods.length} pods · ${spec.label}`
     }
 
     return panel
@@ -986,7 +1150,10 @@ export default class extends Controller {
     const url = this.httpFieldValue("httpUrl")
     const status = this.hasHttpTestStatusTarget ? this.httpTestStatusTarget : null
 
-    if (!url) { if (status) status.textContent = "Enter a URL first"; return }
+    if (!url) { if (status) status.textContent = "Enter a URL first";
+
+ return }
+
     if (status) status.textContent = "Testing…"
 
     const payload = {
@@ -1100,6 +1267,7 @@ export default class extends Controller {
       this.httpMappingTarget.value = JSON.stringify(panel.mapping || {}, null, 2)
       this.httpMappingTarget.dispatchEvent(new Event("input", { bubbles: true }))
     }
+
     this.currentHttpChartType = panel.chart_type || "table"
     this.currentHttpColor = panel.color || "var(--voodu-cyan)"
     this.highlightHttpChart()

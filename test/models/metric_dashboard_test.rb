@@ -193,6 +193,47 @@ class MetricDashboardTest < ActiveSupport::TestCase
       readers.sort_by { |r| r[:name] }
   end
 
+  # ── multi-series (multi-pod) pod list ──────────────────────────────────────
+
+  def pod_entry(server_id = @server.id, name = "web")
+    {"server_id" => server_id, "scope" => "web", "name" => name}
+  end
+
+  def multi_pod_panel(pods)
+    {"scope_kind" => "pod", "metric" => "cpu_percent", "scale" => "percent",
+     "label" => "Pods CPU", "color" => "var(--voodu-purple)", "unit" => "%",
+     "chart_type" => "line", "scope" => "web", "name" => "web", "server_id" => @server.id,
+     "pods" => pods}
+  end
+
+  test "a line panel accepts a pod list (2..5)" do
+    d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel([pod_entry, pod_entry(@server.id, "api")])])
+
+    assert d.valid?, d.errors.full_messages.join("; ")
+  end
+
+  test "more than MAX_SERIES pods is rejected" do
+    d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel(Array.new(6) { pod_entry })])
+
+    assert d.invalid?
+    assert_includes d.errors[:panels].join, "at most #{MetricDashboard::MAX_SERIES} pods"
+  end
+
+  test "a pod entry missing server_id/scope/name is rejected" do
+    d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel([{"scope" => "web"}])])
+
+    assert d.invalid?
+    assert_includes d.errors[:panels].join, "missing server_id, scope, or name"
+  end
+
+  test "a pod referencing a server outside the org is rejected (anti cross-org)" do
+    other = servers(:gamma)
+    d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel([pod_entry, pod_entry(other.id, "api")])])
+
+    assert d.invalid?
+    assert_includes d.errors[:panels].join, "outside this org"
+  end
+
   private
 
   def bad_message(record)

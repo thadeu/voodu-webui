@@ -69,11 +69,15 @@ class Components::Metrics::ChartCard < Components::Base
   # Gauges need a ceiling (a percent metric, or a capacity_pct); when
   # that's missing the card silently falls back to the area chart so a
   # gauge panel on a limitless metric never renders blank.
-  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area", percent: true)
+  def initialize(label:, color:, unit:, points:, range_ms:, current: nil, expand_url: nil, metric: nil, section: nil, default_visible: true, capacity_label: nil, capacity_pct: nil, chart_type: "area", percent: true, series: nil)
     @label = label
     @color = color
     @unit = unit
     @points = Array(points)
+    # series — OPTIONAL multi-series (pilot: Line): one line per pod. When
+    # present the card renders a multi Chart + a legend instead of the single
+    # headline/stat strip. See Components::Metrics::Chart#series.
+    @series = series.is_a?(Array) ? series : nil
     @range_ms = range_ms
     @current = current
     @expand_url = expand_url
@@ -135,7 +139,21 @@ class Components::Metrics::ChartCard < Components::Base
 
   # render_body — the chart_type switch. Gauges fall back to the area
   # chart when there's no usable ceiling (see gauge_pct).
+  # multi? — a multi-series (multi-pod) panel drawing one line per series.
+  def multi? = !@series.nil? && @series.any?
+
   def render_body
+    if multi?
+      return render Components::Metrics::Chart.new(
+        points: [], series: @series,
+        color: @color, unit: @unit, label: @label,
+        range_ms: @range_ms, height: 200, style: :line,
+        # @metric is the panel_key on a dashboard card — a stable id the chart
+        # keys its hidden-line state to so it survives realtime stream refreshes.
+        key: @metric
+      )
+    end
+
     # Gauges are short; flex-1 lets the body grow to the card height (grid
     # rows stretch to the tallest area chart) so the min/avg/max footer
     # sits pinned at the bottom instead of floating mid-card.
@@ -269,9 +287,14 @@ class Components::Metrics::ChartCard < Components::Base
         # span looking like "<0.01 %"). For everything else the
         # number stays plain and the unit hangs in its own muted
         # span.
+        # Multi-series has no single headline value — show the pod count.
+        if multi?
+          span(class: "font-voodu-mono text-[12px] text-voodu-muted shrink-0 whitespace-nowrap") { "#{@series.size} pods" }
+        end
+
         # Gauges render the value + capacity inside the dial/bar, so the
         # header drops the big number to avoid showing it twice.
-        unless gauge?
+        unless gauge? || multi?
           span(class: "font-voodu-mono text-[22px] font-semibold text-voodu-text shrink-0 whitespace-nowrap") do
             if percent_unit?
               plain format_current(@current || s[:current])
@@ -295,6 +318,10 @@ class Components::Metrics::ChartCard < Components::Base
   # 4-up grid. Skipped when there's no data (the chart shows its own
   # empty state).
   def stat_footer
+    # Multi-series draws its own interactive legend inside the Chart (so the
+    # legend buttons sit in the metrics-chart controller scope + can toggle the
+    # lines). Nothing extra to render here.
+    return if multi?
     return if @points.empty?
 
     s = stats

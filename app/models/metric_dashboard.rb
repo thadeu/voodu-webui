@@ -63,6 +63,11 @@ class MetricDashboard < ApplicationRecord
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
 
+  # Multi-series (pilot: Line only): a panel may draw one line PER pod. `pods`
+  # holds up to this many {server_id, scope, name} entries; each is one series.
+  # Capped so a single panel doesn't fan out into a heavy pile of queries.
+  MAX_SERIES = 5
+
   validates :name, presence: true, length: {maximum: 128},
     uniqueness: {scope: :org_id}
   validate :panels_well_formed
@@ -208,6 +213,32 @@ class MetricDashboard < ApplicationRecord
 
       pod_missing = POD_PANEL_KEYS.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "pod panel #{i + 1} is missing #{pod_missing.join(", ")}") if pod_missing.any?
+
+      validate_pods(panel["pods"], i, org_server_ids) if panel.key?("pods")
+    end
+  end
+
+  # validate_pods — the optional multi-series list on a pod panel. Each entry is
+  # {server_id, scope, name}; every server_id must belong to this org (same
+  # cross-org guard as the primary server_id), and the list is capped at
+  # MAX_SERIES so one panel can't fan out into a heavy pile of queries.
+  def validate_pods(pods, i, org_server_ids)
+    unless pods.is_a?(Array) && pods.any?
+      errors.add(:panels, "panel #{i + 1}: pods must be a non-empty list")
+      return
+    end
+
+    if pods.size > MAX_SERIES
+      errors.add(:panels, "panel #{i + 1}: at most #{MAX_SERIES} pods")
+    end
+
+    pods.each_with_index do |p, j|
+      unless p.is_a?(Hash) && POD_PANEL_KEYS.all? { |k| p[k].to_s.present? } && p["server_id"].to_s.present?
+        errors.add(:panels, "panel #{i + 1} pod #{j + 1} is missing server_id, scope, or name")
+        next
+      end
+
+      errors.add(:panels, "panel #{i + 1} pod #{j + 1} references a server outside this org") if org_server_ids.exclude?(p["server_id"].to_s)
     end
   end
 end

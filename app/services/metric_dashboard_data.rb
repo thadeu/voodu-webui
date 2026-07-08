@@ -21,6 +21,14 @@
 class MetricDashboardData
   attr_reader :dashboard, :range, :interval
 
+  # Distinct, high-contrast hues auto-assigned to the lines of a multi-series
+  # (multi-pod) chart — series i gets colors[i]. Drawn from the chart palette;
+  # red stays reserved for errors. Capped by MetricDashboard::MAX_SERIES (5).
+  MULTI_SERIES_COLORS = %w[
+    var(--voodu-purple) var(--voodu-blue) var(--voodu-teal)
+    var(--voodu-amber) var(--voodu-pink)
+  ].freeze
+
   # M2: a dashboard belongs to the ORG and each panel carries its own
   # server_id, so this takes the org (not a single client/server). Each panel
   # resolves its OWN server (scoped to the org — cross-org ids are dropped) and
@@ -168,6 +176,8 @@ class MetricDashboardData
     end
 
     if panel["scope_kind"].to_s == "pod"
+      return multi_series_chart_for(panel, key) if multi_series?(panel)
+
       scope_id = resolve_container(panel, server)
       return missing_card(panel, key) if scope_id.nil?
 
@@ -202,6 +212,64 @@ class MetricDashboardData
     # Settings/Order drawer toggles + reorders this panel by.
     chart.merge(scope_kind: scope_kind, scope_id: scope_id, server_id: server.id,
       default_visible: true, panel_key: key)
+  end
+
+  # multi_series? — a pod panel that draws one line per pod. Pilot: Line only,
+  # 2+ pods. (One pod falls through to the normal single-series path.)
+  def multi_series?(panel)
+    panel["chart_type"].to_s == "line" && Array(panel["pods"]).size >= 2
+  end
+
+  # multi_series_chart_for — build a {series: [...]} envelope: one warehouse
+  # fetch per pod (each with its own org-scoped server + resolved container),
+  # a palette color + the pod name as the label. Pods that don't resolve (gone /
+  # cross-org / no live replica) are simply dropped from the series list.
+  def multi_series_chart_for(panel, key)
+    metric = panel["metric"].to_s
+    scale = panel["scale"].presence&.to_sym
+
+    series = Array(panel["pods"]).each_with_index.filter_map do |pod, i|
+      srv = servers_by_id[pod["server_id"].to_s]
+      next if srv.nil?
+
+      container = resolve_container(pod, srv)
+      next if container.nil?
+
+      page = MetricsPageData.new(
+        client_for(srv), srv,
+        scope_kind: "pod", scope_id: container,
+        range: @range, interval: @interval, from: @from, until_: @until_
+      )
+      sp = page.series_points(metric: metric, scale: scale)
+
+      {label: pod["name"].to_s, color: MULTI_SERIES_COLORS[i % MULTI_SERIES_COLORS.size],
+       points: sp[:points], current: sp[:current]}
+    end
+
+    return missing_card(panel, key) if series.empty?
+
+    {
+      label: panel["label"].to_s,
+      metric: metric,
+      scale: scale,
+      unit: panel["unit"].presence || series_unit(series),
+      chart_type: "line",
+      multi: true,
+      series: series,
+      default_visible: true,
+      panel_key: key,
+      # scope metadata (from the panel's primary pod) so the card + a FUTURE
+      # maximize URL still have a server to anchor to.
+      scope_kind: "pod", scope_id: nil, server_id: panel["server_id"].to_s
+    }
+  end
+
+  # series_unit — best-effort unit for the y-axis when the panel didn't store
+  # one (e.g. bytes_auto): the trailing token of the first formatted value.
+  def series_unit(series)
+    fmt = series.filter_map { |s| s[:points].last }.first&.dig(:formatted).to_s
+
+    fmt.include?(" ") ? fmt.split(" ").last : ""
   end
 
   # log_chart_for — a log-count panel: read the filter's pre-aggregated count

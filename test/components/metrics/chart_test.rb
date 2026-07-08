@@ -91,4 +91,67 @@ class Components::Metrics::ChartTest < ActiveSupport::TestCase
 
     assert_not_includes html, "data-metrics-chart-zoom-url-value"
   end
+
+  # Multi-series (pilot: Line) — one line per series on shared axes, no fill.
+  SERIES = [
+    {label: "a1", color: "var(--voodu-purple)", points: [{ts: "2026-06-16T12:00:00Z", value: 10}, {ts: "2026-06-16T12:05:00Z", value: 20}]},
+    {label: "b2", color: "var(--voodu-blue)", points: [{ts: "2026-06-16T12:00:00Z", value: 5}, {ts: "2026-06-16T12:05:00Z", value: 15}]}
+  ].freeze
+
+  test "series: draws one line + its dots per series, flags multi, and has no fill" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, **BASE.merge(points: [])).call
+
+    assert_includes html, "data-metrics-chart-multi-value"
+    assert_equal 2, html.scan('data-metrics-chart-target="line"').size, "one line per series"
+    assert_includes html, 'data-series-index="0"'
+    assert_includes html, 'data-series-index="1"'
+    assert_includes html, 'stroke="var(--voodu-purple)"'
+    assert_includes html, 'stroke="var(--voodu-blue)"'
+    assert_includes html, 'data-metrics-chart-target="dot"', "per-series dots"
+    assert_not_includes html, 'data-metrics-chart-target="area"', "line style = no fill"
+  end
+
+  test "a single-series chart carries no multi flag" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", **BASE.merge(points: POINTS)).call
+
+    assert_not_includes html, "data-metrics-chart-multi-value"
+  end
+
+  # The multi-series legend is INTERACTIVE: each entry is a button wired to the
+  # controller (hover→spotlight, click→toggle) and lives inside the chart's own
+  # controller scope so it can reach the lines by series_index.
+  test "multi-series renders one interactive legend button per series" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, **BASE.merge(points: [])).call
+
+    assert_equal 2, html.scan('data-metrics-chart-target="legendItem"').size, "one legend button per series"
+    assert_includes html, "mouseenter->metrics-chart#highlightSeries", "hover spotlights"
+    assert_includes html, "mouseleave->metrics-chart#unhighlightSeries", "leave restores"
+    assert_includes html, "click->metrics-chart#toggleSeries", "click toggles visibility"
+    assert_includes html, "<button", "legend entries are buttons (keyboard + a11y)"
+  end
+
+  # A stable key is emitted so the controller can persist which lines the
+  # operator hid ACROSS a realtime stream refresh (which replaces the chart DOM).
+  test "multi-series emits its stable key when given" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, key: "panel-3", **BASE.merge(points: [])).call
+
+    assert_includes html, 'data-metrics-chart-key-value="panel-3"'
+  end
+
+  test "multi-series omits the key value when none is given" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, **BASE.merge(points: [])).call
+
+    assert_not_includes html, "data-metrics-chart-key-value"
+  end
+
+  # Each multi dot carries its series_index so the controller can dim/hide a
+  # series' dots in lockstep with its line on legend hover/toggle.
+  test "multi-series dots carry their series_index" do
+    html = Components::Metrics::Chart.new(color: "var(--voodu-green)", series: SERIES, **BASE.merge(points: [])).call
+
+    dots = html.scan(/<circle[^>]*data-metrics-chart-target="dot"[^>]*>/)
+
+    assert dots.any? { |d| d.include?('data-series-index="0"') }, "series 0 dots tagged"
+    assert dots.any? { |d| d.include?('data-series-index="1"') }, "series 1 dots tagged"
+  end
 end
