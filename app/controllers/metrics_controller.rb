@@ -89,6 +89,8 @@ class MetricsController < ApplicationController
         chart =
           if params[:source].to_s == "hep3"
             hep3_expand_chart
+          elsif params[:source].to_s == "log"
+            log_expand_chart
           else
             data.single_chart(
               metric: params[:metric].to_s,
@@ -233,6 +235,23 @@ class MetricsController < ApplicationController
       "percent" => params[:percent].to_s == "true",
       # server_id → the panel re-aggregates against its OWN server (resolved
       # within the org by MetricDashboardData). Falls back to the URL's server.
+      "server_id" => expand_server&.id
+    }
+    dashboard = current_org.metric_dashboards.new(panels: [panel])
+
+    MetricDashboardData.new(current_org, dashboard,
+      range: params[:range], interval: params[:interval], **custom_window).charts.first
+  end
+
+  # log_expand_chart — rebuild a log-query count CHART for the expand modal from
+  # the maximize URL's params (a synthetic one-panel dashboard → the same
+  # log_chart_for the grid uses). Number tiles don't maximize; only area/bars/line.
+  def log_expand_chart
+    panel = {
+      "scope_kind" => "log", "chart_type" => params[:chart_type].presence || "area",
+      "scope" => params[:scope].to_s, "name" => params[:name].to_s,
+      "query" => params[:query].to_s,
+      "label" => params[:label].to_s, "color" => params[:color].to_s,
       "server_id" => expand_server&.id
     }
     dashboard = current_org.metric_dashboards.new(panels: [panel])

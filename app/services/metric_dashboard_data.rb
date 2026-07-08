@@ -185,9 +185,12 @@ class MetricDashboardData
       return hep_chart_for(panel, key, server)
     end
 
-    if panel["scope_kind"].to_s == "pod"
-      return multi_series_chart_for(panel, key, index) if multi_series?(panel)
+    # Multi-series (2+ pod/host members on shared axes) routes here regardless of
+    # the anchor's scope_kind — a Host + pod chart is anchored on the host but is
+    # still a multi chart.
+    return multi_series_chart_for(panel, key, index) if multi_series?(panel)
 
+    if panel["scope_kind"].to_s == "pod"
       scope_id = resolve_container(panel, server)
       return missing_card(panel, key) if scope_id.nil?
 
@@ -195,6 +198,13 @@ class MetricDashboardData
     else
       scope_kind = "host"
       scope_id = nil
+    end
+
+    # A warehouse metric draws a time-series or a gauge. Number/Table (or any
+    # future render it can't fill) have no chart today, so the panel reads EMPTY
+    # — not a misleading area fallback: the operator chose it knowingly.
+    unless METRIC_RENDERABLE.include?(panel["chart_type"].presence || "area")
+      return zeroed_card(panel, key, scope_kind: scope_kind, scope_id: scope_id, server_id: server.id)
     end
 
     page = MetricsPageData.new(
@@ -224,6 +234,11 @@ class MetricDashboardData
       default_visible: true, panel_key: key)
   end
 
+  # METRIC_RENDERABLE — the chart types a warehouse metric (host/pod) can draw:
+  # the time-series shapes + gauges. Number/Table have no metric render (those
+  # are log/DataTable renders); a metric panel carrying one draws empty (zeroed).
+  METRIC_RENDERABLE = %w[area bars line gauge_radial gauge_linear].freeze
+
   # MULTI_SERIES_CHART_TYPES — the styles that draw one mark per pod on shared
   # axes. Line (raio) + Area (line + translucent fill). Bar/gauges stay single.
   MULTI_SERIES_CHART_TYPES = %w[line area].freeze
@@ -242,21 +257,34 @@ class MetricDashboardData
     metric = panel["metric"].to_s
     scale = panel["scale"].presence&.to_sym
 
-    series = Array(panel["pods"]).each_with_index.filter_map do |pod, i|
-      srv = servers_by_id[pod["server_id"].to_s]
+    series = Array(panel["pods"]).each_with_index.filter_map do |entry, i|
+      srv = servers_by_id[entry["server_id"].to_s]
       next if srv.nil?
 
-      container = resolve_container(pod, srv)
-      next if container.nil?
+      # A member is the host (node metrics, no container) or a pod (resolve its
+      # live container). Every series reads the SAME metric key — CPU shares it
+      # across host + pods; a metric whose key differs by kind (Memory) reads the
+      # anchor's key, so the mismatched side comes back empty (operator's choice).
+      if entry["scope_kind"].to_s == "host"
+        page = MetricsPageData.new(
+          client_for(srv), srv, scope_kind: "host", scope_id: nil,
+          range: @range, interval: @interval, from: @from, until_: @until_
+        )
+        label = series_label(srv, "host")
+      else
+        container = resolve_container(entry, srv)
+        next if container.nil?
 
-      page = MetricsPageData.new(
-        client_for(srv), srv,
-        scope_kind: "pod", scope_id: container,
-        range: @range, interval: @interval, from: @from, until_: @until_
-      )
+        page = MetricsPageData.new(
+          client_for(srv), srv, scope_kind: "pod", scope_id: container,
+          range: @range, interval: @interval, from: @from, until_: @until_
+        )
+        label = series_label(srv, entry["name"].to_s)
+      end
+
       sp = page.series_points(metric: metric, scale: scale)
 
-      {label: pod["name"].to_s, color: MULTI_SERIES_COLORS[i % MULTI_SERIES_COLORS.size],
+      {label: label, color: MULTI_SERIES_COLORS[i % MULTI_SERIES_COLORS.size],
        points: sp[:points], current: sp[:current]}
     end
 
@@ -283,6 +311,14 @@ class MetricDashboardData
     }
   end
 
+  # series_label — a multi-series member's legend label, ALWAYS "<server> · <base>"
+  # so the server owning a "host" / pod line is explicit even in a single-server
+  # org (mirrors the builder dropdown's source_text — an org can grow to N servers
+  # and a bare name is ambiguous across them).
+  def series_label(srv, base)
+    "#{srv.name} · #{base}"
+  end
+
   # series_unit — best-effort unit for the y-axis when the panel didn't store
   # one (e.g. bytes_auto): the trailing token of the first formatted value.
   def series_unit(series)
@@ -291,10 +327,15 @@ class MetricDashboardData
     fmt.include?(" ") ? fmt.split(" ").last : ""
   end
 
-  # log_chart_for — a log-count panel: read the filter's pre-aggregated count
-  # series (via LogMetricData) and reduce it per the query's `| agg` suffix,
-  # returned as a `number` envelope the NumberCard renders. The series is
-  # bucketed by the dashboard interval (so the sparkline honours the picker).
+  # log_chart_for — a log-query panel: read the filter's pre-aggregated count
+  # series (via LogMetricData) and reduce it per the query's `| agg` suffix. The
+  # SAME series renders two ways, chosen by chart_type:
+  #   number (default)   → a big-number tile + optional sparkline  [NumberCard]
+  #   area | bars | line → the count-over-time as a chart           [ChartCard]
+  # The chart's `current` reuses the reduced headline (data.value) so number and
+  # chart of the same filter always agree. No new data source, no counter change
+  # — the warehouse `log_count` series (fed for every scope_kind="log" panel) is
+  # read either way.
   #
   # default_visible: true — the operator explicitly chose this panel, so the
   # metrics-display "hide picker-only on first run" heuristic must never hide
@@ -311,11 +352,40 @@ class MetricDashboardData
       until_: @until_
     )
 
-    # show_chart — the operator's per-panel toggle: a count tile can be just the
-    # big number (show_chart false) or number + timeline area chart (true).
-    # Series is only computed/passed when the chart is wanted; an empty series
-    # makes the NumberCard render the number alone. Absent key → true, so legacy
-    # panels keep their chart.
+    chart_type = panel["chart_type"].presence || "number"
+
+    # Chart render — the count series as a time-series. scope/name/query ride
+    # along so the maximize modal can rebuild the panel (see log_expand_url).
+    if %w[area bars line].include?(chart_type)
+      return {
+        label: panel["label"].to_s,
+        color: panel["color"].to_s,
+        unit: "",
+        points: data.series,
+        current: data.value,
+        metric: key,
+        source: "log",
+        section: "resource",
+        chart_type: chart_type,
+        scope: panel["scope"].to_s,
+        name: panel["name"].to_s,
+        query: panel["query"].to_s,
+        server_id: server&.id,
+        default_visible: true,
+        panel_key: key
+      }
+    end
+
+    # A gauge (or any non-number, non-timeseries render) has no log-count chart —
+    # the count is unbounded, so a gauge can't fill. It reads empty (zeroed).
+    unless chart_type == "number"
+      return zeroed_card(panel, key, source: "log", scope: panel["scope"].to_s,
+        name: panel["name"].to_s, query: panel["query"].to_s, server_id: server&.id)
+    end
+
+    # Number tile (default) — the operator's `show_chart` toggle keeps or drops
+    # the sparkline; an empty series makes the NumberCard render the number
+    # alone. Absent key → true, so legacy panels keep their chart.
     {
       kind: :number,
       label: panel["label"].to_s,
@@ -579,6 +649,28 @@ class MetricDashboardData
       metric: panel["metric"].to_s,
       panel_key: key
     }
+  end
+
+  # zeroed_card — a panel whose (measure, render) pairing has no chart today
+  # draws EMPTY: an empty-points ChartCard, not an error (the replica IS running)
+  # and not a misleading fallback. The operator knowingly chose a render the
+  # measure can't fill (Memory as a Table, a log count as a gauge), and by product
+  # decision that reads as zeroed. `zeroed: true` also suppresses the maximize
+  # button (there's nothing to expand). `extra` carries the routing fields.
+  def zeroed_card(panel, key, extra = {})
+    {
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      unit: panel["unit"].to_s,
+      points: [],
+      series: nil,
+      current: nil,
+      chart_type: panel["chart_type"].to_s,
+      metric: panel["metric"].presence || key,
+      zeroed: true,
+      default_visible: true,
+      panel_key: key
+    }.merge(extra)
   end
 
   # field — read a key from a pod hash that may use string OR symbol

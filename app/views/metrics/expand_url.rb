@@ -26,7 +26,11 @@ module Views::Metrics::ExpandUrl
   end
 
   def expand_url_for(chart, data)
+    # A zeroed card (a render the measure can't fill) has nothing to expand.
+    return nil if chart[:zeroed]
+
     return hep3_expand_url(chart, data) if chart[:source] == "hep3"
+    return log_expand_url(chart, data) if chart[:source] == "log"
     return multi_expand_url(chart, data) if chart[:multi]
 
     # Dashboard charts carry their own resolved scope_kind/scope_id (each panel
@@ -69,6 +73,25 @@ module Views::Metrics::ExpandUrl
   def multi_expand_url(chart, data)
     qp = {
       pid: chart[:dashboard_uuid], panel: chart[:panel_index],
+      range: custom_window? ? "custom" : (data&.range || "1h"),
+      from: custom_window? ? request.query_parameters[:from] : nil,
+      until: custom_window? ? request.query_parameters[:until] : nil,
+      interval: (data&.interval && data.interval != "auto") ? data.interval : nil
+    }.compact
+
+    "#{metrics_chart_path}?#{qp.to_query}"
+  end
+
+  # log_expand_url — the maximize URL for a log-query count CHART (area/bars/
+  # line). Carries the panel (scope/name/query/chart_type) so /metrics/chart
+  # re-aggregates the same slice in the modal, plus the same active window. A
+  # log number tile has no expand button, so this only fires for chart renders.
+  def log_expand_url(chart, data)
+    qp = {
+      source: "log", scope: chart[:scope], name: chart[:name],
+      query: chart[:query].presence, chart_type: chart[:chart_type],
+      label: chart[:label], color: chart[:color],
+      server_id: chart[:server_id],
       range: custom_window? ? "custom" : (data&.range || "1h"),
       from: custom_window? ? request.query_parameters[:from] : nil,
       until: custom_window? ? request.query_parameters[:until] : nil,

@@ -52,11 +52,6 @@ class Views::MetricDashboards::Form < Views::Base
     @return_to = return_to
   end
 
-  # multi_server? — the org has more than one server, so source labels get a
-  # "<server> · …" prefix to disambiguate (single-server orgs stay terse).
-  def multi_server?
-    @server_pods.size > 1
-  end
 
   # servers_json — { server_id => name } for every org server. The builder uses
   # it to prefix a re-edited panel's source label with the right server.
@@ -302,9 +297,7 @@ class Views::MetricDashboards::Form < Views::Base
       span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Choose panel type" }
 
       div(class: "flex flex-wrap gap-3") do
-        type_card("metric", "Metric", "CPU, memory, network, HTTP — chart or gauge") { metric_preview_svg }
-        type_card("log", "Log count", "Count log lines matching a filter — a number") { log_preview_svg }
-        type_card("table", "Table", "Rows from a pod — logs, filter, sort, live") { table_preview_svg }
+        type_card("metric", "Metric", "CPU, memory, log queries — chart, gauge or number") { metric_preview_svg }
         type_card("hep3", "HEP3", "SIP capture — Messages, Calls, Errors — filter, sort, live") { table_preview_svg } if hep3_readers.any?
         type_card("http", "HTTP / external API", "Fetch JSON from any URL — table or chart") { metric_preview_svg }
       end
@@ -869,12 +862,34 @@ class Views::MetricDashboards::Form < Views::Base
       end
 
       div(class: "flex flex-col vmd:flex-row gap-2") do
-        source_picker
         metric_picker
+        source_picker
       end
 
+      metric_query_editor
       shape_chips
       metric_color_swatches
+    end
+  end
+
+  # metric_query_editor — the LogQuery filter, shown only when the measure is
+  # "Query" (the builder toggles metricQueryRow). Same DSL + editor as the
+  # /logs Analytics filter, so a query prototyped there pastes in verbatim; the
+  # builder reads the text via the metricQuery target and routes it to a log /
+  # table panel depending on the chosen render.
+  def metric_query_editor
+    div(hidden: true, data: {dashboard_builder_target: "metricQueryRow"}, class: "flex flex-col gap-2") do
+      render Components::UI::QueryEditor.new(
+        value: "",
+        submits: false,
+        rows: "3",
+        min_h: "min-h-[120px]",
+        help_limit: false,
+        show_stats: true,
+        fields: DataTable::LogsSource::FIELDS,
+        placeholder: "@message like /INVITE/  ·  … | count",
+        input_data: {dashboard_builder_target: "metricQuery"}
+      )
     end
   end
 
@@ -974,27 +989,30 @@ class Views::MetricDashboards::Form < Views::Base
     end
   end
 
-  # source_text — a source dropdown row's label. Host → "Host (system)"; pod →
-  # "<pod> · <kind>". Multi-server orgs prefix "<server> · " so the same pod
-  # name on two servers stays distinguishable.
+  # source_text — a source dropdown row's label, ALWAYS "<server> · <base>" so the
+  # server owning a host/pod is explicit even in a single-server org (an org can
+  # grow to N servers, and "host" / a pod name alone is ambiguous across them).
+  # Host → "<server> · Host (system)"; pod → "<server> · <pod> · <kind>".
   def source_text(src)
     base = (src[:scope_kind] == "host") ? "Host (system)" : "#{src[:label]} · #{src[:kind]}"
 
-    multi_server? ? "#{src[:server]} · #{base}" : base
+    "#{src[:server]} · #{base}"
   end
 
   # default_source_label — the source trigger's resting label before a pick:
   # the default server's host (matches the JS default currentSource).
   def default_source_label
-    multi_server? ? "#{@server&.name} · Host (system)" : "Host (system)"
+    "#{@server&.name} · Host (system)"
   end
 
-  # metric_picker — menu filled by the builder controller from the
-  # catalog whenever the source changes (the offered metrics depend on
-  # the source's kind).
+  # metric_picker — the Type/measure dropdown, picked FIRST. The builder fills it
+  # with the FULL measure set (every measure across all workload kinds) + Query,
+  # independent of the source, so the operator chooses what to measure and then
+  # where. "Query" opens the LogQuery editor; a measure a source doesn't emit
+  # just reads empty (no filtering — the operator owns the pairing).
   def metric_picker
     div(class: "vmd:flex-1 min-w-0 relative", data: {controller: "dropdown"}) do
-      picker_trigger("Select metric", :metricLabel)
+      picker_trigger("Select type", :metricLabel)
       div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "metricMenu"}, class: menu_classes)
     end
   end
@@ -1002,20 +1020,26 @@ class Views::MetricDashboards::Form < Views::Base
   # shape_chips — chart shape picker as the SAME square card pattern as the
   # panel-type chooser: a skeleton preview up top + a label below. Gauge cards
   # carry data-gauge="true"; the builder hides them + snaps back to Area when
-  # the metric has no ceiling. The active card is ringed in JS (highlightShape).
+  # the metric has no ceiling. The Number + Table cards carry
+  # data-measure="query": they're offered only when the measure is "Query" (a
+  # count → a big number, or the matching lines → a table), and hidden for a
+  # warehouse metric. The active card is ringed in JS (highlightShape).
   def shape_chips
     div(class: "flex flex-wrap gap-2.5") do
+      shape_chip("number", "Number", measure: "query") { log_preview_svg }
       Components::Metrics::ChartShape::METRIC_TYPES.each do |t|
         shape_chip(t[:value], t[:label], gauge: t[:gauge]) do
           render Components::Metrics::ChartShape.new(type: t[:value])
         end
       end
+      shape_chip("table", "Table", measure: "query") { table_preview_svg }
     end
   end
 
-  def shape_chip(value, text, gauge: false)
+  def shape_chip(value, text, gauge: false, measure: nil)
     data = {action: "click->dashboard-builder#selectType", chart_type: value, dashboard_builder_target: "shapeChip"}
     data[:gauge] = "true" if gauge
+    data[:measure] = measure if measure
 
     button(
       type: "button",
@@ -1294,7 +1318,7 @@ class Views::MetricDashboards::Form < Views::Base
     table_sources.select { |src| src[:key] == "hep3" }.flat_map do |src|
       hep3_readers.flat_map do |reader|
         base = multi ? reader[:name] : src[:short_label]
-        prefix = multi_server? ? "#{reader[:server]} · #{base}" : base
+        prefix = "#{reader[:server]} · #{base}"
 
         src[:views].map do |v|
           {source: src[:key], server_id: reader[:server_id], scope: reader[:scope], name: reader[:name],

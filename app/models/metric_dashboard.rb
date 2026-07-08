@@ -60,6 +60,12 @@ class MetricDashboard < ApplicationRecord
   # be a rows table OR a count viz (Number/Area/Bar/Line/Radial/Linear); logs → table.
   TABLE_CHART_TYPES = %w[table number area bars line gauge_radial gauge_linear].freeze
 
+  # Chart types a log-query (scope_kind="log") panel may use: the count as a
+  # big-number tile, a count-over-time chart, or a gauge. Gauges have no native
+  # count render yet, so they read empty (a product choice — the operator owns
+  # the pairing). Table isn't here: Query+Table routes to a logs DataTable panel.
+  LOG_CHART_TYPES = %w[number area bars line gauge_radial gauge_linear].freeze
+
   # Bound the per-render fan-out — each panel is its own metric fetch.
   MAX_PANELS = 12
 
@@ -197,31 +203,37 @@ class MetricDashboard < ApplicationRecord
 
       ct = panel["chart_type"].to_s
       errors.add(:panels, "panel #{i + 1} has an unknown chart type") if ct.present? && CHART_TYPES.exclude?(ct)
-      # `number` is the count tile — for log panels OR a hep3/http count panel.
-      number_ok = sk == "log" || (sk == "table" && %w[hep3 http].include?(panel["source"].to_s))
-      errors.add(:panels, "panel #{i + 1}: the number type needs a log, hep3, or http source") if ct == "number" && !number_ok
-      errors.add(:panels, "panel #{i + 1}: the table type is only for table panels") if ct == "table" && sk != "table"
 
-      # A DataTable-family ("table") panel: the logs source only tabulates, but
-      # the hep3 + http sources can ALSO be a count/timeseries chart.
-      if sk == "table"
+      # Each source has a render set. A host/pod METRIC panel accepts ANY known
+      # chart type — a render the measure can't fill (Memory as a Table) just
+      # reads empty, a product choice; the operator owns the pairing, so no
+      # gating here beyond the unknown-type check above. Log + table (DataTable)
+      # panels keep their own render sets.
+      if sk == "log"
+        # Count as number / over-time chart / (empty) gauge — never a table.
+        errors.add(:panels, "log panel #{i + 1} can't use the #{ct} chart type") unless LOG_CHART_TYPES.include?(ct.presence || "number")
+      elsif sk == "table"
+        # The logs source only tabulates; hep3 + http can also be a count viz.
         allowed = %w[hep3 http].include?(panel["source"].to_s) ? TABLE_CHART_TYPES : %w[table]
         errors.add(:panels, "table panel #{i + 1} can't use the #{ct} chart type") unless allowed.include?(ct.presence || "table")
       end
+
+      # Multi-series list — valid on a pod- OR host-anchored metric panel (a
+      # Host + pod chart anchors on the host but still carries a pods list).
+      validate_pods(panel["pods"], i, org_server_ids) if panel.key?("pods") && %w[host pod].include?(sk)
 
       next unless sk == "pod"
 
       pod_missing = POD_PANEL_KEYS.reject { |k| panel[k].to_s.present? }
       errors.add(:panels, "pod panel #{i + 1} is missing #{pod_missing.join(", ")}") if pod_missing.any?
-
-      validate_pods(panel["pods"], i, org_server_ids) if panel.key?("pods")
     end
   end
 
-  # validate_pods — the optional multi-series list on a pod panel. Each entry is
-  # {server_id, scope, name}; every server_id must belong to this org (same
-  # cross-org guard as the primary server_id), and the list is capped at
-  # MAX_SERIES so one panel can't fan out into a heavy pile of queries.
+  # validate_pods — the optional multi-series list. A pod member is
+  # {server_id, scope, name}; a host member (scope_kind "host") is {server_id}
+  # only (host node metrics have no container). Every server_id must belong to
+  # this org (same cross-org guard as the primary server_id), and the list is
+  # capped at MAX_SERIES so one panel can't fan out into a heavy pile of queries.
   def validate_pods(pods, i, org_server_ids)
     unless pods.is_a?(Array) && pods.any?
       errors.add(:panels, "panel #{i + 1}: pods must be a non-empty list")
@@ -233,7 +245,13 @@ class MetricDashboard < ApplicationRecord
     end
 
     pods.each_with_index do |p, j|
-      unless p.is_a?(Hash) && POD_PANEL_KEYS.all? { |k| p[k].to_s.present? } && p["server_id"].to_s.present?
+      unless p.is_a?(Hash) && p["server_id"].to_s.present?
+        errors.add(:panels, "panel #{i + 1} pod #{j + 1} is missing server_id, scope, or name")
+        next
+      end
+
+      # A pod member also needs scope + name; a host member needs only server_id.
+      if p["scope_kind"].to_s != "host" && POD_PANEL_KEYS.any? { |k| p[k].to_s.blank? }
         errors.add(:panels, "panel #{i + 1} pod #{j + 1} is missing server_id, scope, or name")
         next
       end

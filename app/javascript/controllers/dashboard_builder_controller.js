@@ -16,7 +16,7 @@ import Sortable from "sortablejs"
 // match the chosen source's workload kind.
 
 export default class extends Controller {
-  static targets = ["sourceLabel", "metricLabel", "metricMenu", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
+  static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
                     "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
@@ -47,6 +47,16 @@ export default class extends Controller {
     this.currentMetric = null
     this.currentMetricColor = null
     this.currentChartType = "area"
+    // The server-rendered default source label ("Host (system)" / "srv · Host
+    // (system)"), captured so resetMetricBlock can restore it when a fresh
+    // Metric panel drops a carried-over pod selection back to host.
+    this.defaultSourceLabel = this.hasSourceLabelTarget ? this.sourceLabelTarget.textContent.trim() : "Host (system)"
+
+    // isQueryMeasure — the Metric block's "Query" measure is selected: the panel
+    // is a LogQuery (count) routed to a log/table shape, NOT a warehouse metric.
+    // Gates the render chips (Number/Line/Area/Bar/Table, no gauges), reveals the
+    // query editor, and disables multi-pod (a query reads one pod).
+    this.isQueryMeasure = false
 
     this.currentLogSource = null
     this.currentLogColor = this.defaultLogColor()
@@ -66,6 +76,7 @@ export default class extends Controller {
     this.editingIndex = null
     this.selectedIndex = null
 
+    this.buildMeasureIndex()
     this.populateMetrics()
     this.highlightLogColor()
     this.highlightTableColor()
@@ -87,6 +98,11 @@ export default class extends Controller {
       this.tableQueryTarget.addEventListener("input", this.onTableQueryInput)
     }
 
+    if (this.hasMetricQueryTarget) {
+      this.onMetricQueryInput = () => this.autoCommit()
+      this.metricQueryTarget.addEventListener("input", this.onMetricQueryInput)
+    }
+
     // The DS color picker lives in a popover that portals OUT of this form to
     // the modal dialog, so its `color-picker:change` doesn't bubble through
     // here — listen on the document instead.
@@ -104,7 +120,11 @@ export default class extends Controller {
     if (this.hasTableQueryTarget && this.onTableQueryInput) {
       this.tableQueryTarget.removeEventListener("input", this.onTableQueryInput)
     }
-    
+
+    if (this.hasMetricQueryTarget && this.onMetricQueryInput) {
+      this.metricQueryTarget.removeEventListener("input", this.onMetricQueryInput)
+    }
+
     document.removeEventListener("color-picker:change", this.onCustomColor)
   }
 
@@ -120,17 +140,51 @@ export default class extends Controller {
     this.addType = type
     this.wizardStep = "config"
 
+    // A freshly-added panel starts from clean defaults — never inheriting the
+    // previous panel's source / measure / query state — so every type
+    // eager-commits a valid default row (and a carried-over Query mode can't
+    // block the Metric commit).
+    if (type === "metric") this.resetMetricBlock()
+    if (type === "http") this.resetHttpBlock()
+
     // Table (logs) + HEP3 share one block; activate the kind's options + the
     // first source·view so autoCommit can create the panel immediately.
     if (type === "table" || type === "hep3") this.activateTableKind(type)
 
-    if (type === "http") { this.highlightHttpChart(); this.highlightHttpColor() }
-
     this.syncWizard()
-    // Metric panels have valid defaults (host · first metric) → auto-create
-    // immediately so the operator just refines. Log + table panels need a
-    // query / pod, so autoCommit no-ops here and fires on that input instead.
+    // Every type now has valid defaults (host · first metric / a HEP3 reader /
+    // a blank HTTP request) → eager-commit so the new row appears the instant
+    // the type is chosen, then the operator just refines it.
     this.autoCommit()
+  }
+
+  // resetMetricBlock — restore the Metric block to its clean defaults (host ·
+  // first metric, Area render, not Query mode) so a freshly-added Metric panel
+  // always eager-commits a valid default row instead of inheriting the previous
+  // panel's pod / measure / query state.
+  resetMetricBlock() {
+    this.currentSource = { scope_kind: "host", label: "host", server_id: this.defaultServerValue }
+    this.selectedPods = []
+    this.currentChartType = "area"
+    this.currentMetric = null
+    this.isQueryMeasure = false
+
+    if (this.hasMetricQueryRowTarget) this.metricQueryRowTarget.hidden = true
+    if (this.hasMetricQueryTarget) this.metricQueryTarget.value = ""
+    if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = this.defaultSourceLabel
+
+    this.markSelectedSources()
+    this.populateMetrics()
+  }
+
+  // resetHttpBlock — clear the HTTP block back to a blank request (no URL /
+  // headers / body / mapping, GET, Table render) so a freshly-added HTTP panel
+  // starts empty instead of inheriting the previous request's config.
+  resetHttpBlock() {
+    this.loadHttpPanel({
+      url: "", label: "", interval: "auto", method: "GET",
+      headers: {}, body: "", mapping: {}, chart_type: "table", color: "var(--voodu-cyan)"
+    })
   }
 
   // backToTypes — the config block's secondary link. While ADDING it reads
@@ -219,6 +273,14 @@ export default class extends Controller {
     this.selectedIndex = null
   }
 
+  // optionLabel — a source row's LABEL text only. The row also holds a trailing
+  // check span (opacity-toggled for the multi-select indicator); its ✓ glyph is
+  // still in textContent, so read the first (label) span to keep it out of the
+  // trigger. Falls back to the whole text for rows without a label span.
+  optionLabel(el) {
+    return (el.querySelector("span")?.textContent || el.textContent || "").trim()
+  }
+
   // selectSource — operator picked a source row. Update the trigger
   // label + remember the identity, then rebuild the metric menu for
   // this source's kind.
@@ -227,9 +289,9 @@ export default class extends Controller {
 
     if (!source) return
 
-    // Line multi-series: a pod source toggles in/out of the selection (keep the
-    // dropdown open); everything else is single-select (close on pick).
-    if (this.multiEligible() && source.scope_kind === "pod") {
+    // Multi-series: a pod OR the host toggles in/out of the selection (keep the
+    // dropdown open) so a chart can mix Host + pods; only Query is single-select.
+    if (this.multiEligible() && (source.scope_kind === "pod" || source.scope_kind === "host")) {
       this.togglePod(source)
 
       return
@@ -238,7 +300,7 @@ export default class extends Controller {
     this.currentSource = source
     this.selectedPods = []
     this.markSelectedSources()
-    if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = event.currentTarget.textContent.trim()
+    if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = this.optionLabel(event.currentTarget)
 
     this.closeSourceDropdown(event.currentTarget)
     this.populateMetrics()
@@ -247,10 +309,13 @@ export default class extends Controller {
 
   // ── Multi-pod selection (Line multi-series) ──────────────────────────────
 
-  // multiEligible — multi-pod applies to the time-series shapes that draw one
-  // mark per pod: Line + Area. Outside those, pod pick is single-select.
+  // multiEligible — multi-pod selection is enabled by default for EVERY render
+  // (the operator can pick N pods on any chart type). Only a Query is inherently
+  // one pod (logs are per-pod), so Query mode stays single-select. What the read
+  // path DRAWS with the extra pods is its own concern — Line/Area render one mark
+  // per pod; the rest render the first pod (the selection is still preserved).
   multiEligible() {
-    return this.isMultiChartType(this.currentChartType)
+    return !this.isQueryMeasure
   }
 
   // isMultiChartType — the chart types that support a multi-pod series list.
@@ -258,8 +323,10 @@ export default class extends Controller {
     return t === "line" || t === "area"
   }
 
+  // podKey — a stable key for a series member. The host has no scope/name (one
+  // node per server), so it keys off its server alone; a pod keys off scope+name.
   podKey(s) {
-    return `${s.server_id}/${s.scope}/${s.name}`
+    return s.scope_kind === "host" ? `host/${s.server_id}` : `${s.server_id}/${s.scope}/${s.name}`
   }
 
   togglePod(source) {
@@ -291,21 +358,39 @@ export default class extends Controller {
   updateSourceLabel() {
     if (!this.hasSourceLabelTarget) return
 
-    const n = (this.selectedPods || []).length
+    const sel = this.selectedPods || []
+    const n = sel.length
 
-    this.sourceLabelTarget.textContent =
-      n >= 2 ? `${n} pods` : (this.selectedPods?.[0]?.name || this.currentSource?.label || "Host (system)")
+    if (n >= 2) {
+      // "series" once the host joins (it isn't a pod); "pods" for a pure-pod set.
+      this.sourceLabelTarget.textContent = `${n} ${sel.some((p) => p.scope_kind === "host") ? "series" : "pods"}`
+
+      return
+    }
+
+    // A single source shows "<server> · <base>" (host / pod), always server-prefixed.
+    const one = sel[0] || this.currentSource
+
+    if (one) {
+      const base = one.scope_kind === "host" ? "Host (system)" : (one.name || one.label || "Host (system)")
+
+      this.sourceLabelTarget.textContent = this.sourceTriggerLabel(one.server_id, base)
+
+      return
+    }
+
+    this.sourceLabelTarget.textContent = "Host (system)"
   }
 
-  // markSelectedSources — toggle the accent/check on each source row so the
-  // operator sees which pods are in the multi-series selection.
+  // markSelectedSources — toggle the accent/check on each source row (pods AND
+  // the host) so the operator sees which sources are in the multi-series selection.
   markSelectedSources() {
     const keys = new Set((this.selectedPods || []).map((p) => this.podKey(p)))
 
     this.element.querySelectorAll("[data-dropdown-target='option'][data-source]").forEach((el) => {
       const src = this.parse(el.dataset.source)
 
-      el.dataset.selected = src && src.scope_kind === "pod" && keys.has(this.podKey(src)) ? "true" : "false"
+      el.dataset.selected = src && (src.scope_kind === "pod" || src.scope_kind === "host") && keys.has(this.podKey(src)) ? "true" : "false"
     })
   }
 
@@ -322,15 +407,32 @@ export default class extends Controller {
 
     if (!spec) return
 
-    this.currentMetric = spec
-    if (this.hasMetricLabelTarget) this.metricLabelTarget.textContent = spec.label
+    // Query is source-independent; a warehouse measure resolves to the concrete
+    // spec for the CURRENT source's kind (host vs pod Memory differ), so the
+    // panel captures the right metric key/scale — or an empty-reading fallback
+    // when the source doesn't emit it (the operator owns that mismatch).
+    const resolved = spec.query ? spec : (this.resolveMeasure(spec.label, this.currentSource) || spec)
+
+    this.currentMetric = resolved
+    if (this.hasMetricLabelTarget) this.metricLabelTarget.textContent = resolved.label
+
+    // "Query" flips the block into log-query mode (render editor + gated shapes,
+    // no gauges); any real metric flips it back. Toggle BEFORE gating so
+    // syncTypeAvailability reads the right mode.
+    this.applyQueryMode(!!spec.query)
+
+    // A gauge render carries no meaning for a count — snap to a line if we land
+    // in Query mode still holding a gauge shape.
+    if (this.isQueryMeasure && this.isGaugeType(this.currentChartType)) this.currentChartType = "line"
 
     // Reset to this metric's canonical color (the operator can re-override
     // via the swatches); recolor the shape previews to match.
-    this.currentMetricColor = spec.color
+    this.currentMetricColor = resolved.color
     this.highlightMetricColor()
     this.recolorShapes()
 
+    this.updateSourceLabel()
+    this.markSelectedSources()
     this.syncTypeAvailability()
     this.autoCommit()
   }
@@ -417,9 +519,10 @@ export default class extends Controller {
 
     this.currentChartType = t
 
-    // Line/Area ↔ others: entering a multi-capable shape seeds the selection
-    // with the current pod; leaving collapses back to single-select.
-    if (this.isMultiChartType(t)) {
+    // Multi-pod is enabled for every non-Query render, so switching shapes keeps
+    // the pod selection (seed it with the current pod if empty). Query is
+    // single-pod, so it collapses any multi-series selection.
+    if (!this.isQueryMeasure) {
       if (!(this.selectedPods || []).length && this.currentSource?.scope_kind === "pod") {
         this.selectedPods = [this.currentSource]
       }
@@ -447,22 +550,14 @@ export default class extends Controller {
     })
   }
 
-  // syncTypeAvailability — gauges need a ceiling, so hide the gauge chips (and
-  // snap the selection back to Area) whenever the current metric has none.
-  // Driven by the spec's `gauge` flag from the catalog.
+  // syncTypeAvailability — EVERY render is offered for EVERY measure. No gating,
+  // no snapping: the operator owns the pairing (a render the measure can't fill
+  // just reads empty — a product choice). The only mode switch left is Query,
+  // which reveals the editor (applyQueryMode) — it does NOT gate the chips.
   syncTypeAvailability() {
-    const eligible = !!(this.currentMetric && this.currentMetric.gauge)
-
     if (this.hasShapeChipTarget) {
-      this.shapeChipTargets.forEach((el) => {
-        if (el.dataset.gauge === "true") el.hidden = !eligible
-      })
+      this.shapeChipTargets.forEach((el) => { el.hidden = false })
     }
-
-    // Only the GAUGE types need a ceiling. Area / Bar / Line are time-series
-    // shapes any metric can use, so they must survive a switch to a non-gauge
-    // metric — snap back to Area only when the current pick is a gauge.
-    if (!eligible && this.isGaugeType(this.currentChartType)) this.currentChartType = "area"
 
     this.highlightShape()
   }
@@ -471,38 +566,107 @@ export default class extends Controller {
     return t === "gauge_radial" || t === "gauge_linear"
   }
 
-  // populateMetrics — rebuild the metric dropdown's menu from the
-  // catalog for the current source's kind, and default-select the
-  // first metric so Add always has a valid pair.
+  // buildMeasureIndex — collapse the { kind => [spec, …] } catalog into a
+  // measure index keyed by LABEL: every distinct measure across all workload
+  // kinds (host + pod kinds), each remembering its per-kind spec. The Type
+  // dropdown is picked FIRST and lists every measure regardless of source, so a
+  // measure that differs by kind (host `mem_used_bytes` vs pod `mem_usage_bytes`
+  // Memory) resolves to the right metric once a source is chosen — CPU/Memory
+  // work on both, while a source-only measure (Disk on host, Net/HTTP on pods)
+  // simply reads empty where it doesn't exist.
+  buildMeasureIndex() {
+    this.measureOrder = []
+    this.measureByLabel = new Map()
+
+    Object.values(this.catalogValue || {}).forEach((specs) => {
+      (specs || []).forEach((spec) => {
+        let entry = this.measureByLabel.get(spec.label)
+
+        if (!entry) {
+          entry = { display: spec, byKind: {} }
+          this.measureByLabel.set(spec.label, entry)
+          this.measureOrder.push(spec.label)
+        }
+      })
+    })
+
+    // Second pass keys each measure's spec by the kind it came from (needs the
+    // kind key, lost by Object.values above).
+    Object.entries(this.catalogValue || {}).forEach(([kind, specs]) => {
+      (specs || []).forEach((spec) => { this.measureByLabel.get(spec.label).byKind[kind] = spec })
+    })
+  }
+
+  // measureKindKey — the catalog key for a source: "host" for the host, else the
+  // workload kind ("deployment"/"statefulset"/…). Mirrors the old populateMetrics.
+  measureKindKey(source) {
+    return source && source.scope_kind === "host" ? "host" : ((source && source.kind) || "pod")
+  }
+
+  // resolveMeasure — the concrete spec for a measure LABEL against a source's
+  // kind, or the measure's display spec as a fallback (the source doesn't emit
+  // this measure → the panel reads empty data, by the operator's own choice).
+  resolveMeasure(label, source) {
+    const entry = this.measureByLabel.get(label)
+
+    if (!entry) return null
+
+    return entry.byKind[this.measureKindKey(source)] || entry.display
+  }
+
+  // populateMetrics — render the Type dropdown as the FULL measure set (every
+  // label across all kinds) + Query, independent of the chosen source, then
+  // re-bind the current measure to the current source's kind. Rebuilt idempotently
+  // so every caller (source change, multi-pod toggle, edit-load) keeps working.
   populateMetrics() {
     if (!this.hasMetricMenuTarget) return
 
-    const key   = this.currentSource.scope_kind === "host" ? "host" : (this.currentSource.kind || "pod")
-    const specs = (this.catalogValue && this.catalogValue[key]) || []
+    const specs = [...this.measureOrder.map((l) => this.measureByLabel.get(l).display), this.queryMeasureSpec()]
 
     this.metricMenuTarget.innerHTML = ""
     specs.forEach((spec) => this.metricMenuTarget.appendChild(this.metricOption(spec)))
 
-    // Keep the current metric if the new source's catalog still offers it —
-    // otherwise fall back to the first. This is what makes toggling pods in a
-    // multi-series panel non-destructive: same kind → same catalog → the metric
-    // (and its color) survive; only a genuine metric change resets the color.
-    const kept = this.currentMetric && specs.find((s) => s.metric === this.currentMetric.metric)
-    const next = kept || specs[0] || null
+    // Query mode is source-independent — keep it. Otherwise re-resolve the
+    // current measure BY LABEL for the current source (its metric key can differ
+    // per kind), so switching sources re-binds the same measure to the new kind.
+    if (!this.isQueryMeasure) {
+      const label = (this.currentMetric && this.currentMetric.label) || this.measureOrder[0]
+      const next = label ? this.resolveMeasure(label, this.currentSource) : null
 
-    if (!this.currentMetric || !next || this.currentMetric.metric !== next.metric) {
-      this.currentMetricColor = next ? next.color : null
+      if (!this.currentMetric || !next || this.currentMetric.metric !== next.metric) {
+        this.currentMetricColor = next ? next.color : null
+      }
+
+      this.currentMetric = next
     }
 
-    this.currentMetric = next
-
     if (this.hasMetricLabelTarget) {
-      this.metricLabelTarget.textContent = this.currentMetric ? this.currentMetric.label : "Select metric"
+      this.metricLabelTarget.textContent = this.currentMetric ? this.currentMetric.label : "Select type"
     }
 
     this.highlightMetricColor()
     this.recolorShapes()
     this.syncTypeAvailability()
+  }
+
+  // queryMeasureSpec — the synthetic "Query" measure appended to a pod's metric
+  // list. `query: true` flags it so selectMetric enters Query mode; metric
+  // "__query__" is a sentinel that never collides with a real catalog metric.
+  queryMeasureSpec() {
+    return { metric: "__query__", label: "Query", color: "var(--voodu-orange)", unit: "", gauge: false, query: true }
+  }
+
+  // applyQueryMode — enter/leave Query mode: reveal the query editor, and when
+  // leaving, drop the multi-pod selection (a query is single-pod). The render
+  // chip gating happens in syncTypeAvailability (which reads isQueryMeasure).
+  applyQueryMode(on) {
+    this.isQueryMeasure = on
+
+    if (this.hasMetricQueryRowTarget) this.metricQueryRowTarget.hidden = !on
+
+    // A query is one pod — collapse any multi-series selection on entry so the
+    // panel doesn't carry a stale pods list into a log/table shape.
+    if (on) this.selectedPods = []
   }
 
   metricOption(spec) {
@@ -552,11 +716,22 @@ export default class extends Controller {
   }
 
   // buildPanelSafe — the metric panel for the current source+metric, or null
-  // when there isn't enough to build one yet.
+  // when there isn't enough to build one yet. In Query mode it only needs a pod
+  // source (logs are per-pod); a blank query is allowed — the panel commits as a
+  // placeholder the instant Query is picked (like the HTTP panel) and the row
+  // stays put while the operator types, rather than vanishing. The model guards
+  // a blank count query on save.
   buildPanelSafe() {
     if (!this.currentSource || !this.currentMetric) return null
 
+    if (this.isQueryMeasure && this.currentSource.scope_kind !== "pod") return null
+
     return this.buildPanel(this.currentSource, this.currentMetric)
+  }
+
+  // metricQueryText — the trimmed LogQuery from the Metric block's query editor.
+  metricQueryText() {
+    return this.hasMetricQueryTarget ? this.metricQueryTarget.value.trim() : ""
   }
 
   // buildLogPanelSafe — the log-count panel for the current source+query, or
@@ -598,13 +773,17 @@ export default class extends Controller {
     this.render()
   }
 
-  // typeForPanel — the add-wizard type a saved panel edits under.
+  // typeForPanel — the add-wizard type a saved panel edits under. Log-query
+  // panels (scope_kind "log", and the logs DataTable "table"+source "logs") now
+  // author under the Metric block's "Query" measure, so both route to "metric".
+  // HEP3 (table+hep3) + HTTP (table+http) keep their own blocks.
   typeForPanel(panel) {
-    if (panel.scope_kind === "log") return "log"
+    if (panel.scope_kind === "log") return "metric"
 
     if (panel.scope_kind === "table") {
       if (panel.source === "hep3") return "hep3"
       if (panel.source === "http") return "http"
+      if (panel.source === "logs") return "metric"
 
       return "table"
     }
@@ -619,13 +798,13 @@ export default class extends Controller {
     return map[serverId] || map[String(serverId)] || ""
   }
 
-  // sourceTriggerLabel — prefix a source label with its server when the org has
-  // more than one server (mirrors the form's source_text).
+  // sourceTriggerLabel — ALWAYS prefix a source label with its server (mirrors the
+  // form's source_text) so the server owning a host/pod is explicit even in a
+  // single-server org.
   sourceTriggerLabel(serverId, base) {
-    const multi = Object.keys(this.serversValue || {}).length > 1
     const name = this.serverName(serverId)
 
-    return (multi && name) ? `${name} · ${base}` : base
+    return name ? `${name} · ${base}` : base
   }
 
   // resolvePodKind — a saved pod may not carry its workload kind: older panels
@@ -662,8 +841,16 @@ export default class extends Controller {
   }
 
   // loadMetricPanel — restore source + metric + chart type into the metric
-  // block's dropdowns from a saved panel.
+  // block's dropdowns from a saved panel. A log-query panel (scope_kind "log",
+  // or the logs DataTable "table"+source "logs") restores into Query mode
+  // instead of a warehouse metric.
   loadMetricPanel(panel) {
+    if (panel.scope_kind === "log" || (panel.scope_kind === "table" && panel.source === "logs")) {
+      this.loadQueryPanel(panel)
+
+      return
+    }
+
     const host = panel.scope_kind === "host"
     // Resolve the workload kind ONCE (recovering it from source options for old
     // panels) and reuse it for the source, the metric catalog key, and the label.
@@ -701,11 +888,59 @@ export default class extends Controller {
     // catalog lookup on the next toggle comes back empty. resolvePodKind recovers
     // it from the source options for panels saved before per-pod kind existed.
     this.selectedPods = Array.isArray(panel.pods)
-      ? panel.pods.map((p) => ({ scope_kind: "pod", server_id: p.server_id, scope: p.scope, name: p.name, kind: this.resolvePodKind(p, panel.kind), label: p.name }))
+      ? panel.pods.map((p) => (
+        p.scope_kind === "host"
+          ? { scope_kind: "host", server_id: p.server_id, label: "host" }
+          : { scope_kind: "pod", server_id: p.server_id, scope: p.scope, name: p.name, kind: this.resolvePodKind(p, panel.kind), label: p.name }
+      ))
       : []
     this.updateSourceLabel()
     this.markSelectedSources()
 
+    this.syncTypeAvailability()
+  }
+
+  // loadQueryPanel — restore a log-query panel into the Metric block's Query
+  // measure: the pod source, the Query measure + its editor, the render (from
+  // chart_type), and the color. Handles both the log shape (query in `query`,
+  // default render "number") and the logs DataTable shape (query in
+  // `filter_query`, render "table").
+  loadQueryPanel(panel) {
+    const kind = this.resolvePodKind(panel, panel.kind)
+
+    this.currentSource = { scope_kind: "pod", scope: panel.scope, name: panel.name, kind: kind, label: panel.name, server_id: panel.server_id }
+
+    if (this.hasSourceLabelTarget) {
+      this.sourceLabelTarget.textContent = this.sourceTriggerLabel(panel.server_id, `${panel.name} · ${kind}`)
+    }
+
+    // Rebuild the metric menu for this source (appends the Query measure), then
+    // pick Query so the label + Query mode are set.
+    this.populateMetrics()
+    this.currentMetric = this.queryMeasureSpec()
+    if (this.hasMetricLabelTarget) this.metricLabelTarget.textContent = this.currentMetric.label
+    this.applyQueryMode(true)
+
+    // The log shape stores the filter in `query`; the logs DataTable in
+    // `filter_query`. Default render: number for a log panel, table for the
+    // logs DataTable.
+    const isTable = panel.scope_kind === "table"
+
+    this.currentChartType = panel.chart_type || (isTable ? "table" : "number")
+
+    if (this.hasMetricQueryTarget) {
+      this.metricQueryTarget.value = panel.query || panel.filter_query || ""
+      this.metricQueryTarget.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+
+    this.currentMetricColor = panel.color || this.currentMetric.color
+    this.highlightMetricColor()
+    this.recolorShapes()
+    if (String(panel.color).startsWith("#")) this.applyCustomColor("metric", panel.color)
+
+    this.selectedPods = []
+    this.updateSourceLabel()
+    this.markSelectedSources()
     this.syncTypeAvailability()
   }
 
@@ -753,7 +988,15 @@ export default class extends Controller {
   // spec into a self-contained panel. Label reads "<source> · <metric>"
   // so two CPU panels from different pods stay distinguishable.
   buildPanel(source, spec) {
-    const srcLabel = source.label || (source.scope_kind === "host" ? "host" : source.name)
+    // Query measure → a LogQuery panel, not a warehouse metric. Ignore the
+    // metric fields entirely and route by the chosen render (Table → a logs
+    // DataTable; everything else → a scope_kind="log" count/timeseries).
+    if (spec.query) return this.buildQueryPanel(source)
+
+    // "<server> · host" / "<server> · <pod>" so a single-source panel title names
+    // its server too (consistent with the dropdown + multi-series legend).
+    const srcBase = source.scope_kind === "host" ? "host" : (source.name || source.label)
+    const srcLabel = this.sourceTriggerLabel(source.server_id, srcBase)
 
     const panel = {
       scope_kind: source.scope_kind,
@@ -778,23 +1021,75 @@ export default class extends Controller {
       panel.kind  = source.kind
     }
 
-    // Line multi-series: 2+ pods → one line each. Store the pod list; mirror the
-    // first into scope/name so the single-series fields stay valid. Relabel to
-    // "N pods · <metric>" since there's no single source name.
+    // Multi-series: 2+ selected sources (pods and/or the host) → store the list.
+    // Fires whatever the anchor is, so a Host + pod chart is a multi panel too.
+    // The read path draws one mark per member for Line/Area, and the first member
+    // for the rest (the list survives either way).
     const pods = this.selectedPods || []
 
-    if (this.isMultiChartType(this.currentChartType) && source.scope_kind === "pod" && pods.length >= 2) {
-      // Carry each pod's workload kind — re-editing rebuilds the metric catalog
-      // off the source kind, and the catalog is keyed by kind ("deployment",
-      // "statefulset", …), never "pod". Dropping it made a re-opened panel
-      // resolve to an empty catalog → null metric → the edit silently no-op'd.
-      panel.pods  = pods.map((p) => ({ server_id: p.server_id, scope: p.scope, name: p.name, kind: p.kind }))
-      panel.scope = pods[0].scope
-      panel.name  = pods[0].name
-      panel.label = `${pods.length} pods · ${spec.label}`
+    if (pods.length >= 2) {
+      // Each member marks its scope_kind. A pod carries its workload kind — the
+      // metric catalog is keyed by kind ("deployment"/…), never "pod", so a
+      // re-opened panel resolves the right catalog. The host carries only its
+      // server (one node per server, no container).
+      panel.pods = pods.map((p) => (
+        p.scope_kind === "host"
+          ? { scope_kind: "host", server_id: p.server_id }
+          : { scope_kind: "pod", server_id: p.server_id, scope: p.scope, name: p.name, kind: p.kind }
+      ))
+
+      // Mirror the first POD into the single-series fields (keeps a pod-anchored
+      // panel valid); a host-anchored panel keeps scope_kind "host".
+      const firstPod = pods.find((p) => p.scope_kind !== "host")
+
+      if (firstPod) { panel.scope = firstPod.scope; panel.name = firstPod.name; panel.kind = firstPod.kind }
+
+      const noun = pods.some((p) => p.scope_kind === "host") ? "series" : "pods"
+
+      panel.label = `${pods.length} ${noun} · ${spec.label}`
     }
 
     return panel
+  }
+
+  // buildQueryPanel — the "Query" measure's panel. Storage is routed by the
+  // chosen render, transparent to the operator:
+  //   Table                     → a logs DataTable (scope_kind "table", source
+  //                                "logs", chart_type "table", filter_query).
+  //   Number / Line / Area / Bar → a log-count panel (scope_kind "log",
+  //                                agg "count", chart_type = the render, query).
+  // Label defaults to "<pod> · query" so an unlabeled panel still reads.
+  buildQueryPanel(source) {
+    const query = this.metricQueryText()
+    const color = this.currentMetricColor || "var(--voodu-orange)"
+
+    if (this.currentChartType === "table") {
+      return {
+        scope_kind:   "table",
+        source:       "logs",
+        server_id:    source.server_id,
+        scope:        source.scope,
+        name:         source.name,
+        view:         "lines",
+        chart_type:   "table",
+        filter_query: query,
+        label:        `${source.name} · logs`,
+        color:        color
+      }
+    }
+
+    return {
+      scope_kind: "log",
+      server_id:  source.server_id,
+      scope:      source.scope,
+      name:       source.name,
+      kind:       source.kind,
+      query:      query,
+      agg:        "count",
+      chart_type: this.currentChartType,
+      label:      `${source.name} · query`,
+      color:      color
+    }
   }
 
   // ── log-count panels ──────────────────────────────────────────────
@@ -807,7 +1102,7 @@ export default class extends Controller {
     if (!source) return
 
     this.currentLogSource = source
-    if (this.hasLogSourceLabelTarget) this.logSourceLabelTarget.textContent = event.currentTarget.textContent.trim()
+    if (this.hasLogSourceLabelTarget) this.logSourceLabelTarget.textContent = this.optionLabel(event.currentTarget)
     this.autoCommit()
   }
 
@@ -1039,10 +1334,11 @@ export default class extends Controller {
 
   // ── http (external API) panel ──────────────────────────────────────
 
+  // buildHttpPanelSafe — the HTTP panel for the current request. Always returns
+  // a panel (even with a blank URL) so picking the HTTP type inserts a row
+  // immediately, like HEP3/Metric; the model guards a blank URL on save.
   buildHttpPanelSafe() {
-    const url = this.httpFieldValue("httpUrl")
-
-    return url ? this.buildHttpPanel(url) : null
+    return this.buildHttpPanel(this.httpFieldValue("httpUrl"))
   }
 
   buildHttpPanel(url) {

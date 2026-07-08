@@ -50,6 +50,29 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_equal "pod", charts[1][:scope_kind]
   end
 
+  # A multi-series can mix the Host with pods: one line for the host (node
+  # metrics, no container) + one per pod. The panel anchors on the host but still
+  # routes to the multi-series builder, yielding one series per member.
+  test "a host + pod line panel builds one series per member (host labeled 'host')" do
+    seed_running_web_pod
+
+    panel = {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+             "label" => "Host+web CPU", "color" => "var(--voodu-purple)", "unit" => "%",
+             "chart_type" => "line", "server_id" => @server.id,
+             "pods" => [{"scope_kind" => "host", "server_id" => @server.id},
+               {"scope_kind" => "pod", "server_id" => @server.id, "scope" => "web", "name" => "web", "kind" => "deployment"}]}
+    dash = @org.metric_dashboards.create!(name: "hp", panels: [panel])
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert c[:multi], "host + pod line → a multi-series envelope"
+    assert_equal 2, c[:series].size, "one series per member (host + web pod)"
+    # This org has >1 server (fixtures), so labels carry the "<server> · " prefix
+    # to disambiguate — a bare "host" is ambiguous across N servers.
+    assert_equal ["#{@server.name} · host", "#{@server.name} · web"], c[:series].map { |s| s[:label] }.sort,
+      "host member labeled '<server> · host' in a multi-server org"
+  end
+
   # chart_at — the maximize modal's single-panel entry (a multi chart references
   # its dashboard + index). Returns that panel's chart, nil for an out-of-range
   # index.
@@ -129,6 +152,56 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
 
     assert c[:series].any?, "show_chart true → timeline series present"
+  end
+
+  # A log-query panel can also render its count series AS A CHART (area/bars/
+  # line) instead of a number — same series, chosen by chart_type. Reuses the
+  # SAME pre-aggregated log_count warehouse series (no counter change).
+  test "a log panel with an area chart_type renders a chart envelope, not a number" do
+    dash = make_dashboard([FS_CALLS.merge("chart_type" => "area")])
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_nil c[:kind], "chart render → ChartCard (no :number kind)"
+    assert_equal "area", c[:chart_type]
+    assert_equal "log", c[:source], "source=log so the maximize modal rebuilds it"
+    assert c[:points].any?, "count-over-time points for the chart"
+  end
+
+  # A render a measure can't fill draws EMPTY (zeroed), not a misleading fallback
+  # and not an error. Product choice: the operator owns the (measure, render) pair.
+  test "a host metric with a number/table render reads empty (zeroed), not an area fallback" do
+    %w[number table].each do |ct|
+      dash = make_dashboard([HOST.merge("chart_type" => ct)])
+      c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+      assert c[:zeroed], "host + #{ct} → zeroed"
+      assert_empty c[:points], "a zeroed card carries no points"
+      assert_nil c[:kind], "still a ChartCard envelope (empty), not a :number/:table card"
+    end
+  end
+
+  test "a log-query panel with a gauge render reads empty (zeroed) — a count has no ceiling" do
+    dash = make_dashboard([FS_CALLS.merge("chart_type" => "gauge_radial")])
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert c[:zeroed], "log + gauge → zeroed"
+    assert_empty c[:points]
+    assert_nil c[:kind], "not a :number tile — the operator picked a gauge, which reads empty"
+  end
+
+  # The chart's headline (current) must equal the number tile's value for the
+  # SAME filter — number and chart of one query always agree.
+  test "log chart and log number of the same filter report the same headline value" do
+    seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
+
+    num = MetricDashboardData.new(@org, make_dashboard([FS_CALLS]), range: "1h").charts.first
+    chart = MetricDashboardData.new(@org, make_dashboard([FS_CALLS.merge("chart_type" => "line")]), range: "1h").charts.first
+
+    assert_equal num[:value], chart[:current], "chart current == number value (parity)"
   end
 
   test "log panel with no counted data yet reads zero" do

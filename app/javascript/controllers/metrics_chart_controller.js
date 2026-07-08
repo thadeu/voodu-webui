@@ -47,8 +47,9 @@ export default class extends Controller {
     "line",       
     "area",       
     "clipRect",   
-    "hLine",      
+    "hLine",
     "xTick",
+    "yTick",
     "bar",
     "dot",
     "legendItem"
@@ -110,6 +111,10 @@ export default class extends Controller {
       // Re-apply any hidden lines restored from a prior instance (stream refresh)
       // so the reconnected chart paints them hidden on first frame.
       this.applySeriesStyles(null)
+      // Restored hidden lines mean the Y ceiling isn't the server-rendered global
+      // one — reproject to the visible ceiling so the first paint is already
+      // rescaled (skip when nothing's hidden: the server SVG already fits).
+      if (this.hiddenSeries.size) this.applyYScale()
     }
 
     // "Show dots" per-panel pref (options menu). Restore it on connect — incl.
@@ -397,6 +402,78 @@ export default class extends Controller {
     }
 
     this.multiIndex = [...byTs.values()].sort((a, b) => a.x_norm - b.x_norm)
+
+    // Y ceiling for the CURRENTLY VISIBLE series (accounts for any restored
+    // hidden lines). rebuildMultiPaths + the tooltip read multiSeries' y, which
+    // applyYScale reprojects to this ceiling whenever the visible set changes.
+    this.currentYMax = this.visibleYMax()
+
+    // Derive the axis number format from what the SERVER actually rendered (a "%"
+    // in any pristine tick → percent), so a rescaled label matches the original
+    // format — more reliable than the unit value, which can drift for a multi
+    // panel whose members carry mixed units.
+    this.axisIsPercent = this.yTickTargets.some((t) => t.textContent.includes("%"))
+  }
+
+  // visibleYMax — the nice Y ceiling across the raw values of the VISIBLE series
+  // only, so hiding a dominant line rescales the axis to the rest. Mirrors the
+  // server's multi_bounds (nice_ceil of the max value).
+  visibleYMax() {
+    let max = 0
+
+    ;(this.seriesValue || []).forEach((s, idx) => {
+      if (this.hiddenSeries && this.hiddenSeries.has(idx)) return
+
+      ;(s.points || []).forEach((p) => { const v = Number(p.value) || 0;
+
+ if (v > max) max = v })
+    })
+
+    return niceCeil(max)
+  }
+
+  // projectY — a raw value → its viewBox y for the given ceiling. Mirrors
+  // Chart#project_series exactly so a client reproject lands on the server's
+  // coordinates when the ceiling is unchanged.
+  projectY(value, yMax) {
+    const innerH = this.heightValue - this.padTopValue - this.padBottomValue
+    const ySpan  = Math.max(Number(yMax) || 0, 0.0001)
+
+    return this.padTopValue + (1 - (Number(value) || 0) / ySpan) * innerH
+  }
+
+  // applyYScale — reproject every point's y to the current visible ceiling, then
+  // redraw the lines/areas, reposition the dots, and relabel the Y-axis ticks.
+  // Called whenever the visible set changes (legend toggle) so the remaining
+  // lines fill the plot instead of hugging the baseline under a hidden spike.
+  applyYScale() {
+    if (!this.multiSeries) return
+
+    const yMax = this.currentYMax
+
+    this.multiSeries.forEach((s) => { s.points.forEach((p) => { p.y = this.projectY(p.value, yMax) }) })
+
+    this.rebuildMultiPaths(this.widthValue - this.padLeftValue - this.padRightValue)
+
+    // Dots ride in point order per series → reproject each cy.
+    this.multiSeries.forEach((s, idx) => {
+      const dots = this.dotsForIndex(idx)
+
+      s.points.forEach((p, j) => { if (dots[j]) dots[j].setAttribute("cy", p.y.toFixed(2)) })
+    })
+
+    // Y-axis tick labels: value = ratio × ceiling, formatted like the server.
+    this.yTickTargets.forEach((el) => {
+      const r = parseFloat(el.dataset.yTickRatio)
+
+      if (Number.isFinite(r)) el.textContent = this.fmtAxis(r * yMax)
+    })
+  }
+
+  // fmtAxis — a y-axis tick value formatted to match the server's original ticks
+  // (percent when the pristine axis used "%", else a plain number).
+  fmtAxis(v) {
+    return this.axisIsPercent ? fmtPercent(v) : fmtNumber(v)
   }
 
   // ── Legend interaction (hover-spotlight + click-toggle) ────────────────────
@@ -435,6 +512,12 @@ export default class extends Controller {
     else this.hiddenSeries.add(idx)
 
     this.persistHidden()
+
+    // Rescale the Y axis to the now-visible series (hiding a spike lets the rest
+    // fill the plot; re-showing it restores the taller ceiling), then apply the
+    // per-series opacity so the toggled line hides/shows.
+    this.currentYMax = this.visibleYMax()
+    this.applyYScale()
 
     const nowHidden = this.hiddenSeries.has(idx)
 
@@ -616,9 +699,11 @@ export default class extends Controller {
     const padL      = this.padLeftValue
 
     const ptsFor    = (idx) => {
-      const s = this.seriesValue[idx]
+      // Read the WORKING copy — its y is reprojected by applyYScale to the
+      // current visible ceiling (a legend toggle rescales the plot).
+      const s = this.multiSeries && this.multiSeries[idx]
 
-      return s ? (s.points || []).map((p) => [padL + p.x_norm * innerW, p.y]) : null
+      return s ? s.points.map((p) => [padL + p.x_norm * innerW, p.y]) : null
     }
 
     this.lineTargets.forEach((path) => {
@@ -1014,6 +1099,55 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]))
+}
+
+// niceCeil — a "round" Y ceiling at or above v (1, 2, 2.5, 4, 5, 7.5 × 10ⁿ).
+// EXACT port of Chart#nice_ceil so a client-side rescale of the Y axis lands on
+// the same ceilings the server would have chosen.
+function niceCeil(v) {
+  if (v <= 0) return 1
+
+  const factor = Math.pow(10, Math.floor(Math.log10(v)))
+  const m = v / factor
+  let ceil
+
+  if (m <= 1) ceil = 1
+  else if (m <= 2) ceil = 2
+  else if (m <= 2.5) ceil = 2.5
+  else if (m <= 4) ceil = 4
+  else if (m <= 5) ceil = 5
+  else if (m <= 7.5) ceil = 7.5
+  else ceil = 10
+
+  return ceil * factor
+}
+
+// fmtNumber / fmtPercent — Y-axis tick formatting, ported from MetricFormat so a
+// rescaled axis label reads exactly like the server-rendered one.
+function fmtNumber(v) {
+  if (v == null) return "—"
+  if (v === 0) return "0"
+
+  const abs = Math.abs(v)
+
+  if (abs >= 100) return String(Math.round(v))
+  if (abs >= 1) return v.toFixed(1)
+  if (abs >= 0.01) return v.toFixed(2)
+
+  return "<0.01"
+}
+
+function fmtPercent(v) {
+  if (v == null) return "—"
+  if (v === 0) return "0%"
+
+  const abs = Math.abs(v)
+
+  if (abs >= 100) return `${Math.round(v)}%`
+  if (abs >= 1) return `${v.toFixed(1)}%`
+  if (abs >= 0.01) return `${v.toFixed(2)}%`
+
+  return "<0.01%"
 }
 
 function escapeAttr(s) {

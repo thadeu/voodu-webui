@@ -639,14 +639,17 @@ class Components::Metrics::Chart < Components::Base
         data: {metrics_chart_target: "hLine"}
       )
 
-      # Y-axis label x stays at pad_left - 6 across resize (the
-      # left gutter doesn't change with width). No target needed.
+      # Y-axis label x stays at pad_left - 6 across resize (the left gutter
+      # doesn't change with width). The tick RATIO (t) rides on the element so a
+      # multi-series chart can relabel it when a legend toggle rescales the Y
+      # ceiling (label value = t × y_max) — see metrics-chart#applyYScale.
       svg.text(
         x: pad_left - 6, y: y + 3.5,
         "text-anchor": "end",
         "font-size": "10",
         fill: "var(--voodu-muted-2)",
-        "font-family": "var(--voodu-font-mono, ui-monospace, monospace)"
+        "font-family": "var(--voodu-font-mono, ui-monospace, monospace)",
+        data: {metrics_chart_target: "yTick", y_tick_ratio: t}
       ) { format_axis_number(v) }
     end
   end

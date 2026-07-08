@@ -90,12 +90,39 @@ class MetricDashboardTest < ActiveSupport::TestCase
     assert d.errors[:panels].present?
   end
 
-  test "the number chart type is rejected on a non-log panel" do
-    bad = host_panel.merge("chart_type" => "number")
-    d = @org.metric_dashboards.new(name: "x", panels: [bad])
+  # A host/pod METRIC panel accepts ANY known chart type. A render the measure
+  # can't fill (Number/Table on a warehouse metric) saves fine and reads empty —
+  # a product choice: no gating, the operator owns the (measure, render) pairing.
+  test "a host metric panel accepts number + table chart types (they render empty)" do
+    %w[number table gauge_radial gauge_linear].each do |ct|
+      d = @org.metric_dashboards.new(name: "m-#{ct}", panels: [host_panel.merge("chart_type" => ct)])
 
-    assert_not d.valid?
-    assert d.errors[:panels].present?
+      assert d.valid?, "host + #{ct} should be allowed: #{d.errors.full_messages.to_sentence}"
+    end
+  end
+
+  # A log-query panel renders its count as a big number OR a count-over-time
+  # chart (Area/Bars/Line) — same series, chosen by chart_type.
+  test "a log panel accepts number + area/bars/line chart types" do
+    %w[number area bars line].each do |ct|
+      d = @org.metric_dashboards.new(name: "l-#{ct}", panels: [log_panel.merge("chart_type" => ct)])
+
+      assert d.valid?, "log + #{ct} should be valid: #{d.errors.full_messages.to_sentence}"
+    end
+  end
+
+  # A log-query panel now also accepts gauges (they render empty — a count has no
+  # ceiling to fill). Table stays rejected: Query+Table routes to a logs DataTable
+  # panel (scope_kind="table"), never a scope_kind="log" panel.
+  test "a log panel accepts gauges (render empty) but still rejects table" do
+    %w[gauge_radial gauge_linear].each do |ct|
+      d = @org.metric_dashboards.new(name: "l-#{ct}", panels: [log_panel.merge("chart_type" => ct)])
+
+      assert d.valid?, "log + #{ct} should be allowed (renders empty): #{d.errors.full_messages.to_sentence}"
+    end
+
+    table = @org.metric_dashboards.new(name: "l-table", panels: [log_panel.merge("chart_type" => "table")])
+    assert table.invalid?, "log + table should be rejected (logs tabulate via a table panel)"
   end
 
   test "an unknown scope_kind is rejected" do
@@ -158,12 +185,6 @@ class MetricDashboardTest < ActiveSupport::TestCase
   test "a table panel missing its source/view is rejected" do
     assert bad_message(@org.metric_dashboards.new(name: "a", panels: [table_panel(source: "")]))
     assert bad_message(@org.metric_dashboards.new(name: "b", panels: [table_panel(view: "")]))
-  end
-
-  test "the table chart type is rejected on a non-table panel" do
-    panel = host_panel.merge("chart_type" => "table")
-
-    assert bad_message(@org.metric_dashboards.new(name: "a", panels: [panel]))
   end
 
   test "a hep3 table panel may render as a count chart (Area/Radial/Linear)" do
@@ -236,6 +257,30 @@ class MetricDashboardTest < ActiveSupport::TestCase
   test "a pod referencing a server outside the org is rejected (anti cross-org)" do
     other = servers(:gamma)
     d = @org.metric_dashboards.new(name: "m", panels: [multi_pod_panel([pod_entry, pod_entry(other.id, "api")])])
+
+    assert d.invalid?
+    assert_includes d.errors[:panels].join, "outside this org"
+  end
+
+  # A multi-series can mix the Host with pods (one Line for host + one per pod).
+  # The panel is host-anchored (scope_kind "host"); a host member is {server_id}
+  # only (no container), a pod member still needs scope + name.
+  test "a host-anchored line panel accepts a Host + pod multi-series list" do
+    panel = {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+             "label" => "Host+api CPU", "color" => "var(--voodu-purple)", "unit" => "%",
+             "chart_type" => "line", "server_id" => @server.id,
+             "pods" => [{"scope_kind" => "host", "server_id" => @server.id}, pod_entry(@server.id, "api")]}
+    d = @org.metric_dashboards.new(name: "hp", panels: [panel])
+
+    assert d.valid?, d.errors.full_messages.join("; ")
+  end
+
+  test "a host member in a multi-series still can't reference a server outside the org" do
+    other = servers(:gamma)
+    panel = {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+             "label" => "x", "color" => "c", "unit" => "%", "chart_type" => "line", "server_id" => @server.id,
+             "pods" => [{"scope_kind" => "host", "server_id" => other.id}, pod_entry(@server.id, "api")]}
+    d = @org.metric_dashboards.new(name: "hp", panels: [panel])
 
     assert d.invalid?
     assert_includes d.errors[:panels].join, "outside this org"

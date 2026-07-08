@@ -77,4 +77,36 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/from=2026-06-19/, @response.body, "expand URL must carry the window's from")
     assert_match(/until=2026-06-19/, @response.body, "expand URL must carry the window's until")
   end
+
+  # A "zeroed" panel — a render the measure can't fill (a host metric asked to be
+  # a Table) — must render the dashboard EMPTY, never a 500. Exercises the full
+  # path: chart_for → zeroed_card → the grid → an empty-points ChartCard.
+  test "a zeroed panel (metric + table) renders the dashboard without error" do
+    @org.metric_dashboards.destroy_all
+    @org.metric_dashboards.create!(
+      name: "zeroed", pinned: true,
+      panels: [{"scope_kind" => "host", "metric" => "mem_used_bytes", "scale" => "bytes_to_gb",
+                "label" => "Mem as Table", "color" => "var(--voodu-blue)", "unit" => "GB",
+                "chart_type" => "table", "server_id" => @server.id}]
+    )
+
+    get metrics_path(server_key: @key, range: "1h")
+
+    assert_response :success
+    assert_match "Mem as Table", @response.body, "the zeroed panel still renders (empty), not a 500"
+  end
+
+  # A log-query panel rendered as a chart maximizes like the others: the
+  # /metrics/chart endpoint's source=log branch rebuilds the count chart for the
+  # modal (a synthetic one-panel dashboard → log_chart_for), not a 404.
+  test "the chart endpoint rebuilds a log-query count chart for maximize" do
+    get metrics_chart_path(server_key: @key, source: "log", scope: "fs", name: "fs",
+      query: "@message like /INVITE/", chart_type: "area",
+      label: "calls", color: "var(--voodu-orange)", server_id: @server.id, range: "1h"),
+      headers: {"Accept" => "text/vnd.turbo-stream.html"}
+
+    assert_response :success
+    assert_match "chart-modal-body", @response.body, "modal body streamed (not a 404)"
+    assert_match "calls", @response.body, "the panel label rides into the modal title"
+  end
 end
