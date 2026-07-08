@@ -321,9 +321,15 @@ class Components::Metrics::ChartCard < Components::Base
     end
   end
 
-  # options_menu? — which panels get the ⋮ options menu. Today only Line charts
-  # (single or multi), whose sole option is the "Show dots" toggle.
-  def options_menu? = @chart_type.to_s == "line"
+  # options_menu? — which panels get the ⋮ options menu. Its sole option today
+  # ("Show dots") only makes sense where dots exist: Line (single + multi always
+  # draw dots) and multi Area (one dotted line per pod). Single Area has no dots,
+  # so it gets no menu.
+  def options_menu?
+    return true if @chart_type.to_s == "line"
+
+    multi? && @chart_type.to_s == "area"
+  end
 
   # options_menu — the triple-dot popover. The trigger lives in the header; the
   # menu (portaled out on open by the popover controller to escape clipping)

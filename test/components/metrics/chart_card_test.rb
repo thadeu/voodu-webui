@@ -28,7 +28,8 @@ class Components::Metrics::ChartCardTest < ActiveSupport::TestCase
     assert_includes html, "Show dots"
   end
 
-  test "area / bar / gauge panels render NO options menu (Line-only for now)" do
+  # No dots → no menu: single Area (no per-point dots), Bar, and gauges.
+  test "single-area / bar / gauge panels render NO options menu (no dots to toggle)" do
     %w[area bars gauge_radial gauge_linear].each do |ct|
       html = card(chart_type: ct, capacity_pct: 50) # capacity_pct gives gauges a ceiling
 
@@ -36,15 +37,22 @@ class Components::Metrics::ChartCardTest < ActiveSupport::TestCase
     end
   end
 
-  # Multi-series Line also gets the menu — the dots toggle applies to every line.
-  test "a multi-series line panel renders the options menu" do
+  def multi_card(chart_type:)
     series = [{label: "a", color: "var(--voodu-purple)", points: POINTS}]
-    html = Components::Metrics::ChartCard.new(
-      label: "Pods", color: "var(--voodu-purple)", unit: "%",
-      points: [], series: series, range_ms: 900_000, chart_type: "line", metric: "k7"
-    ).call
 
-    assert_includes html, 'data-controller="panel-options"'
-    assert_includes html, 'data-panel-options-key-value="k7"'
+    Components::Metrics::ChartCard.new(
+      label: "Pods", color: "var(--voodu-purple)", unit: "%",
+      points: [], series: series, range_ms: 900_000, chart_type: chart_type, metric: "k7"
+    ).call
+  end
+
+  # Both multi-series shapes that draw dots get the menu: Line + Area.
+  test "multi-series line AND area panels render the options menu" do
+    %w[line area].each do |ct|
+      html = multi_card(chart_type: ct)
+
+      assert_includes html, 'data-controller="panel-options"', "multi #{ct} renders the menu"
+      assert_includes html, 'data-panel-options-key-value="k7"'
+    end
   end
 end
