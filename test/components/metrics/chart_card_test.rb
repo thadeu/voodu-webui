@@ -26,6 +26,12 @@ class Components::Metrics::ChartCardTest < ActiveSupport::TestCase
     assert_includes html, 'data-panel-options-key-value="k1"', "keyed by the panel id"
     assert_includes html, "change->panel-options#toggleDots", "the toggle is wired"
     assert_includes html, "Show dots"
+    # Polished UI: a header naming the panel, a macOS-style switch (hidden peer
+    # checkbox), and a keyboard hint.
+    assert_includes html, "peer sr-only", "checkbox is a hidden peer (switch, not raw checkbox)"
+    assert_includes html, "peer-checked:bg-voodu-accent", "the switch track lights up when on"
+    assert_match(/uppercase[^"]*">\s*CPU/m, html, "header names the panel")
+    assert_match(/font-voodu-mono[^"]*">\s*B\s*</m, html, "shows the 'B' keyboard hint")
   end
 
   # No dots → no menu: single Area (no per-point dots), Bar, and gauges.
