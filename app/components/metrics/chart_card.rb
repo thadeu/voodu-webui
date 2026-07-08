@@ -357,26 +357,14 @@ class Components::Metrics::ChartCard < Components::Base
         label(class: "flex items-center justify-between gap-3 px-3 py-2.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
           span(class: "flex items-center gap-2 min-w-0") do
             plain "Show dots"
-            option_kbd("B")
+            option_kbd("D")
           end
-          option_switch("dots")
+          render Components::UI::Switch.new(
+            checked: true,
+            data: {panel_options_target: "dots", action: "change->panel-options#toggleDots"}
+          )
         end
       end
-    end
-  end
-
-  # option_switch — a hidden checkbox (the a11y control + source of truth) styled
-  # as a macOS toggle via Tailwind `peer`: the track + knob react to peer-checked.
-  # The panel-options controller reads/writes the checkbox.
-  def option_switch(name)
-    span(class: "relative inline-flex items-center shrink-0 w-[34px] h-[20px]") do
-      input(
-        type: "checkbox", checked: true,
-        data: {panel_options_target: name, action: "change->panel-options#toggleDots"},
-        class: "peer sr-only"
-      )
-      span(class: "absolute inset-0 rounded-full bg-voodu-border transition-colors peer-checked:bg-voodu-accent")
-      span(class: "absolute left-[3px] top-[3px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform peer-checked:translate-x-[14px]")
     end
   end
 

@@ -21,9 +21,9 @@ export default class extends Controller {
     // dots shown by default).
     if (this.hasDotsTarget) this.dotsTarget.checked = panelPref(this.keyValue, "dots", true)
 
-    // Keyboard: while THIS popover is open, "B" toggles Show dots (the kbd hint
-    // in the row). Guard on the menu (this.element) being shown so a stray "B"
-    // elsewhere never fires it.
+    // Keyboard: while THIS popover is open, "D" (dots) toggles Show dots — the
+    // kbd hint in the row. Guard on the menu (this.element) being shown so a
+    // stray "D" elsewhere never fires it.
     this.onKey = (e) => this.handleKey(e)
     document.addEventListener("keydown", this.onKey)
   }
@@ -35,7 +35,7 @@ export default class extends Controller {
   handleKey(e) {
     if (this.element.hidden) return
     if (e.metaKey || e.ctrlKey || e.altKey) return
-    if (e.key.toLowerCase() !== "b") return
+    if (e.key.toLowerCase() !== "d") return
 
     const t = e.target
 
