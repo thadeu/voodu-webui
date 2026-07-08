@@ -312,11 +312,11 @@ class Components::Metrics::ChartCard < Components::Base
         end
       end
 
-      # Top-right actions: the per-panel options menu (⋮, Line only for now)
-      # sits LEFT of the maximize (⛶), which stays pinned in the corner.
+      # Top-right actions: maximize (⛶) first, then the options menu (⋮) LAST —
+      # the triple-dot menu is conventionally the trailing icon.
       div(class: "flex items-center gap-0.5 shrink-0") do
-        options_menu if options_menu?
         maximize_link if @expand_url
+        options_menu if options_menu?
       end
     end
   end
