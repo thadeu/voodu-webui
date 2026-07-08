@@ -213,3 +213,21 @@ Mandatory checklist before declaring "done":
   in its view
 - A polling controller fires too often → `polling_interval_value` on the
   data-controller div
+
+## Agent skills
+
+### Issue tracker
+
+Issues & PRDs live as local markdown under `.scratch/<feature-slug>/` (no
+external tracker; PRs are not a triage surface). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five roles used verbatim (`needs-triage`, `needs-info`,
+`ready-for-agent`, `ready-for-human`, `wontfix`), written as a `Status:`
+line in each issue file. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root (created
+lazily by skills). See `docs/agents/domain.md`.
