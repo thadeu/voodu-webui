@@ -122,7 +122,7 @@ export default class extends Controller {
     this.applyShowDots(panelPref(this.keyValue, "dots", true))
 
     this.onPanelOptions = (e) => {
-      if (e.detail?.key === this.keyValue) this.applyShowDots(e.detail.dots)
+      if (e.detail?.key === this.keyValue && "dots" in (e.detail || {})) this.applyShowDots(e.detail.dots)
     }
 
     window.addEventListener("panel-options:change", this.onPanelOptions)

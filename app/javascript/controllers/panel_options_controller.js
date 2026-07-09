@@ -13,17 +13,19 @@ import { panelPref, setPanelPref } from "../lib/panel_prefs"
 // popover portals its menu out to <body> on open (to escape overflow clipping),
 // so a direct DOM/controller link to the chart wouldn't survive.
 export default class extends Controller {
-  static targets = ["dots"]
+  static targets = ["dots", "timeline"]
   static values  = { key: String }
 
   connect() {
-    // Reflect the stored pref onto the checkbox (server renders it checked =
-    // dots shown by default).
+    // Reflect the stored prefs onto the switches (server renders them checked =
+    // shown by default). A menu carries only the target its card supports:
+    // Line → dots, Number → timeline.
     if (this.hasDotsTarget) this.dotsTarget.checked = panelPref(this.keyValue, "dots", true)
+    if (this.hasTimelineTarget) this.timelineTarget.checked = panelPref(this.keyValue, "timeline", true)
 
-    // Keyboard: while THIS popover is open, "D" (dots) toggles Show dots — the
-    // kbd hint in the row. Guard on the menu (this.element) being shown so a
-    // stray "D" elsewhere never fires it.
+    // Keyboard: while THIS popover is open, its kbd hint fires the toggle —
+    // "D" (dots) on a Line, "T" (timeline) on a Number. Guard on the menu
+    // (this.element) being shown so a stray key elsewhere never fires it.
     this.onKey = (e) => this.handleKey(e)
     document.addEventListener("keydown", this.onKey)
   }
@@ -35,16 +37,22 @@ export default class extends Controller {
   handleKey(e) {
     if (this.element.hidden) return
     if (e.metaKey || e.ctrlKey || e.altKey) return
-    if (e.key.toLowerCase() !== "d") return
 
     const t = e.target
 
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return
-    if (!this.hasDotsTarget) return
 
-    e.preventDefault()
-    this.dotsTarget.checked = !this.dotsTarget.checked
-    this.toggleDots()
+    const key = e.key.toLowerCase()
+
+    if (key === "d" && this.hasDotsTarget) {
+      e.preventDefault()
+      this.dotsTarget.checked = !this.dotsTarget.checked
+      this.toggleDots()
+    } else if (key === "t" && this.hasTimelineTarget) {
+      e.preventDefault()
+      this.timelineTarget.checked = !this.timelineTarget.checked
+      this.toggleTimeline()
+    }
   }
 
   toggleDots() {
@@ -56,6 +64,16 @@ export default class extends Controller {
 
     window.dispatchEvent(new CustomEvent("panel-options:change", {
       detail: { key: this.keyValue, dots: show }
+    }))
+  }
+
+  toggleTimeline() {
+    const show = this.hasTimelineTarget ? this.timelineTarget.checked : true
+
+    setPanelPref(this.keyValue, "timeline", show ? null : false)
+
+    window.dispatchEvent(new CustomEvent("panel-options:change", {
+      detail: { key: this.keyValue, timeline: show }
     }))
   }
 }

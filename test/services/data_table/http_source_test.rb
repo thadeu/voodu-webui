@@ -104,4 +104,50 @@ class DataTable::HttpSourceTest < ActiveSupport::TestCase
     assert_equal SERIES_JSON, preview.raw, "raw = the shape the operator maps against"
     assert_equal 2, preview.series.size, "series = the mapped output, confirming the paths resolve"
   end
+
+  # ── Builder-preview token resolution (locate_panel) ──────────────────────────
+  # An in-progress http panel isn't persisted, so metrics#preview caches its
+  # config under an org-scoped token and hands the card "preview-<token>".
+  # from_params resolves that from the cache, so the preview's rows fetch works
+  # without the url/auth-headers ever reaching the client.
+
+  # with_cache — swap Rails.cache for a real store for the block (test env's
+  # :null_store swallows writes). Mirrors stub_fetch; avoids minitest/mock.
+  def with_cache(store)
+    original = Rails.method(:cache)
+    Rails.define_singleton_method(:cache, -> { store })
+
+    yield
+  ensure
+    Rails.define_singleton_method(:cache, original)
+  end
+
+  test "from_params resolves a preview-<token> panel from the org-scoped cache" do
+    panel = {"url" => "http://ext/api", "mapping" => {"root" => "", "columns" => []}}
+    store = ActiveSupport::Cache::MemoryStore.new
+    store.write(DataTable::HttpSource.preview_cache_key(@server.org_id, "tok123"), panel)
+
+    with_cache(store) do
+      src = DataTable::HttpSource.from_params(server: @server, params: {dashboard: "preview-tok123"})
+
+      assert_instance_of DataTable::HttpSource, src, "the cached panel builds a live source"
+    end
+  end
+
+  test "a preview token minted for ANOTHER org never resolves for this server" do
+    panel = {"url" => "http://ext/api", "mapping" => {}}
+    store = ActiveSupport::Cache::MemoryStore.new
+    store.write(DataTable::HttpSource.preview_cache_key("some-other-org", "tok123"), panel)
+
+    with_cache(store) do
+      assert_nil DataTable::HttpSource.from_params(server: @server, params: {dashboard: "preview-tok123"}),
+        "the cache key is org-scoped — a token from another org is a miss"
+    end
+  end
+
+  test "an unknown/expired preview token resolves to nil, not a crash" do
+    with_cache(ActiveSupport::Cache::MemoryStore.new) do
+      assert_nil DataTable::HttpSource.from_params(server: @server, params: {dashboard: "preview-missing"})
+    end
+  end
 end

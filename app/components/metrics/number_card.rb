@@ -57,13 +57,21 @@ class Components::Metrics::NumberCard < Components::Base
 
     root_data[:default_visible] = "false" unless @default_visible
 
+    # number-card controller → live show/hide of the sparkline from the options
+    # popover ("Show timeline" / "T"). Only wired when there IS a sparkline + a
+    # panel key to broadcast on; a bare number tile needs neither.
+    if @metric && chart?
+      root_data[:controller] = "number-card"
+      root_data[:number_card_key_value] = @metric
+    end
+
     div(
       class: "relative bg-voodu-surface border border-voodu-border p-3.5 flex flex-col gap-2 min-w-0",
       data: root_data
     ) do
       card_header
       value_block
-      sparkline
+      timeline_block
 
       if @metric
         resize_handle("left")
@@ -84,10 +92,14 @@ class Components::Metrics::NumberCard < Components::Base
           style: "color: #{@color};"
         ) { @label }
 
-        span(
-          class: "inline-flex items-center px-1.5 h-[18px] text-[10.5px] font-medium rounded-voodu-sm " \
-                 "border border-voodu-border text-voodu-muted shrink-0 font-voodu-mono"
-        ) { @range }
+        div(class: "flex items-center gap-1 shrink-0") do
+          span(
+            class: "inline-flex items-center px-1.5 h-[18px] text-[10.5px] font-medium rounded-voodu-sm " \
+                   "border border-voodu-border text-voodu-muted font-voodu-mono"
+          ) { @range }
+
+          options_menu if @metric && chart?
+        end
       end
 
       # sub — the agg + field qualifier ("avg · duration_ms"). Mono because the
@@ -150,9 +162,16 @@ class Components::Metrics::NumberCard < Components::Base
   # count card being the tallest and forcing everything else taller. Needs ≥2
   # points; the densified (full-window zero-fill) series keeps the area filled
   # instead of collapsing to a bare line on mostly-zero counts.
-  def sparkline
+  # timeline_block — wraps the sparkline in the number-card controller's toggle
+  # target so the options popover ("Show timeline" / "T") can hide/reveal it live
+  # without a reload. Only present when there's a chart to toggle.
+  def timeline_block
     return unless chart?
 
+    div(data: {number_card_target: "timeline"}) { sparkline }
+  end
+
+  def sparkline
     render Components::Metrics::Chart.new(
       points: @series,
       color: @color,
@@ -162,6 +181,47 @@ class Components::Metrics::NumberCard < Components::Base
       height: 150,
       axes: true
     )
+  end
+
+  # options_menu — the triple-dot popover (mirrors ChartCard's). One toggle:
+  # "Show timeline" — the sparkline under the headline. The menu portals out on
+  # open, so it carries its own panel-options controller keyed by the panel id;
+  # the toggle persists (sessionStorage) + broadcasts to this card's number-card
+  # controller (matched by key), which shows/hides the sparkline live.
+  def options_menu
+    div(class: "relative", data: {controller: "popover"}) do
+      button(
+        type: "button",
+        data: {popover_target: "trigger", action: "popover#toggle"},
+        class: "inline-flex items-center justify-center w-6 h-6 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
+        aria: {label: "Panel options", haspopup: "true"}, title: "Panel options"
+      ) { render Icon::EllipsisVerticalOutline.new(class: "w-4 h-4") }
+
+      div(
+        hidden: true,
+        data: {popover_target: "menu", controller: "panel-options", panel_options_key_value: @metric},
+        class: "min-w-[220px] bg-voodu-surface-2 border border-voodu-border shadow-xl overflow-hidden"
+      ) do
+        div(class: "px-3 py-2 border-b border-voodu-border text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted-2 truncate") { @label }
+
+        label(class: "flex items-center justify-between gap-3 px-3 py-2.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
+          span(class: "flex items-center gap-2 min-w-0") do
+            plain "Show timeline"
+            option_kbd("T")
+          end
+          render Components::UI::Switch.new(
+            checked: true,
+            data: {panel_options_target: "timeline", action: "change->panel-options#toggleTimeline"}
+          )
+        end
+      end
+    end
+  end
+
+  # option_kbd — the shortcut hint beside an option: pressing the key toggles it
+  # while the popover is open (see panel_options_controller).
+  def option_kbd(key)
+    span(class: "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded border border-voodu-border bg-voodu-surface text-[10px] font-voodu-mono text-voodu-muted-2 leading-none") { key }
   end
 
   # resize_handle — grab strip on the card's edge; mirrors ChartCard so a

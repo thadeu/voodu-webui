@@ -53,7 +53,15 @@ module DataTable
     end
 
     def self.locate_panel(server, dashboard_uuid, panel_key)
-      return nil if dashboard_uuid.blank? || panel_key.blank?
+      return nil if dashboard_uuid.blank?
+
+      # Builder preview — the panel isn't persisted yet, so its config was cached
+      # server-side under a one-shot token (the url + auth headers never leave the
+      # server). Resolve it here so the preview's rows fetch behaves exactly like a
+      # saved panel's.
+      return preview_panel(server, dashboard_uuid.to_s) if dashboard_uuid.to_s.start_with?(PREVIEW_TOKEN_PREFIX)
+
+      return nil if panel_key.blank?
 
       # Dashboards are org-level now (M2); look up via the server's org so an
       # http panel's stored config still re-resolves server-side.
@@ -61,6 +69,23 @@ module DataTable
       return nil unless dash
 
       Array(dash.panels)[panel_key.to_s.delete_prefix("k").to_i]
+    end
+
+    # Builder-preview token plumbing. metrics#preview caches an in-progress http
+    # panel under an org-scoped, short-lived token and hands the TableCard
+    # "preview-<token>" as its dashboard id; the rows fetch round-trips it back
+    # here. Org-scoped key → a token only resolves for the org that minted it.
+    PREVIEW_TOKEN_PREFIX = "preview-"
+
+    def self.preview_cache_key(org_id, token)
+      "metrics:preview-panel:#{org_id}:#{token}"
+    end
+
+    def self.preview_panel(server, dashboard_uuid)
+      token = dashboard_uuid.delete_prefix(PREVIEW_TOKEN_PREFIX)
+      return nil if token.blank?
+
+      Rails.cache.read(preview_cache_key(server.org_id, token))
     end
 
     def initialize(server:, panel:)

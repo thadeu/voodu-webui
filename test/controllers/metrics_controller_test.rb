@@ -96,6 +96,58 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
     assert_match "Mem as Table", @response.body, "the zeroed panel still renders (empty), not a 500"
   end
 
+  # ── Builder panel preview (POST /metrics/previews/panel) ────────────────────
+
+  def preview(panel)
+    post metrics_preview_panel_path(server_key: @key), params: {panel: panel.to_json}
+  end
+
+  test "preview renders an in-progress metric panel as its card" do
+    preview({scope_kind: "host", metric: "cpu_percent", scale: "percent", chart_type: "area",
+             label: "CPU preview", color: "var(--voodu-accent)", unit: "%", server_id: @server.id})
+
+    assert_response :success
+    assert_match "CPU preview", @response.body, "the panel renders as a card (not a 500)"
+  end
+
+  test "preview of a malformed / empty panel returns the placeholder, not a 500" do
+    preview({})
+
+    assert_response :success
+    assert_match(/to preview/i, @response.body, "empty panel → placeholder")
+  end
+
+  # An http Table panel fetches its rows client-side, and the endpoint re-resolves
+  # the panel's request config (url + auth headers) SERVER-SIDE. A preview panel
+  # isn't persisted, so the card gets a one-shot "preview-<token>" dashboard id
+  # (config cached server-side); the url NEVER reaches the client.
+  test "preview of an http Table panel hands the card a preview token, not the url" do
+    preview({source: "http", scope_kind: "table", chart_type: "table", view: "response",
+             label: "External API", color: "var(--voodu-cyan)", server_id: @server.id,
+             url: "https://api.example.test/posts", method: "GET",
+             mapping: {root: "", columns: [{field: "id"}, {field: "title"}]}})
+
+    assert_response :success
+    assert_match(/data-data-table-dashboard-value="preview-[a-f0-9]+"/, @response.body,
+      "the card resolves its rows via a one-shot, server-side preview token")
+    assert_no_match(/api\.example\.test/, @response.body,
+      "the request url never reaches the client — only the opaque token does")
+  end
+
+  test "preview never renders a panel pointing at ANOTHER org's server (isolation)" do
+    gamma = servers(:gamma)
+    assert_not_equal @org.id, gamma.org_id
+
+    preview({scope_kind: "host", metric: "cpu_percent", scale: "percent", chart_type: "area",
+             label: "forged", color: "c", unit: "%", server_id: gamma.id})
+
+    assert_response :success
+    # cross-org server_id fails panels_well_formed → the placeholder, and the
+    # read path never runs (no cross-org read at all).
+    assert_no_match "forged", @response.body, "the cross-org panel is NOT rendered"
+    assert_match(/to preview/i, @response.body, "→ placeholder")
+  end
+
   # A HEP3 group-by panel (`… | count() by to_user`) renders end-to-end without a
   # 500 — the full path: chart_for → hep_grouped_chart_for → the grid → GroupCard.
   test "a hep3 group-by Table panel renders the dashboard without error" do

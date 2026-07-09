@@ -20,6 +20,7 @@ class Views::Metrics::Frame < Views::Base
   # re-render of the grid can't drift from first paint (it used to: the modal
   # dropped the brushed window after the first tick).
   include Views::Metrics::ExpandUrl
+  include Views::Metrics::CardRenderer
 
   def initialize(data: nil)
     @data = data
@@ -132,118 +133,7 @@ class Views::Metrics::Frame < Views::Base
       class: "grid grid-cols-1 vmd:grid-cols-2 gap-3",
       data: {metrics_display_target: "grid"}
     ) do
-      charts.each do |c|
-        if c[:kind] == :number
-          render_number_card(c)
-        elsif c[:kind] == :table
-          render_table_card(c)
-        elsif c[:kind] == :group_table || c[:kind] == :group_bar
-          render_group_card(c)
-        elsif c[:missing]
-          render_missing_card(c)
-        else
-          render Components::Metrics::ChartCard.new(
-            label: c[:label],
-            color: c[:color],
-            unit: c[:unit],
-            points: c[:points],
-            series: c[:series],
-            range_ms: data.range_ms,
-            current: c[:current],
-            expand_url: expand_url_for(c, data),
-            metric: c[:panel_key] || c[:metric],
-            section: c[:section],
-            default_visible: c.fetch(:default_visible, true),
-            capacity_label: c[:capacity_label],
-            capacity_pct: c[:capacity_pct],
-            chart_type: c[:chart_type],
-            percent: c.fetch(:percent, true)
-          )
-        end
-      end
-    end
-  end
-
-  # render_group_card — mirrors Views::Metrics::Index#render_group_card so a
-  # group-by snapshot (Table/Bar) renders identically after a broadcast-tick swap.
-  def render_group_card(c)
-    render Components::Metrics::GroupCard.new(
-      label: c[:label], color: c[:color], field: c[:field], groups: c[:groups] || [],
-      style: (c[:kind] == :group_bar) ? :bars : :table,
-      metric: c[:panel_key], default_visible: c.fetch(:default_visible, true)
-    )
-  end
-
-  # render_number_card — mirrors Views::Metrics::Index#render_number_card so
-  # a log-count tile renders identically on initial load and after a
-  # broadcast-tick frame swap. Drift = the count flickers shape on refresh.
-  def render_number_card(c)
-    render Components::Metrics::NumberCard.new(
-      label: c[:label],
-      color: c[:color],
-      formatted: c[:formatted],
-      range: c[:range],
-      metric: c[:panel_key],
-      truncated: c[:truncated],
-      clamped: c[:clamped],
-      series: c[:series] || [],
-      range_ms: c[:range_ms],
-      sub: c[:meta],
-      default_visible: c.fetch(:default_visible, true)
-    )
-  end
-
-  # render_table_card — mirrors Views::Metrics::Index#render_table_card so a
-  # Table panel renders the same shell after a broadcast-tick frame swap.
-  # The card is turbo-permanent, so its live client state (rows, scroll,
-  # pause) survives the swap; this keeps the no-JS / first-paint shell in
-  # lockstep.
-  def render_table_card(c)
-    render Components::Metrics::TableCard.new(
-      label: c[:label],
-      color: c[:color],
-      source: c[:source],
-      scope: c[:scope],
-      name: c[:name],
-      view: c[:view],
-      fields: c[:fields] || [],
-      default_fields: c[:default_fields] || [],
-      filter_query: c[:filter_query],
-      rows_url: metrics_datatable_rows_path(source: c[:source]),
-      metric: c[:panel_key],
-      default_visible: c.fetch(:default_visible, true),
-      row_action: c[:row_action],
-      dashboard_uuid: c[:dashboard_uuid],
-      server_id: c[:server_id],
-      **table_window
-    )
-  end
-
-  # table_window — mirrors Views::Metrics::Index#table_window so a Table panel
-  # keeps honouring the page's time window after a broadcast-tick frame swap.
-  def table_window
-    custom = @data.respond_to?(:custom?) && @data.custom?
-
-    {
-      range: custom ? "custom" : (@data&.range || "1h"),
-      window_from: (custom ? request.query_parameters[:from] : nil),
-      window_until: (custom ? request.query_parameters[:until] : nil)
-    }
-  end
-
-  # render_missing_card — mirrors Views::Metrics::Index#render_missing_card
-  # so a dashboard panel with no running replica renders the same dashed
-  # placeholder after a broadcast-tick frame swap.
-  def render_missing_card(c)
-    div(class: "bg-voodu-surface border border-voodu-border border-dashed p-3.5 flex flex-col gap-2 min-w-0") do
-      span(
-        class: "text-[11.5px] font-semibold uppercase tracking-[0.05em]",
-        style: "color: #{c[:color]};"
-      ) { c[:label] }
-
-      div(class: "flex items-center justify-center w-full h-[120px] text-[12px] text-voodu-muted text-center px-3") do
-        plain "no running replica for #{c[:source_label]}"
-      end
+      charts.each { |c| render_one_card(c, data) }
     end
   end
 end

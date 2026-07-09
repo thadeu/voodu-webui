@@ -85,4 +85,33 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes render_card(sub: "avg-marker"), "avg-marker"
     assert_not_includes render_card(sub: nil), "avg-marker"
   end
+
+  # ── Show-timeline options popover (mirrors the Line chart's "Show dots") ──────
+  SPARK = [
+    {ts: "2026-06-19T14:45:00Z", value: 3.0, formatted: "3"},
+    {ts: "2026-06-19T14:46:00Z", value: 5.0, formatted: "5"}
+  ].freeze
+
+  test "with a sparkline + a key, renders the Show-timeline popover wired for live toggle" do
+    html = render_card(series: SPARK, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, "Show timeline", "the popover's toggle label"
+    assert_includes html, 'data-panel-options-target="timeline"', "the switch broadcasts a timeline change"
+    assert_includes html, 'data-number-card-target="timeline"', "the sparkline is the toggle target"
+    assert_includes html, "number-card", "the card controller shows/hides the sparkline live"
+  end
+
+  test "a bare number tile (no series) has no options popover — nothing to toggle" do
+    html = render_card(series: [], metric: "k0")
+
+    assert_not_includes html, "Show timeline"
+    assert_not_includes html, 'data-panel-options-target="timeline"'
+    assert_not_includes html, "number-card"
+  end
+
+  test "no options popover without a panel key (no key to broadcast on)" do
+    html = render_card(series: SPARK, range_ms: 3_600_000, metric: nil)
+
+    assert_not_includes html, "Show timeline"
+  end
 end

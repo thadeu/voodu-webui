@@ -16,7 +16,7 @@ import Sortable from "sortablejs"
 // match the chosen source's workload kind.
 
 export default class extends Controller {
-  static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
+  static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "metricTimelineRow", "metricShowChart", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
                     "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
@@ -25,7 +25,8 @@ export default class extends Controller {
                     "httpTab", "httpTabPanel", "httpHeadersRows", "httpHeaderTemplate", "httpHeaderKey", "httpHeaderValue",
                     "httpTestStatus", "httpTestResult", "httpTestRaw", "httpTestParsed",
                     "idleStep", "typeStep", "metricBlock", "logBlock",
-                    "metricBlockTitle", "logBlockTitle", "backLink"]
+                    "metricBlockTitle", "logBlockTitle", "backLink",
+                    "previewPane", "panelPreview", "previewRefresh"]
   static values  = {
     catalog:          Object,
     logsSourceViews:  Array,
@@ -34,6 +35,7 @@ export default class extends Controller {
     hep3Fields:       Array,
     hep3Hints:        Object,
     httpTestUrl:      String,
+    previewUrl:       String,
     defaultServer:    String,
     servers:          Object,
     panels:           Array
@@ -113,6 +115,8 @@ export default class extends Controller {
   disconnect() {
     if (this.sortable) this.sortable.destroy()
 
+    clearTimeout(this.previewTimer)
+
     if (this.hasLogQueryTarget && this.onLogQueryInput) {
       this.logQueryTarget.removeEventListener("input", this.onLogQueryInput)
     }
@@ -171,6 +175,8 @@ export default class extends Controller {
 
     if (this.hasMetricQueryRowTarget) this.metricQueryRowTarget.hidden = true
     if (this.hasMetricQueryTarget) this.metricQueryTarget.value = ""
+    if (this.hasMetricTimelineRowTarget) this.metricTimelineRowTarget.hidden = true
+    if (this.hasMetricShowChartTarget) this.metricShowChartTarget.checked = true
     if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = this.defaultSourceLabel
 
     this.markSelectedSources()
@@ -228,11 +234,74 @@ export default class extends Controller {
     if (this.hasTableBlockTarget) this.tableBlockTarget.hidden = !(config && isTable)
     if (this.hasHttpBlockTarget) this.httpBlockTarget.hidden = !(config && isHttp)
 
+    // The preview lives below the config — only meaningful while configuring.
+    if (this.hasPreviewPaneTarget) this.previewPaneTarget.hidden = !config
+
     if (this.hasMetricBlockTitleTarget) this.metricBlockTitleTarget.textContent = editing ? "Edit metric panel" : "New metric panel"
     if (this.hasLogBlockTitleTarget) this.logBlockTitleTarget.textContent = editing ? "Edit log count" : "New log count"
     if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = editing ? "Edit table panel" : "New table panel"
     if (this.hasHttpBlockTitleTarget) this.httpBlockTitleTarget.textContent = editing ? "Edit HTTP panel" : "New HTTP panel"
     this.backLinkTargets.forEach((el) => { el.textContent = editing ? "Cancel" : "Change type" })
+  }
+
+  // ── panel preview ──────────────────────────────────────────────────────────
+
+  // refreshPreview — POST the in-progress panel to /metrics/previews/panel and
+  // swap the rendered card into the preview pane. Manual (a button) so an HTTP
+  // panel's external request only fires on demand; a panel that can't build yet
+  // renders a placeholder server-side.
+  refreshPreview() {
+    if (!this.hasPanelPreviewTarget || !this.previewUrlValue) return
+
+    const panel = this.currentPanel()
+
+    this.setPreviewBusy(true)
+
+    fetch(this.previewUrlValue, {
+      method: "POST",
+      headers: {"X-CSRF-Token": this.csrfToken(), "Content-Type": "application/x-www-form-urlencoded"},
+      body: `panel=${encodeURIComponent(JSON.stringify(panel || {}))}`
+    })
+      .then((r) => r.text())
+      .then((html) => { this.panelPreviewTarget.innerHTML = html })
+      .catch(() => {})
+      .finally(() => this.setPreviewBusy(false))
+  }
+
+  // currentPanel — what the preview renders: the row autoCommit keeps current
+  // while editing, else a best-effort build of the in-progress config.
+  currentPanel() {
+    if (this.editingIndex != null && this.panels[this.editingIndex]) return this.panels[this.editingIndex]
+
+    return this.panelForType()
+  }
+
+  setPreviewBusy(on) {
+    if (!this.hasPreviewRefreshTarget) return
+
+    this.previewRefreshTarget.disabled = on
+    this.previewRefreshTarget.classList.toggle("opacity-50", on)
+  }
+
+  csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || ""
+  }
+
+  // autoPreview — re-render the preview automatically on any config change
+  // (chart type, measure, color, server, query…) so switching a shape updates
+  // the view live, not just on the refresh button. Debounced so query typing
+  // doesn't hammer the endpoint. Skipped for HTTP panels — those hit an external
+  // API, so they stay manual (the refresh button is their only trigger). No-op
+  // while the preview pane is hidden (no panel being configured yet).
+  autoPreview() {
+    if (!this.hasPreviewPaneTarget || this.previewPaneTarget.hidden) return
+
+    const panel = this.currentPanel()
+
+    if (panel && panel.source === "http") return
+
+    clearTimeout(this.previewTimer)
+    this.previewTimer = setTimeout(() => this.refreshPreview(), 250)
   }
 
   // initSortable — drag-reorder the panel chips. The grip handle
@@ -539,6 +608,8 @@ export default class extends Controller {
   // highlightShape — ring the active shape chip (accent border + fill). Inline
   // styles so nothing depends on a purge-scanned Tailwind class.
   highlightShape() {
+    this.syncTimelineRow()
+
     if (!this.hasShapeChipTarget) return
 
     this.shapeChipTargets.forEach((el) => {
@@ -548,6 +619,16 @@ export default class extends Controller {
       el.style.background   = active ? "var(--voodu-accent-dim)" : ""
       el.setAttribute("aria-pressed", active ? "true" : "false")
     })
+  }
+
+  // syncTimelineRow — the "Show timeline chart" toggle only applies to a Number
+  // render (it decides whether the tile draws its sparkline). Reveal that row
+  // for Number, hide it for every other render. Runs from highlightShape, so it
+  // fires on every render/measure/load change.
+  syncTimelineRow() {
+    if (this.hasMetricTimelineRowTarget) {
+      this.metricTimelineRowTarget.hidden = this.currentChartType !== "number"
+    }
   }
 
   // syncTypeAvailability — EVERY render is offered for EVERY measure. No gating,
@@ -701,6 +782,7 @@ export default class extends Controller {
     this.render()
     this.sync()
     this.syncWizard()
+    this.autoPreview()
   }
 
   // panelForType — the in-progress panel for the active add type, or null
@@ -771,6 +853,7 @@ export default class extends Controller {
     else this.loadMetricPanel(panel)
 
     this.render()
+    this.autoPreview()
   }
 
   // typeForPanel — the add-wizard type a saved panel edits under. Log-query
@@ -882,6 +965,10 @@ export default class extends Controller {
     if (String(panel.color).startsWith("#")) this.applyCustomColor("metric", panel.color)
 
     this.currentChartType = panel.chart_type || "area"
+
+    // Restore the Number "Show timeline chart" toggle (absent = shown). Harmless
+    // for non-Number renders — syncTimelineRow hides the row for those.
+    if (this.hasMetricShowChartTarget) this.metricShowChartTarget.checked = panel.show_chart !== false
 
     // Multi-series: restore the selected pods so re-editing shows all lines.
     // kind must be the REAL workload kind (not literal "pod") or the metric
@@ -1013,6 +1100,15 @@ export default class extends Controller {
       // a ceiling-less metric falls back to Area. Area / Bar / Line are valid
       // for any metric, so keep the operator's choice.
       chart_type: (this.isGaugeType(this.currentChartType) && !spec.gauge) ? "area" : this.currentChartType
+    }
+
+    // Number render → the "Show timeline chart" toggle decides whether the tile
+    // draws its sparkline. Only carried for Number (other renders ignore it), and
+    // only when off — absent = shown, keeping the stored panel minimal.
+    if (this.currentChartType === "number") {
+      const showChart = this.hasMetricShowChartTarget ? this.metricShowChartTarget.checked : true
+
+      if (!showChart) panel.show_chart = false
     }
 
     if (source.scope_kind === "pod") {

@@ -33,6 +33,48 @@ class MetricsController < ApplicationController
     end
   end
 
+  # Fixed window for the builder preview (v1). Future: a per-preview time picker.
+  PREVIEW_RANGE = "1h"
+  PREVIEW_INTERVAL = "1m"
+  # How long a previewed http panel's cached request config lives — long enough
+  # for the card's rows fetch to follow the preview render, short enough that the
+  # token is effectively one-shot.
+  PREVIEW_PANEL_TTL = 5.minutes
+
+  # preview — render the in-progress builder panel as its real dashboard card, so
+  # the operator sees it BEFORE saving. The panel JSON (`params[:panel]`, a stringy
+  # blob from the builder) is built into a SYNTHETIC, non-persisted one-panel
+  # dashboard and rendered through the same chart_for + cards the grid uses.
+  #
+  # Safe by construction: MetricDashboardData resolves the panel's server WITHIN
+  # current_org (a forged / cross-org / deleted id → a "missing" placeholder,
+  # never a cross-org read), and every field flows through the read-path
+  # allowlists (chart_for / hep3 filter_expr / the query plan). A malformed panel
+  # degrades to a placeholder — never a 500.
+  def preview
+    chart = nil
+
+    if (panel = parse_preview_panel)
+      dashboard = current_org.metric_dashboards.new(panels: [panel])
+      dashboard.validate
+
+      # Only render a WELL-FORMED panel. An incomplete one (no source/metric yet)
+      # or a cross-org server_id fails `panels_well_formed` → the placeholder,
+      # never the "no running replica" card and never a cross-org read. (Ignore
+      # dashboard-level errors like the missing name — the synthetic dash has none.)
+      if dashboard.errors[:panels].blank?
+        @preview_data = MetricDashboardData.new(current_org, dashboard, range: PREVIEW_RANGE, interval: PREVIEW_INTERVAL)
+        chart = @preview_data.chart_at(0)
+        stash_http_preview_panel(panel, chart)
+      end
+    end
+
+    render Views::Metrics::PanelPreview.new(chart: chart, data: @preview_data), layout: false
+  rescue => e
+    Rails.logger.warn("[panel-preview] #{e.class}: #{e.message}")
+    render Views::Metrics::PanelPreview.new(chart: nil, data: nil), layout: false
+  end
+
   # chart — backs the expand-to-modal flow on /metrics. Two formats:
   #
   #   turbo_stream (default, when triggered by maximize button or
@@ -222,6 +264,37 @@ class MetricsController < ApplicationController
   end
 
   private
+
+  # parse_preview_panel — the builder posts the in-progress panel as a JSON
+  # STRING (`params[:panel]`). Parse it to a string-keyed Hash; a bad/empty blob
+  # → nil (→ the preview placeholder). Never trusts it structurally — the read
+  # path is org-scoped + allowlisted, so an arbitrary hash is safe to render.
+  def parse_preview_panel
+    panel = JSON.parse(params[:panel].to_s)
+
+    panel.is_a?(Hash) ? panel : nil
+  rescue JSON::ParserError
+    nil
+  end
+
+  # stash_http_preview_panel — an http Table card fetches its rows client-side
+  # from the datatable endpoint, which re-resolves the panel's request config
+  # (url + auth headers) SERVER-SIDE by (dashboard uuid, panel_key). A preview
+  # panel isn't persisted, so cache its config under a one-shot, org-scoped token
+  # and hand the card "preview-<token>" as its dashboard id. The url + headers
+  # never reach the client — only the opaque token does (see HttpSource
+  # #locate_panel). No-op for every other source/render (they resolve without a
+  # stored config). Charts read server-side, so only the Table needs this.
+  def stash_http_preview_panel(panel, chart)
+    return unless chart.is_a?(Hash) && chart[:kind] == :table && chart[:source].to_s == "http"
+
+    token = SecureRandom.hex(16)
+    Rails.cache.write(
+      DataTable::HttpSource.preview_cache_key(current_org.id, token),
+      panel, expires_in: PREVIEW_PANEL_TTL
+    )
+    chart[:dashboard_uuid] = "#{DataTable::HttpSource::PREVIEW_TOKEN_PREFIX}#{token}"
+  end
 
   # hep3_expand_chart — rebuild a HEP3 count chart for the expand modal from
   # the maximize URL's params (a synthetic one-panel dashboard → the same

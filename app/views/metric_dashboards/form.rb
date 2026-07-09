@@ -52,7 +52,6 @@ class Views::MetricDashboards::Form < Views::Base
     @return_to = return_to
   end
 
-
   # servers_json — { server_id => name } for every org server. The builder uses
   # it to prefix a re-edited panel's source label with the right server.
   def servers_json
@@ -135,6 +134,7 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
         dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
         dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
+        dashboard_builder_preview_url_value: metrics_preview_panel_path,
         # default_server — the server a fresh (host) panel binds to before the
         # operator picks a source. current_server, so single-server behaviour is
         # unchanged; a picked source overrides it with its own server_id.
@@ -267,6 +267,35 @@ class Views::MetricDashboards::Form < Views::Base
       add_log_panel_row
       add_table_panel_row
       add_http_panel_row
+      panel_preview_pane
+    end
+  end
+
+  # panel_preview_pane — a live preview of the panel being configured, in the
+  # empty space below the config. Manual (a refresh-icon button, not live) so it
+  # never auto-fires an external HTTP request; the controller POSTs the current
+  # panel to /metrics/previews/panel and swaps the rendered card in. Shown only
+  # in the config step (the controller toggles it in syncWizard).
+  def panel_preview_pane
+    div(hidden: true, data: {dashboard_builder_target: "previewPane"}, class: "flex flex-col gap-2 mt-4 pt-4 border-t border-voodu-border-2") do
+      div(class: "flex items-center justify-between gap-2") do
+        span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Preview" }
+        button(
+          type: "button",
+          title: "Refresh preview",
+          "aria-label": "Refresh preview",
+          data: {action: "click->dashboard-builder#refreshPreview", dashboard_builder_target: "previewRefresh"},
+          class: "inline-flex items-center justify-center w-7 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2"
+        ) { render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5") }
+      end
+
+      div(data: {dashboard_builder_target: "panelPreview"}) { preview_placeholder }
+    end
+  end
+
+  def preview_placeholder
+    div(class: "flex items-center justify-center h-[180px] border border-voodu-border border-dashed text-[12px] text-voodu-muted text-center px-4") do
+      plain "Refresh to preview the panel"
     end
   end
 
@@ -869,6 +898,28 @@ class Views::MetricDashboards::Form < Views::Base
       metric_query_editor
       shape_chips
       metric_color_swatches
+      metric_timeline_toggle
+    end
+  end
+
+  # metric_timeline_toggle — a Number render's "Show timeline chart" switch: draw
+  # the tile as a bare number, or number + sparkline. Only meaningful for Number,
+  # so the builder reveals this row (metricTimelineRow) only when that render is
+  # picked. Writes `show_chart` on the panel; the read path (MetricDashboardData
+  # #show_chart?) drops the series when off. Mirrors log_show_chart_toggle.
+  def metric_timeline_toggle
+    div(hidden: true, data: {dashboard_builder_target: "metricTimelineRow"}, class: "flex flex-col gap-2") do
+      label(class: "flex items-center gap-2 cursor-pointer select-none mt-0.5") do
+        input(
+          type: "checkbox",
+          checked: true,
+          data: {dashboard_builder_target: "metricShowChart", action: "change->dashboard-builder#autoCommit"},
+          class: "w-4 h-4 shrink-0 cursor-pointer",
+          style: "accent-color: var(--voodu-accent);"
+        )
+        span(class: "text-[12px] text-voodu-text-2") { "Show timeline chart" }
+        span(class: "text-[11px] text-voodu-muted") { "— number + area over time" }
+      end
     end
   end
 

@@ -176,6 +176,10 @@ Rails.application.routes.draw do
     # and return the raw response + the mapped output (the mapping preview loop).
     post "/metrics/datatable/http/test", to: "datatable#test", as: :metrics_datatable_http_test
 
+    # Builder panel preview — render an in-progress panel (JSON in the body) as
+    # its real dashboard card, so the operator sees it before saving.
+    post "/metrics/previews/panel", to: "metrics#preview", as: :metrics_preview_panel
+
     # HEP3 call-flow ladder — drill-down off a DataTable (hep3) row. Returns
     # the overlay fragment injected by the page host (mirrors #surrounding).
     # corr_id/scope/name ride in the query string (a SIP Call-ID has @ and .).
