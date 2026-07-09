@@ -239,11 +239,14 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # options_menu — the triple-dot popover (mirrors ChartCard's). One toggle:
-  # "Show timeline" — the sparkline under the headline. The menu portals out on
+  # options_menu — the triple-dot popover (mirrors ChartCard's). Toggles:
+  # "Show timeline" (T) — the sparkline under the headline; and, on a MULTI tile,
+  # "Show dots" (D) — the per-pod markers on the multi-area timeline (a single
+  # area sparkline has no dots, so that tile skips it). The menu portals out on
   # open, so it carries its own panel-options controller keyed by the panel id;
-  # the toggle persists (sessionStorage) + broadcasts to this card's number-card
-  # controller (matched by key), which shows/hides the sparkline live.
+  # the toggles persist (sessionStorage) + broadcast to this card's number-card
+  # controller (timeline) and the timeline chart's metrics-chart controller
+  # (dots), both matched by the same key.
   def options_menu
     div(class: "relative", data: {controller: "popover"}) do
       button(
@@ -260,17 +263,25 @@ class Components::Metrics::NumberCard < Components::Base
       ) do
         div(class: "px-3 py-2 border-b border-voodu-border text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted-2 truncate") { @label }
 
-        label(class: "flex items-center justify-between gap-3 px-3 py-2.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
-          span(class: "flex items-center gap-2 min-w-0") do
-            plain "Show timeline"
-            option_kbd("T")
-          end
-          render Components::UI::Switch.new(
-            checked: true,
-            data: {panel_options_target: "timeline", action: "change->panel-options#toggleTimeline"}
-          )
-        end
+        option_row(text: "Show timeline", kbd: "T", target: "timeline", action: "change->panel-options#toggleTimeline")
+        option_row(text: "Show dots", kbd: "D", target: "dots", action: "change->panel-options#toggleDots") if multi?
       end
+    end
+  end
+
+  # option_row — a popover toggle: label + kbd hint (left), macOS-style switch
+  # (right). checked by default; the panel-options controller reflects the stored
+  # pref on connect + fires the action.
+  def option_row(text:, kbd:, target:, action:)
+    label(class: "flex items-center justify-between gap-3 px-3 py-2.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
+      span(class: "flex items-center gap-2 min-w-0") do
+        plain text
+        option_kbd(kbd)
+      end
+      render Components::UI::Switch.new(
+        checked: true,
+        data: {panel_options_target: target, action: action}
+      )
     end
   end
 

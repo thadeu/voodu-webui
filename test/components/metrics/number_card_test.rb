@@ -151,4 +151,19 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes html, "20%"
     assert_not_includes html, "<svg", "no timeline"
   end
+
+  test "a multi-pod tile's popover adds Show dots (D) — the multi timeline has markers" do
+    html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, "Show dots"
+    assert_includes html, 'data-panel-options-target="dots"'
+    assert_includes html, "panel-options#toggleDots", "toggles the per-pod markers"
+  end
+
+  test "a single tile's popover has NO Show dots — a single area sparkline draws none" do
+    html = render_card(series: SPARK, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, "Show timeline", "the timeline toggle is still there"
+    assert_not_includes html, "Show dots"
+  end
 end
