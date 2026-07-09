@@ -168,6 +168,14 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
       "15m buckets are coarser than 1m over the same 1h window"
   end
 
+  test "a hep3 group-by Line with no data in the window renders an empty chart, not a missing card" do
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h").charts.first
+
+    assert c[:multi], "empty group-by still renders a (flat) chart"
+    assert_not c[:missing], "not a 'no running replica' card — the reader is up"
+    assert c[:series].first[:points].any?, "a flat-zero timeline keeps the axes + label"
+  end
+
   test "a plain hep3 filter (no group-by) still renders the normal count chart" do
     seed_calls_by_number
     dash = hep_group_panel(chart_type: "area", query: "@to_user like /A/")
@@ -277,15 +285,27 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   # A render a measure can't fill draws EMPTY (zeroed), not a misleading fallback
   # and not an error. Product choice: the operator owns the (measure, render) pair.
-  test "a host metric with a number/table render reads empty (zeroed), not an area fallback" do
-    %w[number table].each do |ct|
-      dash = make_dashboard([HOST.merge("chart_type" => ct)])
-      c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+  # A Table on a metric can't fill (no rows source) → the panel reads EMPTY
+  # (zeroed), never a misleading area fallback: the operator chose it knowingly.
+  test "a host metric asked to be a Table reads empty (zeroed), not an area fallback" do
+    dash = make_dashboard([HOST.merge("chart_type" => "table")])
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
 
-      assert c[:zeroed], "host + #{ct} → zeroed"
-      assert_empty c[:points], "a zeroed card carries no points"
-      assert_nil c[:kind], "still a ChartCard envelope (empty), not a :number/:table card"
-    end
+    assert c[:zeroed], "host + table → zeroed"
+    assert_empty c[:points], "a zeroed card carries no points"
+    assert_nil c[:kind], "still a ChartCard envelope (empty), not a :table card"
+  end
+
+  # A Number on a metric IS a valid render — a "stat" tile of the CURRENT value
+  # (the latest sample) — so it is NOT zeroed. Reuses the :number envelope the
+  # log/HEP3/HTTP tiles use.
+  test "a host metric with a Number render is a :number tile of the current value" do
+    dash = make_dashboard([HOST.merge("chart_type" => "number")])
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_equal :number, c[:kind], "host + number → a :number tile"
+    assert_not c[:zeroed], "a Number tile is a real render, not zeroed"
+    assert c.key?(:formatted), "carries a formatted headline (the current value)"
   end
 
   test "a log-query panel with a gauge render reads empty (zeroed) — a count has no ceiling" do

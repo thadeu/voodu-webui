@@ -209,10 +209,13 @@ class MetricDashboardData
       scope_id = nil
     end
 
-    # A warehouse metric draws a time-series or a gauge. Number/Table (or any
-    # future render it can't fill) have no chart today, so the panel reads EMPTY
-    # — not a misleading area fallback: the operator chose it knowingly.
-    unless METRIC_RENDERABLE.include?(panel["chart_type"].presence || "area")
+    ct = panel["chart_type"].presence || "area"
+
+    # A warehouse metric draws a time-series, a gauge, or a Number tile (the
+    # CURRENT value — the latest sample). Table (or any future render it can't
+    # fill) has no chart, so the panel reads EMPTY — not a misleading area
+    # fallback: the operator chose it knowingly.
+    if ct != "number" && !METRIC_RENDERABLE.include?(ct)
       return zeroed_card(panel, key, scope_kind: scope_kind, scope_id: scope_id, server_id: server.id)
     end
 
@@ -228,9 +231,25 @@ class MetricDashboardData
       label: panel["label"].to_s,
       color: panel["color"].to_s,
       unit: panel["unit"].to_s,
-      chart_type: panel["chart_type"].presence || :area
+      chart_type: (ct == "number") ? :area : ct
     )
     return missing_card(panel, key) if chart.nil?
+
+    # Number render → a big-number "stat" tile of the CURRENT value, with the
+    # trend as a sparkline. Reuses the same :number envelope log/HEP3/HTTP tiles
+    # use. The headline is the last point's formatted string (already unit/scale
+    # formatted by single_chart); an empty window → "—". show_chart? keeps or
+    # drops the sparkline (absent → true, so it shows by default).
+    if ct == "number"
+      return {
+        kind: :number, label: panel["label"].to_s, color: panel["color"].to_s,
+        value: chart[:current],
+        formatted: chart[:points].last&.dig(:formatted) || "—",
+        series: show_chart?(panel) ? chart[:points] : [],
+        range: @range, range_ms: range_ms,
+        default_visible: true, panel_key: key
+      }
+    end
 
     # scope_kind/scope_id → so the ChartCard maximize button can build
     # the right /metrics/chart expand URL. default_visible: true → the
@@ -544,7 +563,12 @@ class MetricDashboardData
        points: hep_points(pts, from, to, bucket)}
     end
 
-    return missing_card(panel, key) if series.empty?
+    # No groups matched in this window → an EMPTY chart (a flat-zero series keeps
+    # the axes + label), NOT a "no running replica" placeholder: the reader IS
+    # up, there's just nothing to group yet (mirrors the metric heartbeat-zero).
+    if series.empty?
+      series = [{label: plan.group_by.to_s, color: panel["color"].to_s, points: hep_points([], from, to, bucket)}]
+    end
 
     {
       label: panel["label"].to_s, unit: "", chart_type: chart_type,
