@@ -423,9 +423,11 @@ export default class extends Controller {
   // measureColumnWidth — the natural px width for the column at `index`: the
   // widest rendered text across the header label + every body cell, measured
   // with each element's OWN font (the header is uppercase/tracked, the body a
-  // plain cell), plus padding. Clamped to [60, 640] so a single very long
-  // value can't blow the table out — generously, since the operator asked to
-  // see it. Only the loaded rows are measured, so it stays instant.
+  // plain cell), plus padding. Double-click fits the FULL content — the table
+  // grows past the viewport and scrolls in X (that's fine, the operator asked to
+  // see the whole cell). The only ceiling is a pathological guard so a single
+  // enormous value (a base64 blob, a raw payload) can't create a megapixel
+  // column that janks the browser. Only the loaded rows are measured → instant.
   measureColumnWidth(table, index) {
     const th = table.querySelectorAll("thead th")[index]
     const label = th && th.querySelector("span")
@@ -439,8 +441,13 @@ export default class extends Controller {
       if (td.textContent) max = Math.max(max, this.textWidth(td.textContent, td))
     })
 
-    return Math.min(640, Math.max(60, Math.ceil(max + pad)))
+    return Math.min(this.MAX_FIT_WIDTH, Math.max(60, Math.ceil(max + pad)))
   }
+
+  // MAX_FIT_WIDTH — the auto-fit ceiling. High enough to hold any realistic
+  // single-field value (a SIP payload, a long log line, a URL) so the fit shows
+  // it whole; a bound only so a runaway cell can't blow the layout out.
+  get MAX_FIT_WIDTH() { return 8000 }
 
   // textWidth — width of `text` in `el`'s computed font via a shared canvas 2D
   // context. Exact per-element font, no DOM reflow.
