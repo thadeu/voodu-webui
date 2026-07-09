@@ -151,7 +151,7 @@ class Components::Metrics::NumberCard < Components::Base
           ) { n[:formatted] }
 
           span(
-            class: "text-[10px] text-voodu-muted-2 truncate max-w-full",
+            class: "#{multi_caption_size} text-voodu-muted-2 truncate max-w-full",
             data: {tooltip: n[:label]}, "aria-label": n[:label]
           ) { n[:label] }
         end
@@ -159,15 +159,33 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # multi_value_size — the per-pod headline font, stepped down as pods multiply so
-  # N stats fit one row; smaller on narrow, larger at vmd+ (the responsive ask).
+  # multi_value_size — the per-pod headline font. Stepped down as pods multiply
+  # so N stats fit one row; smaller on narrow, larger at vmd+ (the responsive
+  # ask). WITHOUT a timeline the stats own the whole card, so they scale up
+  # dramatically — big enough to read a wall-mounted TV dashboard across a room.
   def multi_value_size
-    case @numbers.size
-    when 2 then "text-[30px] vmd:text-[40px]"
-    when 3 then "text-[22px] vmd:text-[32px]"
-    when 4 then "text-[18px] vmd:text-[26px]"
-    else "text-[15px] vmd:text-[20px]"
+    if chart?
+      case @numbers.size
+      when 2 then "text-[30px] vmd:text-[40px]"
+      when 3 then "text-[22px] vmd:text-[32px]"
+      when 4 then "text-[18px] vmd:text-[26px]"
+      else "text-[15px] vmd:text-[20px]"
+      end
+    else
+      case @numbers.size
+      when 2 then "text-[52px] vmd:text-[72px]"
+      when 3 then "text-[40px] vmd:text-[56px]"
+      when 4 then "text-[30px] vmd:text-[42px]"
+      else "text-[24px] vmd:text-[32px]"
+      end
     end
+  end
+
+  # multi_caption_size — the pod-name caption. A hair bigger without a timeline so
+  # it stays legible under the scaled-up stat (still a supporting line, not the
+  # hero).
+  def multi_caption_size
+    chart? ? "text-[10px]" : "text-[12px] vmd:text-[13px]"
   end
 
   # chart? — whether this tile draws its timeline. SINGLE: ≥2 points. MULTI: any

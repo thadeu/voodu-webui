@@ -145,11 +145,14 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes html, "metrics-chart#toggleSeries", "with click-to-hide/show, like the area chart"
   end
 
-  test "a multi-pod tile with no series (Show timeline off) shows just the stats" do
-    html = render_card(numbers: MULTI, series: [], metric: "k0")
+  test "a multi-pod tile with no series (Show timeline off) shows just the stats, scaled up for a TV" do
+    with_tl = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
+    no_tl = render_card(numbers: MULTI, series: [], metric: "k0")
 
-    assert_includes html, "20%"
-    assert_not_includes html, "<svg", "no timeline"
+    assert_includes no_tl, "20%"
+    assert_not_includes no_tl, "<svg", "no timeline"
+    assert_includes no_tl, "vmd:text-[72px]", "no timeline → the stats scale up for across-the-room reading"
+    assert_includes with_tl, "vmd:text-[40px]", "WITH a timeline the stats stay modest (the chart needs the room)"
   end
 
   test "a multi-pod tile's popover adds Show dots (D) — the multi timeline has markers" do
