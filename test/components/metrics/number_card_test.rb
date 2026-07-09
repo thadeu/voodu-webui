@@ -135,6 +135,14 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes html, 'data-tooltip="srv · api"', "the pod name captions with a tooltip (never a title)"
   end
 
+  test "colored: false renders the stats solid (text color), dropping the per-pod colors" do
+    html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0", colored: false)
+
+    assert_includes html, "text-voodu-text", "solid → the neutral text color"
+    assert_not_includes html, "color: var(--voodu-purple)", "no per-pod color on the stats"
+    assert_includes html, "srv · api", "captions + the timeline colors stay — only the numbers go solid"
+  end
+
   test "a multi-pod tile draws the shared multi-area timeline WITH the interactive legend" do
     html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
 

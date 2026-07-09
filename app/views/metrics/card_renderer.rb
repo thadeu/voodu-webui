@@ -57,6 +57,7 @@ module Views
           clamped: c[:clamped],
           series: c[:series] || [],
           numbers: c[:numbers],
+          colored: c.fetch(:colored, true),
           range_ms: c[:range_ms],
           sub: c[:meta],
           default_visible: c.fetch(:default_visible, true)

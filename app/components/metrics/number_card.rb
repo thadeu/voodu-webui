@@ -33,7 +33,7 @@ class Components::Metrics::NumberCard < Components::Base
   #   plain count.
   # @param default_visible [Boolean]
   def initialize(label:, color:, formatted:, range:, metric: nil,
-    truncated: false, clamped: false, series: [], numbers: nil, range_ms: nil, sub: nil, default_visible: true)
+    truncated: false, clamped: false, series: [], numbers: nil, colored: true, range_ms: nil, sub: nil, default_visible: true)
     @label = label
     @color = color
     @formatted = formatted
@@ -47,6 +47,10 @@ class Components::Metrics::NumberCard < Components::Base
     # ({label, color, formatted, value}) rendered side by side.
     @series = Array(series)
     @numbers = numbers
+    # colored — MULTI only: paint each stat in its pod's series color, or (false)
+    # render them all solid (text color) for a calmer wall. The timeline keeps its
+    # colors either way — the lines need them to stay apart.
+    @colored = colored
     @range_ms = range_ms
     @sub = sub
     @default_visible = default_visible
@@ -164,7 +168,7 @@ class Components::Metrics::NumberCard < Components::Base
         # auto-shrinks as pods multiply / the card narrows.
         div(class: "flex flex-col items-center gap-1 min-w-0 flex-1", style: "container-type: inline-size;") do
           span(
-            class: "font-voodu-mono #{multi_value_size} font-semibold leading-none truncate max-w-full",
+            class: "font-voodu-mono #{multi_value_size} #{multi_value_color_class} font-semibold leading-none truncate max-w-full",
             style: multi_value_style(n[:color]),
             data: {number_card_target: "stat"}
           ) { n[:formatted] }
@@ -202,10 +206,17 @@ class Components::Metrics::NumberCard < Components::Base
   # WITH a timeline the size comes from multi_value_size instead, and the
   # number-card controller applies TV_VALUE_FONT live if the operator hides it.
   def multi_value_style(color)
-    base = "color: #{color};"
+    base = @colored ? "color: #{color};" : ""
     return base if chart?
 
     "#{base} font-size: #{TV_VALUE_FONT};"
+  end
+
+  # multi_value_color_class — solid tiles paint every stat the text color (a
+  # class, so nothing competes with an inline color); colored tiles set the
+  # per-pod series color inline (multi_value_style).
+  def multi_value_color_class
+    @colored ? "" : "text-voodu-text"
   end
 
   # multi_caption_style — the caption keeps a base text-[10px] class; without a

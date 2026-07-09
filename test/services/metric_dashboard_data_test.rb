@@ -107,6 +107,15 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     assert_empty c[:series], "show_chart false → no timeline"
   end
 
+  test "a multi-pod Number carries the colored flag — true by default, false when opted out" do
+    seed_running_web_pod
+    default = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc1", panels: [multi_number_panel]), range: "1h").charts.first
+    solid = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc2", panels: [multi_number_panel("colored" => false)]), range: "1h").charts.first
+
+    assert default[:colored], "absent → colored (per-pod)"
+    assert_not solid[:colored], "colored:false → the card renders solid stats"
+  end
+
   # ── HEP3 group-by (`… | count() by <field>`) → Query → ANY CHART ────────────
 
   def seed_hep(to_user, corr:, meth: "INVITE", at: Time.current - 60)

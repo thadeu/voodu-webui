@@ -373,6 +373,7 @@ class MetricDashboardData
       kind: :number,
       label: panel["label"].to_s, color: panel["color"].to_s,
       numbers: numbers,
+      colored: panel["colored"] != false,
       series: show_chart?(panel) ? series : [],
       range: @range, range_ms: range_ms,
       default_visible: true, panel_key: key

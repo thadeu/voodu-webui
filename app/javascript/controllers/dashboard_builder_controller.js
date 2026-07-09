@@ -16,7 +16,7 @@ import Sortable from "sortablejs"
 // match the chosen source's workload kind.
 
 export default class extends Controller {
-  static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "metricTimelineRow", "metricShowChart", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
+  static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "metricTimelineRow", "metricShowChart", "metricColoredRow", "metricColored", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
                     "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
@@ -177,6 +177,8 @@ export default class extends Controller {
     if (this.hasMetricQueryTarget) this.metricQueryTarget.value = ""
     if (this.hasMetricTimelineRowTarget) this.metricTimelineRowTarget.hidden = true
     if (this.hasMetricShowChartTarget) this.metricShowChartTarget.checked = true
+    if (this.hasMetricColoredRowTarget) this.metricColoredRowTarget.hidden = true
+    if (this.hasMetricColoredTarget) this.metricColoredTarget.checked = true
     if (this.hasSourceLabelTarget) this.sourceLabelTarget.textContent = this.defaultSourceLabel
 
     this.markSelectedSources()
@@ -621,14 +623,15 @@ export default class extends Controller {
     })
   }
 
-  // syncTimelineRow — the "Show timeline chart" toggle only applies to a Number
-  // render (it decides whether the tile draws its sparkline). Reveal that row
-  // for Number, hide it for every other render. Runs from highlightShape, so it
-  // fires on every render/measure/load change.
+  // syncTimelineRow — the Number-only toggles ("Show timeline chart" + "Colored
+  // values") only apply to a Number render. Reveal those rows for Number, hide
+  // them for every other render. Runs from highlightShape, so it fires on every
+  // render/measure/load change.
   syncTimelineRow() {
-    if (this.hasMetricTimelineRowTarget) {
-      this.metricTimelineRowTarget.hidden = this.currentChartType !== "number"
-    }
+    const number = this.currentChartType === "number"
+
+    if (this.hasMetricTimelineRowTarget) this.metricTimelineRowTarget.hidden = !number
+    if (this.hasMetricColoredRowTarget) this.metricColoredRowTarget.hidden = !number
   }
 
   // syncTypeAvailability — EVERY render is offered for EVERY measure. No gating,
@@ -969,6 +972,7 @@ export default class extends Controller {
     // Restore the Number "Show timeline chart" toggle (absent = shown). Harmless
     // for non-Number renders — syncTimelineRow hides the row for those.
     if (this.hasMetricShowChartTarget) this.metricShowChartTarget.checked = panel.show_chart !== false
+    if (this.hasMetricColoredTarget) this.metricColoredTarget.checked = panel.colored !== false
 
     // Multi-series: restore the selected pods so re-editing shows all lines.
     // kind must be the REAL workload kind (not literal "pod") or the metric
@@ -1102,13 +1106,15 @@ export default class extends Controller {
       chart_type: (this.isGaugeType(this.currentChartType) && !spec.gauge) ? "area" : this.currentChartType
     }
 
-    // Number render → the "Show timeline chart" toggle decides whether the tile
-    // draws its sparkline. Only carried for Number (other renders ignore it), and
-    // only when off — absent = shown, keeping the stored panel minimal.
+    // Number render → the "Show timeline chart" + "Colored values" toggles. Only
+    // carried for Number (other renders ignore them), and only when OFF — absent
+    // = shown / colored, keeping the stored panel minimal.
     if (this.currentChartType === "number") {
       const showChart = this.hasMetricShowChartTarget ? this.metricShowChartTarget.checked : true
+      const colored = this.hasMetricColoredTarget ? this.metricColoredTarget.checked : true
 
       if (!showChart) panel.show_chart = false
+      if (!colored) panel.colored = false
     }
 
     if (source.scope_kind === "pod") {

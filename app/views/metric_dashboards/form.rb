@@ -899,6 +899,27 @@ class Views::MetricDashboards::Form < Views::Base
       shape_chips
       metric_color_swatches
       metric_timeline_toggle
+      metric_colored_toggle
+    end
+  end
+
+  # metric_colored_toggle — a multi-pod Number render's "Colored values" switch:
+  # paint each pod's stat in its series color, or (off) render them all solid for
+  # a calmer wall. Number-only row (metricColoredRow); writes `colored` on the
+  # panel (MetricDashboardData reads it; absent = colored).
+  def metric_colored_toggle
+    div(hidden: true, data: {dashboard_builder_target: "metricColoredRow"}, class: "flex flex-col gap-2") do
+      label(class: "flex items-center gap-2 cursor-pointer select-none mt-0.5") do
+        input(
+          type: "checkbox",
+          checked: true,
+          data: {dashboard_builder_target: "metricColored", action: "change->dashboard-builder#autoCommit"},
+          class: "w-4 h-4 shrink-0 cursor-pointer",
+          style: "accent-color: var(--voodu-accent);"
+        )
+        span(class: "text-[12px] text-voodu-text-2") { "Colored values" }
+        span(class: "text-[11px] text-voodu-muted") { "— per-pod colors, or all solid" }
+      end
     end
   end
 
