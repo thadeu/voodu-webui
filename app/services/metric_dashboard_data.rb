@@ -198,6 +198,7 @@ class MetricDashboardData
     # the anchor's scope_kind — a Host + pod chart is anchored on the host but is
     # still a multi chart.
     return multi_series_chart_for(panel, key, index) if multi_series?(panel)
+    return multi_number_chart_for(panel, key) if multi_number?(panel)
 
     if panel["scope_kind"].to_s == "pod"
       scope_id = resolve_container(panel, server)
@@ -284,15 +285,45 @@ class MetricDashboardData
   def multi_series_chart_for(panel, key, index)
     metric = panel["metric"].to_s
     scale = panel["scale"].presence&.to_sym
+    series = pod_series(panel)
 
-    series = Array(panel["pods"]).each_with_index.filter_map do |entry, i|
+    return missing_card(panel, key) if series.empty?
+
+    {
+      label: panel["label"].to_s,
+      metric: metric,
+      scale: scale,
+      unit: panel["unit"].presence || series_unit(series),
+      chart_type: panel["chart_type"].presence || "line",
+      multi: true,
+      series: series,
+      default_visible: true,
+      panel_key: key,
+      # dashboard_uuid + panel_index let the maximize modal reference THIS panel
+      # (a multi chart can't be rebuilt from flat metric/scope params like a
+      # single one — the endpoint reloads the dashboard + rebuilds its series).
+      dashboard_uuid: @dashboard&.uuid,
+      panel_index: index,
+      # scope metadata (from the panel's primary pod) so the card still has a
+      # server to anchor to.
+      scope_kind: "pod", scope_id: nil, server_id: panel["server_id"].to_s
+    }
+  end
+
+  # pod_series — one warehouse fetch per pod member (each with its own org-scoped
+  # server + resolved container) → [{label:, color:, points:, current:}]. Shared
+  # by the multi-line/area chart AND the multi-pod Number tile. Members that don't
+  # resolve (gone / cross-org / no live replica) are dropped. Every series reads
+  # the SAME metric key — a metric whose key differs by kind (Memory) comes back
+  # empty for the mismatched side (the operator's choice).
+  def pod_series(panel)
+    metric = panel["metric"].to_s
+    scale = panel["scale"].presence&.to_sym
+
+    Array(panel["pods"]).each_with_index.filter_map do |entry, i|
       srv = servers_by_id[entry["server_id"].to_s]
       next if srv.nil?
 
-      # A member is the host (node metrics, no container) or a pod (resolve its
-      # live container). Every series reads the SAME metric key — CPU shares it
-      # across host + pods; a metric whose key differs by kind (Memory) reads the
-      # anchor's key, so the mismatched side comes back empty (operator's choice).
       if entry["scope_kind"].to_s == "host"
         page = MetricsPageData.new(
           client_for(srv), srv, scope_kind: "host", scope_id: nil,
@@ -315,27 +346,36 @@ class MetricDashboardData
       {label: label, color: MULTI_SERIES_COLORS[i % MULTI_SERIES_COLORS.size],
        points: sp[:points], current: sp[:current]}
     end
+  end
+
+  # multi_number? — a Number panel over 2+ pods: a current-value stat per pod
+  # side by side, over a shared multi-area timeline. One pod → the single tile.
+  def multi_number?(panel)
+    panel["chart_type"].to_s == "number" && Array(panel["pods"]).size >= 2
+  end
+
+  # multi_number_chart_for — the multi-pod Number envelope: `numbers` (a stat per
+  # pod — its current value, name + series color) + `series` (the shared multi-
+  # area timeline, reusing the multi-line/area chart). show_chart? off → just the
+  # numbers, no timeline (same toggle as the single tile). Both come from ONE
+  # pod_series fetch, so the headline of pod N always matches line N.
+  def multi_number_chart_for(panel, key)
+    series = pod_series(panel)
 
     return missing_card(panel, key) if series.empty?
 
+    numbers = series.map do |s|
+      {label: s[:label], color: s[:color], value: s[:current],
+       formatted: s[:points].last&.dig(:formatted) || "—"}
+    end
+
     {
-      label: panel["label"].to_s,
-      metric: metric,
-      scale: scale,
-      unit: panel["unit"].presence || series_unit(series),
-      chart_type: panel["chart_type"].presence || "line",
-      multi: true,
-      series: series,
-      default_visible: true,
-      panel_key: key,
-      # dashboard_uuid + panel_index let the maximize modal reference THIS panel
-      # (a multi chart can't be rebuilt from flat metric/scope params like a
-      # single one — the endpoint reloads the dashboard + rebuilds its series).
-      dashboard_uuid: @dashboard&.uuid,
-      panel_index: index,
-      # scope metadata (from the panel's primary pod) so the card still has a
-      # server to anchor to.
-      scope_kind: "pod", scope_id: nil, server_id: panel["server_id"].to_s
+      kind: :number,
+      label: panel["label"].to_s, color: panel["color"].to_s,
+      numbers: numbers,
+      series: show_chart?(panel) ? series : [],
+      range: @range, range_ms: range_ms,
+      default_visible: true, panel_key: key
     }
   end
 

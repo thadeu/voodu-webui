@@ -73,6 +73,40 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
       "host member labeled '<server> · host' in a multi-server org"
   end
 
+  # A Number over 2+ pods → a current-value stat PER pod (its name + series color)
+  # side by side, over a shared multi-area timeline. Both come from one pod_series
+  # fetch, so stat N always matches line N.
+  def multi_number_panel(**over)
+    {"scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+     "label" => "pods CPU", "color" => "var(--voodu-purple)", "unit" => "%",
+     "chart_type" => "number", "server_id" => @server.id,
+     "pods" => [{"scope_kind" => "host", "server_id" => @server.id},
+       {"scope_kind" => "pod", "server_id" => @server.id, "scope" => "web", "name" => "web", "kind" => "deployment"}]}.merge(over)
+  end
+
+  test "a Number over 2+ pods builds a per-pod stat + a shared multi-area timeline" do
+    seed_running_web_pod
+    dash = @org.metric_dashboards.create!(name: "np", panels: [multi_number_panel])
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_equal :number, c[:kind], "number + 2 pods → a :number tile"
+    assert_equal 2, c[:numbers].size, "one stat per pod"
+    assert_equal ["#{@server.name} · host", "#{@server.name} · web"], c[:numbers].map { |n| n[:label] }.sort
+    assert c[:numbers].all? { |n| n[:color].present? }, "each stat carries its series color"
+    assert_equal 2, c[:series].size, "the shared timeline carries one series per pod"
+  end
+
+  test "a multi-pod Number with show_chart false keeps the stats but drops the timeline" do
+    seed_running_web_pod
+    dash = @org.metric_dashboards.create!(name: "np2", panels: [multi_number_panel("show_chart" => false)])
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_equal 2, c[:numbers].size, "the per-pod stats still render"
+    assert_empty c[:series], "show_chart false → no timeline"
+  end
+
   # ── HEP3 group-by (`… | count() by <field>`) → Query → ANY CHART ────────────
 
   def seed_hep(to_user, corr:, meth: "INVITE", at: Time.current - 60)

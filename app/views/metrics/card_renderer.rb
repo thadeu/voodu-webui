@@ -56,6 +56,7 @@ module Views
           truncated: c[:truncated],
           clamped: c[:clamped],
           series: c[:series] || [],
+          numbers: c[:numbers],
           range_ms: c[:range_ms],
           sub: c[:meta],
           default_visible: c.fetch(:default_visible, true)

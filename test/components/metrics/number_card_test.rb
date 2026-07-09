@@ -114,4 +114,40 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
 
     assert_not_includes html, "Show timeline"
   end
+
+  # ── Multi-pod tile (numbers[] + a shared multi-area timeline) ────────────────
+  MULTI = [
+    {label: "srv · api", color: "var(--voodu-purple)", value: 20.0, formatted: "20%"},
+    {label: "srv · fs", color: "var(--voodu-blue)", value: 30.0, formatted: "30%"}
+  ].freeze
+  MULTI_SERIES = [
+    {label: "srv · api", color: "var(--voodu-purple)", points: SPARK},
+    {label: "srv · fs", color: "var(--voodu-blue)", points: SPARK}
+  ].freeze
+
+  test "a multi-pod tile renders one colored stat per pod, with the pod name captioned" do
+    html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, "20%"
+    assert_includes html, "30%"
+    assert_includes html, "color: var(--voodu-purple)", "the first stat wears its series color"
+    assert_includes html, "color: var(--voodu-blue)", "the second stat its own"
+    assert_includes html, 'data-tooltip="srv · api"', "the pod name captions with a tooltip (never a title)"
+  end
+
+  test "a multi-pod tile draws the shared multi-area timeline with NO legend" do
+    html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, "<svg", "the multi-area timeline renders"
+    assert_includes html, "data-metrics-chart-multi-value", "as a multi-series chart"
+    assert_includes html, 'data-series-index="1"', "one area per pod on shared axes"
+    assert_not_includes html, "legendItem", "no legend — the colored per-pod stats name the lines"
+  end
+
+  test "a multi-pod tile with no series (Show timeline off) shows just the stats" do
+    html = render_card(numbers: MULTI, series: [], metric: "k0")
+
+    assert_includes html, "20%"
+    assert_not_includes html, "<svg", "no timeline"
+  end
 end

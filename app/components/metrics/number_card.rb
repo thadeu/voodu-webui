@@ -33,7 +33,7 @@ class Components::Metrics::NumberCard < Components::Base
   #   plain count.
   # @param default_visible [Boolean]
   def initialize(label:, color:, formatted:, range:, metric: nil,
-    truncated: false, clamped: false, series: [], range_ms: nil, sub: nil, default_visible: true)
+    truncated: false, clamped: false, series: [], numbers: nil, range_ms: nil, sub: nil, default_visible: true)
     @label = label
     @color = color
     @formatted = formatted
@@ -41,11 +41,20 @@ class Components::Metrics::NumberCard < Components::Base
     @metric = metric
     @truncated = truncated
     @clamped = clamped
+    # series — SINGLE tile: a flat [{ts,value,formatted}] sparkline. MULTI tile
+    # (numbers present): the multi-series array [{label,color,points}] the shared
+    # timeline draws (one area per pod). numbers — MULTI only: one stat per pod
+    # ({label, color, formatted, value}) rendered side by side.
     @series = Array(series)
+    @numbers = numbers
     @range_ms = range_ms
     @sub = sub
     @default_visible = default_visible
   end
+
+  # multi? — a multi-pod Number: N current-value stats side by side over a shared
+  # multi-area timeline. @numbers carries the per-pod headlines.
+  def multi? = @numbers.is_a?(Array) && @numbers.size >= 2
 
   def view_template
     root_data = {}
@@ -112,6 +121,8 @@ class Components::Metrics::NumberCard < Components::Base
   # the card's extra height (vs the taller chart cards in the same row) and
   # lands mid-tile above the sparkline — no empty gap.
   def value_block
+    return multi_value_block if multi?
+
     div(class: "flex-1 flex flex-col items-center justify-center gap-1.5 py-2") do
       div(class: "flex items-baseline gap-1") do
         span(class: "text-voodu-muted text-[22px] font-voodu-mono leading-none") { "≥" } if @truncated
@@ -126,11 +137,48 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # chart? — whether this tile draws its timeline chart. Needs ≥2 points; the
-  # operator can also turn it off per-panel (show_chart false → empty series).
-  # When false the tile is a bare number, so the headline gets the whole card.
+  # multi_value_block — the multi-pod headline row: one CURRENT-value stat per pod
+  # side by side, each colored to match its timeline line, with the pod name as a
+  # caption below. The name truncates (+ tooltip) so a long "<server> · <pod>"
+  # never breaks the row; the stats share the width evenly (flex-1 min-w-0).
+  def multi_value_block
+    div(class: "flex-1 flex items-center justify-around gap-2 py-2 min-w-0") do
+      @numbers.each do |n|
+        div(class: "flex flex-col items-center gap-1 min-w-0 flex-1") do
+          span(
+            class: "font-voodu-mono #{multi_value_size} font-semibold leading-none truncate max-w-full",
+            style: "color: #{n[:color]};"
+          ) { n[:formatted] }
+
+          span(
+            class: "text-[10px] text-voodu-muted-2 truncate max-w-full",
+            data: {tooltip: n[:label]}, "aria-label": n[:label]
+          ) { n[:label] }
+        end
+      end
+    end
+  end
+
+  # multi_value_size — the per-pod headline font, stepped down as pods multiply so
+  # N stats fit one row; smaller on narrow, larger at vmd+ (the responsive ask).
+  def multi_value_size
+    case @numbers.size
+    when 2 then "text-[30px] vmd:text-[40px]"
+    when 3 then "text-[22px] vmd:text-[32px]"
+    when 4 then "text-[18px] vmd:text-[26px]"
+    else "text-[15px] vmd:text-[20px]"
+    end
+  end
+
+  # chart? — whether this tile draws its timeline. SINGLE: ≥2 points. MULTI: any
+  # pod series carries points. The operator can also turn it off per-panel
+  # (show_chart false → empty series); then the tile is just the number(s).
   def chart?
-    @series.size >= 2
+    if multi?
+      @series.is_a?(Array) && @series.any? { |s| Array(s[:points]).any? }
+    else
+      @series.size >= 2
+    end
   end
 
   # value_size_classes — the headline number's font size. A number-only tile
@@ -171,16 +219,23 @@ class Components::Metrics::NumberCard < Components::Base
     div(data: {number_card_target: "timeline"}) { sparkline }
   end
 
+  # sparkline — the timeline under the headline(s). SINGLE: a flat area sparkline
+  # of the one series. MULTI: the shared multi-AREA chart (one filled area per
+  # pod, reusing the multi-line/area Chart), with its legend OFF — the colored
+  # per-pod headlines above already name each line.
   def sparkline
-    render Components::Metrics::Chart.new(
-      points: @series,
-      color: @color,
-      unit: "",
-      label: @label,
-      range_ms: @range_ms || (60 * 60 * 1000),
-      height: 150,
-      axes: true
-    )
+    if multi?
+      render Components::Metrics::Chart.new(
+        points: [], series: @series, color: @color, unit: "", label: @label,
+        range_ms: @range_ms || (60 * 60 * 1000), height: 150, axes: true,
+        style: :area, legend: false
+      )
+    else
+      render Components::Metrics::Chart.new(
+        points: @series, color: @color, unit: "", label: @label,
+        range_ms: @range_ms || (60 * 60 * 1000), height: 150, axes: true
+      )
+    end
   end
 
   # options_menu — the triple-dot popover (mirrors ChartCard's). One toggle:
