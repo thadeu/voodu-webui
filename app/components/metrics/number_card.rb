@@ -144,10 +144,13 @@ class Components::Metrics::NumberCard < Components::Base
   def multi_value_block
     div(class: "flex-1 flex items-center justify-around gap-2 py-2 min-w-0") do
       @numbers.each do |n|
-        div(class: "flex flex-col items-center gap-1 min-w-0 flex-1") do
+        # container-type: inline-size → the no-timeline headline sizes to THIS
+        # column's width (cqw), so it fills a wide wall-mounted TV card and
+        # auto-shrinks as pods multiply / the card narrows.
+        div(class: "flex flex-col items-center gap-1 min-w-0 flex-1", style: "container-type: inline-size;") do
           span(
             class: "font-voodu-mono #{multi_value_size} font-semibold leading-none truncate max-w-full",
-            style: "color: #{n[:color]};"
+            style: multi_value_style(n[:color])
           ) { n[:formatted] }
 
           span(
@@ -159,33 +162,38 @@ class Components::Metrics::NumberCard < Components::Base
     end
   end
 
-  # multi_value_size — the per-pod headline font. Stepped down as pods multiply
-  # so N stats fit one row; smaller on narrow, larger at vmd+ (the responsive
-  # ask). WITHOUT a timeline the stats own the whole card, so they scale up
-  # dramatically — big enough to read a wall-mounted TV dashboard across a room.
+  # multi_value_size — the per-pod headline font WITH a timeline: a fixed
+  # step-down by pod count (the chart owns the lower card, so the number stays
+  # modest — smaller on narrow, larger at vmd+). WITHOUT a timeline the size is
+  # container-relative instead (see multi_value_style), so this returns nothing.
   def multi_value_size
-    if chart?
-      case @numbers.size
-      when 2 then "text-[30px] vmd:text-[40px]"
-      when 3 then "text-[22px] vmd:text-[32px]"
-      when 4 then "text-[18px] vmd:text-[26px]"
-      else "text-[15px] vmd:text-[20px]"
-      end
-    else
-      case @numbers.size
-      when 2 then "text-[52px] vmd:text-[72px]"
-      when 3 then "text-[40px] vmd:text-[56px]"
-      when 4 then "text-[30px] vmd:text-[42px]"
-      else "text-[24px] vmd:text-[32px]"
-      end
+    return "" unless chart?
+
+    case @numbers.size
+    when 2 then "text-[30px] vmd:text-[40px]"
+    when 3 then "text-[22px] vmd:text-[32px]"
+    when 4 then "text-[18px] vmd:text-[26px]"
+    else "text-[15px] vmd:text-[20px]"
     end
+  end
+
+  # multi_value_style — the headline's inline style: its series color, plus (when
+  # there's no timeline) a container-query font size so the stat FILLS its column.
+  # clamp keeps it readable on a narrow card and bounded on a huge TV; the middle
+  # cqw term is the sweet spot — ~gauge-sized on a normal card, bigger as the card
+  # widens. cqw resolves against the column (container-type set on the parent).
+  def multi_value_style(color)
+    base = "color: #{color};"
+    return base if chart?
+
+    "#{base} font-size: clamp(28px, 20cqw, 120px);"
   end
 
   # multi_caption_size — the pod-name caption. A hair bigger without a timeline so
   # it stays legible under the scaled-up stat (still a supporting line, not the
   # hero).
   def multi_caption_size
-    chart? ? "text-[10px]" : "text-[12px] vmd:text-[13px]"
+    chart? ? "text-[10px]" : "text-[13px] vmd:text-[15px]"
   end
 
   # chart? — whether this tile draws its timeline. SINGLE: ≥2 points. MULTI: any

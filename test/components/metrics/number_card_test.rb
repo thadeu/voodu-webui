@@ -151,8 +151,9 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
 
     assert_includes no_tl, "20%"
     assert_not_includes no_tl, "<svg", "no timeline"
-    assert_includes no_tl, "vmd:text-[72px]", "no timeline → the stats scale up for across-the-room reading"
-    assert_includes with_tl, "vmd:text-[40px]", "WITH a timeline the stats stay modest (the chart needs the room)"
+    assert_includes no_tl, "cqw", "no timeline → the stat sizes to its column width (fills a TV card)"
+    assert_includes no_tl, "container-type: inline-size", "the column is a query container"
+    assert_includes with_tl, "vmd:text-[40px]", "WITH a timeline the stat stays a modest fixed size"
   end
 
   test "a multi-pod tile's popover adds Show dots (D) — the multi timeline has markers" do
