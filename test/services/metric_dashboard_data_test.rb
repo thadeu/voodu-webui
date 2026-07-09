@@ -73,6 +73,112 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
       "host member labeled '<server> · host' in a multi-server org"
   end
 
+  # ── HEP3 group-by (`… | count() by <field>`) → Query → ANY CHART ────────────
+
+  def seed_hep(to_user, corr:, meth: "INVITE", at: Time.current - 60)
+    payload = {ts: at.utc.strftime("%Y-%m-%d %H:%M:%S.000000"), call_id: corr, x_cid: corr,
+               to_user: to_user, method: meth, response_code: 0}.to_json
+    HepMessage.bulk_insert([{server_id: @server.id, scope: "fsw", name: "hep3-api", payload: payload}])
+  end
+
+  def hep_group_panel(chart_type:, query: "| count() by to_user", view: "messages")
+    @org.metric_dashboards.create!(name: "g-#{SecureRandom.hex(6)}", panels: [{
+      "scope_kind" => "table", "source" => "hep3", "chart_type" => chart_type,
+      "scope" => "fsw", "name" => "hep3-api", "view" => view, "server_id" => @server.id,
+      "label" => "calls by number", "color" => "var(--voodu-orange)", "filter_query" => query
+    }])
+  end
+
+  def seed_calls_by_number
+    seed_hep("A", corr: "c1")
+    seed_hep("A", corr: "c2")
+    seed_hep("A", corr: "c3")  # A: 3 messages, 3 distinct calls
+    seed_hep("C", corr: "c4")
+    seed_hep("C", corr: "c4")  # C: 2 messages, 1 distinct call
+    seed_hep("B", corr: "c5")  # B: 1 message
+  end
+
+  test "a hep3 `count() by to_user` Table renders a grouped-table snapshot, sorted desc" do
+    seed_calls_by_number
+    dash = hep_group_panel(chart_type: "table")
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_equal :group_table, c[:kind]
+    assert_equal "to_user", c[:field]
+    assert_equal [["A", 3], ["C", 2], ["B", 1]], c[:groups].map { |g| [g[:group], g[:value]] }
+  end
+
+  test "a hep3 group-by Bar renders a grouped-bar snapshot" do
+    seed_calls_by_number
+
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "bars"), range: "1h").charts.first
+
+    assert_equal :group_bar, c[:kind]
+    assert_equal "A", c[:groups].first[:group], "biggest group first"
+  end
+
+  test "a hep3 group-by Line renders a multi-series envelope, one series per number" do
+    seed_calls_by_number
+
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h").charts.first
+
+    assert c[:multi], "one line per group → the multi-series card"
+    assert_equal %w[A C B], c[:series].map { |s| s[:label] }, "series in snapshot (top-N) order"
+    assert c[:series].first[:points].any?, "each series carries a bucketed timeline"
+  end
+
+  test "a hep3 group-by Number renders the grand total across groups" do
+    seed_calls_by_number
+
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "number"), range: "1h").charts.first
+
+    assert_equal :number, c[:kind]
+    assert_equal 6, c[:value], "3 (A) + 2 (C) + 1 (B) messages"
+  end
+
+  test "count(distinct corr_id) by to_user counts distinct CALLS per number (read path)" do
+    seed_calls_by_number
+    dash = hep_group_panel(chart_type: "table", query: "| count(distinct corr_id) by to_user")
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    by = c[:groups].to_h { |g| [g[:group], g[:value]] }
+
+    assert_equal 3, by["A"], "A has 3 distinct calls"
+    assert_equal 1, by["C"], "C's 2 messages are one call"
+  end
+
+  test "the panel's view drives the metric: Calls counts distinct calls, Messages counts messages" do
+    seed_calls_by_number  # C has 2 messages that are 1 call
+
+    on_messages = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "messages"), range: "1h").charts.first
+    on_calls = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "calls"), range: "1h").charts.first
+
+    assert_equal 2, on_messages[:groups].to_h { |g| [g[:group], g[:value]] }["C"], "messages view → 2 messages"
+    assert_equal 1, on_calls[:groups].to_h { |g| [g[:group], g[:value]] }["C"], "calls view → 1 call"
+  end
+
+  test "the interval sets the HEP3 group-by bucket width (finer interval → more points)" do
+    seed_calls_by_number
+
+    coarse = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h", interval: "15m").charts.first
+    fine = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h", interval: "1m").charts.first
+
+    assert_operator coarse[:series].first[:points].size, :<, fine[:series].first[:points].size,
+      "15m buckets are coarser than 1m over the same 1h window"
+  end
+
+  test "a plain hep3 filter (no group-by) still renders the normal count chart" do
+    seed_calls_by_number
+    dash = hep_group_panel(chart_type: "area", query: "@to_user like /A/")
+
+    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+
+    assert_nil c[:kind], "no group-by ⇒ the existing hep count chart (ChartCard), not a grouped card"
+    assert_not c[:multi], "single series"
+    assert_equal "hep3", c[:source]
+  end
+
   # chart_at — the maximize modal's single-panel entry (a multi chart references
   # its dashboard + index). Returns that panel's chart, nil for an out-of-range
   # index.

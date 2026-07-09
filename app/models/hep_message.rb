@@ -120,6 +120,53 @@ class HepMessage < HepRecord
       .pluck(Arel.sql(bucket_sql), Arel.sql(count_sql))
   end
 
+  # group_snapshot — ONE aggregated value per distinct value of `group_expr` over
+  # [ts_from, ts_to), for a group-by chart's SNAPSHOT (Table / Bar / Number).
+  # `agg_sql` is COUNT(*) or COUNT(DISTINCT <expr>); `group_expr`, `agg_sql` and
+  # `sort_expr` are built by the caller from HepMessage.filter_expr (the frozen
+  # allowlist), so no field is ever attacker SQL. NULL groups (a missing field)
+  # are dropped. Sorted by `sort_expr` (default: the agg value) and capped at
+  # `limit`. Returns [[group_value, value], …].
+  def self.group_snapshot(server_id:, scope:, name:, ts_from:, ts_to:, group_expr:, agg_sql:,
+    sort_expr: nil, sort_dir: :desc, limit: nil, min_code: nil, where_sql: nil, where_binds: [])
+    ensure_regexp! if where_sql.present?
+
+    rel = for_instance(server_id: server_id, scope: scope, name: name)
+      .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
+      .where("#{group_expr} IS NOT NULL")
+    rel = rel.where("response_code >= ?", min_code) if min_code
+    rel = rel.where(where_sql, *where_binds) if where_sql.present?
+
+    dir = (sort_dir.to_s == "asc") ? "ASC" : "DESC"
+    rel = rel.group(Arel.sql(group_expr)).order(Arel.sql("#{sort_expr || agg_sql} #{dir}"))
+    rel = rel.limit(limit) if limit
+
+    rel.pluck(Arel.sql(group_expr), Arel.sql(agg_sql))
+  end
+
+  # group_series — per-(group, bucket) aggregate for a GIVEN set of group values
+  # (the top-N from group_snapshot), so a Line/Area draws one series per group
+  # over time. Same allowlist-built `group_expr`/`agg_sql`; `groups` are bind
+  # values. Returns [[group_value, bucket_epoch, value], …] ascending by bucket.
+  def self.group_series(server_id:, scope:, name:, ts_from:, ts_to:, bucket:, group_expr:, agg_sql:,
+    groups:, min_code: nil, where_sql: nil, where_binds: [])
+    return [] if groups.blank?
+
+    ensure_regexp! if where_sql.present?
+
+    b = [bucket.to_i, 1].max
+    bucket_sql = "(ts_epoch / #{b}) * #{b}"
+
+    rel = for_instance(server_id: server_id, scope: scope, name: name)
+      .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
+      .where("#{group_expr} IN (?)", groups)
+    rel = rel.where("response_code >= ?", min_code) if min_code
+    rel = rel.where(where_sql, *where_binds) if where_sql.present?
+
+    rel.group(Arel.sql(group_expr), Arel.sql(bucket_sql)).order(Arel.sql(bucket_sql))
+      .pluck(Arel.sql(group_expr), Arel.sql(bucket_sql), Arel.sql(agg_sql))
+  end
+
   # locate_by_call_id — the most recent captured message whose SIP Call-ID is
   # `call_id`, across ALL reader instances of the server. Backs the Logs →
   # call-flow bridge: a FreeSWITCH log line carries a `Call-ID:`, and this

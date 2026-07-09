@@ -137,6 +137,8 @@ class Views::Metrics::Frame < Views::Base
           render_number_card(c)
         elsif c[:kind] == :table
           render_table_card(c)
+        elsif c[:kind] == :group_table || c[:kind] == :group_bar
+          render_group_card(c)
         elsif c[:missing]
           render_missing_card(c)
         else
@@ -160,6 +162,16 @@ class Views::Metrics::Frame < Views::Base
         end
       end
     end
+  end
+
+  # render_group_card — mirrors Views::Metrics::Index#render_group_card so a
+  # group-by snapshot (Table/Bar) renders identically after a broadcast-tick swap.
+  def render_group_card(c)
+    render Components::Metrics::GroupCard.new(
+      label: c[:label], color: c[:color], field: c[:field], groups: c[:groups] || [],
+      style: (c[:kind] == :group_bar) ? :bars : :table,
+      metric: c[:panel_key], default_visible: c.fetch(:default_visible, true)
+    )
   end
 
   # render_number_card — mirrors Views::Metrics::Index#render_number_card so

@@ -176,6 +176,15 @@ class MetricDashboardData
     return log_chart_for(panel, key, server) if panel["scope_kind"].to_s == "log"
 
     if panel["scope_kind"].to_s == "table"
+      # A HEP3 group-by query (`… | count()/count(distinct X) by <field>`) renders
+      # PER GROUP: Line/Area → one series per value; Table → grouped rows; Bar →
+      # grouped bars; Number → the grand total. Detected from the query's pipeline.
+      if panel["source"].to_s == "hep3"
+        plan = DataTable::QueryPlan.compile(panel["filter_query"].to_s)
+
+        return hep_grouped_chart_for(panel, plan, key, server, index) if plan.grouped?
+      end
+
       # A "table" panel is DataTable-family: chart_type "table" → rows;
       # anything else (area/number/gauge) → a count/timeseries chart. The http
       # source maps the response's own points into the series; hep3 counts.
@@ -425,7 +434,10 @@ class MetricDashboardData
     from, to = hep_window
     bucket = hep_bucket_seconds
 
-    series = source ? source.count_series(view: view, filter_query: panel["filter_query"].to_s, ts_from: from, ts_to: to, bucket: bucket) : []
+    # Extract just the WHERE part of the query (a bare filter, or the filter stage
+    # of a pipeline) so `@x | count()` still filters even without a `by`.
+    filter_only = DataTable::QueryPlan.compile(panel["filter_query"].to_s).filter
+    series = source ? source.count_series(view: view, filter_query: filter_only, ts_from: from, ts_to: to, bucket: bucket) : []
     points = hep_points(series, from, to, bucket)
     values = points.map { |p| p[:value] }
     total = values.sum
@@ -478,6 +490,68 @@ class MetricDashboardData
       server_id: server&.id,
       default_visible: true,
       panel_key: key
+    }
+  end
+
+  # hep_grouped_chart_for — a HEP3 group-by query (`… | count()/count(distinct X)
+  # by <field>`). One aggregation, rendered by chart_type:
+  #   number       → the grand total (all groups summed)
+  #   table / bars → a SNAPSHOT: one row/bar per group value, sorted + capped
+  #   line / area  → OVER TIME: one series per group (reuses the multi-series card)
+  # `plan` is the parsed DataTable::QueryPlan::Plan; `index` lets a Line/Area
+  # maximize reference this panel (multi charts rebuild from the dashboard).
+  def hep_grouped_chart_for(panel, plan, key, server, index)
+    source = DataTable::Registry.build(
+      panel["source"], server: server, params: {scope: panel["scope"], name: panel["name"]}
+    )
+    return missing_card(panel, key) if source.nil?
+
+    chart_type = panel["chart_type"].presence || "line"
+    # The view (messages/calls/errors) sets the base semantics: on Calls, count()
+    # counts distinct CALLS; on Errors, only 4xx/5xx rows. count(distinct X) in
+    # the query overrides the metric regardless of view.
+    view = panel["view"].presence || "messages"
+    from, to = hep_window
+
+    if chart_type == "number"
+      total = source.grouped_snapshot(plan, ts_from: from, ts_to: to, view: view).sum { |g| g[:value] }
+
+      return {
+        kind: :number, label: panel["label"].to_s, color: panel["color"].to_s,
+        formatted: total.to_s, value: total, series: [],
+        range: @range, range_ms: range_ms, truncated: false, clamped: false, meta: nil,
+        default_visible: true, panel_key: key
+      }
+    end
+
+    # Snapshot renders (Table / Bar): one aggregated value per group.
+    if chart_type == "table" || chart_type == "bars"
+      groups = source.grouped_snapshot(plan, ts_from: from, ts_to: to, view: view)
+
+      return {
+        kind: (chart_type == "table") ? :group_table : :group_bar,
+        label: panel["label"].to_s, color: panel["color"].to_s,
+        field: plan.group_by.to_s, unit: "", groups: groups,
+        default_visible: true, panel_key: key
+      }
+    end
+
+    # Time-series renders (Line / Area): one series per group → the multi card.
+    bucket = hep_bucket_seconds
+    series_map = source.grouped_series(plan, ts_from: from, ts_to: to, bucket: bucket, view: view)
+    series = series_map.each_with_index.map do |(label, pts), i|
+      {label: label, color: MULTI_SERIES_COLORS[i % MULTI_SERIES_COLORS.size],
+       points: hep_points(pts, from, to, bucket)}
+    end
+
+    return missing_card(panel, key) if series.empty?
+
+    {
+      label: panel["label"].to_s, unit: "", chart_type: chart_type,
+      multi: true, series: series,
+      default_visible: true, panel_key: key,
+      dashboard_uuid: @dashboard&.uuid, panel_index: index,
+      scope_kind: "pod", scope_id: nil, server_id: server&.id
     }
   end
 
@@ -540,10 +614,24 @@ class MetricDashboardData
     [from, to]
   end
 
-  # hep_bucket_seconds — ~60 buckets across the range (min 30s), so the
-  # sparkline honours the picker without over-fetching.
+  # hep_bucket_seconds — the bucket width for a HEP3 count/group chart. Honors
+  # the operator's INTERVAL when set (15m → 900s buckets), matching the warehouse
+  # charts; "auto" derives ~60 buckets across the range. Floored at 30s AND at
+  # range/600 so a fine interval over a long range can't fan out into thousands
+  # of raw-SQL buckets.
   def hep_bucket_seconds
-    [(range_ms / 1000) / 60, 30].max
+    span = [range_ms / 1000, 60].max
+    bucket = interval_seconds(@interval) || (span / 60)
+
+    [bucket, span / 600, 30].max
+  end
+
+  # interval_seconds — an explicit interval ("15m"/"1h"/"10s") → seconds, or nil
+  # for "auto"/unrecognised (→ the ~60-bucket auto derivation).
+  def interval_seconds(iv)
+    m = iv.to_s.match(/\A(\d+)(s|m|h)\z/) or return nil
+
+    m[1].to_i * {"s" => 1, "m" => 60, "h" => 3600}.fetch(m[2])
   end
 
   # hep_points — densify count_series ([[bucket_epoch, count], …]) into a

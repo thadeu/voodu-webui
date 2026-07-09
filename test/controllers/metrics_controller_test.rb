@@ -96,6 +96,29 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
     assert_match "Mem as Table", @response.body, "the zeroed panel still renders (empty), not a 500"
   end
 
+  # A HEP3 group-by panel (`… | count() by to_user`) renders end-to-end without a
+  # 500 — the full path: chart_for → hep_grouped_chart_for → the grid → GroupCard.
+  test "a hep3 group-by Table panel renders the dashboard without error" do
+    HepMessage.bulk_insert([
+      {server_id: @server.id, scope: "fsw", name: "hep3-api",
+       payload: {ts: (Time.current - 60).utc.strftime("%Y-%m-%d %H:%M:%S.000000"),
+                 call_id: "c1", x_cid: "c1", to_user: "5512", method: "INVITE", response_code: 0}.to_json}
+    ])
+    @org.metric_dashboards.destroy_all
+    @org.metric_dashboards.create!(
+      name: "by-number", pinned: true,
+      panels: [{"scope_kind" => "table", "source" => "hep3", "chart_type" => "table",
+                "scope" => "fsw", "name" => "hep3-api", "view" => "messages", "server_id" => @server.id,
+                "label" => "Calls by number", "color" => "var(--voodu-orange)",
+                "filter_query" => "| count() by to_user"}]
+    )
+
+    get metrics_path(server_key: @key, range: "1h")
+
+    assert_response :success
+    assert_match "Calls by number", @response.body, "the grouped panel renders (GroupCard), not a 500"
+  end
+
   # A log-query panel rendered as a chart maximizes like the others: the
   # /metrics/chart endpoint's source=log branch rebuilds the count chart for the
   # modal (a synthetic one-panel dashboard → log_chart_for), not a 404.

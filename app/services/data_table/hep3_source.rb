@@ -136,6 +136,58 @@ module DataTable
       )
     end
 
+    # grouped_snapshot — a group-by aggregation SNAPSHOT for Table/Bar/Number:
+    # [{group:, value:}, …], one row per distinct value of the plan's `group_by`,
+    # sorted + capped per the plan (`sort`/`limit`). The `view` sets the base
+    # semantics (like count_series): calls ⇒ count distinct CALLS (corr_id),
+    # errors ⇒ only 4xx/5xx rows, messages ⇒ raw rows. `plan` is a
+    # DataTable::QueryPlan::Plan. Returns [] when the plan isn't a valid
+    # group-by (no group field, or a field outside the allowlist).
+    def grouped_snapshot(plan, ts_from:, ts_to:, view: DEFAULT_VIEW)
+      ge = group_expr(plan)
+      agg = agg_sql(plan, view)
+
+      return [] if ge.nil? || agg.nil?
+
+      where_sql, where_binds = compile_filter(plan.filter)
+
+      HepMessage.group_snapshot(
+        server_id: @server.id, scope: @scope, name: @name,
+        ts_from: ts_from, ts_to: ts_to, group_expr: ge, agg_sql: agg,
+        sort_expr: sort_expr(plan), sort_dir: plan.sort_dir || :desc, limit: plan.limit,
+        min_code: errors?(view) ? ERROR_THRESHOLD : nil,
+        where_sql: where_sql, where_binds: where_binds
+      ).map { |g, v| {group: g.to_s, value: v.to_i} }
+    end
+
+    # grouped_series — the same aggregation OVER TIME for Line/Area:
+    # { group_value => [[bucket_epoch, value], …] }, in the snapshot's order
+    # (top-N by the sort/limit). Runs the snapshot first to pick the groups, then
+    # one bucketed pass over just those groups. Empty when there are no groups.
+    # `view` sets the same base semantics as grouped_snapshot.
+    def grouped_series(plan, ts_from:, ts_to:, bucket:, view: DEFAULT_VIEW)
+      snapshot = grouped_snapshot(plan, ts_from: ts_from, ts_to: ts_to, view: view)
+
+      return {} if snapshot.empty?
+
+      groups = snapshot.map { |g| g[:group] }
+      where_sql, where_binds = compile_filter(plan.filter)
+
+      raw = HepMessage.group_series(
+        server_id: @server.id, scope: @scope, name: @name,
+        ts_from: ts_from, ts_to: ts_to, bucket: bucket,
+        group_expr: group_expr(plan), agg_sql: agg_sql(plan, view), groups: groups,
+        min_code: errors?(view) ? ERROR_THRESHOLD : nil,
+        where_sql: where_sql, where_binds: where_binds
+      )
+
+      by_group = Hash.new { |h, k| h[k] = [] }
+      raw.each { |g, b, v| by_group[g.to_s] << [b.to_i, v.to_i] }
+
+      # Preserve the snapshot's top-N order; keep only groups that had buckets.
+      groups.each_with_object({}) { |g, out| out[g] = by_group[g] if by_group.key?(g) }
+    end
+
     # live_stream — the ActionCable stream the Hep3 poller broadcasts to
     # after inserting new rows for this instance (view-agnostic; the table
     # appends or refreshes per the view's realtime mode).
@@ -162,6 +214,37 @@ module DataTable
       compiled = DataTable::Query.compile(query) { |field| HepMessage.filter_expr(field) }
 
       [compiled.sql, compiled.binds]
+    end
+
+    # group_expr — the SQL expression the plan's `by <field>` groups on, from the
+    # allowlist (nil ⇒ no group field, or a field that isn't groupable → the
+    # caller returns empty, never injects).
+    def group_expr(plan)
+      plan.group_by && HepMessage.filter_expr(plan.group_by)
+    end
+
+    # agg_sql — the aggregate SQL for the plan's metric, resolved against the view:
+    #   count(distinct <field>) → COUNT(DISTINCT <expr>)        (explicit, any view)
+    #   count() on the Calls view → COUNT(DISTINCT corr_id)     (the view counts CALLS)
+    #   count() otherwise         → COUNT(*)                    (rows / messages)
+    # nil when an explicit distinct field isn't in the allowlist.
+    def agg_sql(plan, view)
+      if plan.distinct_field
+        de = HepMessage.filter_expr(plan.distinct_field) or return nil
+
+        return "COUNT(DISTINCT #{de})"
+      end
+
+      calls?(view) ? "COUNT(DISTINCT corr_id)" : "COUNT(*)"
+    end
+
+    # sort_expr — the ORDER BY expression when the plan sorts by a FIELD; nil when
+    # it sorts by the aggregated value (:value) or the field isn't in the
+    # allowlist (→ falls back to the agg value in group_snapshot).
+    def sort_expr(plan)
+      return nil if plan.sort_field.nil? || plan.sort_field == :value
+
+      HepMessage.filter_expr(plan.sort_field)
     end
 
     def message_rows(where_sql:, where_binds:, limit:, before_id:, since_id:, min_code:, ts_from: nil, ts_to: nil)
