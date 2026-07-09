@@ -56,6 +56,14 @@ class Components::Metrics::NumberCard < Components::Base
   # multi-area timeline. @numbers carries the per-pod headlines.
   def multi? = @numbers.is_a?(Array) && @numbers.size >= 2
 
+  # TV_VALUE_FONT / TV_CAPTION_FONT — the no-timeline stat sizes: a container
+  # query so each stat FILLS its column (readable on a wall-mounted TV). Applied
+  # server-side for a saved no-timeline panel AND by the number-card controller
+  # when the operator hides the timeline live via the popover (same rule: big
+  # ONLY while the timeline is hidden).
+  TV_VALUE_FONT = "clamp(28px, 20cqw, 120px)"
+  TV_CAPTION_FONT = "clamp(11px, 4cqw, 18px)"
+
   def view_template
     root_data = {}
 
@@ -72,6 +80,13 @@ class Components::Metrics::NumberCard < Components::Base
     if @metric && chart?
       root_data[:controller] = "number-card"
       root_data[:number_card_key_value] = @metric
+      # Multi tile → hand the controller the no-timeline stat sizes so hiding the
+      # timeline live (popover) scales the stats up, same as a saved no-timeline
+      # panel; showing it restores the modest size.
+      if multi?
+        root_data[:number_card_stat_size_value] = TV_VALUE_FONT
+        root_data[:number_card_caption_size_value] = TV_CAPTION_FONT
+      end
     end
 
     div(
@@ -150,12 +165,14 @@ class Components::Metrics::NumberCard < Components::Base
         div(class: "flex flex-col items-center gap-1 min-w-0 flex-1", style: "container-type: inline-size;") do
           span(
             class: "font-voodu-mono #{multi_value_size} font-semibold leading-none truncate max-w-full",
-            style: multi_value_style(n[:color])
+            style: multi_value_style(n[:color]),
+            data: {number_card_target: "stat"}
           ) { n[:formatted] }
 
           span(
-            class: "#{multi_caption_size} text-voodu-muted-2 truncate max-w-full",
-            data: {tooltip: n[:label]}, "aria-label": n[:label]
+            class: "text-[10px] text-voodu-muted-2 truncate max-w-full",
+            style: multi_caption_style,
+            data: {tooltip: n[:label], number_card_target: "caption"}, "aria-label": n[:label]
           ) { n[:label] }
         end
       end
@@ -182,18 +199,20 @@ class Components::Metrics::NumberCard < Components::Base
   # clamp keeps it readable on a narrow card and bounded on a huge TV; the middle
   # cqw term is the sweet spot — ~gauge-sized on a normal card, bigger as the card
   # widens. cqw resolves against the column (container-type set on the parent).
+  # WITH a timeline the size comes from multi_value_size instead, and the
+  # number-card controller applies TV_VALUE_FONT live if the operator hides it.
   def multi_value_style(color)
     base = "color: #{color};"
     return base if chart?
 
-    "#{base} font-size: clamp(28px, 20cqw, 120px);"
+    "#{base} font-size: #{TV_VALUE_FONT};"
   end
 
-  # multi_caption_size — the pod-name caption. A hair bigger without a timeline so
-  # it stays legible under the scaled-up stat (still a supporting line, not the
-  # hero).
-  def multi_caption_size
-    chart? ? "text-[10px]" : "text-[13px] vmd:text-[15px]"
+  # multi_caption_style — the caption keeps a base text-[10px] class; without a
+  # timeline it scales with its column too (container query), so it stays legible
+  # under the blown-up stat. (The controller applies the same live on popover-hide.)
+  def multi_caption_style
+    chart? ? "" : "font-size: #{TV_CAPTION_FONT};"
   end
 
   # chart? — whether this tile draws its timeline. SINGLE: ≥2 points. MULTI: any

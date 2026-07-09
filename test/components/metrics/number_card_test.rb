@@ -164,6 +164,15 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes html, "panel-options#toggleDots", "toggles the per-pod markers"
   end
 
+  test "a multi tile wires the stat targets + TV sizes so hiding the timeline resizes live" do
+    html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
+
+    assert_includes html, 'data-number-card-target="stat"', "each stat is a resize target"
+    assert_includes html, 'data-number-card-target="caption"', "so is the caption"
+    assert_includes html, "data-number-card-stat-size-value", "the controller gets the no-timeline size"
+    assert_includes html, "20cqw", "…the container-query TV size, applied live on popover-hide"
+  end
+
   test "a single tile's popover has NO Show dots — a single area sparkline draws none" do
     html = render_card(series: SPARK, range_ms: 3_600_000, metric: "k0")
 
