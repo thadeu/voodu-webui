@@ -135,13 +135,14 @@ class Components::Metrics::NumberCardTest < ActiveSupport::TestCase
     assert_includes html, 'data-tooltip="srv · api"', "the pod name captions with a tooltip (never a title)"
   end
 
-  test "a multi-pod tile draws the shared multi-area timeline with NO legend" do
+  test "a multi-pod tile draws the shared multi-area timeline WITH the interactive legend" do
     html = render_card(numbers: MULTI, series: MULTI_SERIES, range_ms: 3_600_000, metric: "k0")
 
     assert_includes html, "<svg", "the multi-area timeline renders"
     assert_includes html, "data-metrics-chart-multi-value", "as a multi-series chart"
     assert_includes html, 'data-series-index="1"', "one area per pod on shared axes"
-    assert_not_includes html, "legendItem", "no legend — the colored per-pod stats name the lines"
+    assert_includes html, "legendItem", "the timeline carries the chart's labels"
+    assert_includes html, "metrics-chart#toggleSeries", "with click-to-hide/show, like the area chart"
   end
 
   test "a multi-pod tile with no series (Show timeline off) shows just the stats" do

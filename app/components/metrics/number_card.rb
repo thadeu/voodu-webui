@@ -221,14 +221,15 @@ class Components::Metrics::NumberCard < Components::Base
 
   # sparkline — the timeline under the headline(s). SINGLE: a flat area sparkline
   # of the one series. MULTI: the shared multi-AREA chart (one filled area per
-  # pod, reusing the multi-line/area Chart), with its legend OFF — the colored
-  # per-pod headlines above already name each line.
+  # pod, reusing the multi-line/area Chart) — WITH its interactive legend, so the
+  # operator gets the same labels + click-to-hide/show + hover-highlight a real
+  # chart has. key: @metric persists the hidden-line selection across refreshes.
   def sparkline
     if multi?
       render Components::Metrics::Chart.new(
         points: [], series: @series, color: @color, unit: "", label: @label,
         range_ms: @range_ms || (60 * 60 * 1000), height: 150, axes: true,
-        style: :area, legend: false
+        style: :area, key: @metric
       )
     else
       render Components::Metrics::Chart.new(

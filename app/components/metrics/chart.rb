@@ -62,14 +62,11 @@ class Components::Metrics::Chart < Components::Base
   # {label:, color:, points: [{ts,value,formatted}]}. When present the chart
   # draws ONE line (+ dots) per series on shared axes (y = max across all
   # series, x = union of their time range). `points`/`color` are ignored.
-  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, style: :area, zoom_url: nil, series: nil, key: nil, legend: true)
+  def initialize(points:, color:, unit:, label:, range_ms:, height: 200, width: 600, axes: true, style: :area, zoom_url: nil, series: nil, key: nil)
     # key — a STABLE per-chart id (the panel_key on a dashboard). Emitted so the
     # multi-series controller can persist which lines the operator hid ACROSS a
     # realtime Turbo Stream refresh (which replaces the chart DOM + reconnects).
     @key = key
-    # legend — draw the multi-series legend under the chart. Off for a Number
-    # tile's multi timeline, where the colored per-pod headlines ARE the legend.
-    @legend = legend
     @series = series.is_a?(Array) ? series : nil
     @points = Array(points)
     @color = color
@@ -423,7 +420,7 @@ class Components::Metrics::Chart < Components::Base
         )
       end
 
-      render_multi_legend if @legend
+      render_multi_legend
     end
   end
 
