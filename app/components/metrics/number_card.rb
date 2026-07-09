@@ -187,10 +187,10 @@ class Components::Metrics::NumberCard < Components::Base
     return "" unless chart?
 
     case @numbers.size
-    when 2 then "text-[30px] vmd:text-[40px]"
-    when 3 then "text-[22px] vmd:text-[32px]"
-    when 4 then "text-[18px] vmd:text-[26px]"
-    else "text-[15px] vmd:text-[20px]"
+    when 2 then "text-[34px] vmd:text-[44px]"
+    when 3 then "text-[26px] vmd:text-[36px]"
+    when 4 then "text-[20px] vmd:text-[28px]"
+    else "text-[18px] vmd:text-[24px]"
     end
   end
 
