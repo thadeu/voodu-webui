@@ -77,6 +77,13 @@ export default class extends Controller {
   }
 
   connect() {
+    // This page grows to a big (up to ~20k-row), server-rendered, infinite-scroll
+    // list. Exempt it from Turbo's snapshot cache so navigating away doesn't
+    // retain that entire DOM in memory. Unlike the DataTable, the rows aren't in
+    // sessionStorage, so a cleared snapshot couldn't cheaply rehydrate — no-cache
+    // is the right call: Turbo re-fetches the first page on return.
+    window.Turbo?.cache?.exemptPageFromCache?.()
+
     if (this.rangeValue === "custom") {
       this.fillCustomInputsFromWindow()
     } else {

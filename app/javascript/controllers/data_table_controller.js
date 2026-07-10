@@ -83,6 +83,14 @@ export default class extends Controller {
     }
 
     if (this.live) this.startPolling()
+
+    // turbo:before-cache — swap the rendered table for a tiny placeholder BEFORE
+    // Turbo snapshots the page, so its snapshot cache doesn't retain up to
+    // MAX_ROWS of wide rows in memory (× every table card × every cached page).
+    // connect() rehydrates from sessionStorage (restoreState → render) on the way
+    // back — for both normal and restoration visits — so nothing is lost.
+    this.onBeforeCache = () => { if (this.hasViewportTarget) this.showStatus("Loading…") }
+    document.addEventListener("turbo:before-cache", this.onBeforeCache)
   }
 
   disconnect() {
@@ -90,6 +98,8 @@ export default class extends Controller {
     this.stopPolling()
     this.resumeReloads()
     this.unbindFilterFocus()
+
+    if (this.onBeforeCache) document.removeEventListener("turbo:before-cache", this.onBeforeCache)
   }
 
   // ── filter-focus reload guard ─────────────────────────────────────
