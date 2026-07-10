@@ -186,12 +186,25 @@ export default class extends Controller {
     this.onPodsFilterChanged = this.onPodsFilterChanged.bind(this)
     window.addEventListener("logs-pods:changed", this.onPodsFilterChanged)
 
+    // turbo:before-cache — empty the tail BEFORE Turbo snapshots the page. A
+    // live-tail DOM holds up to bufferCap large rows (SIP/JSON payloads); without
+    // this Turbo's snapshot cache retains that entire DOM in memory long after
+    // the operator navigates away — and across the several logs URLs (/logs,
+    // /logs/analytics, ?refresh) it compounds into a multi-GB leak. The stream
+    // re-backfills on the next visit, so nothing is lost.
+    this.onBeforeCache = this.clearRows.bind(this)
+    document.addEventListener("turbo:before-cache", this.onBeforeCache)
+
     // Apply the initial wrap state to the list element. The button
     // chrome in page.rb#wrap_btn already renders the active chip;
     // this line is what actually flips the CSS so long lines wrap
     // on first paint instead of after the first toggle click.
     if (this.hasListTarget) {
       this.listTarget.classList.toggle("log-wrap", this.wrap)
+      // Start from an empty tail — if a Turbo snapshot (or bfcache) restored a
+      // stale, row-filled list, drop those rows so the buffer + DOM begin in
+      // sync (else the cap-based eviction never catches up and the DOM grows).
+      this.clearRows()
     }
 
     if (this.streaming) {
@@ -212,7 +225,24 @@ export default class extends Controller {
       window.removeEventListener("logs-pods:changed", this.onPodsFilterChanged)
     }
 
+    if (this.onBeforeCache) {
+      document.removeEventListener("turbo:before-cache", this.onBeforeCache)
+    }
+
     if (this.streamAbort) this.streamAbort.abort()
+  }
+
+  // clearRows — drop every data row from the list, keeping the sticky column
+  // header. Unlike clear() (the toolbar button, which also zeroes the live
+  // buffer + counters) this only touches the DOM: it runs on connect (fresh
+  // start from a possibly-stale snapshot) and on turbo:before-cache (keep the
+  // cached snapshot tiny so Turbo doesn't retain a huge log DOM in memory).
+  clearRows() {
+    if (!this.hasListTarget) return
+
+    const dataRows = this.listTarget.querySelectorAll(".log-row:not(.log-header)")
+
+    for (const r of dataRows) r.remove()
   }
 
   // ── User actions ───────────────────────────────────────────────────
