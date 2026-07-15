@@ -6,7 +6,9 @@ module Poller
   # Runner — entrypoint used by the Rails app's `bin/poller` binstub.
   #
   # Responsibilities:
-  #   - Default `RAILS_INTERNAL_URL` to localhost:3000 when not set.
+  #   - Default `RAILS_INTERNAL_URL` to loopback on `PORT` (3000 if
+  #     unset) when not already set, so `PORT=xxxx bin/poller` follows
+  #     the app instead of hardcoding :3000.
   #   - exec(3) the binary so the binstub process is replaced — no Ruby
   #     residue in `ps`, no stale signal handlers.
   #
@@ -19,7 +21,7 @@ module Poller
     module_function
 
     def start
-      ENV["RAILS_INTERNAL_URL"] ||= "http://127.0.0.1:3000"
+      ENV["RAILS_INTERNAL_URL"] ||= "http://127.0.0.1:#{ENV.fetch("PORT", 3000)}"
       exec(Poller.binary_path)
     end
   end
