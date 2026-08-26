@@ -24,6 +24,12 @@ gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"
 gem "csv", "~> 3.3", require: false
 
+# clowk — optional operator sign-in (hosted Clowk.in identity). Inert
+# unless CLOWK_AUTH_ENABLED=1 plus both keys are present; see
+# config/initializers/clowk.rb. No user table: the gem verifies the JWT
+# and keeps the claims in the Rails session.
+gem "clowk", "~> 0.5"
+
 # poller — Go-based NDJSON poller for voodu servers. Ships a
 # compiled binary that the Puma plugin (config/puma.rb) spawns when
 # `POLLER_SPAWN=1`. Path-resolved local gem; no rubygems.org publish.

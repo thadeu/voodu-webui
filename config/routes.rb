@@ -5,6 +5,11 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", :as => :rails_health_check
 
+  # Hosted sign-in, sign-out and the OAuth callback (/clowk/sign_in,
+  # /clowk/sign_out, /clowk/oauth/callback). Mounted only when operator auth
+  # is switched on, so a default deploy exposes no extra surface at all.
+  mount Clowk::Engine => "/clowk" if ClowkAuth.enabled?
+
   # ActionCable WebSocket endpoint.
   #
   # Required so `turbo_stream_from` subscribers in any view (currently

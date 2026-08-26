@@ -24,6 +24,12 @@ class ApplicationController < ActionController::Base
   # `return_to_path` — a safe "come back here" target for modals/drawers.
   include Returnable
 
+  # Operator sign-in, when CLOWK_AUTH_ENABLED=1. Included before the
+  # before_action below so identity is settled before we resolve a server —
+  # an anonymous visitor must land on the sign-in page, not on a 404 for a
+  # server key they were never allowed to know exists.
+  include ClowkGuard
+
   # Only allow modern browsers supporting webp images, web push, badges,
   # import maps, CSS nesting, and CSS :has.
   allow_browser versions: :modern, with: :webp

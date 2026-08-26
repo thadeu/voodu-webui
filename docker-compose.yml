@@ -24,6 +24,13 @@ services:
       # Point at the Let's Encrypt staging directory while testing DNS or
       # firewall rules, so failures don't burn the production rate limit.
       ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}
+      # Operator sign-in via Clowk.in. CLOWK_SECRET_KEY is optional (RS256 is
+      # verified against the public JWKS); with the switch on and no
+      # publishable key the app refuses to boot, on purpose — see
+      # config/initializers/clowk.rb.
+      CLOWK_AUTH_ENABLED: ${CLOWK_AUTH_ENABLED:-}
+      CLOWK_PUBLISHABLE_KEY: ${CLOWK_PUBLISHABLE_KEY:-}
+      CLOWK_SECRET_KEY: ${CLOWK_SECRET_KEY:-}
       WAREHOUSE: ${WAREHOUSE:-1}
       POLLER_SPAWN: ${POLLER_SPAWN:-1}
       POLLER_INTERVAL_SECONDS: ${POLLER_INTERVAL_SECONDS:-15}
@@ -41,10 +48,15 @@ services:
       # Use it as the address when registering an server that lives on the
       # host or on a sibling VM (Lima, OrbStack, UTM, multipass).
       - "host.docker.internal:host-gateway"
-    resources:
-      limits:
-        cpus: 1.0
-        memory: 999M
+    # `resources` is only a valid service key under `deploy` — at the top level
+    # Compose rejects the whole file ("additional properties 'resources' not
+    # allowed") and nothing starts. Compose v2 applies deploy.resources.limits
+    # to plain `docker compose up`, no swarm involved.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 999M
 
 volumes:
   voodu_webui_storage:
