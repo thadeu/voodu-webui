@@ -40,6 +40,11 @@ docker run -d -p 80:3000    -v voodu_webui_storage:/rails/storage --add-host=hos
 docker run -d -p 1886:3000  -v voodu_webui_storage:/rails/storage --add-host=host.docker.internal:host-gateway ghcr.io/thadeu/voodu-webui:latest
 docker run -d -p 18687:3000 -v voodu_webui_storage:/rails/storage --add-host=host.docker.internal:host-gateway ghcr.io/thadeu/voodu-webui:latest
 
+# With HTTPS: Thruster gets a Let's Encrypt cert for TLS_DOMAIN and redirects
+# HTTP -> HTTPS. Needs an A record pointing here and host ports 80 + 443 open.
+docker run -d -p 80:3000 -p 443:443 -e TLS_DOMAIN=console.example.com \
+  -v voodu_webui_storage:/rails/storage --add-host=host.docker.internal:host-gateway ghcr.io/thadeu/voodu-webui:latest
+
 # Logs / lifecycle
 docker logs -f voodu-webui
 docker stop voodu-webui && docker start voodu-webui
@@ -56,7 +61,7 @@ natively, so the flag is a no-op there — leave it in for portability.
 curl -O https://raw.githubusercontent.com/thadeu/voodu-webui/main/docker-compose.yml
 curl -O https://raw.githubusercontent.com/thadeu/voodu-webui/main/.env.example
 mv .env.example .env
-# edit .env to change HOST_PORT if you don't want 3000
+# edit .env: host ports, TLS_DOMAIN, Basic Auth
 docker compose up -d
 
 # Lifecycle
@@ -69,6 +74,72 @@ The bundled `docker-compose.yml` already wires the storage volume, the
 `host.docker.internal` host alias, and an isolated default network
 (`voodu_webui_network`). Other containers on your host won't reach it on the Docker
 network — only through the published host port.
+
+By default it publishes host `80` -> container `3000` and host `443` -> container
+`443` (`HOST_HTTP_PORT` / `HOST_HTTPS_PORT` in `.env`). The container side stays on
+`3000`: the image `HEALTHCHECK` curls `http://localhost:3000/up`.
+
+### HTTPS
+
+The image bundles Thruster, which provisions and renews a Let's Encrypt certificate
+on its own. Set one variable:
+
+```sh
+# .env
+TLS_DOMAIN=console.example.com
+```
+
+```sh
+docker compose up -d
+docker compose logs -f web | grep -i -E 'tls|acme|certificate'
+```
+
+Three things must be true before you set it, or the site goes dark — the HTTPS
+listener has no certificate and HTTP only answers with a redirect to it:
+
+1. An A/AAAA record for the name resolves to this host
+2. Host ports 80 **and** 443 are open — 80 is where the ACME HTTP-01 challenge lands
+3. Nothing else terminates TLS in front. A Cloudflare orange-cloud proxy breaks
+   HTTP-01; use DNS-only, or leave `TLS_DOMAIN` empty and let Cloudflare hold the cert
+
+Certificates persist in the storage volume (`/rails/storage/thruster`), so restarts
+don't re-request them. While you're still fixing DNS or firewall rules, set
+`ACME_DIRECTORY` to the Let's Encrypt staging endpoint so failures don't burn the
+production rate limit. Leaving `TLS_DOMAIN` empty serves plain HTTP with no cert.
+
+Mapping host `443` straight to container `3000` without `TLS_DOMAIN` is the common
+mistake: the browser opens a TLS handshake against a plain HTTP listener and shows
+`ERR_SSL_PROTOCOL_ERROR`.
+
+### Basic Auth
+
+The dashboard has no login screen. `docker-compose.auth.yml` puts Caddy in front of
+it: Caddy terminates TLS, asks for a user and password, and proxies to the app over
+the private compose network. In this mode the app publishes no host port at all, so
+the prompt can't be walked around by hitting the host directly.
+
+```sh
+curl -O https://raw.githubusercontent.com/thadeu/voodu-webui/main/docker-compose.auth.yml
+curl -O https://raw.githubusercontent.com/thadeu/voodu-webui/main/Caddyfile
+```
+
+```sh
+# .env
+TLS_DOMAIN=console.example.com
+BASIC_AUTH_USER=voodu
+BASIC_AUTH_PASSWORD=something-long
+```
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d
+```
+
+Set `COMPOSE_FILE=docker-compose.yml:docker-compose.auth.yml` in `.env` to keep
+typing plain `docker compose up -d`.
+
+The password stays plain text in `.env` and is bcrypt-hashed at container boot, so
+rotating it is one edit plus `docker compose up -d`. `/up` is excluded from the
+prompt so healthchecks and uptime monitors keep working without credentials.
 
 ## Registering an server (server address)
 
@@ -114,7 +185,10 @@ network namespace, not the macOS network. Don't reach for it.
 | `RAILS_MASTER_KEY`                                                                                    | Decrypt `config/credentials.yml.enc` if you ship encrypted credentials.                |
 | `DATABASE_URL`                                                                                        | Swap SQLite for Postgres later without rebuilding.                                     |
 | `WAREHOUSE`                                                                                   | `1` enables the in-process metrics warehouse (default in the bundled compose).         |
-| `HOST_PORT`                                                                                           | Compose-only — external port forwarded to internal `3000` (default `3000`).            |
+| `HOST_HTTP_PORT` / `HOST_HTTPS_PORT`                                                                  | Compose-only — host ports forwarded to the container's `3000` / `443` (default `80` / `443`). |
+| `TLS_DOMAIN`                                                                                          | Domain to get a Let's Encrypt certificate for. Empty = plain HTTP, no cert.             |
+| `ACME_DIRECTORY`                                                                                      | ACME endpoint. Point at Let's Encrypt staging while testing DNS/firewall.               |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD`                                                             | Credentials for the Caddy front door (`docker-compose.auth.yml` only). Hashed at boot.  |
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
 | `TARGET_PORT`                                                                                         | Internal Rails port behind Thruster (default `3001`). Must differ from `HTTP_PORT`.    |
 | `SOLID_QUEUE_IN_PUMA`                                                                                 | Run `solid_queue` (recurring scheduler + workers) inside the Puma process. Default `true` in the image — required for the metrics warehouse to refill every 30s. Unset to disable (e.g., when running a sidecar `bin/jobs` container). |

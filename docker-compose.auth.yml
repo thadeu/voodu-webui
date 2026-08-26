@@ -1,0 +1,49 @@
+# Basic Auth overlay — the dashboard has no login of its own.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.auth.yml up -d
+#
+# ...or set COMPOSE_FILE in .env (see .env.example) and keep typing plain
+# `docker compose up -d`.
+#
+# Caddy takes over the host ports, terminates TLS for $TLS_DOMAIN and asks
+# for BASIC_AUTH_USER / BASIC_AUTH_PASSWORD. The app service drops its
+# published ports and its own TLS, so exactly one process owns 80/443 and
+# the only way in is through the password prompt.
+services:
+  web:
+    ports: !reset []
+    environment:
+      # Empty = Thruster serves plain HTTP on 3000, reachable only on the
+      # compose network. Caddy holds the certificate now.
+      TLS_DOMAIN: ""
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "${HOST_HTTP_PORT:-${HOST_PORT:-80}}:80"
+      - "${HOST_HTTPS_PORT:-443}:443"
+    environment:
+      TLS_DOMAIN: ${TLS_DOMAIN-acme.dev}
+      ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-voodu}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-change-me}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - voodu_webui_caddy_data:/data
+      - voodu_webui_caddy_config:/config
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        # Caddy only accepts hashed passwords. Hashing here keeps the plain
+        # text in .env, so rotating it is one edit + `docker compose up -d`.
+        BASIC_AUTH_HASH="$$(caddy hash-password --plaintext "$$BASIC_AUTH_PASSWORD")"
+        export BASIC_AUTH_HASH
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+
+volumes:
+  voodu_webui_caddy_data:
+  voodu_webui_caddy_config:

@@ -1,0 +1,29 @@
+{
+	# ACME directory used to issue the certificate. Point ACME_DIRECTORY at
+	# the Let's Encrypt staging endpoint while DNS or the firewall is still
+	# wrong — failures there don't burn the production rate limit.
+	acme_ca {$ACME_DIRECTORY:https://acme-v02.api.letsencrypt.org/directory}
+}
+
+# voodu-webui — Basic Auth front door. Loaded by docker-compose.auth.yml.
+#
+# Caddy owns TLS for $TLS_DOMAIN and gates the dashboard behind HTTP Basic
+# Auth, then proxies to the app container over the private compose network.
+# The app publishes no host port in this mode, so the password cannot be
+# walked around by hitting the host directly.
+#
+# /up stays open on purpose: the container HEALTHCHECK and any external
+# uptime monitor need it without credentials, and it exposes no data.
+{$TLS_DOMAIN:acme.dev} {
+	@protected not path /up
+	basic_auth @protected {
+		# BASIC_AUTH_HASH is the bcrypt hash of BASIC_AUTH_PASSWORD, computed
+		# at container boot by the entrypoint in docker-compose.auth.yml.
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	reverse_proxy web:3000
+
+	encode zstd gzip
+	log
+}

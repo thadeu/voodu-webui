@@ -4,13 +4,33 @@ services:
     # build: .              # uncomment to build locally instead of pulling
     restart: unless-stopped
     ports:
-      - "${HOST_PORT:-3000}:3000"
+      # Host 80 -> container 3000 is Thruster's HTTP listener: it answers the
+      # Let's Encrypt HTTP-01 challenge and redirects everything else to
+      # HTTPS. Keep the container side on 3000 — the image HEALTHCHECK curls
+      # http://localhost:3000/up and turns the container unhealthy otherwise.
+      # HOST_PORT is the pre-TLS name, still honoured as a fallback. The one
+      # case it cannot cover is a legacy HOST_PORT=443: both entries would
+      # then claim host 443 and the container refuses to start. Drop it and
+      # set TLS_DOMAIN instead — that is what the 443 mapping is now for.
+      - "${HOST_HTTP_PORT:-${HOST_PORT:-80}}:3000"
+      - "${HOST_HTTPS_PORT:-443}:443"
     environment:
       RAILS_ENV: production
-      WAREHOUSE: 1
-      POLLER_SPAWN: 1
-      SOLID_QUEUE_IN_PUMA: 1
-      LOG_TAIL_ENABLED: 1
+      # Domain Thruster provisions a Let's Encrypt certificate for. Needs an
+      # A record pointing here plus host ports 80 + 443 open. Certificates
+      # persist under /rails/storage/thruster (the volume below), so restarts
+      # don't re-request them. Empty (TLS_DOMAIN= in .env) = plain HTTP.
+      TLS_DOMAIN: ${TLS_DOMAIN-acme.dev}
+      # Point at the Let's Encrypt staging directory while testing DNS or
+      # firewall rules, so failures don't burn the production rate limit.
+      ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}
+      WAREHOUSE: ${WAREHOUSE:-1}
+      POLLER_SPAWN: ${POLLER_SPAWN:-1}
+      POLLER_INTERVAL_SECONDS: ${POLLER_INTERVAL_SECONDS:-15}
+      POLLER_LOG_BACKFILL_SECONDS: ${POLLER_LOG_BACKFILL_SECONDS:-86400}
+      POLLER_TOKEN: ${POLLER_TOKEN:-}
+      SOLID_QUEUE_IN_PUMA: ${SOLID_QUEUE_IN_PUMA:-1}
+      LOG_TAIL_ENABLED: ${LOG_TAIL_ENABLED:-1}
       # SECRET_KEY_BASE / ACTIVE_RECORD_ENCRYPTION_* auto-generated on first
       # boot if unset and persisted in the storage volume.
     volumes:
