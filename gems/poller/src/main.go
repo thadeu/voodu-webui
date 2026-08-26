@@ -183,8 +183,61 @@ func envIntSeconds(name string, def, floor int) int {
 
 // ServerRefreshInterval is how often main.go re-fetches the server
 // list from Rails. New servers get a goroutine, removed servers have
-// their goroutine cancelled (next refresh tick).
-const ServerRefreshInterval = 5 * time.Minute
+// their goroutine cancelled (next refresh tick). Servers that are
+// already running keep their goroutine — their endpoint and PAT reach
+// the wire through credRegistry instead, so nothing has to restart to
+// pick up a rotated token.
+//
+// 60s, not the old 5 minutes, because this interval is also the ceiling
+// on how long a rotated PAT keeps 401ing before the registry catches up.
+// The cost is one GET to Rails over loopback per minute per process.
+const ServerRefreshInterval = 60 * time.Second
+
+// credRegistry holds the live endpoint + PAT for every server in the
+// roster. Each refresh republishes the whole set; the stream clients
+// read through it on every request via client.NewLiveVooduClient.
+//
+// Why it exists: the PAT used to be copied into the HTTP client when the
+// stream goroutine was spawned, and `spawn` skips servers that are
+// already running. Revoke a PAT in the WebUI, issue a new one, and the
+// running streams kept presenting the dead token — every request 401 until
+// the process was recreated. Reading through the registry means the next
+// refresh fixes it in place, with the log/metric cursors intact.
+type credRegistry struct {
+	mu sync.RWMutex
+	m  map[string]client.Credentials
+}
+
+func newCredRegistry() *credRegistry {
+	return &credRegistry{m: map[string]client.Credentials{}}
+}
+
+// replace swaps in the credentials for the whole roster. Wholesale rather
+// than upsert so a server removed in the WebUI drops out of the registry
+// in the same pass that cancels its goroutines.
+func (r *credRegistry) replace(servers []client.Server) {
+	next := make(map[string]client.Credentials, len(servers))
+	for _, s := range servers {
+		next[s.ID] = client.Credentials{Endpoint: s.Endpoint, PAT: s.PAT}
+	}
+
+	r.mu.Lock()
+	r.m = next
+	r.mu.Unlock()
+}
+
+// fn returns the resolver handed to one server's HTTP client. It reads
+// the CURRENT value on every call — never snapshot it. A server dropped
+// from the roster resolves to the zero value; its goroutine is being
+// cancelled in the same refresh, so the failed request is moot.
+func (r *credRegistry) fn(serverID string) client.CredentialsFunc {
+	return func() client.Credentials {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+
+		return r.m[serverID]
+	}
+}
 
 // DrainBudget is how long we wait for in-flight ticks to finish on
 // SIGTERM before yanking the rug.
@@ -211,6 +264,7 @@ func main() {
 
 	writer := poller.NewWriter(cfg.StorageDir, state.CapHitIncr)
 	railsClient := client.NewRailsClient(cfg.RailsURL, cfg.InternalToken)
+	creds := newCredRegistry()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -235,6 +289,10 @@ func main() {
 
 	spawn := func(stream, serverID string, run func(context.Context)) {
 		key := stream + "|" + serverID
+		// Keyed on identity alone, deliberately: a server whose endpoint or
+		// PAT changed keeps its goroutine (and its log/metric cursors) and
+		// reads the new values through credRegistry. Adding credentials to
+		// this key would restart the stream on every rotation instead.
 		if _, ok := running[key]; ok {
 			return
 		}
@@ -264,6 +322,11 @@ func main() {
 
 		state.SetServerCount(len(servers))
 
+		// Publish credentials BEFORE spawning: a goroutine that starts
+		// below resolves them on its first tick, and one already running
+		// picks up a rotated PAT here without being restarted.
+		creds.replace(servers)
+
 		seen := map[string]bool{} // key = "<stream>|<serverID>"
 
 		for _, isl := range servers {
@@ -273,6 +336,9 @@ func main() {
 				seen["logs|"+isl.ID] = true
 				p := poller.NewServerPoller(isl, cfg.StorageDir, logsInterval, logBackfill, writer, state)
 				p.Verbose = cfg.Verbose
+				// Live credentials — the PAT copied into isl is a snapshot
+				// and goes stale the moment the operator rotates it.
+				p.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))
 				spawn("logs", isl.ID, p.Run)
 			}
 
@@ -280,6 +346,7 @@ func main() {
 				seen["metrics|"+isl.ID] = true
 				f := metricsstream.NewFetcher(isl, cfg.DigestRoot, metricsInterval, railsClient, state)
 				f.Verbose = cfg.Verbose
+				f.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))
 				spawn("metrics", isl.ID, f.Run)
 			}
 
@@ -287,6 +354,7 @@ func main() {
 				seen["state|"+isl.ID] = true
 				f := statestream.NewFetcher(isl, cfg.DigestRoot, stateInterval, railsClient, state)
 				f.Verbose = cfg.Verbose
+				f.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))
 				spawn("state", isl.ID, f.Run)
 			}
 		}

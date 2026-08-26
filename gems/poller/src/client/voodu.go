@@ -11,26 +11,67 @@ import (
 	"time"
 )
 
+// Credentials is one server's connection identity as currently configured
+// in the WebUI: where the controller lives and which PAT to present.
+type Credentials struct {
+	Endpoint string
+	PAT      string
+}
+
+// CredentialsFunc resolves the CURRENT credentials, called once per
+// request.
+//
+// This indirection is the whole point of the type: a PAT revoked and
+// reissued in the WebUI used to stay stuck for the life of the stream
+// goroutine, because the token was copied into the client at spawn time
+// and the roster refresh skipped servers that were already running. Every
+// request answered 401 until the process restarted. Resolving per request
+// means the next roster refresh republishes the token and the very next
+// call carries it — no goroutine restart, no lost cursor state.
+type CredentialsFunc func() Credentials
+
 // VooduClient hits a single voodu controller's PAT plane. One instance
 // per server. The HTTP client has a 60s round-trip timeout. Per-pod log
 // backfill that can't drain its whole window inside 60s is RESUMABLE: the
 // stream is oldest-first, the poller persists what it read and advances the
 // watermark, so the next tick continues where it left off.
 type VooduClient struct {
-	Endpoint string
-	PAT      string
-	HTTP     *http.Client
+	// Creds is resolved once per request. Never cache what it returns
+	// across calls — that would reintroduce the stuck-token bug.
+	Creds CredentialsFunc
+	HTTP  *http.Client
 }
 
-// NewVooduClient returns a VooduClient with sensible defaults. The
-// HTTP client has a 60s timeout on the round-trip; the poll itself is
-// `follow=false` so it should return quickly with the queued lines.
+// NewVooduClient returns a VooduClient pinned to fixed credentials — for
+// tests and one-off calls where nothing can rotate underneath. Long-lived
+// stream goroutines want NewLiveVooduClient instead.
 func NewVooduClient(endpoint, pat string) *VooduClient {
+	fixed := Credentials{Endpoint: endpoint, PAT: pat}
+
+	return NewLiveVooduClient(func() Credentials { return fixed })
+}
+
+// NewLiveVooduClient returns a client that re-reads its credentials from
+// `fn` on every request. `fn` MUST be safe for concurrent use — the
+// per-stream goroutines call it from their own goroutines.
+func NewLiveVooduClient(fn CredentialsFunc) *VooduClient {
 	return &VooduClient{
-		Endpoint: strings.TrimRight(endpoint, "/"),
-		PAT:      pat,
-		HTTP:     &http.Client{Timeout: 60 * time.Second},
+		Creds: fn,
+		HTTP:  &http.Client{Timeout: 60 * time.Second},
 	}
+}
+
+// current resolves the credentials for ONE request. Each exported method
+// calls this exactly once and threads the result through, so a refresh
+// landing mid-request can't pair an old endpoint with a new PAT.
+//
+// Trimming happens here rather than at construction because a live
+// provider hands us whatever the operator most recently saved.
+func (c *VooduClient) current() Credentials {
+	cr := c.Creds()
+	cr.Endpoint = strings.TrimRight(cr.Endpoint, "/")
+
+	return cr
 }
 
 // FetchLogs GETs `/api/pat/v1/logs?follow=false&tail=500&since=...&timestamps=true`
@@ -49,11 +90,13 @@ func (c *VooduClient) FetchLogs(ctx context.Context, since time.Time) (io.ReadCl
 		q.Set("since", since.UTC().Format(time.RFC3339Nano))
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", c.Endpoint+"/api/pat/v1/logs?"+q.Encode(), nil)
+	cr := c.current()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", cr.Endpoint+"/api/pat/v1/logs?"+q.Encode(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.PAT)
+	req.Header.Set("Authorization", "Bearer "+cr.PAT)
 	req.Header.Set("Accept", "text/plain")
 
 	resp, err := c.HTTP.Do(req)
@@ -92,9 +135,10 @@ func (c *VooduClient) FetchPodLogs(ctx context.Context, pod string, since time.T
 		q.Set("since", since.UTC().Format(time.RFC3339Nano))
 	}
 
-	endpoint := c.Endpoint + "/api/pat/v1/pods/" + url.PathEscape(pod) + "/logs?" + q.Encode()
+	cr := c.current()
+	endpoint := cr.Endpoint + "/api/pat/v1/pods/" + url.PathEscape(pod) + "/logs?" + q.Encode()
 
-	return c.doGet(ctx, endpoint, "text/plain")
+	return c.doGet(ctx, cr, endpoint, "text/plain")
 }
 
 // FetchMetrics GETs `/api/pat/v1/metrics/dump?since=<unix_seconds>` and
@@ -119,12 +163,14 @@ func (c *VooduClient) FetchMetrics(ctx context.Context, since string) (io.ReadCl
 		q.Set("since", since)
 	}
 
-	endpoint := c.Endpoint + "/api/pat/v1/metrics/dump"
+	cr := c.current()
+
+	endpoint := cr.Endpoint + "/api/pat/v1/metrics/dump"
 	if encoded := q.Encode(); encoded != "" {
 		endpoint += "?" + encoded
 	}
 
-	return c.doGet(ctx, endpoint, "application/x-ndjson")
+	return c.doGet(ctx, cr, endpoint, "application/x-ndjson")
 }
 
 // FetchPods GETs `/api/pat/v1/pods?detail=true&spec=true` and returns
@@ -134,7 +180,9 @@ func (c *VooduClient) FetchPods(ctx context.Context) (io.ReadCloser, error) {
 	q.Set("detail", "true")
 	q.Set("spec", "true")
 
-	return c.doGet(ctx, c.Endpoint+"/api/pat/v1/pods?"+q.Encode(), "application/json")
+	cr := c.current()
+
+	return c.doGet(ctx, cr, cr.Endpoint+"/api/pat/v1/pods?"+q.Encode(), "application/json")
 }
 
 // FetchPodList GETs `/api/pat/v1/pods` with NO detail/spec — the lightweight
@@ -142,7 +190,9 @@ func (c *VooduClient) FetchPods(ctx context.Context) (io.ReadCloser, error) {
 // sends detail+spec for the state stream's full snapshot; fetching that every
 // log tick just to read names would be wasteful. Caller MUST Close().
 func (c *VooduClient) FetchPodList(ctx context.Context) (io.ReadCloser, error) {
-	return c.doGet(ctx, c.Endpoint+"/api/pat/v1/pods", "application/json")
+	cr := c.current()
+
+	return c.doGet(ctx, cr, cr.Endpoint+"/api/pat/v1/pods", "application/json")
 }
 
 // podsEnvelope mirrors the controller's GET /pods response. The PAT plane
@@ -182,17 +232,22 @@ func ParsePodNames(r io.Reader) ([]string, error) {
 // FetchSystem GETs `/api/pat/v1/system` and returns the response body.
 // The caller MUST Close() the returned ReadCloser.
 func (c *VooduClient) FetchSystem(ctx context.Context) (io.ReadCloser, error) {
-	return c.doGet(ctx, c.Endpoint+"/api/pat/v1/system", "application/json")
+	cr := c.current()
+
+	return c.doGet(ctx, cr, cr.Endpoint+"/api/pat/v1/system", "application/json")
 }
 
 // doGet is the shared GET helper for the PAT plane: Bearer auth, single
 // Accept header, surfaces non-2xx with a truncated body in the error.
-func (c *VooduClient) doGet(ctx context.Context, url, accept string) (io.ReadCloser, error) {
+//
+// Takes the credentials the caller already resolved rather than resolving
+// again, so the URL and the token always come from the same snapshot.
+func (c *VooduClient) doGet(ctx context.Context, cr Credentials, url, accept string) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.PAT)
+	req.Header.Set("Authorization", "Bearer "+cr.PAT)
 	req.Header.Set("Accept", accept)
 
 	resp, err := c.HTTP.Do(req)

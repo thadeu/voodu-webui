@@ -217,3 +217,87 @@ func TestParseLine_BracketInBody_NotConsumed(t *testing.T) {
 		t.Errorf("body=%q", body)
 	}
 }
+
+// A live client must carry whatever the resolver returns AT REQUEST TIME.
+//
+// Regression: the PAT used to be copied into the client when the stream
+// goroutine was spawned, and the roster refresh skipped servers already
+// running — so revoking a PAT and issuing a new one left every request
+// presenting the dead token until the process was recreated.
+func TestLiveVooduClient_PicksUpRotatedPAT(t *testing.T) {
+	var seen []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Get("Authorization"))
+	}))
+	defer srv.Close()
+
+	pat := "pat-old"
+	c := NewLiveVooduClient(func() Credentials {
+		return Credentials{Endpoint: srv.URL, PAT: pat}
+	})
+
+	// doGet path
+	body, err := c.FetchSystem(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	pat = "pat-new"
+
+	// inline path (FetchLogs builds its own request)
+	body, err = c.FetchLogs(context.Background(), time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	want := []string{"Bearer pat-old", "Bearer pat-new"}
+	if len(seen) != len(want) {
+		t.Fatalf("got %d requests, want %d", len(seen), len(want))
+	}
+
+	for i := range want {
+		if seen[i] != want[i] {
+			t.Errorf("request %d sent %q, want %q", i, seen[i], want[i])
+		}
+	}
+}
+
+// The endpoint follows the resolver too — an operator correcting a
+// controller address must not need a restart either.
+func TestLiveVooduClient_FollowsRotatedEndpoint(t *testing.T) {
+	hitA, hitB := 0, 0
+	srvA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hitA++ }))
+	defer srvA.Close()
+	srvB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hitB++ }))
+	defer srvB.Close()
+
+	// Trailing slash on purpose: trimming must happen per resolve, not once
+	// at construction, or a live provider reintroduces the double slash.
+	endpoint := srvA.URL + "/"
+	c := NewLiveVooduClient(func() Credentials {
+		return Credentials{Endpoint: endpoint, PAT: "pat-1"}
+	})
+
+	body, err := c.FetchPodList(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	endpoint = srvB.URL
+
+	body, err = c.FetchPodList(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+
+	if hitA != 1 {
+		t.Errorf("first server got %d requests, want 1", hitA)
+	}
+	if hitB != 1 {
+		t.Errorf("second server got %d requests, want 1", hitB)
+	}
+}
