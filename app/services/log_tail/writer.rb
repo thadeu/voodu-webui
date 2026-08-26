@@ -136,6 +136,14 @@ module LogTail
       @seen.clear
     end
 
+    # cap_flag_key — Rails.cache key the UI reads to render the daily-cap
+    # banner. Public on purpose (the UI has no Writer instance), and above
+    # `private` because that keyword never applied to singleton methods
+    # anyway — see the private instance-level delegate further down.
+    def self.cap_flag_key(server_id, pod_name, date_str)
+      "log-tail:cap:#{server_id}:#{pod_name}:#{date_str}"
+    end
+
     private
 
     def today
@@ -325,10 +333,6 @@ module LogTail
     # method on the writer so the UI side can read with the same key.
     def cap_flag_key(pod_name, date_str)
       self.class.cap_flag_key(@server_id, pod_name, date_str)
-    end
-
-    def self.cap_flag_key(server_id, pod_name, date_str)
-      "log-tail:cap:#{server_id}:#{pod_name}:#{date_str}"
     end
 
     # maybe_check_disk — every DISK_CHECK_EVERY writes, statfs the

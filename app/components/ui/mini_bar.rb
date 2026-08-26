@@ -15,7 +15,7 @@ class Components::UI::MiniBar < Components::Base
   end
 
   def view_template
-    pct = [[(@value / [@max, 0.001].max) * 100, 0].max, 100].min
+    pct = ((@value / [@max, 0.001].max) * 100).clamp(0, 100)
 
     div(
       class: "shrink-0 overflow-hidden",

@@ -21,7 +21,7 @@
 class ServerPats
   TTL = 30.seconds
 
-  Result = Struct.new(:ok, :pats, :forbidden, :error, keyword_init: true) do
+  Result = Struct.new(:ok, :pats, :forbidden, :error) do
     def ok? = ok
     def forbidden? = !ok && forbidden
     def error? = !ok && !forbidden
