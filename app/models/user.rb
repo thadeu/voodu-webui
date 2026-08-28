@@ -21,8 +21,7 @@ class User < ApplicationRecord
   # place that treats an address as identity has to ask instead.
   PLACEHOLDER_EMAIL_SUFFIX = "@clowk.noemail"
 
-  has_many :org_memberships, class_name: "Org::Membership", dependent: :destroy,
-    inverse_of: :user
+  has_many :org_memberships, class_name: "Org::Membership", dependent: :destroy, inverse_of: :user
   has_many :orgs, through: :org_memberships
 
   # restrict: deleting someone who still answers for an account would leave it
