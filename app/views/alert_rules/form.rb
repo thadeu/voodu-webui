@@ -368,32 +368,13 @@ class Views::AlertRules::Form < Views::Base
     (secs >= 60) ? "#{secs / 60} minute#{"s" if secs >= 120}" : "#{secs} seconds"
   end
 
-  # ds_select — a DS single-select dropdown (trigger + hidden input + menu),
-  # replacing a native <select> so every picker in the form matches the design
-  # system. `dropdown` handles open/close (+ the shared filter once options pass
-  # the threshold); `ds-select` syncs the pick → hidden input + label + ✓ and
-  # dispatches `change` (so metric's constraint hook still fires). `selected` is
-  # compared to each option value with `==`, so integer values (durations) work.
+  # ds_select — delegates to the extracted Components::UI::Select. The markup
+  # and the two Stimulus controllers moved there when the members screen needed
+  # the same picker; this stays so the call sites in this form read unchanged.
   def ds_select(name:, selected:, options:, input_data: {})
-    current = options.find { |value, _| value == selected }
-
-    div(class: "relative", data: {controller: "dropdown ds-select"}) do
-      input(type: "hidden", name: name, value: selected, data: {ds_select_target: "input"}.merge(input_data))
-
-      button(
-        type: "button", data: {action: "click->dropdown#toggle"},
-        class: tokens(input_classes, "flex items-center gap-2 text-[13px] cursor-pointer")
-      ) do
-        span(data: {ds_select_target: "label"}, class: "flex-1 min-w-0 truncate text-left") { current ? current[1] : "Select…" }
-        render Icon::ChevronDownOutline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
-      end
-
-      div(hidden: true, data: {dropdown_target: "menu"}, class: target_menu_classes) do
-        dropdown_filter("Filter…") if options.size > 6
-        options.each { |value, text| ds_option(value, text, value == selected) }
-        dropdown_empty if options.size > 6
-      end
-    end
+    render Components::UI::Select.new(
+      name: name, selected: selected, options: options, input_data: input_data
+    )
   end
 
   def ds_option(value, text, active)

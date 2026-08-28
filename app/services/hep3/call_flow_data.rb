@@ -202,7 +202,7 @@ module Hep3
     end
 
     def records
-      HepMessage.for_call(server_id: @server.id, scope: @scope, name: @name, corr_id: @corr_id)
+      HepMessage.for_call(server: @server, scope: @scope, name: @name, corr_id: @corr_id)
     end
 
     # build_message — one parsed message as a flat, view-ready hash. `kind`

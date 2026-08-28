@@ -34,7 +34,7 @@ class LogTailServerJobTest < ActiveSupport::TestCase
 
   test "watermark does not advance past a line the Writer dropped (disk pressure)" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@server.id)
+      writer = LogTail::Writer.new(@server)
       writer.instance_variable_set(:@disk_ok, false) # simulate disk-pressure pause
 
       advanced = :unset
@@ -47,7 +47,7 @@ class LogTailServerJobTest < ActiveSupport::TestCase
 
   test "watermark advances for a persisted line" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@server.id)
+      writer = LogTail::Writer.new(@server)
 
       advanced = nil
       count = poll_once(FakeClient.new([line(at: "2026-06-09T12:05:00.000Z")]), writer, WATERMARK) { |ts| advanced = ts }
@@ -61,7 +61,7 @@ class LogTailServerJobTest < ActiveSupport::TestCase
 
   test "a distinct line sharing the watermark ms is kept (strict boundary guard)" do
     Time.use_zone("UTC") do
-      writer = LogTail::Writer.new(@server.id)
+      writer = LogTail::Writer.new(@server)
 
       count = poll_once(FakeClient.new([line(at: WATERMARK, msg: "boundary")]), writer, WATERMARK) { |_ts| }
       writer.close
@@ -81,7 +81,7 @@ class LogTailServerJobTest < ActiveSupport::TestCase
   end
 
   def clear_server_logs
-    dir = LogTail::FilePath.server_dir(@server.id)
+    dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

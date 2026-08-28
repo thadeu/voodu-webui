@@ -16,6 +16,8 @@
 class AlertRulesController < ApplicationController
   before_action :set_rule, only: [:edit, :update, :destroy, :toggle]
 
+  authorize :manage_alerts
+
   def new
     # Owned by the org (M3); default target = the current server's host.
     @rule = current_org.alert_rules.new(
@@ -125,10 +127,8 @@ class AlertRulesController < ApplicationController
     attrs = permitted.to_h
     target = attrs.delete("target").to_s
 
-    # Drop the empty-string sentinel the form sends so an all-unchecked
-    # submit clears the association cleanly (rejecting blank ids).
     if attrs["alert_destination_ids"].is_a?(Array)
-      attrs["alert_destination_ids"] = attrs["alert_destination_ids"].reject(&:blank?)
+      attrs["alert_destination_ids"] = org_destination_ids(attrs["alert_destination_ids"])
     end
 
     kind, server_id, scope, name = target.split("|", 4)
@@ -148,5 +148,19 @@ class AlertRulesController < ApplicationController
     return current_server&.id if id.blank?
 
     current_org.servers.where(id: id).pick(:id) || current_server&.id
+  end
+
+  # org_destination_ids — keep only the ids that name a destination IN this org,
+  # and drop the empty-string sentinel the form sends so an all-unchecked submit
+  # still clears the association.
+  #
+  # Mirrors org_server_id, but the timing matters more here: on a PERSISTED rule
+  # Rails writes the join rows the instant `alert_destination_ids=` is assigned —
+  # before any model validation gets a say. So the filter has to be on the way
+  # in. Without it, a forged id wires this org's rule to another org's webhook,
+  # and `alert_rule_destinations` carries no org_id for anything downstream to
+  # notice.
+  def org_destination_ids(ids)
+    current_org.alert_destinations.where(id: Array(ids).reject(&:blank?)).pluck(:id)
   end
 end

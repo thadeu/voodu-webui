@@ -64,7 +64,10 @@ class Server < ApplicationRecord
     StateSyncServerJob.perform_later(id) if defined?(StateSyncServerJob)
   end
 
-  validates :name, presence: true, uniqueness: true, length: {maximum: 64}
+  # Unique per ORG, not globally: a global index would answer "has already been
+  # taken" for another tenant's server name, and would block two customers from
+  # both owning a box called "web-1". Mirrors AlertDestination.
+  validates :name, presence: true, uniqueness: {scope: :org_id}, length: {maximum: 64}
   validates :endpoint, presence: true, format: {
     with: %r{\Ahttps?://[^/]+:\d+}, message: "could not be normalised to scheme://host:port"
   }

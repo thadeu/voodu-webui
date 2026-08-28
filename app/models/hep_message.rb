@@ -11,6 +11,9 @@
 # Server model lives in the primary DB and cross-DB joins are out of
 # scope.
 class HepMessage < HepRecord
+  # A Server, never an id — see ServerScoped.
+  extend ServerScoped
+
   # bulk_insert (BulkInsertable): Hep3PollerJob hands column-shaped rows
   # [{ server_id:, scope:, name:, payload: }]; generated columns are computed
   # by SQLite. parsed_payload (PayloadParsable) exposes `payload` as a Hash.
@@ -45,8 +48,13 @@ class HepMessage < HepRecord
   end
 
   # for_instance — narrow to one reader (scope, name) of a server.
-  scope :for_instance, ->(server_id:, scope:, name:) {
-    where(server_id: server_id, scope: scope, name: name)
+  #
+  # Takes a Server, never an id: these rows carry a bare server_id with no org
+  # column, so the object is the only proof the caller was allowed to ask (see
+  # ServerScoped). Every read below funnels through here, which is why this is
+  # the one place that has to coerce.
+  scope :for_instance, ->(server:, scope:, name:) {
+    where(server_id: HepMessage.server_id_of(server), scope: scope, name: name)
   }
 
   # page — newest-first slice for the DataTable. `filter` is an optional
@@ -54,10 +62,10 @@ class HepMessage < HepRecord
   # allowlist). `before_id` pages older (infinite scroll); `since_id`
   # pulls only rows newer than a watermark (live-append). id ordering is
   # the stable arrival order — ts ties at the second don't reshuffle.
-  def self.page(server_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_id: nil, since_id: nil, min_code: nil, ts_from: nil, ts_to: nil)
+  def self.page(server:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_id: nil, since_id: nil, min_code: nil, ts_from: nil, ts_to: nil)
     ensure_regexp! if where_sql.present?
 
-    rel = for_instance(server_id: server_id, scope: scope, name: name)
+    rel = for_instance(server: server, scope: scope, name: name)
     rel = rel.where("hep_messages.id < ?", before_id) if before_id
     rel = rel.where("hep_messages.id > ?", since_id) if since_id
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
@@ -86,10 +94,10 @@ class HepMessage < HepRecord
     "GROUP_CONCAT(DISTINCT sip_method)"
   ].freeze
 
-  def self.calls_page(server_id:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_epoch: nil, ts_from: nil, ts_to: nil)
+  def self.calls_page(server:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_epoch: nil, ts_from: nil, ts_to: nil)
     ensure_regexp! if where_sql.present?
 
-    rel = for_instance(server_id: server_id, scope: scope, name: name)
+    rel = for_instance(server: server, scope: scope, name: name)
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
     rel = rel.where("ts_epoch <= ?", ts_to) if ts_to
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
@@ -104,11 +112,11 @@ class HepMessage < HepRecord
   # [ts_from, ts_to). Returns [[bucket_epoch, count], …] ascending, ready to
   # feed a sparkline. `distinct_corr` counts calls (one per corr_id) instead of
   # messages; `min_code` narrows to errors (4xx/5xx).
-  def self.count_series(server_id:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [], distinct_corr: false, min_code: nil)
+  def self.count_series(server:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [], distinct_corr: false, min_code: nil)
     ensure_regexp! if where_sql.present?
 
     b = [bucket.to_i, 1].max
-    rel = for_instance(server_id: server_id, scope: scope, name: name)
+    rel = for_instance(server: server, scope: scope, name: name)
       .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
     rel = rel.where("response_code >= ?", min_code) if min_code
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
@@ -127,11 +135,11 @@ class HepMessage < HepRecord
   # allowlist), so no field is ever attacker SQL. NULL groups (a missing field)
   # are dropped. Sorted by `sort_expr` (default: the agg value) and capped at
   # `limit`. Returns [[group_value, value], …].
-  def self.group_snapshot(server_id:, scope:, name:, ts_from:, ts_to:, group_expr:, agg_sql:,
+  def self.group_snapshot(server:, scope:, name:, ts_from:, ts_to:, group_expr:, agg_sql:,
     sort_expr: nil, sort_dir: :desc, limit: nil, min_code: nil, where_sql: nil, where_binds: [])
     ensure_regexp! if where_sql.present?
 
-    rel = for_instance(server_id: server_id, scope: scope, name: name)
+    rel = for_instance(server: server, scope: scope, name: name)
       .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
       .where("#{group_expr} IS NOT NULL")
     rel = rel.where("response_code >= ?", min_code) if min_code
@@ -148,7 +156,7 @@ class HepMessage < HepRecord
   # (the top-N from group_snapshot), so a Line/Area draws one series per group
   # over time. Same allowlist-built `group_expr`/`agg_sql`; `groups` are bind
   # values. Returns [[group_value, bucket_epoch, value], …] ascending by bucket.
-  def self.group_series(server_id:, scope:, name:, ts_from:, ts_to:, bucket:, group_expr:, agg_sql:,
+  def self.group_series(server:, scope:, name:, ts_from:, ts_to:, bucket:, group_expr:, agg_sql:,
     groups:, min_code: nil, where_sql: nil, where_binds: [])
     return [] if groups.blank?
 
@@ -157,7 +165,7 @@ class HepMessage < HepRecord
     b = [bucket.to_i, 1].max
     bucket_sql = "(ts_epoch / #{b}) * #{b}"
 
-    rel = for_instance(server_id: server_id, scope: scope, name: name)
+    rel = for_instance(server: server, scope: scope, name: name)
       .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
       .where("#{group_expr} IN (?)", groups)
     rel = rel.where("response_code >= ?", min_code) if min_code
@@ -172,8 +180,8 @@ class HepMessage < HepRecord
   # call-flow bridge: a FreeSWITCH log line carries a `Call-ID:`, and this
   # resolves which reader has it + the corr_id (which folds x_cid → call_id).
   # nil when the call wasn't captured.
-  def self.locate_by_call_id(server_id, call_id)
-    where(server_id: server_id, call_id: call_id.to_s).order(id: :desc).first
+  def self.locate_by_call_id(server, call_id)
+    where(server_id: server_id_of(server), call_id: call_id.to_s).order(id: :desc).first
   end
 
   # for_call — every message of one call (by the correlation key), in
@@ -185,8 +193,8 @@ class HepMessage < HepRecord
   # so ts_epoch ties and the fallback to arrival `id` reorders the ladder
   # (a 100 Trying that the poller inserted before its INVITE would render
   # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
-  scope :for_call, ->(server_id:, scope:, name:, corr_id:) {
-    for_instance(server_id: server_id, scope: scope, name: name)
+  scope :for_call, ->(server:, scope:, name:, corr_id:) {
+    for_instance(server: server, scope: scope, name: name)
       .where(corr_id: corr_id).order(:ts, :id)
   }
 

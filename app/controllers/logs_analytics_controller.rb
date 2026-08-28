@@ -133,7 +133,7 @@ class LogsAnalyticsController < ApplicationController
 
   def each_export_record(data, &block)
     reader = LogTail::Reader.each_line(
-      server_id: data.server.id,
+      server: data.server,
       pods: data.pods.presence,
       from: data.from,
       until_: data.until_,

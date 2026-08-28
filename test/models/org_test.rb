@@ -9,7 +9,7 @@ class OrgTest < ActiveSupport::TestCase
   fixtures :orgs, :servers
 
   test "a new org gets a uuidv7 id and an 8-char base62 short_id used as the param" do
-    org = Org.create!(name: "New Co")
+    org = accounts(:acme_co).orgs.create!(name: "New Co")
 
     assert_equal 36, org.id.length
     assert_equal "7", org.id[14], "id should be a v7 uuid (version nibble = 7)"
@@ -22,7 +22,7 @@ class OrgTest < ActiveSupport::TestCase
   end
 
   test "name is unique" do
-    dup = Org.new(name: orgs(:acme).name)
+    dup = accounts(:acme_co).orgs.new(name: orgs(:acme).name)
 
     assert dup.invalid?
     assert_includes dup.errors[:name], "has already been taken"
@@ -75,7 +75,7 @@ class OrgTest < ActiveSupport::TestCase
   end
 
   test "timezone is normalized — trimmed, and set on create" do
-    org = Org.create!(name: "TZ Co", timezone: "  America/Sao_Paulo  ")
+    org = accounts(:acme_co).orgs.create!(name: "TZ Co", timezone: "  America/Sao_Paulo  ")
 
     assert_equal "America/Sao_Paulo", org.timezone
   end

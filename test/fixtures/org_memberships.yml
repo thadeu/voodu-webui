@@ -1,0 +1,50 @@
+# Membership is the ONLY source of access. Every access a test relies on is a
+# row here — there is no implicit path to fall back on.
+owner_in_acme:
+  id: "019f0000-0000-7000-8000-0000000000f1"
+  user_id: "019f0000-0000-7000-8000-0000000000d1"
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
+  role: 2
+  status: 1
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+owner_in_voidco:
+  id: "019f0000-0000-7000-8000-0000000000f2"
+  user_id: "019f0000-0000-7000-8000-0000000000d1"
+  org_id: "019f0000-0000-7000-8000-0000000000c3"
+  role: 2
+  status: 1
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+# A real owner of their OWN org — the control in every cross-tenant test.
+outsider_in_globex:
+  id: "019f0000-0000-7000-8000-0000000000f3"
+  user_id: "019f0000-0000-7000-8000-0000000000d2"
+  org_id: "019f0000-0000-7000-8000-0000000000b2"
+  role: 2
+  status: 1
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+# Member of acme, granted alpha only (see org_server_accesses.yml).
+contractor_in_acme:
+  id: "019f0000-0000-7000-8000-0000000000f4"
+  user_id: "019f0000-0000-7000-8000-0000000000d3"
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
+  role: 0
+  status: 1
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+# Invited, never accepted. active_orgs must NOT return acme for this row.
+invitee_in_acme:
+  id: "019f0000-0000-7000-8000-0000000000f5"
+  user_id: "019f0000-0000-7000-8000-0000000000d4"
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
+  role: 0
+  status: 0
+  invited_at: <%= Time.current %>
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

@@ -68,9 +68,15 @@ class CommandPaletteController < ApplicationController
   # the same isolation boundary as the sidebar. Org-less surfaces (/servers, /)
   # send no org → only the global actions (add / manage server) show.
   def palette_servers
-    org = params[:org].present? ? Org.find_by(short_id: params[:org]) : nil
+    return [] if params[:org].blank? || Current.user.nil?
 
-    org ? org.servers.order(:name).to_a : []
+    # Through the user's ACTIVE memberships, and then through reachable_servers:
+    # the org arrives as an attacker-controllable query param, and the response
+    # carries server names, keys and pod names — an inventory of the tenant.
+    org = Current.user.active_orgs.find_by(short_id: params[:org])
+    return [] if org.nil?
+
+    reachable_servers.where(org_id: org.id).order(:name).to_a
   end
 
   # safe_client — Voodu::Client construction can raise if the server

@@ -16,7 +16,7 @@ class Components::UI::NoServerState < Components::Base
         "metrics, and logs."
       end
       div(class: "pt-2") do
-        render(Components::UI::Button.new(tag: :a, variant: :primary, href: new_server_path)) { "Add server" }
+        render(Components::UI::Button.new(tag: :a, variant: :primary, href: new_server_path(server_key: nil))) { "Add server" }
       end
     end
   end

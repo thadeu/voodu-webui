@@ -52,7 +52,7 @@ class MetricsSyncServerJob < ApplicationJob
     return unless server # deleted between orchestrator + job dispatch
 
     client = Voodu::Client.new(server)
-    last_ts = MetricSample.last_ts_for(server.id)
+    last_ts = MetricSample.last_ts_for(server)
 
     # Stream the controller's NDJSON into MetricsDigestService — the
     # same persist + broadcast path the Go-fed PollerDigestJob uses.

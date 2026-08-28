@@ -12,6 +12,10 @@
 class AlertDestinationsController < ApplicationController
   before_action :set_destination, only: [:edit, :update, :destroy, :test]
 
+  # A destination holds an endpoint and an auth header — a credential for
+  # somewhere else. Reading the list is as sensitive as editing it.
+  authorize :manage_alerts
+
   def new
     @destination = current_org.alert_destinations.new(
       kind: "webhook", on_firing: true, on_resolved: true, enabled: true

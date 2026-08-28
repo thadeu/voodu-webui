@@ -53,6 +53,58 @@ class Components::Base < Phlex::HTML
   # org switcher + breadcrumb (org › servers › <server>).
   register_value_helper :current_org
   register_value_helper :all_orgs
+  # current_user — the signed-in operator (a local ::User mirroring the Clowk
+  # subject), for anything that shows who you are or offers a way out.
+  register_value_helper :current_user
+  # clowk_sign_out_path — the gem derives it from Clowk.config.mount_path, so
+  # moving the engine's mount moves this with it. Registered because the gem
+  # only installs its UrlHelpers into ActionView and ActionController, and a
+  # Phlex component is neither.
+  register_value_helper :clowk_sign_out_path
+  # manageable_org — the org whose members this person may manage, or nil.
+  register_value_helper :manageable_org
+  # allowed?(:capability) — the same table the controllers enforce, for
+  # deciding what to DRAW. Not a control: the endpoint refuses regardless.
+  register_value_helper :allowed?
+  # allowed_in?(org, capability) — the same question about a NAMED org, for the
+  # chrome that renders on pages with no :org_id in the URL.
+  register_value_helper :allowed_in?
+
+  # ── Form + dropdown primitives ─────────────────────────────────────────
+  # Moved down from Views::Base when Components::UI::Select needed them: a
+  # component is not a view, and CLAUDE.md's rule is that a primitive lives in
+  # Components::UI before it gets duplicated. Views::Base inherits from here,
+  # so every existing caller is unaffected.
+
+  # input_classes — the base <input> styling shared by every modal-form text
+  # field (h-9, surface bg, accent focus ring). Callers layer size / mono
+  # classes on top via `tokens(input_classes, …)`.
+  def input_classes
+    "w-full px-3 h-9 bg-voodu-surface border border-voodu-border text-voodu-text outline-none " \
+      "focus:border-voodu-accent focus:ring-1 focus:ring-voodu-accent-line placeholder:text-voodu-muted-2"
+  end
+
+  # dropdown_filter / dropdown_empty — the in-menu type-to-filter box (sticky
+  # top) + "no matches" row that the `dropdown` Stimulus controller drives.
+  # Shared by every filterable DS dropdown (the alert-rule form's target /
+  # metric pickers, the metrics builder's source / log pickers). Render inside
+  # the menu; the controller shows/hides options + the empty row as you type.
+  # (The menu container's own width/height classes stay per-caller — they
+  # legitimately differ — so those aren't hoisted here.)
+  def dropdown_filter(placeholder)
+    div(class: "sticky top-0 z-10 bg-voodu-surface border-b border-voodu-border-2 p-1.5") do
+      input(
+        type: "text", placeholder: placeholder, autocomplete: "off", spellcheck: "false",
+        data: {dropdown_target: "filter", action: "input->dropdown#filterInput keydown->dropdown#onFilterKey"},
+        class: "w-full h-8 px-2.5 bg-voodu-surface-2 border border-voodu-border text-voodu-text text-[12px] " \
+               "placeholder:text-voodu-muted-2 focus:outline-none focus:border-voodu-accent-line"
+      )
+    end
+  end
+
+  def dropdown_empty
+    div(hidden: true, data: {dropdown_target: "empty"}, class: "px-3 py-3 text-[12px] text-voodu-muted text-center") { "No matches" }
+  end
 
   Icon = PhlexIcons::Hero
 

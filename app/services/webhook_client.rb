@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "ipaddr"
-require "resolv"
-
 # WebhookClient — POSTs a JSON payload to an operator-configured
 # external URL (Slack incoming webhook, generic webhook). Mirrors the
 # Faraday + error-class shape of Voodu::Client, minus the Authorization
@@ -27,14 +24,11 @@ class WebhookClient
     new(url).post(payload, headers: headers)
   end
 
-  # Whether to permit non-routable (loopback / private / link-local)
-  # hosts. voodu-webui is a single-operator self-hosted dashboard, so
-  # in dev/test we allow them (the operator legitimately webhooks a
-  # local API). In production we block by default as SSRF
-  # defence-in-depth — an operator running on a private network can
-  # opt back in with VOODU_ALLOW_PRIVATE_WEBHOOKS=1.
+  # Kept as a delegation: the rule (and the VOODU_ALLOW_PRIVATE_WEBHOOKS
+  # switch behind it) moved to SsrfGuard when DataTable::HttpFetch became the
+  # second caller. Callers and tests that already ask WebhookClient keep working.
   def self.allow_private_hosts?
-    Rails.env.local? || ENV["VOODU_ALLOW_PRIVATE_WEBHOOKS"] == "1"
+    SsrfGuard.allow_private_hosts?
   end
 
   def initialize(url)
@@ -78,41 +72,19 @@ class WebhookClient
     end
   end
 
-  # guard_ssrf! — require an http(s) URL with a host. Unless private
-  # hosts are permitted (see .allow_private_hosts?), refuse URLs whose
-  # host resolves to a loopback / private / link-local address —
-  # defence-in-depth against pointing the app at its own metadata
-  # service or an internal box on an exposed production deploy.
+  # guard_ssrf! — refuse a URL this app should not be made to fetch. The rule
+  # lives in SsrfGuard (shared with DataTable::HttpFetch); the mapping to our
+  # error taxonomy lives here, because it is ours: a blocked URL is permanent
+  # (discard, never retry), while an unresolvable host may be a resolver blip
+  # worth retrying.
   def guard_ssrf!
-    uri = URI.parse(@url)
-    raise BlockedError, "must be an http(s) URL" unless %w[http https].include?(uri.scheme)
-    raise BlockedError, "missing host" if uri.host.blank?
+    # Through our own predicate, not SsrfGuard's default: this class is the
+    # seam callers and tests already reach for when they need to force the
+    # strict behaviour (see test/services/webhook_client_test.rb#block_private).
+    result = SsrfGuard.check(@url, allow_private: self.class.allow_private_hosts?)
+    return if result.ok?
+    raise TransportError, result.message if result.unresolvable?
 
-    return if self.class.allow_private_hosts?
-
-    addresses(uri.host).each do |ip|
-      addr = IPAddr.new(ip)
-      if addr.loopback? || addr.private? || addr.link_local?
-        raise BlockedError, "host resolves to a non-routable address (#{ip})"
-      end
-    end
-  rescue URI::InvalidURIError
-    raise BlockedError, "invalid URL"
-  end
-
-  # Resolve the host to its IPs. A bare IP literal is checked directly;
-  # a hostname is resolved (both A and AAAA). DNS failure → transport
-  # error so it retries (could be a transient resolver blip).
-  def addresses(host)
-    return [host] if ip_literal?(host)
-
-    Resolv.getaddresses(host).presence || raise(TransportError, "cannot resolve #{host}")
-  end
-
-  def ip_literal?(host)
-    IPAddr.new(host)
-    true
-  rescue IPAddr::InvalidAddressError
-    false
+    raise BlockedError, result.message
   end
 end

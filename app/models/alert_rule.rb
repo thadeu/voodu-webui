@@ -61,6 +61,7 @@ class AlertRule < ApplicationRecord
   validate :disk_is_host_only
   validate :req_s_is_deployment_only
   validate :target_server_in_org
+  validate :destinations_in_org
 
   scope :enabled, -> { where(enabled: true) }
 
@@ -230,6 +231,20 @@ class AlertRule < ApplicationRecord
     return if server&.org_id == org_id
 
     errors.add(:server, "must be a server in this org")
+  end
+
+  # destinations_in_org — every notified destination MUST belong to this rule's
+  # org. Defence in depth behind AlertRulesController#org_destination_ids: this
+  # catches the create path and any other caller, but it CANNOT be the only
+  # guard, because assigning `alert_destination_ids` on a persisted rule writes
+  # the join rows before validation runs. `alert_rule_destinations` has no
+  # org_id, so a cross-org row is invisible to every query downstream — the
+  # delivery job re-checks for exactly that reason.
+  def destinations_in_org
+    return if org_id.blank?
+    return if alert_destinations.all? { |destination| destination.org_id == org_id }
+
+    errors.add(:alert_destinations, "must belong to this org")
   end
 
   def disk_is_host_only

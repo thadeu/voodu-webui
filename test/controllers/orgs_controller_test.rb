@@ -31,7 +31,7 @@ class OrgsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "update renames the org" do
-    org = orgs(:globex)
+    org = orgs(:voidco)
 
     patch org_path(org), params: {org: {name: "Globex Intl"}}, as: :turbo_stream
 
@@ -48,7 +48,7 @@ class OrgsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "update sets the org timezone" do
-    org = orgs(:globex)
+    org = orgs(:voidco)
 
     patch org_path(org), params: {org: {name: org.name, timezone: "Europe/Lisbon"}}, as: :turbo_stream
 
@@ -57,7 +57,7 @@ class OrgsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "an unknown timezone is rejected without saving" do
-    org = orgs(:globex)
+    org = orgs(:voidco)
 
     patch org_path(org), params: {org: {name: org.name, timezone: "Mars/Phobos"}}, as: :turbo_stream
 

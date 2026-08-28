@@ -111,7 +111,7 @@ class LogSurroundingData
     scanned = []
     seq = 0
     LogTail::Reader.each_line(
-      server_id: server.id,
+      server: server,
       pods: @all_pods ? nil : [@pod],
       from: anchor - @window,
       until_: anchor + @window,

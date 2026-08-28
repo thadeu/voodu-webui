@@ -24,13 +24,15 @@ services:
       # Point at the Let's Encrypt staging directory while testing DNS or
       # firewall rules, so failures don't burn the production rate limit.
       ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}
-      # Operator sign-in via Clowk.in. CLOWK_SECRET_KEY is optional (RS256 is
-      # verified against the public JWKS); with the switch on and no
-      # publishable key the app refuses to boot, on purpose — see
-      # config/initializers/clowk.rb.
-      CLOWK_AUTH_ENABLED: ${CLOWK_AUTH_ENABLED:-}
-      CLOWK_PUBLISHABLE_KEY: ${CLOWK_PUBLISHABLE_KEY:-}
+      # Operator sign-in via Clowk.in — REQUIRED. Without a publishable key the
+      # app refuses to boot rather than serve the dashboard unprotected; see
+      # config/initializers/clowk.rb. CLOWK_SECRET_KEY is optional (RS256 is
+      # verified against the public JWKS).
+      CLOWK_PUBLISHABLE_KEY: ${CLOWK_PUBLISHABLE_KEY:?set it in .env — sign-in is mandatory}
       CLOWK_SECRET_KEY: ${CLOWK_SECRET_KEY:-}
+      # Skips the api.clowk.dev lookup on the request path. Optional; the gem
+      # derives it from the publishable key when unset.
+      CLOWK_SUBDOMAIN_URL: ${CLOWK_SUBDOMAIN_URL:-}
       WAREHOUSE: ${WAREHOUSE:-1}
       POLLER_SPAWN: ${POLLER_SPAWN:-1}
       POLLER_INTERVAL_SECONDS: ${POLLER_INTERVAL_SECONDS:-15}

@@ -9,6 +9,13 @@
 # `alerts-live` frame) re-renders ONLY the frame body with
 # layout: false, so live updates skip the dashboard chrome.
 class AlertsController < ApplicationController
+  # Org-level, not per-server: this page lists every rule and every firing
+  # episode in the org, and AlertRule#target_label names the server and the
+  # workload ("beta · web/web"). A member holds a per-server grant, so serving
+  # them the org's alert inventory would hand over the names of servers they
+  # were never granted. Admin+ — the line the plan draws for org surfaces.
+  authorize :read_org_surfaces
+
   def index
     data = AlertsPageData.new(current_org, current_server, history_filter: history_filter)
     tab = active_tab

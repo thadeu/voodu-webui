@@ -120,7 +120,7 @@ class LogMetricsSyncServerJob < ApplicationJob
     counts = Hash.new(0)
 
     LogTail::Reader.each_line(
-      server_id: server.id, pods: nil, from: from, until_: until_,
+      server: server, pods: nil, from: from, until_: until_,
       content_search: nil, regex: false, limit: SCAN_CAP
     ) do |_pod, h|
       pod = (h["pod"] || h[:pod]).to_s

@@ -129,7 +129,7 @@ module DataTable
       where_sql, where_binds = compile_filter(filter_query)
 
       HepMessage.count_series(
-        server_id: @server.id, scope: @scope, name: @name,
+        server: @server, scope: @scope, name: @name,
         ts_from: ts_from, ts_to: ts_to, bucket: bucket,
         where_sql: where_sql, where_binds: where_binds,
         distinct_corr: calls?(view), min_code: errors?(view) ? ERROR_THRESHOLD : nil
@@ -152,7 +152,7 @@ module DataTable
       where_sql, where_binds = compile_filter(plan.filter)
 
       HepMessage.group_snapshot(
-        server_id: @server.id, scope: @scope, name: @name,
+        server: @server, scope: @scope, name: @name,
         ts_from: ts_from, ts_to: ts_to, group_expr: ge, agg_sql: agg,
         sort_expr: sort_expr(plan), sort_dir: plan.sort_dir || :desc, limit: plan.limit,
         min_code: errors?(view) ? ERROR_THRESHOLD : nil,
@@ -174,7 +174,7 @@ module DataTable
       where_sql, where_binds = compile_filter(plan.filter)
 
       raw = HepMessage.group_series(
-        server_id: @server.id, scope: @scope, name: @name,
+        server: @server, scope: @scope, name: @name,
         ts_from: ts_from, ts_to: ts_to, bucket: bucket,
         group_expr: group_expr(plan), agg_sql: agg_sql(plan, view), groups: groups,
         min_code: errors?(view) ? ERROR_THRESHOLD : nil,
@@ -249,7 +249,7 @@ module DataTable
 
     def message_rows(where_sql:, where_binds:, limit:, before_id:, since_id:, min_code:, ts_from: nil, ts_to: nil)
       HepMessage.page(
-        server_id: @server.id, scope: @scope, name: @name,
+        server: @server, scope: @scope, name: @name,
         where_sql: where_sql, where_binds: where_binds,
         limit: limit, before_id: before_id, since_id: since_id, min_code: min_code,
         ts_from: ts_from, ts_to: ts_to
@@ -264,7 +264,7 @@ module DataTable
 
     def call_rows(where_sql:, where_binds:, limit:, before_id:, ts_from: nil, ts_to: nil)
       HepMessage.calls_page(
-        server_id: @server.id, scope: @scope, name: @name,
+        server: @server, scope: @scope, name: @name,
         where_sql: where_sql, where_binds: where_binds,
         limit: limit, before_epoch: before_id, ts_from: ts_from, ts_to: ts_to
       ).map { |row| call_row(row) }

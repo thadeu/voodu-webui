@@ -17,6 +17,8 @@
 # slashes if the controller ever changes naming.
 module LogTail
   module FilePath
+    extend ServerScoped
+
     module_function
 
     LOG_ROOT = "storage/logs"
@@ -40,19 +42,26 @@ module LogTail
     end
 
     # Per-server directory: storage/logs/<server_id>/
-    def server_dir(server_id)
-      log_root.join(server_id.to_s)
+    #
+    # Takes a Server, never an id (see ServerScoped). This segment is the
+    # tenant boundary ON DISK and, unlike the pod segment which goes through
+    # safe_pod_name, it used to have no sanitisation at all — a request param
+    # reaching it would have been path traversal out of storage/logs. Taking
+    # the object closes both holes at once: the caller must have gone through
+    # authorized_servers to hold one, and an id from a row is always an integer.
+    def server_dir(server)
+      log_root.join(server_id_of(server).to_s)
     end
 
     # Per-pod directory: storage/logs/<server_id>/<pod>/
-    def pod_dir(server_id, pod_name)
-      server_dir(server_id).join(safe_pod_name(pod_name))
+    def pod_dir(server, pod_name)
+      server_dir(server).join(safe_pod_name(pod_name))
     end
 
     # Per-day file: storage/logs/<server_id>/<pod>/YYYY-MM-DD.ndjson
     # `date` is a Date or anything responding to #strftime.
-    def daily_file(server_id, pod_name, date)
-      pod_dir(server_id, pod_name).join("#{date.strftime("%Y-%m-%d")}.ndjson")
+    def daily_file(server, pod_name, date)
+      pod_dir(server, pod_name).join("#{date.strftime("%Y-%m-%d")}.ndjson")
     end
 
     # ensure_dir — mkdir_p on demand. Writer calls before every open
@@ -72,12 +81,12 @@ module LogTail
     # date_files_in_range — list of daily file paths overlapping the
     # [from, until] window for a pod. Returns existing files only;
     # callers iterate this list to read NDJSON for export.
-    def date_files_in_range(server_id, pod_name, from, until_)
+    def date_files_in_range(server, pod_name, from, until_)
       from_date = from.to_date
       until_date = until_.to_date
 
       (from_date..until_date).filter_map do |date|
-        path = daily_file(server_id, pod_name, date)
+        path = daily_file(server, pod_name, date)
         path if File.exist?(path)
       end
     end
@@ -85,8 +94,8 @@ module LogTail
     # list_pods — discover which pods have stored data for an server.
     # Used by the Reader to handle "All pods" exports without
     # needing the controller's current pod list.
-    def list_pods(server_id)
-      dir = server_dir(server_id)
+    def list_pods(server)
+      dir = server_dir(server)
       return [] unless Dir.exist?(dir)
 
       Dir.children(dir).sort
@@ -95,8 +104,8 @@ module LogTail
     # server_disk_bytes — total bytes under storage/logs/<server_id>/.
     # Walks the tree once; cheap enough for orchestrator's per-tick
     # check (a few MB-sized files per pod per day).
-    def server_disk_bytes(server_id)
-      dir = server_dir(server_id)
+    def server_disk_bytes(server)
+      dir = server_dir(server)
       return 0 unless Dir.exist?(dir)
 
       total = 0

@@ -19,7 +19,7 @@ module LogTail
     DEFAULT_MATCH_LIMIT = 50_000  # cap matched lines (operator-set)
 
     # each_line — yields each matched parsed-hash + the pod name.
-    # @param server_id [Integer]
+    # @param server    [Server]
     # @param pods      [Array<String>] empty/nil = all pods on disk
     # @param from      [Time, Date]
     # @param until_    [Time, Date]
@@ -30,11 +30,11 @@ module LogTail
     # @yieldparam pod_name [String]
     # @yieldparam hash     [Hash] parsed line ({ts, pod, level, msg, raw, …})
     # @return [Integer] number of lines yielded
-    def self.each_line(server_id:, from:, until_:, pods: nil,
+    def self.each_line(server:, from:, until_:, pods: nil,
       content_search: nil, regex: false,
       limit: DEFAULT_MATCH_LIMIT, &block)
       new(
-        server_id: server_id,
+        server: server,
         pods: pods,
         from: from,
         until_: until_,
@@ -44,9 +44,11 @@ module LogTail
       ).each_line(&block)
     end
 
-    def initialize(server_id:, pods:, from:, until_:,
+    def initialize(server:, pods:, from:, until_:,
       content_search:, regex:, limit:)
-      @server_id = server_id
+      # The Server object, not its id: FilePath refuses an id, and holding the
+      # object means the caller had to reach it through authorized_servers.
+      @server = server
       @from = from
       @until_ = until_
       @content_search = content_search.to_s
@@ -56,7 +58,7 @@ module LogTail
       # Resolve pod list: explicit list OR every pod with on-disk data.
       requested = Array(pods).compact.reject(&:empty?)
       @pods = if requested.empty?
-        LogTail::FilePath.list_pods(server_id)
+        LogTail::FilePath.list_pods(server)
       else
         requested.map { |p| LogTail::FilePath.safe_pod_name(p) }
       end
@@ -71,7 +73,7 @@ module LogTail
 
       @pods.each do |pod|
         files = LogTail::FilePath.date_files_in_range(
-          @server_id, pod, @from, @until_
+          @server, pod, @from, @until_
         )
 
         files.each do |path|

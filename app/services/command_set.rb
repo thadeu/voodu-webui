@@ -232,7 +232,10 @@ class CommandSet
         title: "Add new server",
         icon: "PlusOutline",
         match: "add new server host connect setup register",
-        href: @h.new_server_path
+        # The registry moved under /:org_id. The palette is org-less (it is one
+        # global feed), and when a server IS in play its org is the right one;
+        # otherwise the org-less door picks one this person belongs to.
+        href: @server ? @h.new_server_path(org_id: @server.org.short_id, server_key: nil) : @h.all_servers_path
       },
       {
         id: "act-manage-servers",
@@ -240,7 +243,7 @@ class CommandSet
         title: "Manage servers",
         icon: "ServerStackOutline",
         match: "manage servers list edit remove registry",
-        href: @h.servers_path
+        href: @server ? @h.servers_path(org_id: @server.org.short_id, server_key: nil) : @h.all_servers_path
       }
     ]
   end

@@ -19,6 +19,11 @@
 class MetricDashboardsController < ApplicationController
   before_action :set_dashboard, only: [:edit, :update, :destroy, :pin, :unpin]
 
+  # Saved dashboards are org objects whose panels may name ANY server in the
+  # org. Admin+ keeps the per-server grant honest without having to filter
+  # every panel against the viewer — see Permissions#read_org_surfaces.
+  authorize :manage_dashboards
+
   def index
     @dashboards = current_org.metric_dashboards.order(:name).to_a
 

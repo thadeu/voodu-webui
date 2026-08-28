@@ -7,9 +7,11 @@ module DataTable
   # a response-size cap, and forced JSON parsing. Secrets (auth headers) are
   # applied server-side and never reach the browser.
   #
-  # SSRF hardening (blocking internal / metadata targets) is deliberately NOT
-  # here yet — it's a later milestone. Until then this must only be used for
-  # trusted, operator-owned targets.
+  # SSRF: the URL is operator-supplied and the request is made BY THE SERVER,
+  # from inside the private network where every voodu controller and this app's
+  # own /internal endpoints live. SsrfGuard (shared with WebhookClient) refuses
+  # non-routable targets; a deploy that legitimately lives on a private network
+  # opts back in with VOODU_ALLOW_PRIVATE_WEBHOOKS=1.
   #
   # Returns a Result: `ok?` + `json` on success, or `ok? == false` + `error`
   # (a short human message) on any failure — a bad URL, timeout, non-2xx, an
@@ -37,8 +39,17 @@ module DataTable
       @query = query.is_a?(Hash) ? query.compact : {}
     end
 
+    # Same seam as WebhookClient: tests force the strict path through this
+    # predicate rather than through SsrfGuard's default.
+    def self.allow_private_hosts?
+      SsrfGuard.allow_private_hosts?
+    end
+
     def call
       return failure("no URL configured") if @url.strip.empty?
+
+      guard = SsrfGuard.check(@url, allow_private: self.class.allow_private_hosts?)
+      return failure(guard.message) unless guard.ok?
 
       response = connection.run_request(@method.downcase.to_sym, @url, request_body, request_headers) do |req|
         req.params.update(@query.transform_keys(&:to_s))

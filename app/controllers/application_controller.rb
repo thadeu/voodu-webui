@@ -24,11 +24,15 @@ class ApplicationController < ActionController::Base
   # `return_to_path` — a safe "come back here" target for modals/drawers.
   include Returnable
 
-  # Operator sign-in, when CLOWK_AUTH_ENABLED=1. Included before the
-  # before_action below so identity is settled before we resolve a server —
-  # an anonymous visitor must land on the sign-in page, not on a 404 for a
-  # server key they were never allowed to know exists.
-  include ClowkGuard
+  # Operator sign-in — mandatory. Included before the before_action below so
+  # identity is settled before we resolve a server: an anonymous visitor must
+  # land on the sign-in page, not on a 404 for a server key they were never
+  # allowed to know exists.
+  include Authentication
+
+  # `authorize :capability, only: [...]` + `allowed?` for views. The capability
+  # table lives in Permissions.
+  include Authorization
 
   # Only allow modern browsers supporting webp images, web push, badges,
   # import maps, CSS nesting, and CSS :has.
@@ -55,7 +59,7 @@ class ApplicationController < ActionController::Base
   # needs org context off the controller) can resolve the per-org timezone
   # without threading the org through every render. Rails resets Current at
   # the end of the request, so there's no cross-request bleed.
-  before_action { Current.org = current_org }
+  before_action { publish_current_context }
 
   # default_url_options — Rails calls this for EVERY url_for / named
   # route helper. By auto-injecting the current server_key we keep
@@ -95,20 +99,116 @@ class ApplicationController < ActionController::Base
   def current_org
     return @current_org if defined?(@current_org)
 
-    @current_org = params[:org_id].present? ? Org.find_by(short_id: params[:org_id]) : nil
+    # Through the user's ACTIVE memberships, never Org.find_by: an org this
+    # person does not belong to is not in the scope, so a short_id from
+    # someone else's URL resolves to nil and every downstream lookup misses —
+    # the same way a made-up one does. active_orgs, not orgs: an invitation
+    # nobody accepted must not put anyone inside.
+    @current_org = if params[:org_id].present? && Current.user
+      Current.user.active_orgs.find_by(short_id: params[:org_id])
+    end
+  end
+
+  # current_membership — this person's active membership in the current org, or
+  # nil. Memoised: authorized_servers reads its grants on every request.
+  def current_membership
+    return @current_membership if defined?(@current_membership)
+
+    @current_membership = Current.user&.membership_in(current_org)
+  end
+
+  # role_in — this person's role in ONE named org, for the routes that carry no
+  # :org_id. Current.role answers for the org in the URL and is nil on /servers
+  # and /orgs, which is correct there and useless here: the org that matters is
+  # the one being acted on.
+  def role_in(org)
+    return nil if org.nil?
+
+    Current.user&.membership_in(org)&.role
+  end
+
+  # allowed_in?(org, capability) — the capability table, asked about ONE named
+  # org. `allowed?` reads Current.role, which answers for the org in the URL and
+  # is nil on /servers and /orgs — so a sidebar rendered there would hide every
+  # org-level item that carries a capability, even from the org's own owner.
+  def allowed_in?(org, capability)
+    Permissions.allow?(role_in(org), capability)
+  end
+
+  # administrable_orgs — the orgs this person may register a server in. Used by
+  # the org-less registry: "may I create a server" has no answer until you say
+  # in which org, and the form's dropdown must offer only these.
+  def administrable_orgs
+    return Org.none if Current.user.nil?
+
+    Current.user.active_orgs.where(
+      id: Current.user.org_memberships.active.privileged.select(:org_id)
+    )
+  end
+
+  # manageable_org — the org whose members this person may manage, for the
+  # topbar link. The one in the URL when they administer it, otherwise the
+  # first they do administer; nil when they administer none, and the link is
+  # then not drawn at all.
+  #
+  # Computed here, not in the view, because it needs role_in — and asking
+  # `allowed?(:invite_member)` from a view would read Current.role, which is nil
+  # on every org-less page and would hide the link exactly where it is most
+  # useful.
+  def manageable_org
+    return @manageable_org if defined?(@manageable_org)
+
+    @manageable_org =
+      if Permissions.allow?(role_in(current_org), :invite_member)
+        current_org
+      else
+        administrable_orgs.order(:name).first
+      end
+  end
+
+  # reachable_servers — every server this person reaches, across every org they
+  # belong to. THE producer: nothing else may turn a param into a Server.
+  #
+  #   admin / owner → every server in that org
+  #   member        → only the servers granted to their membership
+  #
+  # Used directly by the org-less registry routes (/servers), and narrowed by
+  # authorized_servers everywhere under /:org_id.
+  def reachable_servers
+    user = Current.user
+    return Server.none if user.nil?
+
+    active = user.org_memberships.active
+    privileged_org_ids = active.privileged.select(:org_id)
+    granted_server_ids = Org::ServerAccess.where(membership_id: active.select(:id)).select(:server_id)
+
+    Server.where(org_id: privileged_org_ids).or(Server.where(id: granted_server_ids))
+  end
+
+  # authorized_servers — reachable_servers narrowed to the org in the URL.
+  #
+  # The outer org_id filter is not redundant with the grant subquery: a
+  # ServerAccess row pairing one org's membership with another org's server
+  # would otherwise widen this. The model refuses to create such a row; this
+  # makes one inert if it ever exists.
+  def authorized_servers
+    return Server.none if current_org.nil?
+
+    reachable_servers.where(org_id: current_org.id)
   end
 
   # all_servers — the servers of the CURRENT ORG, feeding the sidebar list +
   # the recent-server LRU. Scoped to current_org so one org never sees
   # another org's servers. Empty on server-less pages (no org in the URL).
   def all_servers
-    @all_servers ||= current_org ? current_org.servers.order(:name).to_a : []
+    @all_servers ||= authorized_servers.order(:name).to_a
   end
 
-  # all_orgs — every Org, for the topbar org switcher. Small table; a full
-  # scan per render is cheap.
+  # all_orgs — the orgs THIS PERSON belongs to, for the topbar switcher. Never
+  # every org: the switcher would otherwise list every tenant's name, and the
+  # markup carries their ids.
   def all_orgs
-    @all_orgs ||= Org.order(:name).to_a
+    @all_orgs ||= Current.user ? Current.user.active_orgs.order(:name).to_a : []
   end
 
   # current_server — the server the operator is currently focused on.
@@ -125,22 +225,29 @@ class ApplicationController < ActionController::Base
     # SCOPED to current_org — a server key only resolves within its own org,
     # so a URL pairing an org with another org's server key 404s (via
     # require_server!) instead of leaking cross-org data.
-    @current_server = if params[:server_key].present? && current_org
-      current_org.servers.find_by(key: params[:server_key])
+    @current_server = if params[:server_key].present?
+      authorized_servers.find_by(key: params[:server_key])
     end
     track_recent_server!(@current_server) if @current_server
     @current_server
   end
 
   # lookup_server — resolve a `?server_id` param to a server WITHIN the current
-  # org (the isolation guard), falling back to current_server when it's absent,
-  # blank, or points at a forged / cross-org / deleted id. The cross-server read
-  # endpoints (datatable / metrics / hep3) use it so a dashboard panel can target
-  # ANY server in the org without ever reaching another org's data.
+  # org (the isolation guard). The cross-server read endpoints (datatable /
+  # metrics / hep3) use it so a dashboard panel can target ANY server in the
+  # org without ever reaching another org's data.
+  #
+  # No param means "the server in the URL". A param that does NOT resolve means
+  # nil — deliberately NOT a fall back to current_server. Falling back served
+  # the current server's rows under the forged server's label: a wrong answer
+  # presented as a right one, which is worse than no answer. Both callers that
+  # matter already handle nil (DatatableController#rows and
+  # MetricsController#expand_client head :not_found); the fallback was the only
+  # reason that handling never ran.
   def lookup_server
-    return current_server unless params[:server_id].present? && current_org
+    return current_server if params[:server_id].blank?
 
-    current_org.servers.find_by(id: params[:server_id]) || current_server
+    authorized_servers.find_by(id: params[:server_id])
   end
 
   # recent_servers — the LRU-ordered subset of servers surfaced in
@@ -190,6 +297,15 @@ class ApplicationController < ActionController::Base
   # Subcontrollers that don't live under /:server_key (Servers#*,
   # Dashboard#redirect_to_default, Styleguide) skip this with
   # `skip_before_action :require_server!`.
+  # Publish the request's identity + tenant so services, views and components
+  # can reach them without threading them through every call. Rails resets
+  # Current at the end of the request, so nothing bleeds across.
+  def publish_current_context
+    Current.org = current_org
+    Current.membership = current_membership
+    Current.role = current_membership&.role
+  end
+
   def require_server!
     return if current_server
 
@@ -244,5 +360,5 @@ class ApplicationController < ActionController::Base
     }
   end
 
-  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context
+  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?
 end

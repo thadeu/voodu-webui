@@ -20,7 +20,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   teardown do
     ENV["WAREHOUSE"] = @prev_wh
-    dir = LogTail::FilePath.server_dir(@server.id)
+    dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 

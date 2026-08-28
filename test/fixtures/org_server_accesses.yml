@@ -1,0 +1,9 @@
+# The contractor reaches alpha and nothing else — not beta, which lives in the
+# SAME org. That pair is what makes per-server granularity testable.
+contractor_alpha:
+  id: "019f0000-0000-7000-8000-000000000101"
+  membership_id: "019f0000-0000-7000-8000-0000000000f4"
+  server: alpha
+  org_id: "019f0000-0000-7000-8000-0000000000a1"
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

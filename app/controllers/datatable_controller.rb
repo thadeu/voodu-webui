@@ -9,6 +9,13 @@
 # (all columns) and default_fields (initial visible set) so the client can
 # build the column picker without a separate schema call.
 class DatatableController < ApplicationController
+  # #test fires an operator-supplied URL SERVER-SIDE, from inside the private
+  # network that holds every voodu controller and this app's own /internal
+  # endpoints. SsrfGuard refuses non-routable targets; this keeps the primitive
+  # itself out of a member's hands. (#rows stays open — it is per-server and
+  # goes through authorized_servers.)
+  authorize :manage_dashboards, only: [:test]
+
   DEFAULT_LIMIT = 100
   MAX_LIMIT = 500
 

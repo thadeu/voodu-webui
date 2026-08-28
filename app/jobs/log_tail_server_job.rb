@@ -110,7 +110,7 @@ class LogTailServerJob < ApplicationJob
 
   def run_tail(server)
     client = Voodu::Client.new(server)
-    writer = LogTail::Writer.new(server.id)
+    writer = LogTail::Writer.new(server)
     started_at = Time.current
     # Resume from the persisted watermark so a recycle/restart continues
     # with `since` instead of re-fetching a `tail=N` backfill. nil only

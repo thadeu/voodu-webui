@@ -1,0 +1,17 @@
+# Accounts group orgs and bill; they never authorize. Two, so cross-account is
+# a real boundary in the suite rather than a hypothetical.
+acme_co:
+  id: "019f0000-0000-7000-8000-0000000000e1"
+  short_id: acmeacct
+  name: Acme Co
+  owner_id: "019f0000-0000-7000-8000-0000000000d1"
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+globex_co:
+  id: "019f0000-0000-7000-8000-0000000000e2"
+  short_id: globexac
+  name: Globex Co
+  owner_id: "019f0000-0000-7000-8000-0000000000d2"
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

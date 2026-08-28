@@ -5,10 +5,38 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", :as => :rails_health_check
 
-  # Hosted sign-in, sign-out and the OAuth callback (/clowk/sign_in,
-  # /clowk/sign_out, /clowk/oauth/callback). Mounted only when operator auth
-  # is switched on, so a default deploy exposes no extra surface at all.
-  mount Clowk::Engine => "/clowk" if ClowkAuth.enabled?
+  # Sign-in, sign-out and the OAuth callback, owned by the gem's engine. The
+  # mount point is the ONLY thing this file decides — everything else about the
+  # flow is configured in config/initializers/clowk.rb, and `mount_path` there
+  # must match the mount here: the gem builds the paths it redirects to from
+  # the config, not from this table.
+  #
+  # Mounted at root, so the door is `/sign_in` with no prefix. The engine's
+  # controllers descend from ActionController::Base and NOT from ours — a
+  # sign-in route that ran the authentication chain would lock you out of
+  # signing in.
+  mount Clowk::Engine => "/"
+
+  # `/login` — a friendlier name for the same door. An alias by redirect rather
+  # than a second route into the controller, so there stays exactly one real
+  # sign-in path and this is plainly a shortcut to it.
+  #
+  # 302, not the default 301: browsers cache a permanent redirect, so if the
+  # engine's mount ever moves, everyone who visited /login once would keep
+  # bouncing to a path that no longer exists — and we would have no way to
+  # clear it from our side.
+  get "login", to: redirect(status: 302) { |_path_params, request|
+    ["/sign_in", request.query_string.presence].compact.join("?")
+  }
+
+  # Development only, and defined only here: signing in without a Clowk
+  # instance. Not in the production route table at all — ClowkDevToken carries
+  # the second lock. See app/services/clowk_dev_token.rb.
+  if Rails.env.development?
+    namespace :dev do
+      get "sign_in", to: "sessions#create", as: :sign_in
+    end
+  end
 
   # ActionCable WebSocket endpoint.
   #
@@ -39,11 +67,23 @@ Rails.application.routes.draw do
   get "manifest" => "rails/pwa#manifest", :as => :pwa_manifest
   get "service-worker" => "rails/pwa#service_worker", :as => :pwa_service_worker
 
-  # Server registry — operator-facing CRUD lives at the SERVER-LESS
-  # root because it's the bootstrapping surface ("I have no servers
-  # yet, how do I add one?"). Once an server exists, every other
-  # route lives under /:server_key/.
-  resources :servers, only: [:index, :new, :create, :edit, :update, :destroy]
+  # Server registry — scoped to an ORG, like everything else that shows data.
+  # A registry with no org listed every server the operator could reach across
+  # every org at once, which made "which tenant am I looking at" unanswerable
+  # and left the topbar with nothing to name.
+  #
+  # Still server-less (no :server_key): this is the bootstrapping surface —
+  # "the org has no servers, how do I add one?".
+  scope ":org_id", constraints: {org_id: /[a-zA-Z0-9]{8}/} do
+    resources :servers, only: [:index, :new, :create, :edit, :update, :destroy]
+  end
+
+  # The org-less door. Redirects to the registry of an org this person
+  # actually belongs to. Kept because plenty of places need a "somewhere that
+  # renders" with no org in hand — a refused capability, the landing when there
+  # are no servers yet, a bookmark from before the routes moved. `servers` is
+  # seven characters and the scope above demands eight, so they cannot collide.
+  get "servers", to: "servers#redirect_to_org", as: :all_servers
 
   # Org registry — the server/grouping layer above servers. Also SERVER-LESS
   # (an org is created from the server-registration form, before any server
@@ -72,6 +112,24 @@ Rails.application.routes.draw do
 
   # Bare root — if any servers exist, ApplicationController redirects
   # to /<first-server-key>/; otherwise lands on /servers/new.
+  # NOT :token — Authentication#reject_stray_token 400s any request carrying a
+  # `token` param outside the Clowk callback, which is what stops a session
+  # being established from a query string.
+  get "invites/:invite_token", to: "invites#show", as: :invite
+
+  # Who may reach an org, and which of its servers. Org-scoped but server-less.
+  scope ":org_id", constraints: {org_id: /[a-zA-Z0-9]{8}/}, as: :org do
+    resources :members, only: [:index, :create, :update, :destroy], controller: "org/members" do
+      member do
+        post :grant
+        delete :revoke
+      end
+    end
+  end
+
+  # The only screen a person with no org can act on — see OnboardingsController.
+  resource :onboarding, only: [:new, :create]
+
   root "dashboard#redirect_to_default"
 
   get "/styleguide", to: "styleguide#index"

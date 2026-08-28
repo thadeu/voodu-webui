@@ -142,7 +142,7 @@ class LogsController < ApplicationController
 
     count = 0
     LogTail::Reader.each_line(
-      server_id: current_server.id,
+      server: current_server,
       pods: pod ? [pod] : nil,
       from: since,
       until_: 1.day.from_now,

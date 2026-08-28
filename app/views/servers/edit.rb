@@ -69,7 +69,7 @@ class Views::Servers::Edit < Views::Base
         text_input(name: "server[name]", value: @server.name)
       end
 
-      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @server.org_id)
+      org_row
 
       field(label: "Server endpoint", error: @server.errors[:endpoint].first) do
         text_input(
@@ -124,6 +124,16 @@ class Views::Servers::Edit < Views::Base
         mono ? "font-voodu-mono text-[12.5px]" : "text-[13px]"
       )
     )
+  end
+
+  # Read-only on edit. ServersController#server_params stops permitting
+  # :org_id outside registration — moving a server between orgs would carry
+  # its whole warehouse history and its PAT along with it — so an editable
+  # selector here would be a control that silently does nothing.
+  def org_row
+    field(label: "Org", hint: "Set at registration.") do
+      div(class: "text-[13px] text-voodu-text-2") { @server.org&.name.to_s }
+    end
   end
 
   def pat_input

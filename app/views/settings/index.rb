@@ -203,7 +203,7 @@ class Views::Settings::Index < Views::Base
   # affordance for both.
   def header_actions
     a(
-      href: edit_server_path(@current_server, return_to: settings_path),
+      href: edit_server_path(@current_server, server_key: nil, return_to: settings_path),
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
     ) do
       render Icon::PencilSquareOutline.new(class: "w-3.5 h-3.5")
@@ -220,7 +220,7 @@ class Views::Settings::Index < Views::Base
       danger: true,
       icon: :TrashOutline,
       form: {
-        action: server_path(@current_server),
+        action: server_path(@current_server, server_key: nil),
         method: :delete
       },
       trigger: {

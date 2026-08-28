@@ -21,13 +21,13 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   test "a fresh Writer dedupes against lines already on disk" do
     line = line_for("hello", ts: "2026-06-09T15:00:00.000Z")
 
-    w1 = LogTail::Writer.new(@server.id)
+    w1 = LogTail::Writer.new(@server)
     assert w1.append("web", line), "first write lands"
     w1.close
 
     # New Writer = empty in-memory window. It must still skip the
     # identical line by seeding its window from the file tail.
-    w2 = LogTail::Writer.new(@server.id)
+    w2 = LogTail::Writer.new(@server)
     assert_not w2.append("web", line), "identical on-disk line is skipped"
     assert w2.append("web", line_for("world", ts: "2026-06-09T15:00:01.000Z")), "a genuinely new line still writes"
     w2.close
@@ -38,7 +38,7 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   test "dedupes within a single Writer run too" do
     line = line_for("repeat", ts: "2026-06-09T15:00:00.000Z")
 
-    w = LogTail::Writer.new(@server.id)
+    w = LogTail::Writer.new(@server)
     assert w.append("web", line)
     assert_not w.append("web", line), "same line twice in one run is skipped"
     w.close
@@ -53,11 +53,11 @@ class LogTail::WriterTest < ActiveSupport::TestCase
   end
 
   def daily_path(pod)
-    LogTail::FilePath.daily_file(@server.id, pod, Date.current)
+    LogTail::FilePath.daily_file(@server, pod, Date.current)
   end
 
   def clear_server_logs
-    dir = LogTail::FilePath.server_dir(@server.id)
+    dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

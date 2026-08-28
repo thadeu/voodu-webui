@@ -104,7 +104,7 @@ module DataTable
       prefix = "#{@scope}-#{@name}."
       exact = "#{@scope}-#{@name}"
 
-      LogTail::FilePath.list_pods(@server.id).select { |p| p == exact || p.start_with?(prefix) }
+      LogTail::FilePath.list_pods(@server).select { |p| p == exact || p.start_with?(prefix) }
     end
 
     def read_lines(from:, until_:, filter_query:, limit:)
@@ -114,7 +114,7 @@ module DataTable
       rows = []
 
       LogTail::Reader.each_line(
-        server_id: @server.id, pods: instances, from: from, until_: until_,
+        server: @server, pods: instances, from: from, until_: until_,
         content_search: filter_query.to_s.presence, limit: [limit * 4, SCAN_CAP].min
       ) do |pod, hash|
         rows << line_row(pod, hash)

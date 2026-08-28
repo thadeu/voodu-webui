@@ -21,6 +21,14 @@ class Org < ApplicationRecord
   # restrict_with_error: deleting an Org that still owns servers is blocked
   # with a friendly error (mirrors the DB FK restrict) — the operator moves
   # or removes the servers first, so no server is left orphaned.
+  belongs_to :account
+
+  # Membership is the ONLY source of access to this org — the account above it
+  # grants nothing. See Account.
+  has_many :memberships, class_name: "Org::Membership", dependent: :destroy,
+    inverse_of: :org
+  has_many :users, through: :memberships
+
   has_many :servers, dependent: :restrict_with_error
 
   # Metric dashboards live at the org level (M2) — a dashboard's panels can
@@ -34,7 +42,10 @@ class Org < ApplicationRecord
   has_many :alert_events, dependent: :destroy
   has_many :alert_destinations, dependent: :destroy
 
-  validates :name, presence: true, uniqueness: true, length: {maximum: 64}
+  # Unique per ACCOUNT, not globally: a global index answers "has already been
+  # taken" for a name only another tenant uses, and two customers may both call
+  # an org "Platform".
+  validates :name, presence: true, uniqueness: {scope: :account_id}, length: {maximum: 64}
   validates :short_id, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{8}\z/}
 
   # timezone — per-org display preference. Blank means "inherit" (global

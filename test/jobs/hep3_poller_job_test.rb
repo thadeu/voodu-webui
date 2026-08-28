@@ -47,7 +47,7 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
   end
 
   def message_count
-    HepMessage.for_instance(server_id: @server.id, scope: @scope, name: @name).count
+    HepMessage.for_instance(server: @server, scope: @scope, name: @name).count
   end
 
   test "drains the tail, inserts every line, and advances the cursor" do
@@ -56,7 +56,7 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
     run_poll(fake)
 
     assert_equal 3, message_count
-    assert_equal "3", HepCursor.cursor_for(@server.id, @scope, @name)
+    assert_equal "3", HepCursor.cursor_for(@server, @scope, @name)
   end
 
   test "a second tick re-reads nothing — no duplicates" do
@@ -78,12 +78,12 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
     run_poll(fake)
 
     assert_equal 2, message_count, "the garbage line is dropped, the 2 valid lines land"
-    assert_equal "3", HepCursor.cursor_for(@server.id, @scope, @name),
+    assert_equal "3", HepCursor.cursor_for(@server, @scope, @name),
       "cursor reflects lines consumed (incl. the skipped one) so it never re-reads"
   end
 
   test "a caught-up reader is a no-op" do
-    HepCursor.advance(@server.id, @scope, @name, "5")
+    HepCursor.advance(@server, @scope, @name, "5")
     fake = FakeHepReader.new([sip_line(call_id: "a")], page_size: 1000)
     # since='5' is past the single line → empty.
     run_poll(fake)

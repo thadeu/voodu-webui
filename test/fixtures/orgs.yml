@@ -7,6 +7,7 @@
 acme:
   id: "019f0000-0000-7000-8000-0000000000a1"
   short_id: acmeorg1
+  account_id: "019f0000-0000-7000-8000-0000000000e1"
   name: Acme
   description: Primary test org
   created_at: <%= Time.current %>
@@ -15,6 +16,7 @@ acme:
 globex:
   id: "019f0000-0000-7000-8000-0000000000b2"
   short_id: globex22
+  account_id: "019f0000-0000-7000-8000-0000000000e2"
   name: Globex
   created_at: <%= Time.current %>
   updated_at: <%= Time.current %>
@@ -24,6 +26,7 @@ globex:
 voidco:
   id: "019f0000-0000-7000-8000-0000000000c3"
   short_id: voidco33
+  account_id: "019f0000-0000-7000-8000-0000000000e1"
   name: Voidco
   created_at: <%= Time.current %>
   updated_at: <%= Time.current %>

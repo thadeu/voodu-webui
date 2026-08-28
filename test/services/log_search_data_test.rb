@@ -264,7 +264,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   # for the given pod, in the exact on-disk shape LogTail::Writer emits.
   def seed(pod, lines)
     lines.each do |time, msg|
-      path = LogTail::FilePath.daily_file(@server.id, pod, time.to_date)
+      path = LogTail::FilePath.daily_file(@server, pod, time.to_date)
       LogTail::FilePath.ensure_dir(File.dirname(path))
       row = {
         ts: time.iso8601(3),
@@ -280,7 +280,7 @@ class LogSearchDataTest < ActiveSupport::TestCase
   end
 
   def clear_server_logs
-    dir = LogTail::FilePath.server_dir(@server.id)
+    dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

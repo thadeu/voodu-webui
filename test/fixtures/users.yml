@@ -1,0 +1,44 @@
+# Users mirror Clowk subjects. UUIDv7 string PKs are set explicitly — fixtures
+# skip the before_create callback.
+#
+# The cast is the threat model:
+#   owner     — the default identity every integration test signs in as
+#   outsider  — a real OWNER of their own org. The control in every cross-tenant
+#               test: nothing they are refused can be blamed on a missing role.
+#   contractor— an active MEMBER of acme, granted alpha and nothing else. The
+#               boundary per-server grants invent.
+#   invitee   — invited to acme, never signed in, so no clowk_user_id yet. The
+#               row a first sign-in claims by address.
+owner:
+  id: "019f0000-0000-7000-8000-0000000000d1"
+  email: operator@example.com
+  clowk_user_id: test-<%= Digest::SHA256.hexdigest("operator@example.com")[0, 16] %>
+  email_verified: true
+  name: Operator
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+outsider:
+  id: "019f0000-0000-7000-8000-0000000000d2"
+  email: outsider@globex.example
+  clowk_user_id: test-<%= Digest::SHA256.hexdigest("outsider@globex.example")[0, 16] %>
+  email_verified: true
+  name: Outsider
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+contractor:
+  id: "019f0000-0000-7000-8000-0000000000d3"
+  email: contractor@example.com
+  clowk_user_id: test-<%= Digest::SHA256.hexdigest("contractor@example.com")[0, 16] %>
+  email_verified: true
+  name: Contractor
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
+invitee:
+  id: "019f0000-0000-7000-8000-0000000000d4"
+  email: invitee@example.com
+  email_verified: false
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>

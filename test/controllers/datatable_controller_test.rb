@@ -119,17 +119,26 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes froms, "a", "alpha's own rows must NOT appear when the panel targets beta"
   end
 
-  test "a forged server_id for a server OUTSIDE the org falls back to the URL's server (cross-org guard)" do
+  # Used to fall back to the URL's server and answer 200 — the current server's
+  # rows served under the forged server's label, a wrong answer presented as a
+  # right one. lookup_server now returns nil and the endpoint refuses.
+  test "a forged server_id for a server OUTSIDE the org is refused, not substituted" do
     gamma = servers(:gamma) # globex — a DIFFERENT org
     HepMessage.bulk_insert([reader_row(gamma, from_user: "gamma-secret")])
 
     get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
       view: "messages", server_id: gamma.id)
 
-    assert_response :success
-    froms = JSON.parse(@response.body)["rows"].map { |r| r["from_user"] }
+    assert_response :not_found
+    assert_not_includes @response.body, "gamma-secret",
+      "a cross-org server_id must NEVER leak another org's server"
+  end
 
-    assert_not_includes froms, "gamma-secret", "a cross-org server_id must NEVER leak another org's server"
+  test "a server_id naming nothing at all is refused too" do
+    get metrics_datatable_rows_path(server_key: @key, source: "hep3", scope: "fsw", name: "hep3-api",
+      view: "messages", server_id: 999_999)
+
+    assert_response :not_found
   end
 
   # reader_row — a hep3 message under `server`'s server, tagged via from_user.

@@ -93,7 +93,15 @@ module Internal
       server_id = params[:server_id].presence
       return render(json: {error: "server_id required"}, status: :bad_request) unless server_id
 
-      render json: {version: 1, since: MetricSample.last_ts_for(server_id)}
+      # Resolved to a row before use: MetricSample.last_ts_for takes a Server,
+      # never an id (see ServerScoped), and this is the one place that turns a
+      # request param into one. The auth here is the internal token plus the
+      # private-IP guard — this endpoint is global by design — but an id that
+      # names nothing should say so rather than answer 0.
+      server = Server.find_by(id: server_id)
+      return render(json: {error: "unknown server"}, status: :not_found) if server.nil?
+
+      render json: {version: 1, since: MetricSample.last_ts_for(server)}
     end
   end
 end

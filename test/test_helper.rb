@@ -18,11 +18,55 @@ WebMock.disable_net_connect!(allow_localhost: true)
 # isn't masked; this only fills in the segment for bare helper calls in tests.
 Rails.application.routes.default_url_options[:org_id] = "acmeorg1"
 
+# Sign-in for tests. NOT a stub: this mints a real HS256 token with the secret
+# the app is configured to verify with, and sets the real cookie — so
+# Clowk::Middleware::TokenExtractor reads it, Clowk::JwtVerifier verifies it and
+# Clowk::Authenticable persists the session exactly as in production. Nothing
+# about the gem is mocked.
+module AuthenticationTestHelper
+  DEFAULT_EMAIL = "operator@example.com"
+
+  def sign_in_as(email: DEFAULT_EMAIL, name: "Operator", email_verified: true, sub: nil)
+    subject = sub || "test-#{Digest::SHA256.hexdigest(email)[0, 16]}"
+    cookies[Clowk.config.cookie_key] = ClowkDevToken.mint(
+      sub: subject, email: email, name: name, email_verified: email_verified
+    )
+
+    User.provision_from_clowk!(
+      sub: subject, email: email, name: name, email_verified: email_verified, provider: "dev"
+    )
+  end
+
+  def sign_out
+    cookies.delete(Clowk.config.cookie_key)
+  end
+end
+
+module ActionDispatch
+  class IntegrationTest
+    include AuthenticationTestHelper
+
+    # Authentication is mandatory, so an unauthenticated request only ever
+    # proves that the sign-in redirect works. Every integration test starts
+    # signed in; the ones that care about the boundary sign out first.
+    setup { sign_in_as }
+  end
+end
+
 module ActiveSupport
   class TestCase
-    # Tests opt in to fixtures via `fixtures :servers` etc. — no
-    # global `fixtures :all` because the suite is just starting up
-    # and not every model has a fixture file yet.
+    # `fixtures :all` now, not opt-in: orgs reference accounts, accounts
+    # reference users, and memberships tie the three together — loading any one
+    # of them alone trips a foreign key. Per-test `fixtures :x` declarations are
+    # harmless and stay as documentation of what each file leans on.
+    # Namespaced models: Rails would classify `org_memberships` as
+    # OrgMembership, find nothing, and fall back to a raw table insert — which
+    # silently stops resolving `server: alpha` style label references.
+    set_fixture_class org_memberships: "Org::Membership",
+      org_server_accesses: "Org::ServerAccess"
+
+    fixtures :all
+
     parallelize(workers: 1)
 
     # Default: any non-localhost HTTP times out. The app's ServerHealth#probe

@@ -27,6 +27,8 @@ class MetricSample < MetricsRecord
   include BulkInsertable
   include PayloadParsable
 
+  extend ServerScoped
+
   # last_ts_for — highest ts_epoch we've persisted for this server.
   # MetricsSyncServerJob uses this as the `?since=<ts>` boundary on
   # the next incremental pull. Hits idx_metric_samples_watermark.
@@ -35,8 +37,10 @@ class MetricSample < MetricsRecord
   # / first sync). Caller decides whether 0 means "pull controller's
   # full 7d retention" (backfill path) or "start fresh from now"
   # (normal incremental — controller filter handles the empty case).
-  def self.last_ts_for(server_id)
-    where(server_id: server_id).maximum(:ts_epoch) || 0
+  # Takes a Server, never an id — see ServerScoped. These rows have no org
+  # column, so the object is the only proof the caller was allowed to ask.
+  def self.last_ts_for(server)
+    where(server_id: server_id_of(server)).maximum(:ts_epoch) || 0
   end
 
   # ── Scopes ──────────────────────────────────────────────────────

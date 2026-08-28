@@ -30,7 +30,7 @@ class LogTailOrchestratorJob < ApplicationJob
 
     Server.find_each do |server|
       next if LogTail::TailLock.held?(server.id)
-      next if over_disk_cap?(server.id)
+      next if over_disk_cap?(server)
 
       LogTailServerJob.perform_later(server.id)
     end
@@ -41,14 +41,14 @@ class LogTailOrchestratorJob < ApplicationJob
   # over_disk_cap? — true when this server's tree of NDJSON files
   # exceeds the per-server cap (2GB). Logs a warning so operator
   # can see why tailing paused.
-  def over_disk_cap?(server_id)
-    bytes = LogTail::FilePath.server_disk_bytes(server_id)
+  def over_disk_cap?(server)
+    bytes = LogTail::FilePath.server_disk_bytes(server)
     cap = LogTail::FilePath::PER_SERVER_CAP_BYTES
 
     return false if bytes < cap
 
     Rails.logger.warn(
-      "log-tail orchestrator skipping server=#{server_id} " \
+      "log-tail orchestrator skipping server=#{server.id} " \
       "disk=#{(bytes / 1024.0 / 1024.0).round}MB cap=#{cap / 1024 / 1024}MB"
     )
     true

@@ -141,43 +141,62 @@ The password stays plain text in `.env` and is bcrypt-hashed at container boot, 
 rotating it is one edit plus `docker compose up -d`. `/up` is excluded from the
 prompt so healthchecks and uptime monitors keep working without credentials.
 
-### Operator sign-in (Clowk)
+### Operator sign-in (Clowk) — required
 
-Basic Auth is one shared password. For per-person identity, set three variables
-and the whole dashboard goes behind a Clowk.in sign-in:
+The dashboard holds a PAT for every controller it manages: deploy, exec, logs.
+It does not answer to whoever finds the port. Set one variable:
 
 ```sh
 # .env
-CLOWK_AUTH_ENABLED=1
 CLOWK_PUBLISHABLE_KEY=pk_live_...
 ```
 
-`CLOWK_SECRET_KEY` is **optional**. Clowk signs with RS256 and the app verifies
-against the instance's public JWKS (discovered from the publishable key, cached
-in-process), so the secret is never touched on the sign-in path. Supply it only
-for tokens minted before Clowk's RS256 migration, or if you turn
-`enforce_active_session` on to check revocation against the broker.
+There is no users table. The app verifies the JWT Clowk issues, mirrors the
+subject onto a local row and keeps the claims in the Rails session. Without a
+publishable key the app **refuses to boot** rather than start unprotected.
 
-There is no users table. The app verifies the JWT Clowk issues and keeps the
-claims in the Rails session — nothing about the person is written to disk. Sign-in
-is at `/clowk/sign_in`, sign-out at `/clowk/sign_out`, and an anonymous visitor is
-redirected to sign-in with `return_to` set to the page they asked for.
+Two optional companions:
 
-With the switch on and no `CLOWK_PUBLISHABLE_KEY`, the app **refuses to boot**
-rather than serve the dashboard open to an operator who believes it is behind a
-login. Unset `CLOWK_AUTH_ENABLED` and nothing changes —
-no mounted routes, no before_action, no calls to Clowk.
+- `CLOWK_SECRET_KEY` — server-to-server calls to the Clowk API and the legacy
+  HS256 path. Verifying a current token does not need it: that runs against the
+  published key set.
+- `CLOWK_SUBDOMAIN_URL` — the instance's auth domain. Set it and the gem stops
+  resolving it through `api.clowk.dev`, taking one network dependency off the
+  path that authenticates every request (and off the JWKS fetch behind it).
 
-Two endpoints stay outside the session requirement by design:
+In development and test neither is needed — the app falls back to a local secret
+and `/dev/sign_in?email=you@example.com` mints a token the real verifier
+accepts. That route is defined only under `Rails.env.development?`, and
+`ClowkDevToken` raises in production.
+
+Two surfaces stay outside the session requirement by design:
 
 - `/up` — the image `HEALTHCHECK` curls it every 30s and has no session to offer
 - `/internal/poller/*` — the Go poller authenticates with `POLLER_TOKEN` plus a
-  private-IP guard. Redirecting it to a sign-in page would stop the metrics
-  warehouse from refilling
+  private-IP guard
 
-Sessions last as long as the token Clowk issued; revoking access there takes
-effect when it expires, since the app makes no per-request round-trip to the
-broker.
+### Accounts, orgs and who sees what
+
+An **account** is the signup tenant and groups N orgs; an **org** groups servers
+and belongs to exactly one account. A **membership** is the only thing that
+grants access — an account groups and bills, it never authorizes, which is what
+lets someone be invited into another company's org with no exception to the
+rule.
+
+| Role | Reaches |
+|---|---|
+| `owner` | The account principal. People, the org itself, deleting a server. |
+| `admin` | Every server in the org: PATs, alerts, dashboards, invites, grants. |
+| `member` | Only the servers explicitly granted to them. No PATs, no settings. |
+
+Alerts and saved dashboards are org-level objects that name every server in the
+org, so they are admin+. Members reach the per-server surfaces: overview, pods,
+logs and metrics.
+
+Invitations are a membership row with `status: invited`. The members screen
+mints a signed link the admin sends however they like — there is no SMTP in this
+app. Only the person it was addressed to can accept it, and it expires in 30
+days.
 
 ## Registering an server (server address)
 
@@ -227,9 +246,9 @@ network namespace, not the macOS network. Don't reach for it.
 | `TLS_DOMAIN`                                                                                          | Domain to get a Let's Encrypt certificate for. Empty = plain HTTP, no cert.             |
 | `ACME_DIRECTORY`                                                                                      | ACME endpoint. Point at Let's Encrypt staging while testing DNS/firewall.               |
 | `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD`                                                             | Credentials for the Caddy front door (`docker-compose.auth.yml` only). Hashed at boot.  |
-| `CLOWK_AUTH_ENABLED`                                                                                  | `1` puts the dashboard behind a Clowk.in sign-in. Needs `CLOWK_PUBLISHABLE_KEY` or the app won't boot. |
-| `CLOWK_PUBLISHABLE_KEY`                                                                               | Clowk instance identity — sign-in URL, JWKS endpoint and token audience derive from it. |
-| `CLOWK_SECRET_KEY`                                                                                    | Optional. Only for legacy HS256 tokens or the broker-side session check.                |
+| `CLOWK_PUBLISHABLE_KEY`                                                                               | **Required.** Clowk instance identity — sign-in URL, JWKS endpoint and token audience derive from it. |
+| `CLOWK_SECRET_KEY`                                                                                    | Optional. Clowk API calls and the legacy HS256 path; token verification does not need it. |
+| `CLOWK_SUBDOMAIN_URL`                                                                                 | Optional. The instance's auth domain — set it to skip the api.clowk.dev lookup per request. |
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
 | `TARGET_PORT`                                                                                         | Internal Rails port behind Thruster (default `3001`). Must differ from `HTTP_PORT`.    |
 | `SOLID_QUEUE_IN_PUMA`                                                                                 | Run `solid_queue` (recurring scheduler + workers) inside the Puma process. Default `true` in the image — required for the metrics warehouse to refill every 30s. Unset to disable (e.g., when running a sidecar `bin/jobs` container). |

@@ -54,10 +54,53 @@ class Components::Layouts::Topbar < Components::Base
       search_box
       search_icon
       theme_toggle
+      account_menu
     end
   end
 
   private
+
+  # account_menu — who you are, and the way out.
+  #
+  # A <details> rather than a Stimulus popover: one element, closes on Escape
+  # and on click-outside for free, and it is the only floating thing in the bar.
+  # The avatar comes from the Clowk claims mirrored onto the User; providers
+  # that hand back none fall through to the initial.
+  def account_menu
+    return if current_user.nil?
+
+    details(class: "relative shrink-0", data: {controller: "details-dismiss"}) do
+      summary(
+        class: "list-none cursor-pointer inline-flex items-center justify-center shrink-0 " \
+               "rounded-full ring-1 ring-voodu-border hover:ring-voodu-border-2",
+        title: current_user.email,
+        "aria-label": "Account"
+      ) { avatar }
+
+      account_dropdown
+    end
+  end
+
+  def avatar
+    render Components::UI::Avatar.new(
+      url: current_user.avatar_url, name: current_user.display_name, size: :sm
+    )
+  end
+
+  def account_dropdown
+    div(class: "absolute right-0 top-9 z-50 w-56 flex flex-col " \
+               "border border-voodu-border bg-voodu-surface shadow-lg") do
+      div(class: "flex flex-col gap-0.5 px-3 py-2.5 border-b border-voodu-border") do
+        span(class: "text-[12.5px] text-voodu-text truncate") { current_user.display_name }
+        span(class: "text-[11px] text-voodu-muted font-mono truncate") { current_user.email }
+      end
+
+      a(
+        href: clowk_sign_out_path,
+        class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+      ) { "Sign out" }
+    end
+  end
 
   # theme_toggle — sun/moon quick switch. The initial theme is resolved
   # before paint by the inline script in application.html.erb (sets
@@ -207,7 +250,7 @@ class Components::Layouts::Topbar < Components::Base
       ) do
         div(class: "py-1") { @servers.each { |i| switcher_row(i) } }
         div(class: "border-t border-voodu-border py-1") do
-          a(href: servers_path, class: "block px-3 py-1.5 text-[12px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text") { "manage servers →" }
+          a(href: servers_path(server_key: nil), class: "block px-3 py-1.5 text-[12px] text-voodu-muted hover:bg-voodu-surface-2 hover:text-voodu-text") { "manage servers →" }
         end
       end
     end
@@ -270,8 +313,25 @@ class Components::Layouts::Topbar < Components::Base
     chip(label, value)
   end
 
+  # The same bar, minus what needs a server.
+  #
+  # It used to collapse to a line of plain text, so stepping from a server onto
+  # the registry threw away the org switcher and the crumb trail — the two
+  # controls that are still perfectly valid there, and the ones you reach for to
+  # get back. Only the server-dependent pieces (name, status, region, uptime,
+  # updated) actually have nothing to say.
   def no_server_hint
-    span(class: "text-voodu-muted text-xs") { "no server selected" }
+    return span(class: "text-voodu-muted text-xs") { "no server selected" } if current_org.nil?
+
+    div(class: "flex items-center gap-2 vmd:gap-2.5 min-w-0 flex-1 vmd:flex-initial") do
+      div(class: "flex items-center gap-1.5 min-w-0") do
+        org_switcher
+        render Icon::ChevronRightOutline.new(class: "hidden vmd:inline w-2.5 h-2.5 text-voodu-muted")
+        span(class: "text-voodu-muted text-[13px]") { "servers" }
+      end
+
+      span(class: "hidden vmd:inline text-voodu-muted-2 text-xs") { "no server selected" }
+    end
   end
 
   # Full search box — visible at 1100+. Real button now: clicking

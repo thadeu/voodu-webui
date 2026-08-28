@@ -59,7 +59,7 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "focus pre-selects the clicked message (server emits its ladder index)" do
-    ok = HepMessage.for_call(server_id: @server.id, scope: "fsw", name: "hep3-api", corr_id: "call-1")
+    ok = HepMessage.for_call(server: @server, scope: "fsw", name: "hep3-api", corr_id: "call-1")
       .find { |m| m.payload_json["response_code"] == 200 }
 
     get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "call-1", focus: ok.id)

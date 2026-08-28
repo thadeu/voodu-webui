@@ -20,10 +20,23 @@ class DashboardController < ApplicationController
   skip_before_action :require_server!, only: [:redirect_to_default, :org_root]
 
   def redirect_to_default
-    if (server = Server.order(:name).first)
+    # reachable_servers, not Server.order(:name).first: "/" used to land on the
+    # alphabetically-first server in the INSTALL, which under multi-tenancy is
+    # someone else's. Every require_server! bounce comes through here too.
+    if (server = reachable_servers.order(:name).first)
       redirect_to server_root_path(org_id: server.org.short_id, server_key: server.key)
+    elsif administrable_orgs.exists?
+      # Only for someone who may actually register one. Sending a plain member
+      # here meant the form refused them and bounced them back to `/`, which
+      # sent them to the form again — a redirect loop the browser eventually
+      # gave up on.
+      redirect_to new_server_path(org_id: administrable_orgs.order(:name).first.short_id)
+    elsif Current.user&.active_orgs&.exists?
+      redirect_to all_servers_path
     else
-      redirect_to new_server_path
+      # No org at all: a first sign-in, or someone whose last membership was
+      # removed. Onboarding is the only screen they can act on.
+      redirect_to new_onboarding_path
     end
   end
 
@@ -32,10 +45,14 @@ class DashboardController < ApplicationController
   def org_root
     return redirect_to(root_path(org_id: nil, server_key: nil)) if current_org.nil?
 
-    if (server = current_org.servers.order(:name).first)
+    if (server = authorized_servers.order(:name).first)
       redirect_to server_root_path(org_id: current_org.short_id, server_key: server.key)
+    elsif allowed_in?(current_org, :manage_servers)
+      redirect_to new_server_path(server_key: nil)
     else
-      redirect_to new_server_path
+      # A member with no granted server in this org: the registry renders and
+      # explains itself; the form would just refuse them.
+      redirect_to servers_path(server_key: nil)
     end
   end
 

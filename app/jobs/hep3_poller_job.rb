@@ -54,7 +54,7 @@ class Hep3PollerJob < ApplicationJob
   # `client` is injected so tests drive it with a fake reader instead of
   # stubbing the network (same seam as LogTailServerJob#poll_once).
   def drain(server, scope, name, client)
-    cursor = HepCursor.cursor_for(server.id, scope, name)
+    cursor = HepCursor.cursor_for(server, scope, name)
     inserted = 0
     pages = 0
 
@@ -72,7 +72,7 @@ class Hep3PollerJob < ApplicationJob
 
       HepRecord.transaction do
         rows.each_slice(BATCH_SIZE) { |slice| HepMessage.bulk_insert(slice) }
-        HepCursor.advance(server.id, scope, name, next_cursor)
+        HepCursor.advance(server, scope, name, next_cursor)
       end
 
       inserted += rows.size

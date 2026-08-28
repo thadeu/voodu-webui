@@ -10,7 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_27_140300) do
+  create_table "accounts", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "owner_id", null: false
+    t.string "short_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["owner_id"], name: "index_accounts_on_owner_id"
+    t.index ["short_id"], name: "index_accounts_on_short_id", unique: true
+  end
+
   create_table "alert_destinations", force: :cascade do |t|
     t.text "body_template"
     t.datetime "created_at", null: false
@@ -104,14 +114,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
     t.index ["uuid"], name: "index_metric_dashboards_on_uuid", unique: true
   end
 
+  create_table "org_memberships", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "invited_at"
+    t.string "org_id", null: false
+    t.integer "role", default: 0, null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.string "user_id", null: false
+    t.index ["org_id"], name: "index_org_memberships_on_org_id"
+    t.index ["user_id", "org_id"], name: "index_org_memberships_on_user_id_and_org_id", unique: true
+  end
+
+  create_table "org_server_accesses", id: :string, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "membership_id", null: false
+    t.string "org_id", null: false
+    t.integer "server_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["membership_id", "server_id"], name: "index_org_server_accesses_on_membership_id_and_server_id", unique: true
+    t.index ["server_id"], name: "index_org_server_accesses_on_server_id"
+  end
+
   create_table "orgs", id: :string, force: :cascade do |t|
+    t.string "account_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
     t.string "name", null: false
     t.string "short_id", null: false
     t.string "timezone"
     t.datetime "updated_at", null: false
-    t.index ["name"], name: "index_orgs_on_name", unique: true
+    t.index ["account_id", "name"], name: "index_orgs_on_account_id_and_name", unique: true
+    t.index ["account_id"], name: "index_orgs_on_account_id"
     t.index ["short_id"], name: "index_orgs_on_short_id", unique: true
   end
 
@@ -154,7 +188,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
     t.string "region"
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_servers_on_key", unique: true
-    t.index ["name"], name: "index_servers_on_name", unique: true
+    t.index ["org_id", "name"], name: "index_servers_on_org_id_and_name", unique: true
     t.index ["org_id"], name: "index_servers_on_org_id"
   end
 
@@ -175,6 +209,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
     t.index ["server_id"], name: "index_systems_on_server_id", unique: true
   end
 
+  create_table "users", id: :string, force: :cascade do |t|
+    t.string "avatar_url"
+    t.string "clowk_provider"
+    t.string "clowk_user_id"
+    t.datetime "created_at", null: false
+    t.string "email", null: false
+    t.boolean "email_verified", default: false, null: false
+    t.datetime "last_signed_in_at"
+    t.string "name"
+    t.datetime "updated_at", null: false
+    t.index ["clowk_user_id"], name: "index_users_on_clowk_user_id", unique: true
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "accounts", "users", column: "owner_id"
   add_foreign_key "alert_destinations", "orgs"
   add_foreign_key "alert_events", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_events", "orgs"
@@ -184,6 +233,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_07_120000) do
   add_foreign_key "alert_rules", "orgs"
   add_foreign_key "alert_rules", "servers", on_delete: :cascade
   add_foreign_key "metric_dashboards", "orgs"
+  add_foreign_key "org_memberships", "orgs", on_delete: :cascade
+  add_foreign_key "org_memberships", "users", on_delete: :cascade
+  add_foreign_key "org_server_accesses", "org_memberships", column: "membership_id", on_delete: :cascade
+  add_foreign_key "org_server_accesses", "orgs", on_delete: :cascade
+  add_foreign_key "org_server_accesses", "servers", on_delete: :cascade
+  add_foreign_key "orgs", "accounts"
   add_foreign_key "pods", "servers", on_delete: :cascade
   add_foreign_key "servers", "orgs"
   add_foreign_key "systems", "servers", on_delete: :cascade

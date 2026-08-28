@@ -8,6 +8,10 @@
 # cadence, log buffer, appearance) are a separate concern that
 # will land later in a server-LESS /settings/global page.
 class SettingsController < ApplicationController
+  # Lists and revokes the controller's PATs. A PAT is the whole controller:
+  # deploy, exec, logs. Never a member.
+  authorize :reveal_pat
+
   def index
     render Views::Settings::Index.new(
       **dashboard_context.merge(

@@ -47,7 +47,7 @@ class CommandPaletteControllerTest < ActionDispatch::IntegrationTest
     # Compare paths sans query — the test harness's global default_url_options
     # appends a stray ?org_id here that the real (path-param-based) one doesn't.
     paths = commands.map { |c| c["href"].split("?").first }.sort
-    assert_equal ["/servers", "/servers/new"], paths
+    assert_equal ["/servers", "/servers"], paths
   end
 
   test "an unknown ?org falls back to globals only (no leak, no 500)" do

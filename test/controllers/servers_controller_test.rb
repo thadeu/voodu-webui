@@ -28,4 +28,44 @@ class ServersControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, "Add server"
     assert_includes @response.body, "org-select"
   end
+
+  # The registry is org-scoped: a page that lists servers has to say whose.
+  test "the org-less door resolves an org and redirects to its registry" do
+    get "/servers"
+
+    assert_response :redirect
+    assert_match %r{/[a-zA-Z0-9]{8}/servers\z}, URI(response.location).path
+  end
+
+  test "the registry lists only the org in the URL" do
+    get "/acmeorg1/servers"
+
+    assert_response :success
+    assert_includes @response.body, servers(:alpha).name
+    assert_not_includes @response.body, servers(:gamma).name
+  end
+
+  # Stepping onto the registry used to throw away the org switcher and the
+  # crumb trail — the two controls still valid there, and the ones you reach for
+  # to get back. Only the server-dependent chips should disappear.
+  test "the topbar keeps the org switcher and crumbs with no server selected" do
+    get "/acmeorg1/servers"
+
+    assert_includes @response.body, orgs(:acme).name
+    assert_includes @response.body, %(data-controller="org-manager")
+    assert_includes @response.body, "no server selected"
+  end
+
+  test "the server-dependent chips are the only thing that goes" do
+    get "/acmeorg1/servers"
+
+    assert_not_includes @response.body, "uptime"
+    assert_not_includes @response.body, "server-status-pill"
+  end
+
+  test "the brand mark links home" do
+    get "/acmeorg1/servers"
+
+    assert_match %r{<a[^>]+href="/"[^>]*>\s*<img[^>]+mark-mint}, @response.body
+  end
 end

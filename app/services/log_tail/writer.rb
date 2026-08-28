@@ -66,8 +66,10 @@ module LogTail
     # 50MB day file).
     SEED_FROM_DISK_BYTES = 1 * 1024 * 1024  # 1 MB
 
-    def initialize(server_id)
-      @server_id = server_id
+    def initialize(server)
+      # The Server object: FilePath takes one, and the writer is the only thing
+      # that creates directories under storage/logs/<server_id>/.
+      @server = server
       @handles = {}  # { [pod, date_str] => File }
       @sizes = {}  # { [pod, date_str] => Integer (cached size) }
       @seen = {}  # { [pod, date_str] => { hash => true } (insertion-ordered) }
@@ -201,7 +203,7 @@ module LogTail
 
       pod_name, date_str = key
       date_obj = Date.parse(date_str)
-      path = LogTail::FilePath.daily_file(@server_id, pod_name, date_obj)
+      path = LogTail::FilePath.daily_file(@server, pod_name, date_obj)
 
       LogTail::FilePath.ensure_dir(File.dirname(path))
 
@@ -243,7 +245,7 @@ module LogTail
       end
       @seen[key] = window
     rescue => e
-      Rails.logger.warn("log-tail dedupe seed failed server=#{@server_id} #{path}: #{e.class}: #{e.message}")
+      Rails.logger.warn("log-tail dedupe seed failed server=#{@server.id} #{path}: #{e.class}: #{e.message}")
       @seen[key] ||= {}
     end
 
@@ -323,7 +325,7 @@ module LogTail
       )
 
       Rails.logger.warn(
-        "log-tail server=#{@server_id} pod=#{pod_name} date=#{date_str} " \
+        "log-tail server=#{@server.id} pod=#{pod_name} date=#{date_str} " \
         "hit daily cap — drops engaged until midnight"
       )
     end
@@ -332,7 +334,7 @@ module LogTail
     # ("Some entries lost today — daily cap reached at HH:MM"). Class
     # method on the writer so the UI side can read with the same key.
     def cap_flag_key(pod_name, date_str)
-      self.class.cap_flag_key(@server_id, pod_name, date_str)
+      self.class.cap_flag_key(@server.id, pod_name, date_str)
     end
 
     # maybe_check_disk — every DISK_CHECK_EVERY writes, statfs the
@@ -348,7 +350,7 @@ module LogTail
 
       @disk_ok = false
       Rails.logger.warn(
-        "log-tail server=#{@server_id} disk pressure — " \
+        "log-tail server=#{@server.id} disk pressure — " \
         "#{(free / 1024.0 / 1024.0).round}MB free, pausing writes"
       )
     end

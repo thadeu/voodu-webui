@@ -21,10 +21,18 @@ class OrgsController < ApplicationController
 
   before_action :set_org, only: [:update, :destroy]
 
-  def create
-    @org = Org.new(org_params)
+  # Same reason as ServersController: /orgs carries no :org_id segment, so
+  # Current.role is nil here and the macro would refuse the org's own owner.
+  # The role that decides is the one held IN the org being edited.
+  before_action :require_org_management!, only: [:update, :destroy]
 
-    if @org.save
+  def create
+    @org = Org.new(org_params.merge(account: current_account))
+
+    # The creator gets an owner membership in the same transaction — membership
+    # is the only source of access, so an org saved without one is an org
+    # nobody can reach, holding servers nobody can turn off.
+    if @org.save && grant_creator_ownership
       render turbo_stream: [
         turbo_stream.append("org-options", Components::Orgs::Option.new(org: @org)),
         turbo_stream.replace("org-manager-panel", panel)
@@ -63,8 +71,27 @@ class OrgsController < ApplicationController
 
   private
 
+  # The account new orgs land in: the one this operator owns. Onboarding
+  # guarantees it exists before any org-creating screen is reachable.
+  def current_account
+    Current.user&.owned_accounts&.order(:created_at)&.first
+  end
+
+  def grant_creator_ownership
+    @org.memberships.create!(user: Current.user, role: :owner, status: :active)
+    true
+  end
+
+  # Through the user's active memberships, not Org.find_by!: a bare lookup made
+  # every org in the install renameable and deletable by anyone signed in.
+  def require_org_management!
+    return if Permissions.allow?(role_in(@org), :manage_org)
+
+    refuse(:manage_org)
+  end
+
   def set_org
-    @org = Org.find_by!(short_id: params[:id])
+    @org = Current.user.active_orgs.find_by!(short_id: params[:id])
   end
 
   # panel — the re-renderable manager body. Fresh org list + a create form,
@@ -72,7 +99,7 @@ class OrgsController < ApplicationController
   # a top-level error (e.g. delete blocked).
   def panel(create_org: Org.new, edit_org: nil, error: nil)
     Components::Orgs::Panel.new(
-      orgs: Org.order(:name).to_a,
+      orgs: all_orgs,
       create_org: create_org,
       edit_org: edit_org,
       error: error

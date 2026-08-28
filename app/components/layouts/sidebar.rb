@@ -49,9 +49,18 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings}
   ].freeze
 
+  # `org_only` — the route takes :org_id and no :server_key. Passing one anyway
+  # would not fail; the helper appends it as a query string (?server_key=…),
+  # which is noise in the URL bar and in every log line.
+  #
+  # `capability` — drawn only when the role holds it. The endpoint refuses
+  # either way; this keeps the sidebar from offering a door that answers "you
+  # need admin access".
   ORG_NAV = [
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
-    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count}
+    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
+    {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
+     org_only: true, capability: :invite_member}
   ].freeze
 
   def initialize(current_path: "/", servers: [], recent_servers: nil, current_server: nil)
@@ -132,15 +141,23 @@ class Components::Layouts::Sidebar < Components::Base
         "vmd:group-data-[collapsed]:px-0 vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:gap-0"
       )
     ) do
-      render img(
-        src: "/mark-mint.svg",
-        alt: "Clowk",
-        class: "h-8 w-auto",
-        aria: {hidden: "true"}
-      )
+      # The mark is the way home. Every dashboard trains you to click it, and
+      # this one did nothing — so a page with no breadcrumb back (the registry,
+      # members, onboarding) had no obvious exit.
+      a(
+        href: root_path(org_id: nil, server_key: nil),
+        class: "flex items-center gap-2.5 min-w-0 no-underline",
+        title: "Clowk Voodu — home"
+      ) do
+        render img(
+          src: "/mark-mint.svg",
+          alt: "Clowk Voodu",
+          class: "h-8 w-auto"
+        )
 
-      div(class: "flex flex-col leading-tight flex-1 min-w-0 overflow-hidden vmd:group-data-[collapsed]:hidden") do
-        span(class: "font-semibold text-[14px] text-voodu-text tracking-tight whitespace-nowrap") { "Clowk Voodu" }
+        div(class: "flex flex-col leading-tight flex-1 min-w-0 overflow-hidden vmd:group-data-[collapsed]:hidden") do
+          span(class: "font-semibold text-[14px] text-voodu-text tracking-tight whitespace-nowrap") { "Clowk Voodu" }
+        end
       end
     end
   end
@@ -157,7 +174,7 @@ class Components::Layouts::Sidebar < Components::Base
           end
         end
         a(
-          href: new_server_path,
+          href: new_server_path(server_key: nil),
           class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
           aria: {label: "Add server"}
         ) do
@@ -191,7 +208,7 @@ class Components::Layouts::Sidebar < Components::Base
   # "manage servers" affordance never disappears.
   def see_all_link
     a(
-      href: servers_path,
+      href: servers_path(server_key: nil),
       title: "See all servers",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
@@ -211,7 +228,7 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 vmd:group-data-[collapsed]:hidden") do
       plain "no servers yet."
       br
-      a(href: new_server_path, class: "text-voodu-link hover:underline") { "add one →" }
+      a(href: new_server_path(server_key: nil), class: "text-voodu-link hover:underline") { "add one →" }
     end
   end
 
@@ -341,6 +358,15 @@ class Components::Layouts::Sidebar < Components::Base
   # nav_divider — a short rule between the Server + Org blocks, shown ONLY when
   # the sidebar is collapsed (icons-only) — expanded, the "Org" heading already
   # separates them. display:none while expanded, so it reserves no flex gap.
+  def nav_href(item)
+    # server_key: nil explicitly — ApplicationController#default_url_options
+    # injects it from request.path_parameters, so simply not passing one still
+    # produces ?server_key=… on a route that has no such segment.
+    return public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nil) if item[:org_only]
+
+    public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)
+  end
+
   def nav_divider
     div(class: "hidden vmd:group-data-[collapsed]:block border-t border-voodu-border w-7 mx-auto")
   end
@@ -354,7 +380,7 @@ class Components::Layouts::Sidebar < Components::Base
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { label }
       end
       div(class: "flex flex-col gap-px") do
-        items.each { |item| nav_item(item) }
+        items.each { |item| nav_item(item) if nav_permitted?(item) }
       end
     end
   end
@@ -374,11 +400,18 @@ class Components::Layouts::Sidebar < Components::Base
   # nav_item — collapsed view: icon centered, label hidden, badge
   # bubbled top-right of the icon. Expanded view: icon + label +
   # right-aligned badge as before.
+  # Against the org the NAV points at, not the one in the URL. On /servers there
+  # is no :org_id, so Current.role is nil there and `allowed?` would hide
+  # Members from the org's own owner — which is exactly what it did.
+  def nav_permitted?(item)
+    item[:capability].nil? || allowed_in?(nav_server&.org, item[:capability])
+  end
+
   def nav_item(item)
     active = nav_active?(item)
     icon_klass = Icon.const_get(item[:icon])
     badge_count = nav_badge_count(item[:badge])
-    href = public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)
+    href = nav_href(item)
 
     a(
       href: href,

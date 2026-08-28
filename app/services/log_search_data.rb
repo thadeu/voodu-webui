@@ -187,7 +187,7 @@ class LogSearchData
     scanned = 0
 
     LogTail::Reader.each_line(
-      server_id: server.id,
+      server: server,
       pods: pods.presence,
       from: from,
       until_: until_,

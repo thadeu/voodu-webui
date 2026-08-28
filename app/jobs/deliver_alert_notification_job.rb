@@ -21,8 +21,15 @@ class DeliverAlertNotificationJob < ApplicationJob
 
   def perform(event_id, destination_id, transition)
     event = AlertEvent.find_by(id: event_id)
-    destination = AlertDestination.find_by(id: destination_id)
-    return if event.nil? || destination.nil?
+    return if event.nil?
+
+    # Through the event's org, never by bare id. `alert_rule_destinations` has
+    # no org_id, so a join row that should never have existed is invisible to
+    # every query upstream of here — and delivering on it would post one org's
+    # payload to another org's webhook, then stamp the result on their row.
+    # This is the last line, and it holds even when such a row exists.
+    destination = event.org.alert_destinations.find_by(id: destination_id)
+    return if destination.nil?
     return unless destination.enabled?
 
     payload = AlertPayload.for(event, transition, destination)

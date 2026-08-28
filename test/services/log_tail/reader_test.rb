@@ -68,7 +68,7 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
   def read_all
     out = []
     LogTail::Reader.each_line(
-      server_id: @server.id, pods: nil,
+      server: @server, pods: nil,
       from: @day - 1.hour, until_: @day + 1.hour,
       content_search: nil, regex: false, limit: 100
     ) { |pod, hash| out << [pod, hash] }
@@ -77,14 +77,14 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
   end
 
   def seed(pod, time, msg:, raw:)
-    path = LogTail::FilePath.daily_file(@server.id, pod, time.to_date)
+    path = LogTail::FilePath.daily_file(@server, pod, time.to_date)
     LogTail::FilePath.ensure_dir(File.dirname(path))
     row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: raw, parsed: false}
     File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
   end
 
   def clear_server_logs
-    dir = LogTail::FilePath.server_dir(@server.id)
+    dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end

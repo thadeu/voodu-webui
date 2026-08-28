@@ -30,7 +30,8 @@ class Hep3Controller < ApplicationController
   # reader_server — the server whose warehouse holds this call (M2). A
   # cross-server dashboard's hep3 table passes ?server_id=…; resolve it WITHIN
   # current_org (the isolation guard) so a forged / cross-org id never reads
-  # another org's SIP capture — it falls back to the URL's server.
+  # another org's SIP capture. nil when the id names nothing in this org —
+  # call_flow_data answers empty rather than quietly reading the URL's server.
   def reader_server
     return @reader_server if defined?(@reader_server)
 
@@ -39,12 +40,13 @@ class Hep3Controller < ApplicationController
 
   def call_flow_data
     server = reader_server
+    return if server.nil?
 
     if params[:call_id].present?
       # Logs bridge: find any captured message with this SIP Call-ID → its
       # reader instance + corr_id (which folds x_cid). Not captured → an
       # empty-state modal carrying the id (a dead click still explains itself).
-      message = HepMessage.locate_by_call_id(server.id, params[:call_id])
+      message = HepMessage.locate_by_call_id(server, params[:call_id])
 
       return Hep3::CallFlowData.new(
         server: server,
