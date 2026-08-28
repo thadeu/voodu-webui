@@ -43,7 +43,9 @@ class Org
         return redirect_to(org_members_path, alert: "#{email} is already #{membership.status} here.")
       end
 
-      membership.update!(role: role, status: :invited, invited_at: Time.current)
+      membership.update!(
+        role: role, status: :invited, invited_at: Time.current, invited_by: Current.user
+      )
 
       redirect_to org_members_path, notice: "Invitation ready for #{email} — copy the link on their row."
     rescue ActiveRecord::RecordInvalid => e
@@ -65,7 +67,14 @@ class Org
     end
 
     def destroy
+      user = @membership.user
+
       if @membership.destroy
+        # Best effort, and after the fact: the removal itself is what denies
+        # access (the scope is re-read every request). This just stops their
+        # Clowk session outliving it. Never blocks the removal.
+        ClowkSessionRevoker.revoke_for(user)
+
         redirect_to org_members_path, notice: "Access removed."
       else
         redirect_to org_members_path, alert: @membership.errors.full_messages.to_sentence

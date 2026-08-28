@@ -79,6 +79,32 @@ class Org
       assert_match %r{/invites/}, @response.body
     end
 
+    # "Who let them in" is the first question when an unexpected person turns up
+    # in an org, and the row used to have no answer.
+    test "an invitation records who issued it" do
+      post org_members_path(org_id: ACME), params: {email: "traced@example.com", role: "member"}
+
+      membership = Org::Membership.joins(:user).find_by(users: {email: "traced@example.com"})
+
+      assert_equal users(:owner), membership.invited_by
+
+      get org_members_path(org_id: ACME)
+
+      assert_includes @response.body, "Invited by #{users(:owner).display_name}"
+    end
+
+    # Removing an admin must not remove the people they invited.
+    test "the record survives the inviter being removed" do
+      post org_members_path(org_id: ACME), params: {email: "traced@example.com", role: "member"}
+      membership = Org::Membership.joins(:user).find_by(users: {email: "traced@example.com"})
+
+      inviter = users(:owner)
+      orgs(:acme).memberships.create!(user: users(:outsider), role: :owner, status: :active)
+      inviter.org_memberships.find_by(org: orgs(:acme)).destroy
+
+      assert Org::Membership.exists?(membership.id)
+    end
+
     # owner is the account principal, set at signup. Not something an invite
     # form hands out, whatever the posted value says.
     test "an admin cannot mint an owner" do

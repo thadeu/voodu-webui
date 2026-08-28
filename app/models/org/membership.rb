@@ -19,6 +19,11 @@ class Org
     belongs_to :user
     belongs_to :org
 
+    # Who issued the invitation. Optional: the owner membership onboarding
+    # creates has no inviter, and nullify (not cascade) means removing an admin
+    # never removes the people they invited.
+    belongs_to :invited_by, class_name: "User", optional: true
+
     has_many :server_accesses, class_name: "Org::ServerAccess",
       foreign_key: :membership_id, dependent: :destroy, inverse_of: :membership
 

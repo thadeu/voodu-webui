@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_27_140300) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_28_120000) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -117,11 +117,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_140300) do
   create_table "org_memberships", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "invited_at"
+    t.string "invited_by_id"
     t.string "org_id", null: false
     t.integer "role", default: 0, null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.string "user_id", null: false
+    t.index ["invited_by_id"], name: "index_org_memberships_on_invited_by_id"
     t.index ["org_id"], name: "index_org_memberships_on_org_id"
     t.index ["user_id", "org_id"], name: "index_org_memberships_on_user_id_and_org_id", unique: true
   end
@@ -234,6 +236,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_140300) do
   add_foreign_key "alert_rules", "servers", on_delete: :cascade
   add_foreign_key "metric_dashboards", "orgs"
   add_foreign_key "org_memberships", "orgs", on_delete: :cascade
+  add_foreign_key "org_memberships", "users", column: "invited_by_id", on_delete: :nullify
   add_foreign_key "org_memberships", "users", on_delete: :cascade
   add_foreign_key "org_server_accesses", "org_memberships", column: "membership_id", on_delete: :cascade
   add_foreign_key "org_server_accesses", "orgs", on_delete: :cascade

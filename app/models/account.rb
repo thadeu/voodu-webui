@@ -24,4 +24,28 @@ class Account < ApplicationRecord
   validates :short_id, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{8}\z/}
 
   def to_param = short_id
+
+  # transfer_to! — hand the account to someone else.
+  #
+  # The new owner must already hold an ACTIVE membership in every org of this
+  # account. Handing it to someone who reaches none of them produces exactly the
+  # state the last-privileged-member guard exists to prevent: a principal on
+  # paper who cannot open anything, and orgs whose servers keep being polled
+  # with live PATs while nobody can turn them off.
+  #
+  # Ownership is a fact about responsibility, not a grant — so this changes who
+  # answers for the account and nothing about who reaches what.
+  def transfer_to!(new_owner)
+    raise ArgumentError, "the new owner must be a User" unless new_owner.is_a?(User)
+    return true if new_owner == owner
+
+    unreachable = orgs.reject { |org| new_owner.membership_in(org)&.privileged? }
+
+    if unreachable.any?
+      raise ArgumentError,
+        "#{new_owner.email} is not an admin or owner of #{unreachable.map(&:name).to_sentence}"
+    end
+
+    update!(owner: new_owner)
+  end
 end

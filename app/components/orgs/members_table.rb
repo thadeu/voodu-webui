@@ -157,10 +157,20 @@ class Components::Orgs::MembersTable < Components::Base
         span(class: "text-[11px] text-voodu-muted") do
           "Send this link to #{membership.user.email} — only they can accept it, and it expires in 30 days."
         end
+        invited_by_line(membership)
       end
 
       copy_invite_button(invite_url(membership.invite_token))
     end
+  end
+
+  # "Who let them in" is the first question when an unexpected person turns up
+  # in an org, so the row answers it without anyone having to open a console.
+  def invited_by_line(membership)
+    inviter = membership.invited_by
+    return if inviter.nil?
+
+    span(class: "text-[11px] text-voodu-muted-2") { "Invited by #{inviter.display_name}" }
   end
 
   # A labelled Button rather than Components::UI::CopyButton: the clipboard
