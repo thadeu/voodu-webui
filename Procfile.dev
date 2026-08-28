@@ -1,4 +1,9 @@
 web: bin/rails server -b 0.0.0.0
 js: pnpm run build --watch
-css: pnpm run build:css --watch
+# --watch=always, not --watch: tailwind v4 treats EOF on stdin as "stop
+# watching" and exits 0. Under an interactive terminal stdin is a TTY and it
+# never sees EOF, so this works by accident there — but anywhere stdin is not a
+# TTY (make up piped to a log, CI, nohup, a backgrounded bin/dev) it exits one
+# second in, and foreman then tears the whole stack down with it.
+css: pnpm run build:css --watch=always
 jobs: bin/jobs
