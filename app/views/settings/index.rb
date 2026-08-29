@@ -438,7 +438,7 @@ class Views::Settings::Index < Views::Base
     render card do
       div do
         render(Components::UI::KvRow.new(key: "Version")) { version_value }
-        render(Components::UI::KvRow.new(key: "License")) { span(class: "font-voodu-mono") { "Apache-2.0" } }
+        render(Components::UI::KvRow.new(key: "License")) { span(class: "font-voodu-mono") { "Elastic-2.0" } }
         render(Components::UI::KvRow.new(key: "Hostname")) { agent_field("host", "hostname") }
         render(Components::UI::KvRow.new(key: "Kernel")) { agent_field("host", "kernel") }
         render(Components::UI::KvRow.new(key: "CPU cores")) { cpu_cores_value }
