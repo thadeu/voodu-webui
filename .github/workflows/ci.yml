@@ -1,21 +1,100 @@
 name: CI
 
-# Automatic runs are OFF — release.yml (tag push `v*`) is the only active
-# gate for now. Both jobs below still work; they just don't fire on push or
-# pull_request any more. Run them by hand from the Actions tab ("Run
-# workflow"), or re-enable by swapping workflow_dispatch for the two
-# commented triggers.
+# Runs on every pull request and every push to main.
 #
-# Why parked: `bin/brakeman` carries --ensure-latest in its binstub and the
-# scan reports 9 pre-existing warnings (exit 3), so scan_ruby fails on code
-# nobody touched this week.
+# Previously parked on workflow_dispatch because `bin/brakeman` reported 9
+# pre-existing warnings and `bin/bundler-audit` reported 12 vulnerable gems, so
+# both gates failed on code nobody had touched. Both are green now: the 8
+# surviving brakeman warnings are pinned WITH a written justification in
+# config/brakeman.ignore (each one traced to a frozen allowlist or a validated
+# literal), and the gems were bumped to their patched versions. A parked gate
+# protects nothing, and a gate that fails on unrelated code gets ignored — the
+# point of pinning rather than disabling is that a NEW warning still fails.
 on:
+  pull_request:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-  # pull_request:
-  # push:
-  #   branches: [ main ]
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      # pnpm reads its own version from package.json `packageManager`, matching
+      # what the image builds with (Dockerfile: corepack prepare --activate).
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Required, not cosmetic: app/assets/builds is gitignored, and Propshaft
+      # raises on the layout's stylesheet_link_tag / javascript_include_tag when
+      # the built files are absent — integration tests that render a layout error
+      # out. Verified by deleting the builds locally: 2 errors appear.
+      - name: Build assets
+        run: |
+          pnpm run build
+          pnpm run build:css
+
+      # The six SQLite databases (primary, cache, queue, cable, metrics, hep)
+      # are created and loaded by the test run itself from db/*_schema.rb — a
+      # clean checkout needs no db:test:prepare step. CI=1 also turns on eager
+      # loading (config/environments/test.rb), so this catches load errors that
+      # a local run would not.
+      - name: Run tests
+        env:
+          CI: "1"
+        run: bin/rails test
+
+      # The suite cannot cover this. config/environments/test.rb pins
+      # config.x.clowk_enabled to a real boolean, so the ENV resolution in
+      # config/initializers/clowk.rb is never exercised by a test — and that
+      # resolution is what decides whether a bare `docker run` boots at all.
+      # It regressed once already: `config.x.<unset>` returns an empty
+      # OrderedOptions, which is neither nil nor falsey, so a `.nil?` guard
+      # silently produced sign-in ON for every deployment.
+      - name: Boot production in both auth modes
+        env:
+          SECRET_KEY_BASE: ci-boot-smoke-test-only
+          RAILS_ENV: production
+        run: |
+          set -euo pipefail
+
+          echo "--- self-hosted default: no env at all, must boot anonymous"
+          env -u CLOWK_ENABLED -u CLOWK_PUBLISHABLE_KEY \
+            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == false ? 0 : 1)'
+
+          echo "--- upgrade: a key already configured keeps sign-in on with no flag"
+          env -u CLOWK_ENABLED CLOWK_PUBLISHABLE_KEY=pk_test_ci \
+            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == true ? 0 : 1)'
+
+          echo "--- SaaS: flag on with a key, must boot with sign-in"
+          CLOWK_ENABLED=1 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
+            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == true ? 0 : 1)'
+
+          echo "--- SaaS misconfigured: flag on, no key, must REFUSE to boot"
+          if env -u CLOWK_PUBLISHABLE_KEY CLOWK_ENABLED=1 \
+               bin/rails runner 'puts "booted"' 2>/dev/null; then
+            echo "booted without a publishable key — the production guard is gone"
+            exit 1
+          fi
+
   scan_ruby:
     runs-on: ubuntu-latest
 
@@ -30,10 +109,10 @@ jobs:
 
       - name: Scan for common Rails security vulnerabilities using static analysis
         run: bin/brakeman --no-pager
-      
+
       - name: Scan for known security vulnerabilities in gems used
         run: bin/bundler-audit
-      
+
   lint:
     runs-on: ubuntu-latest
     env:
@@ -59,4 +138,3 @@ jobs:
 
       - name: Lint code for consistent style
         run: bin/rubocop -f github
-
