@@ -5,6 +5,16 @@ ruby File.read(".ruby-version").strip
 gem "rails", "~> 8.1.3"
 gem "propshaft"
 gem "sqlite3", "~> 2.1"
+
+# Postgres for the primary database, and only when DATABASE_URL says so — the
+# self-hosted install stays on the six SQLite files. `require: false` because
+# the driver is dead weight in that install: Rails resolves adapters lazily and
+# active_record/connection_adapters/postgresql_adapter.rb requires "pg" itself
+# the moment a Postgres connection is actually configured.
+#
+# The image already carries what this needs: libpq-dev in the build stage and
+# postgresql-client in the runtime base, both there long before this line.
+gem "pg", "~> 1.5", require: false
 gem "puma", ">= 5.0"
 gem "jsbundling-rails"
 gem "turbo-rails"
