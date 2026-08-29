@@ -31,7 +31,7 @@ class OnboardingsController < ApplicationController
       ), status: :unprocessable_entity)
     end
 
-    org = build_workspace(account_name, org_name)
+    org = Account.provision!(owner: Current.user, account_name: account_name, org_name: org_name)
 
     redirect_to org_root_path(org_id: org.short_id), notice: "Welcome. #{org.name} is ready."
   rescue ActiveRecord::RecordInvalid => e
@@ -41,18 +41,6 @@ class OnboardingsController < ApplicationController
   end
 
   private
-
-  # One transaction: an account without an org is a dead end, and an org
-  # without the owner membership is an org nobody can reach.
-  def build_workspace(account_name, org_name)
-    Account.transaction do
-      account = Account.create!(name: account_name, owner: Current.user)
-      org = account.orgs.create!(name: org_name)
-      org.memberships.create!(user: Current.user, role: :owner, status: :active)
-
-      org
-    end
-  end
 
   def redirect_if_settled
     return if Current.user.nil?

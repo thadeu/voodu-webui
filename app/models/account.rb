@@ -25,6 +25,27 @@ class Account < ApplicationRecord
 
   def to_param = short_id
 
+  # provision! — an account, its first org, and the owner membership that
+  # actually grants access, in one transaction.
+  #
+  # All three or none. An account with no org is a dead end; an org with no
+  # owner membership is an org nobody can open — and because membership is the
+  # only source of access, that second one is unrecoverable through the UI.
+  #
+  # Shared by the two ways a workspace comes into being: a person finishing
+  # onboarding (OnboardingsController) and the anonymous operator resolving
+  # itself on first request (User.local_operator). Both need identical results,
+  # so they read from one definition rather than two that drift.
+  def self.provision!(owner:, account_name:, org_name:)
+    transaction do
+      account = create!(name: account_name, owner: owner)
+      org = account.orgs.create!(name: org_name)
+      org.memberships.create!(user: owner, role: :owner, status: :active)
+
+      org
+    end
+  end
+
   # transfer_to! — hand the account to someone else.
   #
   # The new owner must already hold an ACTIVE membership in every org of this
