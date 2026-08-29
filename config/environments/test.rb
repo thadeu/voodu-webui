@@ -51,6 +51,14 @@ Rails.application.configure do
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
 
+  # Sign-in is OFF by default (the self-hosted shape), but the suite is almost
+  # entirely about the multi-tenant path — memberships, per-server grants, the
+  # cross-tenant refusals. Pinned on here so those keep testing what they were
+  # written to test; the anonymous-mode tests turn it off per-test. Set BEFORE
+  # config/initializers/clowk.rb runs, which is why that file only fills in a
+  # nil (environment files load first).
+  config.x.clowk_enabled = true
+
   # Fixtures store PAT values as plaintext (e.g. "pat-alpha-secret")
   # so test files stay readable; this flag tells Rails to encrypt
   # them on fixture load using the test-only encryption keys

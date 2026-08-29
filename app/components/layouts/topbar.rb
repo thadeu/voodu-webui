@@ -66,8 +66,11 @@ class Components::Layouts::Topbar < Components::Base
   # and on click-outside for free, and it is the only floating thing in the bar.
   # The avatar comes from the Clowk claims mirrored onto the User; providers
   # that hand back none fall through to the initial.
+  # Nothing to show in anonymous mode: the address is a handle rather than a
+  # person, and "Sign out" would lead to a door that is not the way in.
   def account_menu
     return if current_user.nil?
+    return unless clowk_enabled?
 
     details(class: "relative shrink-0", data: {controller: "details-dismiss"}) do
       summary(

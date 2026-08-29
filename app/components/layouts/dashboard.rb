@@ -48,6 +48,7 @@ class Components::Layouts::Dashboard < Components::Base
           updated_at: @updated_at,
           uptime: @uptime
         )
+        render Components::Layouts::PerimeterBanner.new
         render Components::Layouts::Breadcrumb.new(crumbs: @breadcrumb) if @breadcrumb.present?
         main(class: "flex-1 overflow-auto") { yield }
       end

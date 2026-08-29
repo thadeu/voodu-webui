@@ -70,6 +70,12 @@ class Components::Base < Phlex::HTML
   # chrome that renders on pages with no :org_id in the URL.
   register_value_helper :allowed_in?
 
+  # Which deployment shape this is. Components use it to drop the surfaces that
+  # only mean something with per-person identity — sign-out, invitations, the
+  # members screen, the org switcher.
+  register_value_helper :clowk_enabled?
+  register_value_helper :perimeter_warning?
+
   # ── Form + dropdown primitives ─────────────────────────────────────────
   # Moved down from Views::Base when Components::UI::Select needed them: a
   # component is not a view, and CLAUDE.md's rule is that a primitive lives in

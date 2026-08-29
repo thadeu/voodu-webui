@@ -60,7 +60,7 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
-     org_only: true, capability: :invite_member}
+     org_only: true, capability: :invite_member, clowk_only: true}
   ].freeze
 
   def initialize(current_path: "/", servers: [], recent_servers: nil, current_server: nil)
@@ -403,7 +403,12 @@ class Components::Layouts::Sidebar < Components::Base
   # Against the org the NAV points at, not the one in the URL. On /servers there
   # is no :org_id, so Current.role is nil there and `allowed?` would hide
   # Members from the org's own owner — which is exactly what it did.
+  # `clowk_only` — the screen only means something when people sign in as
+  # themselves. In anonymous mode there is one operator and no second person to
+  # invite, so the door would open onto a table with a single permanent row.
   def nav_permitted?(item)
+    return false if item[:clowk_only] && !clowk_enabled?
+
     item[:capability].nil? || allowed_in?(nav_server&.org, item[:capability])
   end
 

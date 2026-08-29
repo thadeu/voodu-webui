@@ -360,5 +360,14 @@ class ApplicationController < ActionController::Base
     }
   end
 
-  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?
+  # perimeter_warning? — anonymous mode reached from outside a perimeter.
+  #
+  # Both halves matter. With sign-in on, a public address is simply the internet
+  # arriving at a login page. With sign-in off, it is an unauthenticated owner
+  # session, and owners reveal PATs. See PerimeterCheck and PerimeterBanner.
+  def perimeter_warning?
+    !clowk_enabled? && PerimeterCheck.exposed?(request.remote_ip)
+  end
+
+  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?
 end

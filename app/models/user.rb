@@ -74,6 +74,67 @@ class User < ApplicationRecord
   #   3. Never let a placeholder address claim or overwrite anything. Two
   #      subjects can arrive holding the same one, so ours is derived from
   #      `sub`, which cannot collide.
+  # The anonymous operator's address. Not a mailbox and not identity — a stable
+  # handle for the single row every request runs as when CLOWK_ENABLED is off.
+  # `email_verified` stays false, so verified_email? is false and nothing that
+  # treats an address as proof of a person (invitations, session revocation)
+  # ever matches it.
+  LOCAL_OPERATOR_EMAIL = "operator@voodu.local"
+
+  # local_operator — the identity behind every request in anonymous mode.
+  #
+  # NOT a bypass. This is a real row with a real owner membership, so
+  # authorization keeps running through the one path it always runs through:
+  # there is simply exactly one membership to find. Nothing downstream learns
+  # that sign-in was skipped, which is the property that keeps anonymous mode
+  # from becoming a second way to reach a server.
+  #
+  # Idempotent under a race. Two Puma workers can take a first request at the
+  # same instant; both would find nothing and both would create. The unique
+  # index on `email` is the serialisation point, and the workspace is built in
+  # the SAME transaction — so the loser's account and org roll back with its
+  # user instead of leaving a second orphan workspace behind.
+  def self.local_operator
+    existing = find_by(email: LOCAL_OPERATOR_EMAIL)
+    return repair_local_workspace(existing) if existing
+
+    create_local_operator!
+  end
+
+  def self.create_local_operator!
+    transaction do
+      user = create!(email: LOCAL_OPERATOR_EMAIL, name: "Local operator", email_verified: false)
+      Account.provision!(owner: user, account_name: "Local", org_name: "Default")
+
+      user
+    end
+  rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
+    # Another worker won. Its workspace is committed; ours rolled back whole.
+    #
+    # Both exceptions are the same race seen at different depths: the uniqueness
+    # VALIDATION catches it when the winner committed before our SELECT, the
+    # unique INDEX catches it when the winner committed between our SELECT and
+    # our INSERT. Re-raise anything that is not that race, or a genuine failure
+    # would be swallowed and reported as a missing operator.
+    existing = find_by(email: LOCAL_OPERATOR_EMAIL)
+    raise e if existing.nil?
+
+    repair_local_workspace(existing)
+  end
+  private_class_method :create_local_operator!
+
+  # Only reachable if the workspace was destroyed out from under the operator
+  # (someone deleted the org). Without this the app would answer every page with
+  # "you belong nowhere" and offer onboarding, which anonymous mode does not show.
+  def self.repair_local_workspace(user)
+    return user if user.active_orgs.exists?
+
+    Account.provision!(owner: user, account_name: "Local", org_name: "Default")
+
+    user
+  end
+  private_class_method :repair_local_workspace
+
   def self.provision_from_clowk!(claims)
     clowk_id = claims[:sub].presence
     raise ArgumentError, "clowk claims missing sub" if clowk_id.blank?

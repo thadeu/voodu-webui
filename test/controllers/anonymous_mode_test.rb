@@ -1,0 +1,165 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# Anonymous mode — the self-hosted shape, and the default one.
+#
+# With CLOWK_ENABLED off the app asks for no credentials: the perimeter
+# (Twingate, a VPN, Cloudflare Access) is the door, and whoever reaches the port
+# has already proved who they are to it. What matters here is that skipping
+# sign-in did NOT buy a second way to reach a server.
+#
+# So the sharp test is not "the page renders". It is that the fixture orgs — the
+# ones a signed-in operator reaches through a membership — stay invisible, and
+# that a bare server key still 404s. If those ever start working, anonymous mode
+# has stopped being one identity and started being a bypass.
+class AnonymousModeTest < ActionDispatch::IntegrationTest
+  setup do
+    sign_out
+    @previous = Rails.application.config.x.clowk_enabled
+    Rails.application.config.x.clowk_enabled = false
+  end
+
+  teardown { Rails.application.config.x.clowk_enabled = @previous }
+
+  test "the app serves without any credential" do
+    get root_path
+
+    assert_response :redirect
+    assert_no_match(/sign_in|login/, response.location.to_s)
+  end
+
+  test "the operator owns exactly one org, and it is not a fixture org" do
+    get root_path
+
+    operator = User.find_by!(email: User::LOCAL_OPERATOR_EMAIL)
+
+    assert_equal 1, operator.active_orgs.count
+    assert_equal :owner, operator.membership_in(operator.active_orgs.sole).role.to_sym
+    assert_not_includes operator.active_orgs.map(&:name), orgs(:acme).name
+  end
+
+  # The whole point. Resolving an identity without sign-in must not widen what
+  # that identity reaches — membership is still the only source of access.
+  test "another org's server stays unreachable" do
+    alpha = servers(:alpha)
+
+    get server_root_path(org_id: orgs(:acme).short_id, server_key: alpha.key)
+
+    assert_not_equal 200, response.status
+    assert_not_includes response.body.to_s, alpha.endpoint
+  end
+
+  test "the server registry lists what the operator owns, and nothing else" do
+    org = User.local_operator.active_orgs.sole
+    mine = org.servers.create!(name: "mine-here", endpoint: "http://10.5.5.5:8687", pat: "x")
+
+    get servers_path(org_id: org.short_id)
+
+    assert_response :success
+    # The positive half matters: without it this passes just as well when the
+    # page lists no servers at all, for any reason.
+    assert_includes response.body, mine.name
+    assert_not_includes response.body, servers(:alpha).name
+    assert_not_includes response.body, servers(:gamma).name
+  end
+
+  # Two Puma workers can take a first request at the same instant. The unique
+  # index on email is the serialisation point; the workspace is built in the
+  # same transaction, so a loser leaves nothing behind.
+  test "concurrent resolution provisions one operator, not two" do
+    threads = 4.times.map { Thread.new { User.local_operator } }
+    threads.each(&:join)
+
+    assert_equal 1, User.where(email: User::LOCAL_OPERATOR_EMAIL).count
+    assert_equal 1, Account.where(owner: User.find_by!(email: User::LOCAL_OPERATOR_EMAIL)).count
+  end
+
+  # A leftover cookie from a previous Clowk deployment must not resurrect an
+  # identity the operator did not ask for.
+  test "a stale Clowk session does not override the local operator" do
+    cookies[Clowk.config.cookie_key] = ClowkDevToken.mint(
+      sub: "stale", email: "someone@example.com", name: "Stale", email_verified: true
+    )
+
+    get root_path
+    follow_redirect! while response.redirect?
+
+    assert_equal User::LOCAL_OPERATOR_EMAIL, User.find_by!(email: User::LOCAL_OPERATOR_EMAIL).email
+    assert_not_includes response.body.to_s, "someone@example.com"
+  end
+
+  # ── The surfaces that only mean something with per-person identity ─────
+
+  test "Members and Sign out are not offered" do
+    org = User.local_operator.active_orgs.sole
+    server = org.servers.create!(name: "s1", endpoint: "http://10.5.5.6:8687", pat: "x")
+
+    get server_root_path(org_id: org.short_id, server_key: server.key)
+
+    assert_response :success
+    assert_not_includes response.body, "Sign out"
+    assert_not_includes response.body, org_members_path(org_id: org.short_id)
+  end
+
+  # The workspace already exists, so the screen for "you belong nowhere" must
+  # never be where an anonymous operator lands.
+  test "onboarding is not where the operator arrives" do
+    get root_path
+
+    assert_response :redirect
+    assert_not_includes response.location.to_s, "onboarding"
+
+    get new_onboarding_path
+
+    assert_response :redirect
+    assert_not_includes response.location.to_s, "onboarding"
+  end
+
+  # ── The perimeter warning ─────────────────────────────────────────────
+
+  # Addressed at a rendered page rather than through root_path: follow_redirect!
+  # drops custom headers, so the REMOTE_ADDR under test would not survive the
+  # hop and every one of these would pass for the wrong reason.
+  def a_rendered_page
+    new_server_path(org_id: User.local_operator.active_orgs.sole.short_id)
+  end
+
+  test "a request from a public address is warned about" do
+    get a_rendered_page, headers: {"REMOTE_ADDR" => "54.20.48.217"}
+
+    assert_response :success
+    assert_includes response.body, "No sign-in required"
+    assert_includes response.body, "VOODU_TRUSTED_PERIMETER=1"
+  end
+
+  test "a request from inside the network is not warned about" do
+    get a_rendered_page, headers: {"REMOTE_ADDR" => "10.0.0.4"}
+
+    assert_response :success
+    assert_not_includes response.body, "No sign-in required"
+  end
+
+  test "the warning can be silenced by declaring the perimeter trusted" do
+    original = ENV["VOODU_TRUSTED_PERIMETER"]
+    ENV["VOODU_TRUSTED_PERIMETER"] = "1"
+
+    get a_rendered_page, headers: {"REMOTE_ADDR" => "54.20.48.217"}
+
+    assert_response :success
+    assert_not_includes response.body, "No sign-in required"
+  ensure
+    ENV["VOODU_TRUSTED_PERIMETER"] = original
+  end
+
+  # If the workspace is destroyed out from under the operator, the next request
+  # rebuilds it rather than parking them on an onboarding screen this mode does
+  # not show.
+  test "a destroyed workspace is rebuilt on the next request" do
+    operator = User.local_operator
+    operator.active_orgs.each { |org| org.destroy! }
+    operator.owned_accounts.each { |account| account.reload.destroy! }
+
+    assert_equal 1, User.local_operator.active_orgs.count
+  end
+end

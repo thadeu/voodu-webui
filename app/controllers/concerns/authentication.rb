@@ -1,10 +1,21 @@
 # frozen_string_literal: true
 
-# Authentication — every request carries an identity, or it does not proceed.
+# Authentication — every request carries an identity.
 #
-# Replaces the optional ClowkGuard: sign-in is no longer a flag. The token is
-# verified by the gem; this concern turns the verified subject into a local
-# ::User and publishes it on Current for the rest of the request.
+# WHERE that identity comes from is the one deployment switch (see
+# config/initializers/clowk.rb):
+#
+#   CLOWK_ENABLED=1   The token is verified by the gem, and the verified subject
+#                     is mirrored onto a local ::User. Sign-in is the door.
+#   otherwise         Anonymous. The door is the PERIMETER — Twingate, a VPN,
+#                     Cloudflare Access — and the request runs as the single
+#                     User.local_operator row.
+#
+# Anonymous is not "no identity". It resolves a real User with a real owner
+# membership, so `Current.user` is populated either way and every authorization
+# check downstream keeps working unchanged. Nothing past this concern branches
+# on how sign-in happened, which is deliberate: one authorization path is the
+# whole reason this is safe to offer.
 #
 # Two surfaces stay outside, on purpose, and must stay that way:
 #
@@ -43,6 +54,12 @@ module Authentication
     end
   end
 
+  # Read from config rather than ENV so one value answers for the whole process
+  # and a test can flip it without reaching into the environment.
+  def clowk_enabled?
+    Rails.application.config.x.clowk_enabled
+  end
+
   private
 
   # Clowk::Middleware::TokenExtractor can read a token from params, and
@@ -68,7 +85,10 @@ module Authentication
   # Clowk::Authenticable is included from INSIDE it, which puts the gem CLOSER
   # to the controller in the ancestor chain than we are — an override here
   # loses silently, which is worse than not having one.
+  # Anonymous mode has no door to send anyone to, and no session to age out —
+  # resolve_current_user supplies the identity instead.
   def require_authentication!
+    return unless clowk_enabled?
     return force_reauthentication if session_beyond_ceiling?
     return if clowk_user_signed_in?
 
@@ -79,6 +99,11 @@ module Authentication
   # here is one indexed read; provisioning only runs when the row is new or the
   # mirrored profile has gone stale.
   def resolve_current_user
+    unless clowk_enabled?
+      Current.user = User.local_operator
+      return
+    end
+
     return unless clowk_user_signed_in?
 
     Current.user = User.provision_from_clowk!(current_clowk_user.to_h)
