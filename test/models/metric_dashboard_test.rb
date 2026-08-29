@@ -154,6 +154,35 @@ class MetricDashboardTest < ActiveSupport::TestCase
     assert_equal 1, @org.metric_dashboards.pinned.count
   end
 
+  # The DATABASE half of "one pinned per org", which pin! above never reaches —
+  # it unpins the sibling first, so the index is never asked to refuse anything.
+  # This writes past the model to make the partial index do its job.
+  #
+  # It also pins the predicate itself. That predicate was `pinned = 1` (SQLite
+  # spelling, rejected by Postgres against a boolean column) and is now
+  # `pinned = true`. If a future edit gets the spelling wrong in a way that
+  # matches no rows, the index silently stops constraining anything and only a
+  # test at this level notices.
+  test "the database refuses a second pinned dashboard in one org" do
+    a = @org.metric_dashboards.create!(name: "a", panels: [host_panel])
+    b = @org.metric_dashboards.create!(name: "b", panels: [host_panel])
+
+    a.update_column(:pinned, true)
+
+    assert_raises(ActiveRecord::RecordNotUnique) { b.update_column(:pinned, true) }
+  end
+
+  # The other half of a partial index: rows outside the predicate are not
+  # constrained. Without this, a predicate matching EVERY row would pass the
+  # test above and quietly forbid a second unpinned dashboard.
+  test "unpinned dashboards are not constrained by the pinned index" do
+    @org.metric_dashboards.create!(name: "a", panels: [host_panel], pinned: false)
+
+    assert_nothing_raised do
+      @org.metric_dashboards.create!(name: "b", panels: [host_panel], pinned: false)
+    end
+  end
+
   test "unpin! clears the flag" do
     a = @org.metric_dashboards.create!(name: "a", panels: [host_panel], pinned: true)
     a.unpin!

@@ -38,5 +38,19 @@ module VooduWebui
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    # db/schema.rb has to LOAD on both adapters — the self-hosted install runs
+    # SQLite, the SaaS runs Postgres on the primary — so only SQLite may WRITE
+    # it. One `bin/rails db:migrate` against Postgres rewrites the file in PG
+    # dialect (`where: "pinned = true"` normalised to `where: "pinned"`,
+    # `enable_extension "plpgsql"`, datetime precision) and the next
+    # `db:prepare` on a SQLite install fails to load it.
+    #
+    # Keyed on DATABASE_URL rather than on the environment, because the
+    # environment is not what decides the adapter here: DATABASE_URL is
+    # (config/database.yml + database_configurations.rb, which feeds it to the
+    # primary entry only). Development keeps dumping, which is how schema.rb
+    # gets updated when someone adds a migration.
+    config.active_record.dump_schema_after_migration = false if ENV["DATABASE_URL"].present?
   end
 end

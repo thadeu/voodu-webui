@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_28_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_28_180000) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -110,7 +110,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_28_120000) do
     t.datetime "updated_at", null: false
     t.string "uuid", null: false
     t.index ["org_id", "name"], name: "index_metric_dashboards_on_org_id_and_name", unique: true
-    t.index ["org_id"], name: "index_metric_dashboards_one_pinned_per_org", unique: true, where: "pinned = 1"
+    t.index ["org_id"], name: "index_metric_dashboards_one_pinned_per_org", unique: true, where: "pinned = true"
     t.index ["uuid"], name: "index_metric_dashboards_on_uuid", unique: true
   end
 
