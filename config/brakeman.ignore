@@ -1,0 +1,190 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "015a47a59c598dfa618785d1b14f238e1ee596edbf12f03783b9d1c62bf0b23d",
+      "check_name": "FileAccess",
+      "message": "Model attribute used in file name",
+      "file": "app/jobs/poller_digest_job.rb",
+      "line": 66,
+      "link": "https://brakemanscanner.org/docs/warning_types/file_access/",
+      "code": "FileUtils.rm_rf(Rails.root.join(\"storage\", \"poller\", PollerDigest.find_by!(:sync_hash => sync_hash).type, sync_hash))",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "PollerDigestJob",
+        "method": "perform"
+      },
+      "user_input": "PollerDigest.find_by!(:sync_hash => sync_hash).type",
+      "confidence": "Weak",
+      "cwe_id": [
+        22
+      ],
+      "note": "Both path segments are constrained literals. `type` is validated `inclusion: {in: PollerDigest::TYPES}` (metrics|state) and the case/when raises on anything else; `sync_hash` is validated `/\\A[0-9a-f]{16}\\z/` on the model AND at the only entry point (Internal::PollerDigestController, HASH_FORMAT). Neither can carry a path separator or a traversal segment."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "3f352c34cfa98e51a4f866e722f7dc84e64df8403303e20a3a0cdaae679ee5b1",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/hep_message.rb",
+      "line": 128,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"(ts_epoch / #{[bucket.to_i, 1].max}) * #{[bucket.to_i, 1].max}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HepMessage",
+        "method": "HepMessage.count_series"
+      },
+      "user_input": "[bucket.to_i, 1].max",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Bucket arithmetic over `[bucket.to_i, 1].max` — an Integer by construction, never operator text."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "47b80902809b8c5e8b843e6203d62b083afd0234c68d21bcdde14f0991168517",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/hep_message.rb",
+      "line": 175,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"(ts_epoch / #{[bucket.to_i, 1].max}) * #{[bucket.to_i, 1].max}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HepMessage",
+        "method": "HepMessage.group_series"
+      },
+      "user_input": "[bucket.to_i, 1].max",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "Bucket arithmetic over `[bucket.to_i, 1].max` — an Integer by construction, never operator text."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "4cfa3dd7e2ec7456496162e0f12eca195cfa89e14994b6f8f9fa4c8a6af5e83a",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/hep_message.rb",
+      "line": 170,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "for_instance(:server => server, :scope => scope, :name => name).where(\"ts_epoch >= ? AND ts_epoch < ?\", ts_from.to_i, ts_to.to_i).where(\"#{group_expr} IN (?)\", groups)",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HepMessage",
+        "method": "HepMessage.group_series"
+      },
+      "user_input": "group_expr",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "`group_expr` is HepMessage.filter_expr(...) — a literal from a frozen allowlist, or nil. See the note on line 144."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "4f587aec330f0e305a3837be4fb5597f5b4e5f3067cc117595e6488c3e4c3e94",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/metrics_warehouse.rb",
+      "line": 228,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"#{:BRAKEMAN_SAFE_LITERAL}(CAST(json_extract(payload, '$.#{metric}') AS REAL))\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "MetricsWarehouse",
+        "method": "build_series"
+      },
+      "user_input": "metric",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "MetricsWarehouse#query raises ArgumentError unless ALLOWED_METRICS.include?(metric) before build_series is reached, so `metric` is one of a frozen set. `agg_fn` is METRIC_AGGREGATIONS.fetch with a literal default."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "8b70f6cab763aaec0172e1ecb57e56cab03b50d69a7729f1608c71d834af8564",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/hep_message.rb",
+      "line": 149,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"#{(sort_expr or agg_sql)} #{(\"ASC\" or \"DESC\")}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HepMessage",
+        "method": "HepMessage.group_snapshot"
+      },
+      "user_input": "sort_expr",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "`sort_expr` is HepMessage.filter_expr(plan.sort_field) — a literal from the same frozen allowlist, nil otherwise (falls back to agg_sql). `dir` is a two-branch ternary on a string equality."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "d4d617ec514b0acef03c5385d33b17e81535d880775ed60edbfcd35f7c417be2",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/hep_message.rb",
+      "line": 144,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "for_instance(:server => server, :scope => scope, :name => name).where(\"ts_epoch >= ? AND ts_epoch < ?\", ts_from.to_i, ts_to.to_i).where(\"#{group_expr} IS NOT NULL\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "HepMessage",
+        "method": "HepMessage.group_snapshot"
+      },
+      "user_input": "group_expr",
+      "confidence": "Weak",
+      "cwe_id": [
+        89
+      ],
+      "note": "`group_expr` is HepMessage.filter_expr(...), which returns either a value from the frozen FILTER_COLUMNS hash or a json_extract literal built only for a member of the frozen JSON_FILTER_FIELDS allowlist. An unknown field returns nil and the clause is never built."
+    },
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "f7b3829e72611f49dfbce52d74087987ff6d1743b6223362fd5672db8b5fd979",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/metrics_warehouse.rb",
+      "line": 226,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "Arel.sql(\"(ts_epoch / #{interval_s}) * #{interval_s}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "MetricsWarehouse",
+        "method": "build_series"
+      },
+      "user_input": "interval_s",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "`interval_s` comes from resolve_interval, which returns a member of the frozen INTERVAL_STEPS array or the literal 3600."
+    }
+  ],
+  "updated": "2026-08-28 17:52:56 -0300",
+  "brakeman_version": "8.0.6"
+}

@@ -69,7 +69,7 @@ class Server < ApplicationRecord
   # both owning a box called "web-1". Mirrors AlertDestination.
   validates :name, presence: true, uniqueness: {scope: :org_id}, length: {maximum: 64}
   validates :endpoint, presence: true, format: {
-    with: %r{\Ahttps?://[^/]+:\d+}, message: "could not be normalised to scheme://host:port"
+    with: %r{\Ahttps?://[^/]+:\d+\z}, message: "could not be normalised to scheme://host:port"
   }
   validates :pat_ciphertext, presence: true
   validates :key, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{6}\z/}

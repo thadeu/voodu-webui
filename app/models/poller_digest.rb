@@ -48,7 +48,8 @@ class PollerDigest < ApplicationRecord
   belongs_to :server, foreign_key: :server_id, optional: true
 
   validates :type, presence: true, inclusion: {in: TYPES}
-  validates :sync_hash, presence: true, uniqueness: true
+  validates :sync_hash, presence: true, uniqueness: true,
+    format: {with: /\A[0-9a-f]{16}\z/, message: "must be 16 lowercase hex chars"}
   validates :status, presence: true, inclusion: {in: STATUSES}
 
   scope :processed, -> { where(status: "processed") }
