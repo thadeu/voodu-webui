@@ -14,11 +14,15 @@ operator commands without SSHing in for every check.
 - **External API dashboards.** Build a Table or Area/Number chart from any HTTP endpoint
   with a small JSON mapping — see [docs/http-source-mapping.md](docs/http-source-mapping.md).
 - **PAT auth, encrypted at rest.** Each server stores a personal access token used to
-  talk to its `voodu` controller; tokens live in SQLite as `pat_ciphertext` and are
-  encrypted via ActiveRecord Encryption.
-- **Single container.** Rails 8.1 on SQLite with the Solid stack (`solid_cache`,
-  `solid_queue`, `solid_cable`) — no Postgres, no Redis, no sidekiq, no separate worker
-  pod. Add a volume, you're done.
+  talk to its `voodu` controller; tokens are stored as `pat_ciphertext`, encrypted at
+  rest via ActiveRecord Encryption, in whichever database holds the control plane.
+- **Single container.** Rails 8.1 with the Solid stack (`solid_cache`, `solid_queue`,
+  `solid_cable`) — no Redis, no sidekiq, no separate worker pod. Add a volume, you're
+  done.
+- **Two deployment shapes, one image.** Out of the box: SQLite, no sign-in, meant to
+  sit behind your VPN or access proxy. Set two env vars and the same image becomes a
+  multi-tenant install with per-person sign-in and Postgres holding the control plane.
+  See [Deployment shapes](#deployment-shapes).
 
 ## Quick start
 
@@ -141,19 +145,45 @@ The password stays plain text in `.env` and is bcrypt-hashed at container boot, 
 rotating it is one edit plus `docker compose up -d`. `/up` is excluded from the
 prompt so healthchecks and uptime monitors keep working without credentials.
 
-### Operator sign-in (Clowk) — required
+### Operator sign-in
 
-The dashboard holds a PAT for every controller it manages: deploy, exec, logs.
-It does not answer to whoever finds the port. Set one variable:
+**Off by default on a fresh install.** With no `CLOWK_ENABLED` and no
+`CLOWK_PUBLISHABLE_KEY`, the app asks for no credentials:
+every request runs as one local operator with owner rights. That is the intended
+shape for a self-hosted install — the *perimeter* authenticates (Twingate,
+WireGuard, Cloudflare Access, an SSH tunnel) and whoever reaches the port has
+already proved who they are to it.
+
+> **Read this before publishing the port.** Owner rights include reading each
+> server's access token, and that token IS the controller: deploy, exec, logs, on
+> every box this dashboard manages. Exposing port 3000 to the internet with
+> sign-in off does not leak a dashboard, it hands over the infrastructure. The app
+> warns at boot in `docker logs` and puts a banner on every page once a request
+> arrives from a public address — silence it with `VOODU_TRUSTED_PERIMETER=1` only
+> when a proxy that forwards real client IPs is genuinely in front.
+
+Anonymous mode is not a bypass. It provisions a real user with a real owner
+membership, so authorization keeps running through the one path every request
+uses — there is simply exactly one membership to find.
+
+**Upgrades never remove sign-in.** A publishable key with no `CLOWK_ENABLED`
+keeps sign-in on: an install already configured for Clowk is one where somebody
+chose it, and a release that read "unset" as "anonymous" would silently open
+that dashboard to whoever reaches the port. Set `CLOWK_ENABLED=0` to go
+anonymous deliberately.
+
+**Turn sign-in on** for a multi-tenant install — several people, each reaching
+only what a membership grants them:
 
 ```sh
 # .env
+CLOWK_ENABLED=1
 CLOWK_PUBLISHABLE_KEY=pk_live_...
 ```
 
-There is no users table. The app verifies the JWT Clowk issues, mirrors the
-subject onto a local row and keeps the claims in the Rails session. Without a
-publishable key the app **refuses to boot** rather than start unprotected.
+The app verifies the JWT Clowk issues and mirrors the subject onto a local
+`users` row. With the flag on and no publishable key, it **refuses to boot**
+rather than start unprotected.
 
 Two optional companions:
 
@@ -198,6 +228,85 @@ mints a signed link the admin sends however they like — there is no SMTP in th
 app. Only the person it was addressed to can accept it, and it expires in 30
 days.
 
+## Deployment shapes
+
+One image, two shapes. Neither is a build flag — both are the same
+`ghcr.io/thadeu/voodu-webui`, and the difference is two environment variables
+that are **independent of each other**.
+
+| | `CLOWK_ENABLED` | `DATABASE_URL` |
+|---|---|---|
+| **Self-hosted** — one box, behind your VPN | unset | unset |
+| **Multi-tenant SaaS** — many people, your Postgres | `1` | `postgres://…` |
+| **Enterprise** — behind your VPN, on your own Postgres | unset | `postgres://…` |
+
+That third row is the point of keeping them independent: a company can put the
+control plane on the RDS instance they already back up without also adopting a
+hosted identity provider.
+
+### What `DATABASE_URL` moves, and what it does not
+
+Setting it moves the **primary** database to Postgres and nothing else:
+
+| database | unset | set | holds |
+|---|---|---|---|
+| primary | SQLite | **Postgres** | orgs, users, accounts, memberships, servers, encrypted PATs |
+| cache | SQLite | SQLite | sessions and cache — high churn, disposable |
+| queue | SQLite | SQLite | pending background jobs |
+| cable | SQLite | SQLite | ephemeral by nature |
+| metrics | SQLite | SQLite | ~31 days of telemetry, refilled by the poller |
+| hep | SQLite | SQLite | ~31 days of SIP capture, same |
+
+You do not edit `config/database.yml` for this. Rails routes `DATABASE_URL` to
+the `primary` entry natively and replaces that entry's whole configuration — the
+YAML keeps declaring SQLite, and the URL overrides adapter, host and database
+name on top of it.
+
+The warehouse stays on SQLite deliberately, not for lack of trying: those two
+databases are built on ground only SQLite has — generated columns computed with
+`json_extract` and `strftime`, a `REGEXP` operator registered on the connection,
+`COLLATE NOCASE`. Postgres could not create those tables at all.
+
+**So the storage volume is still required with Postgres.** Losing it costs the
+telemetry window (which the poller rebuilds within minutes), every session
+(people sign in again) and any pending job. It does not cost an org, a user or a
+PAT — those live in Postgres.
+
+First boot needs nothing extra: the entrypoint's `rails db:prepare` creates the
+Postgres database if the role may (`CREATEDB`), loads the schema into it, then
+creates the five SQLite files. Pre-create the database by hand if you would
+rather not grant `CREATEDB`.
+
+### Backups
+
+The two shapes have different jobs, so they get different procedures.
+
+**SQLite (all six, or the five satellites).** Snapshot the volume, or use the
+online backup so you do not copy a file mid-write:
+
+```sh
+docker exec voodu-webui sh -c \
+  'for db in /rails/storage/production*.sqlite3; do
+     sqlite3 "$db" ".backup /rails/storage/backup-$(basename "$db")"
+   done'
+```
+
+Also in that volume, and worth more than the databases: `.secret_key_base` and
+`.ar_encryption.env`. **Losing the encryption keys makes every stored PAT
+unreadable** — a restored database without them is a list of servers you can no
+longer talk to.
+
+**Postgres (the primary, when `DATABASE_URL` is set).** Whatever you already do
+for your other apps:
+
+```sh
+pg_dump "$DATABASE_URL" -Fc -f voodu-$(date +%F).dump
+```
+
+The two halves can drift apart in time without harm: warehouse rows for a server
+that no longer exists are simply never read. Restore the primary from whenever
+you like; the telemetry catches up on its own.
+
 ## Registering an server (server address)
 
 When you add a new server in the UI you'll enter a controller URL. Pick the right one
@@ -228,8 +337,10 @@ network namespace, not the macOS network. Don't reach for it.
   are auto-generated and persisted at `/rails/storage/.ar_encryption.env` under the
   same condition. **Losing this file makes existing encrypted PATs unreadable** — keep
   the volume.
-- First boot runs `rails db:prepare` → creates the four SQLite DBs (main + cache +
-  queue + cable), loads the schema, runs `db:seed`.
+- First boot runs `rails db:prepare` → creates the six SQLite databases (primary,
+  cache, queue, cable, metrics, hep), loads their schemas, runs `db:seed`. With
+  `DATABASE_URL` set, the primary is created in Postgres instead and the other five
+  are still created as files — see [Deployment shapes](#deployment-shapes).
 - Subsequent boots also run `db:prepare`, which only applies pending migrations. Seeds
   do not re-run (Rails default — protects user data).
 
@@ -240,13 +351,15 @@ network namespace, not the macOS network. Don't reach for it.
 | `SECRET_KEY_BASE`                                                                                     | Override the auto-generated key.                                                       |
 | `ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` / `_DETERMINISTIC_KEY` / `_KEY_DERIVATION_SALT`                | Override the auto-generated AR Encryption keys. Set all three together.                |
 | `RAILS_MASTER_KEY`                                                                                    | Decrypt `config/credentials.yml.enc` if you ship encrypted credentials.                |
-| `DATABASE_URL`                                                                                        | Swap SQLite for Postgres later without rebuilding.                                     |
+| `DATABASE_URL`                                                                                        | Move the **primary** database to Postgres. Unset = SQLite. Never moves the warehouse — see [Deployment shapes](#deployment-shapes). |
 | `WAREHOUSE`                                                                                   | `1` enables the in-process metrics warehouse (default in the bundled compose).         |
 | `HOST_HTTP_PORT` / `HOST_HTTPS_PORT`                                                                  | Compose-only — host ports forwarded to the container's `3000` / `443` (default `80` / `443`). |
 | `TLS_DOMAIN`                                                                                          | Domain to get a Let's Encrypt certificate for. Empty = plain HTTP, no cert.             |
 | `ACME_DIRECTORY`                                                                                      | ACME endpoint. Point at Let's Encrypt staging while testing DNS/firewall.               |
 | `BASIC_AUTH_USER` / `BASIC_AUTH_PASSWORD`                                                             | Credentials for the Caddy front door (`docker-compose.auth.yml` only). Hashed at boot.  |
-| `CLOWK_PUBLISHABLE_KEY`                                                                               | **Required.** Clowk instance identity — sign-in URL, JWKS endpoint and token audience derive from it. |
+| `CLOWK_ENABLED`                                                                                       | `1` turns on per-person sign-in. Unset = anonymous, **unless `CLOWK_PUBLISHABLE_KEY` is set**, which keeps it on so upgrades never drop authentication. `0` forces anonymous. |
+| `VOODU_TRUSTED_PERIMETER`                                                                             | `1` silences the anonymous-mode banner when an access proxy in front forwards real public client IPs. |
+| `CLOWK_PUBLISHABLE_KEY`                                                                               | **Required when `CLOWK_ENABLED=1`.** Clowk instance identity — sign-in URL, JWKS endpoint and token audience derive from it. |
 | `CLOWK_SECRET_KEY`                                                                                    | Optional. Clowk API calls and the legacy HS256 path; token verification does not need it. |
 | `CLOWK_SUBDOMAIN_URL`                                                                                 | Optional. The instance's auth domain — set it to skip the api.clowk.dev lookup per request. |
 | `HTTP_PORT`                                                                                           | Thruster's public listen port inside the container (default `3000`).                   |
@@ -257,12 +370,14 @@ network namespace, not the macOS network. Don't reach for it.
 ## Image internals
 
 - Rails 8.1 + Thruster (HTTP/2 in front of Puma).
-- Five SQLite databases under `/rails/storage`: `production.sqlite3` (app data),
+- Six SQLite databases under `/rails/storage`: `production.sqlite3` (app data),
   `production_cache.sqlite3` (solid_cache), `production_queue.sqlite3` (solid_queue),
   `production_cable.sqlite3` (solid_cable), `production_metrics.sqlite3` (metrics
-  warehouse — high-volume background-job writes kept off the primary).
-- `rails db:prepare` runs against every configured database on boot, so all five files
-  are created and migrated automatically.
+  warehouse) and `production_hep.sqlite3` (SIP capture). The last two carry
+  high-volume background-job writes, deliberately kept off the primary.
+- `rails db:prepare` runs against every configured database on boot, so all six are
+  created and migrated automatically. With `DATABASE_URL` set the primary lives in
+  Postgres and the remaining five are still files in the volume.
 - **Background jobs run in-process.** `SOLID_QUEUE_IN_PUMA=true` (default in the image)
   loads the solid_queue Puma plugin — the dispatcher, worker pool, and recurring-task
   scheduler all run inside the same Puma process. The recurring `metrics_sync` task
@@ -297,3 +412,15 @@ bin/rubocop     # lint
 In `development` and `test`, AR Encryption keys are hardcoded in
 `config/initializers/active_record_encryption.rb` so a `git clone` + `bin/dev` works
 without `master.key`. Those keys are intentionally not secret.
+
+## License
+
+[Elastic License 2.0](LICENSE). Source-available, not OSI open source.
+
+Self-hosting is free — run it on your own boxes, for your own servers, with no
+licence to buy. Two things the licence does not permit: offering voodu-webui to
+third parties as a hosted or managed service, and circumventing licence-key
+functionality.
+
+Releases published before this licence took effect remain under the terms they
+shipped with.

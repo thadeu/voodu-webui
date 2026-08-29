@@ -24,12 +24,27 @@ services:
       # Point at the Let's Encrypt staging directory while testing DNS or
       # firewall rules, so failures don't burn the production rate limit.
       ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}
-      # Operator sign-in via Clowk.in — REQUIRED. Without a publishable key the
-      # app refuses to boot rather than serve the dashboard unprotected; see
-      # config/initializers/clowk.rb. CLOWK_SECRET_KEY is optional (RS256 is
-      # verified against the public JWKS).
-      CLOWK_PUBLISHABLE_KEY: ${CLOWK_PUBLISHABLE_KEY:?set it in .env — sign-in is mandatory}
+      # Which database holds the control plane. Empty = the six SQLite files in
+      # the volume below. Set = the PRIMARY moves to Postgres (orgs, users,
+      # accounts, memberships, servers, encrypted PATs); cache, queue, cable,
+      # metrics and hep stay as files, so THE VOLUME IS STILL REQUIRED. An empty
+      # value is treated as unset (config/boot.rb) — this map form always
+      # interpolates something.
+      DATABASE_URL: ${DATABASE_URL:-}
+      # Operator sign-in. Empty = anonymous: no credentials asked, every request
+      # runs as one local operator with OWNER rights, which includes reading
+      # every server's PAT. That is the self-hosted shape and it assumes a VPN or
+      # an access proxy in front — do not publish this port without one. Empty
+      # with CLOWK_PUBLISHABLE_KEY set keeps sign-in ON, so upgrading an existing
+      # install never drops authentication; use 0 to go anonymous deliberately.
+      # Set to 1 for per-person sign-in, and then CLOWK_PUBLISHABLE_KEY is required
+      # (the app refuses to boot without it). See config/initializers/clowk.rb.
+      CLOWK_ENABLED: ${CLOWK_ENABLED:-}
+      CLOWK_PUBLISHABLE_KEY: ${CLOWK_PUBLISHABLE_KEY:-}
       CLOWK_SECRET_KEY: ${CLOWK_SECRET_KEY:-}
+      # Silences the anonymous-mode banner when a proxy in front forwards real
+      # public client IPs (Cloudflare Access does; Twingate does not).
+      VOODU_TRUSTED_PERIMETER: ${VOODU_TRUSTED_PERIMETER:-}
       # Skips the api.clowk.dev lookup on the request path. Optional; the gem
       # derives it from the publishable key when unset.
       CLOWK_SUBDOMAIN_URL: ${CLOWK_SUBDOMAIN_URL:-}
