@@ -110,8 +110,19 @@ jobs:
       - name: Scan for common Rails security vulnerabilities using static analysis
         run: bin/brakeman --no-pager
 
-      - name: Scan for known security vulnerabilities in gems used
-        run: bin/bundler-audit
+      # bundler-audit is deliberately NOT a gate. It reads an advisory database
+      # that updates independently of this repository, so it turns red on
+      # changes nobody here made — a new advisory against any dependency fails
+      # every open pull request at once, and a gate that fails for reasons
+      # unrelated to the diff is a gate people learn to ignore.
+      #
+      # Run it before cutting a release instead:
+      #
+      #   bin/bundler-audit
+      #
+      # It earns that: it is what caught CVE-2026-66066 (arbitrary file read and
+      # RCE in Active Storage variant processing) hours after the advisory
+      # landed, on a database fresher than the local copy.
 
   lint:
     runs-on: ubuntu-latest
