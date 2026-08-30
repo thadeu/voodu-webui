@@ -30,7 +30,12 @@ Puma::Plugin.create do
     launcher.events.on_booted do
       binary = Poller.binary_path
       rails_url = ENV["RAILS_INTERNAL_URL"] || "http://127.0.0.1:#{ENV.fetch("PORT", 3000)}"
-      @pid = spawn({"RAILS_INTERNAL_URL" => rails_url}, binary, out: $stdout, err: $stderr)
+      # The binary sweeps its own NDJSON tree, so it needs the same keep window
+      # Rails honours. A plain number, deliberately: enforcement stays in Ruby
+      # and the Go side never learns that licences exist.
+      env = {"RAILS_INTERNAL_URL" => rails_url, "POLLER_RETENTION_DAYS" => Retention.keep_days.to_s}
+
+      @pid = spawn(env, binary, out: $stdout, err: $stderr)
 
       launcher.log_writer.log("[poller] spawned PID #{@pid} → #{rails_url}")
     end

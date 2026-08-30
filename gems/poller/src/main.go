@@ -418,10 +418,30 @@ func main() {
 	}
 }
 
-// runCleanupLoop fires once a day at 03:00 UTC and removes NDJSON
-// files older than poller's retention (2 days). Watermarks are left in
-// place — they are tiny and a stale watermark is harmless (the poller
-// will read the latest line from disk on next tick).
+// retentionDays is how long NDJSON files are kept on disk. Rails passes it in
+// when it spawns us (see gems/poller/lib/puma/plugin/poller.rb) and it reflects
+// the OPERATOR's setting, never a licence — an entitlement that could shrink
+// this would delete a customer's history the day their licence lapsed. We are
+// handed a number and have no idea licences exist, which is the point.
+func retentionDays() int {
+	raw := os.Getenv("POLLER_RETENTION_DAYS")
+	if raw == "" {
+		return 2
+	}
+
+	days, err := strconv.Atoi(raw)
+	if err != nil || days < 1 {
+		log.Printf("[poller] ignoring POLLER_RETENTION_DAYS=%q, keeping 2 days", raw)
+		return 2
+	}
+
+	return days
+}
+
+// runCleanupLoop fires once a day at 03:00 UTC and removes NDJSON files older
+// than the retention window. Watermarks are left in place — they are tiny and a
+// stale watermark is harmless (the poller will read the latest line from disk
+// on next tick).
 func runCleanupLoop(ctx context.Context, root string) {
 	for {
 		next := nextCleanupTime(time.Now().UTC())
@@ -431,7 +451,7 @@ func runCleanupLoop(ctx context.Context, root string) {
 		case <-time.After(time.Until(next)):
 		}
 
-		cutoff := time.Now().Add(-2 * 24 * time.Hour)
+		cutoff := time.Now().AddDate(0, 0, -retentionDays())
 		if err := cleanupOlderThan(root, cutoff); err != nil {
 			log.Printf("[poller] cleanup: %v", err)
 		}

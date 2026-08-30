@@ -30,7 +30,11 @@ class LogTailCleanupJob < ApplicationJob
     root = LogTail::FilePath.log_root
     return unless Dir.exist?(root)
 
-    threshold = LogTail::FilePath::RETENTION_DAYS.days.ago
+    # Retention.keep_days, NOT the licence. This job deletes bytes, and an
+    # entitlement that could shrink this window would erase a customer's
+    # history the moment their licence lapsed. What a licence narrows is what
+    # can be SEEN (Retention.serve_days); the disk is the operator's call.
+    threshold = Retention.keep_days.days.ago
     deleted = 0
     bytes = 0
 
@@ -77,7 +81,11 @@ class LogTailCleanupJob < ApplicationJob
   # window. Counts beyond it are meaningless (the source NDJSON is already
   # reaped) and the dashboard never sums past it. Bounded, indexed delete.
   def prune_log_metric_samples
-    threshold = LogTail::FilePath::RETENTION_DAYS.days.ago.to_i
+    # Retention.keep_days, NOT the licence. This job deletes bytes, and an
+    # entitlement that could shrink this window would erase a customer's
+    # history the moment their licence lapsed. What a licence narrows is what
+    # can be SEEN (Retention.serve_days); the disk is the operator's call.
+    threshold = Retention.keep_days.days.ago.to_i
     deleted = MetricSample.where(source: "log").where("ts_epoch < ?", threshold).delete_all
 
     Rails.logger.info("log-metric cleanup pruned=#{deleted} samples") if deleted.positive?

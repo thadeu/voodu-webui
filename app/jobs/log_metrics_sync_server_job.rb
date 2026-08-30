@@ -36,8 +36,9 @@ class LogMetricsSyncServerJob < ApplicationJob
   # exits the window and freezes.
   RECOMPUTE_WINDOW = 10.minutes
 
-  # Deepest history a first-sight backfill walks — the log warehouse retention.
-  RETENTION = LogTail::FilePath::RETENTION_DAYS.days
+  # Deepest history a first-sight backfill walks — what is actually kept on
+  # disk, which is the operator's setting and never the licence.
+  def self.retention = Retention.keep_days.days
 
   # Upper bound on lines a single scan tallies. The live window is tiny; this
   # only bites a backfill over a very chatty pod's full retention. We count
@@ -70,7 +71,7 @@ class LogMetricsSyncServerJob < ApplicationJob
       defs.each do |d|
         next if backfilled?(d.key)
 
-        recompute(server, {[d.scope, d.name] => [d]}, pod_map, [d], from: RETENTION.ago, until_: win_start, boundary: win_start, side: :history)
+        recompute(server, {[d.scope, d.name] => [d]}, pod_map, [d], from: self.class.retention.ago, until_: win_start, boundary: win_start, side: :history)
         mark_backfilled(d.key)
       end
     end

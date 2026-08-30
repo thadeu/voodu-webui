@@ -55,8 +55,11 @@ class LogSearchData
 
   DEFAULT_RANGE = "30m"
 
-  # Hard floor on `from` — never scan past what cleanup keeps.
-  RETENTION = LogTail::FilePath::RETENTION_DAYS.days
+  # Hard floor on `from` — never scan past what cleanup keeps, and never past
+  # what the licence allows this installation to look back. Resolved per call
+  # rather than frozen in a constant: a licence can lapse or be renewed while
+  # the process is up, and the window has to follow it.
+  def self.retention = Retention.serve_window
 
   attr_reader :server
 
@@ -76,7 +79,7 @@ class LogSearchData
       ranges: RANGES,
       default_range: DEFAULT_RANGE,
       custom_blank_from: 1.hour,
-      retention: RETENTION
+      retention: self.class.retention
     )
   end
 
