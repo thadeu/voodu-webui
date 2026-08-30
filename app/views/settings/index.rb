@@ -532,8 +532,55 @@ class Views::Settings::Index < Views::Base
         render(Components::UI::KvRow.new(key: "Database")) { database_value }
       end
 
+      license_history if allowed?(:manage_account)
       activation_form if allowed?(:manage_account)
     end
+  end
+
+  # Every licence this installation has run under.
+  #
+  # The rows were always being written — one per activation — and nothing showed
+  # them. What they answer is the question support actually gets asked: when did
+  # this installation become Enterprise, under whose name, and who pasted it.
+  # Owner-only, same bracket as the form, because it names people.
+  def license_history
+    keys = LicenseKey.newest_first.to_a
+    return if keys.empty?
+
+    div(class: "flex flex-col gap-1.5 pt-3 mt-3 border-t border-voodu-border") do
+      span(class: "text-[11px] uppercase tracking-wide text-voodu-muted") { "License history" }
+
+      div(class: "flex flex-col") { keys.each_with_index { |key, i| history_row(key, current: i.zero?) } }
+    end
+  end
+
+  # Stacks on narrow and goes to a row at the breakpoint: four fields competing
+  # for one line turns a mono subject into one character per line at 360px.
+  def history_row(key, current:)
+    div(class: "flex flex-col vmd:flex-row vmd:items-baseline gap-0.5 vmd:gap-3 py-1.5 " \
+               "border-b border-voodu-border/50 last:border-b-0") do
+      span(class: "text-[12.5px] font-voodu-mono text-voodu-text truncate vmd:w-40 shrink-0") do
+        key.subject
+      end
+
+      span(class: "text-[11.5px] text-voodu-muted vmd:flex-1 min-w-0 truncate") do
+        plain "activated #{key.created_at.to_date}"
+        plain " by #{key.activated_by.display_name}" if key.activated_by
+      end
+
+      span(class: "text-[11.5px] font-voodu-mono shrink-0 #{history_tone(key, current)}") do
+        plain current ? "in force · " : ""
+        plain key.expired? ? "expired #{key.expires_at.to_date}" : "until #{key.expires_at.to_date}"
+      end
+    end
+  end
+
+  # Only the licence actually in force is worth colouring; a superseded row is
+  # history and expired is simply what history looks like.
+  def history_tone(key, current)
+    return "text-voodu-muted" unless current
+
+    key.expired? ? "text-voodu-red" : "text-voodu-text-2"
   end
 
   def plan_limits_value

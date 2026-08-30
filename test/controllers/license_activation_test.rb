@@ -115,4 +115,44 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
     assert_not_equal 200, response.status
   end
+
+  # ── The history ────────────────────────────────────────────────────────
+  #
+  # The rows were always being written and nothing showed them. What they answer
+  # is what support actually gets asked: when did this become Enterprise, under
+  # whose name, and who pasted it.
+
+  test "every activation is listed, newest first, with who did it" do
+    post license_path, params: {license_token: token({"sub" => "first-purchase", "iat" => 3.days.ago.to_i}),
+                                return_to: settings_url}
+    post license_path, params: {license_token: token({"sub" => "renewal"}), return_to: settings_url}
+
+    get settings_url
+
+    assert_response :success
+    assert_includes response.body, "License history"
+    assert_includes response.body, "first-purchase"
+    assert_includes response.body, "renewal"
+    assert_includes response.body, "in force"
+    assert_includes response.body, users(:owner).display_name
+  end
+
+  test "only the licence in force is marked as such" do
+    post license_path, params: {license_token: token({"sub" => "acme-2025", "iat" => 3.days.ago.to_i}),
+                                return_to: settings_url}
+    post license_path, params: {license_token: token({"sub" => "acme-2026"}), return_to: settings_url}
+
+    get settings_url
+    body = response.body
+
+    assert_operator body.index("acme-2026"), :<, body.index("acme-2025"), "newest first"
+    assert_equal 1, body.scan("in force").size, "exactly one row is in force"
+  end
+
+  # Nothing to show is nothing shown, rather than an empty heading.
+  test "no history section before the first activation" do
+    get settings_url
+
+    assert_not_includes response.body, "License history"
+  end
 end
