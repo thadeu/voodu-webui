@@ -289,9 +289,25 @@ operator, behind your own perimeter. An Enterprise licence lifts the limits.
 | searchable window | 3 days | configurable, 90 by default |
 | control plane in Postgres | — | ✓ |
 
+Two ways in, and the second is the one most people will use:
+
 ```sh
 VOODU_LICENSE=eyJhbGciOiJSUzI1NiJ9...      # or VOODU_LICENSE_FILE=/path/to.jwt
 ```
+
+**Or paste it into Settings → Plan.** Buy a licence while already running the
+free tier, paste the token, and the installation is Enterprise on the next
+request — no env var, no redeploy, no restarting a dashboard someone is
+watching. Renewal is the same act.
+
+When both exist, **the newer token wins** (by its `iat`), whichever side it came
+from. That is the only rule that serves an operator who only sets the env var,
+one who renews through the UI, and one who keeps compose in git and updates the
+env — without either side silently undoing the other.
+
+Expiry needs no restart either: the status is read from the clock every time it
+is asked. A daily job re-verifies the stored token and warns as the date
+approaches, but nothing depends on it having run.
 
 **Verified offline.** The public key ships in the image and nothing calls home,
 so a licence works in a closed network and our availability is not part of your

@@ -127,6 +127,17 @@ jwt.encode(
 )
 ```
 
+## Where the token lives
+
+Either `VOODU_LICENSE` / `VOODU_LICENSE_FILE` in the environment, or a row in
+`license_keys` written when someone pastes it into Settings → Plan. Both are
+verified the same way; when both are present the one with the newer `iat` is in
+force.
+
+Activation stores the token, its subject and its dates, and who activated it —
+one row per activation, so the history answers "when did they upgrade" without
+costing anything.
+
 ## What the app checks, in order
 
 1. Token absent → `:none`, the free tier. Not an error.
