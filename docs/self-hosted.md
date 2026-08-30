@@ -88,6 +88,12 @@ One thing an upgrade will never do is remove authentication: if
 `CLOWK_PUBLISHABLE_KEY` is set, sign-in stays on even when `CLOWK_ENABLED` is
 not.
 
+## Deploying it with voodu instead
+
+If this host already runs a voodu controller, the dashboard can be a manifest
+like anything else on it — see
+[deploy-with-voodu.md](deploy-with-voodu.md).
+
 ## When one operator stops being enough
 
 - More than one person, each with their own identity → [sso.md](sso.md)

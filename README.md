@@ -59,6 +59,14 @@ docker pull ghcr.io/thadeu/voodu-webui:latest && docker rm -f voodu-webui  # the
 `host.docker.internal` to resolve. Docker Desktop on macOS/Windows already provides it
 natively, so the flag is a no-op there — leave it in for portability.
 
+### With voodu itself
+
+The dashboard can be deployed by the controller it manages — rollouts, health
+gating and TLS at the ingress, instead of a `docker run` you have to remember.
+
+→ [docs/deploy-with-voodu.md](docs/deploy-with-voodu.md) — a complete
+`web.voodu` manifest with ports, volume, probes and TLS.
+
 ### docker-compose
 
 ```sh
