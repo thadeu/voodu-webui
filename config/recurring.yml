@@ -79,6 +79,12 @@ common: &common
     # this tick if a tail is already in flight (TailLock guard).
     schedule: every 1 minute
 
+  # Reporting only — expiry itself is derived from the clock on every read, so
+  # nothing here is load-bearing. See LicenseCheckJob.
+  license_check:
+    class: LicenseCheckJob
+    schedule: every day at 9am
+
   log_tail_cleanup:
     class: LogTailCleanupJob
     # 03:00 daily — low-traffic window. Reaps NDJSON files older
