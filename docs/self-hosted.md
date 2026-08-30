@@ -70,10 +70,10 @@ open.
 
 ## HTTPS and a password prompt
 
-Both are opt-in and documented in `.env.example`: `TLS_DOMAIN` puts Thruster's
-Let's Encrypt certificate in front, and `docker-compose.auth.yml` adds a Caddy
-Basic Auth overlay. Neither replaces the perimeter — Basic Auth in particular is
-a shared password, not identity.
+Both are opt-in. `TLS_DOMAIN` gets a Let's Encrypt certificate automatically —
+see [tls.md](tls.md) for the three conditions and the failure modes — and
+`docker-compose.auth.yml` adds a Caddy Basic Auth overlay. Neither replaces the
+perimeter: Basic Auth in particular is a shared password, not identity.
 
 ## Upgrading
 

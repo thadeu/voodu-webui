@@ -85,35 +85,18 @@ By default it publishes host `80` -> container `3000` and host `443` -> containe
 
 ### HTTPS
 
-The image bundles Thruster, which provisions and renews a Let's Encrypt certificate
-on its own. Set one variable:
+Automatic, once a name points here and ports 80 and 443 are open:
 
 ```sh
-# .env
 TLS_DOMAIN=console.example.com
 ```
 
-```sh
-docker compose up -d
-docker compose logs -f web | grep -i -E 'tls|acme|certificate'
-```
+Thruster requests a Let's Encrypt certificate, redirects HTTP to HTTPS and
+renews it. Empty means plain HTTP, which is right when something in front
+already terminates TLS.
 
-Three things must be true before you set it, or the site goes dark — the HTTPS
-listener has no certificate and HTTP only answers with a redirect to it:
-
-1. An A/AAAA record for the name resolves to this host
-2. Host ports 80 **and** 443 are open — 80 is where the ACME HTTP-01 challenge lands
-3. Nothing else terminates TLS in front. A Cloudflare orange-cloud proxy breaks
-   HTTP-01; use DNS-only, or leave `TLS_DOMAIN` empty and let Cloudflare hold the cert
-
-Certificates persist in the storage volume (`/rails/storage/thruster`), so restarts
-don't re-request them. While you're still fixing DNS or firewall rules, set
-`ACME_DIRECTORY` to the Let's Encrypt staging endpoint so failures don't burn the
-production rate limit. Leaving `TLS_DOMAIN` empty serves plain HTTP with no cert.
-
-Mapping host `443` straight to container `3000` without `TLS_DOMAIN` is the common
-mistake: the browser opens a TLS handshake against a plain HTTP listener and shows
-`ERR_SSL_PROTOCOL_ERROR`.
+→ [docs/tls.md](docs/tls.md) — the three conditions, the port mapping that looks
+like a TLS bug, Cloudflare, and what each failure actually means.
 
 ### Basic Auth
 
