@@ -17,9 +17,10 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   teardown { Rails.application.config.x.license = @previous }
 
-  # The licence lives at the installation level, not inside a server.
+  # The licence has its own screen, named for what it is — not a card inside a
+  # server's settings.
   def settings
-    get installation_path
+    get license_path
   end
 
   def stub_license(status, customer: "acme-corp", expires: 30.days.from_now)
@@ -85,10 +86,10 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   test "reachable with no server registered at all" do
     Server.delete_all
 
-    get installation_path
+    get license_path
 
     assert_response :success
-    assert_includes response.body, "Installation"
+    assert_includes response.body, "License"
     assert_includes response.body, "Plan"
   end
 end

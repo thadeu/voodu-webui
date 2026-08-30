@@ -98,11 +98,32 @@ class Components::Layouts::Topbar < Components::Base
         span(class: "text-[11px] text-voodu-muted font-mono truncate") { current_user.email }
       end
 
+      if allowed?(:manage_account)
+        # org_id: nil explicitly — these routes take no org segment, so the
+        # helper would otherwise append the current one as ?org_id=…, which is
+        # noise in the URL bar and in every log line.
+        account_link(license_path(org_id: nil, server_key: nil), "License")
+        account_link(authentication_path(org_id: nil, server_key: nil), "Authentication")
+      end
+
       a(
         href: clowk_sign_out_path,
-        class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+        class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 " \
+               "hover:text-voodu-text border-t border-voodu-border"
       ) { "Sign out" }
     end
+  end
+
+  # Installation-wide settings belong in the account menu, which is where a
+  # signed-in operator looks for anything that is not about the server in front
+  # of them. They are in the sidebar too, and that is not redundancy: this menu
+  # does not exist in anonymous mode, which is exactly the free tier that would
+  # be going looking for the licence screen.
+  def account_link(href, label_text)
+    a(
+      href: href,
+      class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) { label_text }
   end
 
   # theme_toggle — sun/moon quick switch. The initial theme is resolved

@@ -35,7 +35,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
                 "exp" => 365.days.from_now.to_i}.merge(claims), KEY, "RS256")
   end
 
-  def settings_url = installation_path
+  def settings_url = license_path
 
   test "an operator starts on the free tier" do
     assert Entitlements.current.free?
@@ -125,7 +125,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
                                 return_to: settings_url}
     post license_path, params: {license_token: token({"sub" => "renewal"}), return_to: settings_url}
 
-    get installation_path
+    get license_path
 
     assert_response :success
     assert_includes response.body, "License history"
@@ -140,7 +140,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
                                 return_to: settings_url}
     post license_path, params: {license_token: token({"sub" => "acme-2026"}), return_to: settings_url}
 
-    get installation_path
+    get license_path
     body = response.body
 
     assert_operator body.index("acme-2026"), :<, body.index("acme-2025"), "newest first"
@@ -149,7 +149,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
   # Nothing to show is nothing shown, rather than an empty heading.
   test "no history section before the first activation" do
-    get installation_path
+    get license_path
 
     assert_not_includes response.body, "License history"
   end

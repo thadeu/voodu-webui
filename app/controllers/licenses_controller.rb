@@ -13,6 +13,10 @@ class LicensesController < ApplicationController
 
   authorize :manage_account
 
+  def show
+    render Views::Licenses::Show.new(current_path: request.path, servers: all_servers)
+  end
+
   def create
     license = LicenseKey.activate!(params[:license_token], by: Current.user)
 
@@ -39,5 +43,5 @@ class LicensesController < ApplicationController
   # scope here to rebuild the URL from. The form carries where it came from and
   # Returnable validates it — the same guard the alert modal uses, which is what
   # keeps an attacker-supplied return_to from becoming an open redirect.
-  def back_to_settings = return_to_path(installation_path)
+  def back_to_settings = return_to_path(license_path)
 end

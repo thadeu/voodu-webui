@@ -62,10 +62,13 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
      org_only: true, capability: :invite_member, clowk_only: true},
 
-    # The licence and the sign-in method configure the container, not an org —
-    # but this is the nav an operator is already in, and a second nav for one
-    # entry would be worse than a slightly wrong home.
-    {id: :installation, label: "Installation", icon: :CubeOutline, path: :installation,
+    # Container-wide, so neither belongs to the org this nav is scoped to — but a
+    # second nav for two entries would be worse than a slightly wide one. They
+    # are ALSO in the account menu; the sidebar is what makes them reachable in
+    # anonymous mode, where there is no account menu to open.
+    {id: :license, label: "License", icon: :KeyOutline, path: :license,
+     global: true, capability: :manage_account},
+    {id: :authentication, label: "Authentication", icon: :LockClosedOutline, path: :authentication,
      global: true, capability: :manage_account}
   ].freeze
 

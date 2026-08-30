@@ -25,6 +25,10 @@ class AuthConfigsController < ApplicationController
 
   authorize :manage_account
 
+  def show
+    render Views::AuthConfigs::Show.new(current_path: request.path, servers: all_servers)
+  end
+
   def create
     return refuse(env_pinned_message) if AuthSettings.env_decides?
 
@@ -43,7 +47,7 @@ class AuthConfigsController < ApplicationController
   def destroy
     AuthConfig.delete_all
 
-    redirect_to return_to_path(installation_path),
+    redirect_to return_to_path(authentication_path),
       notice: "Clowk sign-in turned off. This installation is anonymous again — " \
               "make sure a VPN or access proxy is in front of it."
   end
@@ -61,7 +65,7 @@ class AuthConfigsController < ApplicationController
 
     AuthSettings.apply!
 
-    redirect_to return_to_path(installation_path),
+    redirect_to return_to_path(authentication_path),
       notice: "Sign-in is on. Your next request will ask you to authenticate — sign in " \
               "as #{email} and you will be offered this workspace. Nothing has moved yet."
   end
@@ -79,5 +83,5 @@ class AuthConfigsController < ApplicationController
       "take precedence. Change CLOWK_ENABLED / CLOWK_PUBLISHABLE_KEY there instead."
   end
 
-  def refuse(message) = redirect_to(return_to_path(installation_path), alert: message)
+  def refuse(message) = redirect_to(return_to_path(authentication_path), alert: message)
 end
