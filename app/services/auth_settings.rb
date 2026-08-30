@@ -51,8 +51,12 @@ class AuthSettings
   end
 
   def self.from_database
-    config = AuthConfig.current
+    config = SsoConfiguration.current
     return Resolved.new(enabled: false, source: :none) if config.nil?
+
+    # One provider today. When there is a second, this is where it branches —
+    # the column already names which one, so nothing here needs a migration.
+    return Resolved.new(enabled: false, source: :none) unless config.clowk?
 
     Resolved.new(
       enabled: true, publishable_key: config.publishable_key,

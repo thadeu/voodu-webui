@@ -45,7 +45,7 @@ class Ops::SsoController < ApplicationController
 
   # The safety valve, while there is still a session to use it from.
   def destroy
-    AuthConfig.delete_all
+    SsoConfiguration.delete_all
 
     redirect_to return_to_path(ops_sso_path),
       notice: "Clowk sign-in turned off. This installation is anonymous again — " \
@@ -55,7 +55,10 @@ class Ops::SsoController < ApplicationController
   private
 
   def activate!(email)
-    AuthConfig.create!(
+    SsoConfiguration.create!(
+      # Named rather than assumed: Clowk is the only provider today, and the
+      # column exists so the second one does not need a migration.
+      provider: "clowk",
       publishable_key: params[:publishable_key].to_s.strip,
       subdomain_url: params[:subdomain_url].to_s.strip.presence,
       secret_key: params[:secret_key].to_s.strip.presence,

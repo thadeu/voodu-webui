@@ -1,27 +1,43 @@
 # frozen_string_literal: true
 
-# AuthConfig — Clowk credentials entered through Settings.
+# SsoConfiguration — which identity provider this installation trusts, and how
+# to reach it.
 #
-# The second thing this installation can buy. A free-tier operator behind a VPN
-# may decide they want real per-person sign-in; they pay for a Clowk instance,
-# paste its publishable key here, and the app starts authenticating against it —
-# no env var, no redeploy.
+# The second thing an installation can pay for. A free-tier operator running
+# behind a VPN decides they want per-person identity, buys it, and configures it
+# here without a redeploy.
 #
-# THE ENVIRONMENT ALWAYS WINS. That is not a precedence preference, it is the
-# way out: a wrong publishable key saved here would send every request to a
-# Clowk instance that does not know the operator, locking them out of their own
-# dashboard with no UI left to fix it from. Restarting with CLOWK_ENABLED=0
-# always returns them to anonymous mode, whatever this table says.
-class AuthConfig < ApplicationRecord
-  encrypts :secret_key_ciphertext
+# Shaped around `provider` + `settings` rather than one provider's columns.
+# Clowk is the only one today and `publishable_key` is Clowk's word for it — a
+# schema built on that would need either columns that are null for everyone else
+# or a second table saying the same thing differently. Settings live in JSON
+# because nothing queries them: they are read whole and handed to whatever they
+# configure. (The metrics warehouse went the other way for the opposite reason —
+# those columns exist to be indexed.)
+#
+# One row per change. For an authentication setting, "who turned this on and
+# when" is worth more than for most things.
+class SsoConfiguration < ApplicationRecord
+  PROVIDERS = %w[clowk].freeze
+
+  # Public identifiers, per provider. Adding one means a new key here and a
+  # branch in AuthSettings#apply! — not a migration.
+  store_accessor :settings, :publishable_key, :subdomain_url
+
+  encrypts :secret_ciphertext
 
   belongs_to :configured_by, class_name: "User", optional: true
 
-  # Clowk derives the sign-in URL, the JWKS endpoint and the token audience from
-  # this, so a malformed one is not a setting, it is an outage.
-  validates :publishable_key, presence: true, format: {
+  validates :provider, presence: true, inclusion: {in: PROVIDERS}
+  validates :publishable_key, presence: true
+
+  # Provider-specific, and scoped as such: pk_ is what Clowk issues, and
+  # asserting it of a provider that spells its keys differently would be a bug
+  # the day the second one arrives.
+  validates :publishable_key, format: {
     with: /\Apk_[a-zA-Z0-9_]+\z/, message: "should look like pk_live_… or pk_test_…"
-  }
+  }, if: :clowk?
+
   validates :subdomain_url, allow_blank: true, format: {
     with: %r{\Ahttps://[^\s/]+\z}, message: "should be an https URL with no path"
   }
@@ -30,7 +46,9 @@ class AuthConfig < ApplicationRecord
 
   def self.current = newest_first.first
 
-  alias_attribute :secret_key, :secret_key_ciphertext
+  def clowk? = provider == "clowk"
+
+  alias_attribute :secret_key, :secret_ciphertext
 
   # A migration is outstanding while an address was named and nobody has
   # claimed it yet.
