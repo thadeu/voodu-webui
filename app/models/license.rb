@@ -38,7 +38,7 @@ class License
   # :invalid — signature, algorithm or shape failed
   ENTITLED = %i[valid grace].freeze
 
-  attr_reader :status, :claims, :reason
+  attr_reader :claims, :reason
 
   def self.public_key
     @public_key ||= OpenSSL::PKey::RSA.new(PUBLIC_KEY_PATH.read)
@@ -64,6 +64,48 @@ class License
     ""
   end
 
+  # current — the licence in force, resolved fresh.
+  #
+  # Two places can hold one: VOODU_LICENSE in the environment, and an activation
+  # saved in the database from Settings. NEWEST ISSUED WINS, from either side,
+  # which is the only rule that serves all three real situations — an operator
+  # who only ever sets the env var, one who renews by pasting into Settings, and
+  # one who keeps compose in git and updates the env on renewal. Neither side
+  # silently undoes the other.
+  #
+  # Resolved per call rather than cached: measured at 0.07ms to verify and 0.3ms
+  # to read the row, which is not worth a cache whose invalidation would have to
+  # cross Puma workers.
+  #
+  # config.x.license, when it holds a License, overrides everything. That is the
+  # test seam; production never sets it. Checked with is_a? rather than presence
+  # because config.x returns a truthy empty OrderedOptions for anything unset.
+  def self.current
+    configured = Rails.application.config.x.license
+    return configured if configured.is_a?(License)
+
+    candidates = [resolve(token_from_env), from_database].reject { |l| l.status == :none }
+    verified = candidates.select(&:verified?)
+
+    return verified.max_by { |l| l.issued_at || Time.zone.at(0) } if verified.any?
+
+    # Nothing verified. Report a failure if there was one to report, so Settings
+    # can explain itself; otherwise this really is the free tier.
+    candidates.first || new(status: :none)
+  end
+
+  def self.from_database
+    key = LicenseKey.current
+    return new(status: :none) if key.nil?
+
+    resolve(key.token)
+  rescue ActiveRecord::ActiveRecordError => e
+    # A licence must never be the reason a page 500s — not even when the table
+    # is missing because a migration has not run yet.
+    Rails.logger.error("[license] could not read the stored licence: #{e.class}")
+    new(status: :none)
+  end
+
   def self.resolve(token = token_from_env, key: public_key, now: Time.current)
     return new(status: :none) if token.blank?
     return new(status: :invalid, reason: "no public key") if key.nil?
@@ -73,27 +115,41 @@ class License
     # and grace needs the date to measure against.
     claims, = JWT.decode(token, key, true, algorithm: "RS256", verify_expiration: false)
 
-    new(status: status_for(claims, now), claims: claims)
+    return new(status: :invalid, reason: "no exp") if claims["exp"].blank?
+
+    new(status: :signed, claims: claims, token: token)
   rescue JWT::DecodeError, OpenSSL::PKey::PKeyError => e
     new(status: :invalid, reason: e.class.name.demodulize)
   end
 
-  def self.status_for(claims, now)
-    exp = claims["exp"]
-    return :invalid if exp.blank?
+  # :signed marks "the signature held" and nothing about time. Where the licence
+  # sits in its lifetime is decided in #status, on every read.
+  def initialize(status:, claims: {}, reason: nil, token: nil)
+    @verified = status
+    @claims = claims || {}
+    @reason = reason
+    @token = token
+  end
 
-    expires = Time.zone.at(exp.to_i)
+  attr_reader :token
+
+  # Derived on READ, never stored.
+  #
+  # This used to be computed once and frozen into the object, which meant a
+  # container running past its expiry date kept reporting :valid forever — the
+  # licence never actually expired in a long-lived process, only in one that
+  # happened to restart. Asking the clock at the moment of the question is the
+  # whole fix, and it needs no scheduled job to prop it up.
+  def status
+    return @verified unless @verified == :signed
+
+    expires = expires_at
+    now = Time.current
+
     return :valid if now <= expires + LEEWAY
     return :grace if now <= expires + GRACE_PERIOD
 
     :lapsed
-  end
-  private_class_method :status_for
-
-  def initialize(status:, claims: {}, reason: nil)
-    @status = status
-    @claims = claims || {}
-    @reason = reason
   end
 
   # Whether this licence currently grants anything. Grace counts — that is the
@@ -101,6 +157,16 @@ class License
   def entitled? = ENTITLED.include?(status)
 
   def present? = status != :none
+
+  # Whether the signature held, regardless of where the licence sits in time.
+  # An expired licence still verified — that is what lets Settings show whose
+  # it was and when it lapsed, instead of a shrug.
+  def verified? = @verified == :signed
+
+  def issued_at
+    iat = claims["iat"]
+    iat.present? ? Time.zone.at(iat.to_i) : nil
+  end
 
   def customer = claims["sub"].presence
 

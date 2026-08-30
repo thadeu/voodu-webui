@@ -13,16 +13,13 @@
 # possible token produces a :invalid licence and the free tier, never a boot
 # failure, because a licence that can stop the app from starting is a licence
 # that can take a customer's monitoring down during an incident.
-Rails.application.config.to_prepare do
-  Rails.application.config.x.license = License.resolve
-end
 
 # Said once at boot, where an operator setting the container up will see it. A
 # lapsed or unverifiable licence is worth a warning: it means capabilities the
 # operator is paying for silently stopped applying.
 Rails.application.config.after_initialize do
-  license = Rails.application.config.x.license
-  next if license.nil? || license.status == :none
+  license = License.current
+  next if license.status == :none
 
   message = "[license] #{license.summary}"
 

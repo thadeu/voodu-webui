@@ -38,7 +38,7 @@ class Entitlements
     postgres: true
   }.freeze
 
-  def self.current(license = Rails.application.config.x.license)
+  def self.current(license = License.current)
     new(license)
   end
 

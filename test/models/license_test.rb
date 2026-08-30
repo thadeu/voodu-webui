@@ -132,4 +132,24 @@ class LicenseTest < ActiveSupport::TestCase
   ensure
     ENV.delete("VOODU_LICENSE_FILE")
   end
+
+  # The bug this class had, pinned so it cannot come back.
+  #
+  # Status used to be computed once at resolve time and frozen into the object.
+  # A container that booted with a valid licence therefore reported :valid for
+  # as long as it ran — the licence expired on the calendar and never in the
+  # process. Deriving on read is the fix, and it needs no scheduled job.
+  test "status follows the clock on a licence resolved long ago" do
+    license = resolve(token({"exp" => 10.days.from_now.to_i}))
+
+    assert_equal :valid, license.status
+
+    travel_to 15.days.from_now do
+      assert_equal :grace, license.status, "the same object must notice it expired"
+    end
+
+    travel_to (10.days + License::GRACE_PERIOD + 1.day).from_now do
+      assert_equal :lapsed, license.status
+    end
+  end
 end
