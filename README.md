@@ -298,6 +298,10 @@ so a licence works in a closed network and our availability is not part of your
 risk. Check what the app sees with `rake 'license:inspect[<token>]'`, or in
 Settings → Plan.
 
+The token is a plain RS256 JWT — nothing voodu-specific, issuable from any
+language. Format, worked example and reference implementations:
+[docs/license-token-format.md](docs/license-token-format.md).
+
 **A licence can never take anything away.** Absent, malformed and lapsed are
 ordinary states that drop to the free tier — none of them stops the app. Expiry
 has a 30-day grace period, after which the only changes are that new orgs and
