@@ -147,78 +147,17 @@ prompt so healthchecks and uptime monitors keep working without credentials.
 
 ### Operator sign-in
 
-**Off by default on a fresh install.** With no `CLOWK_ENABLED` and no
-`CLOWK_PUBLISHABLE_KEY`, the app asks for no credentials:
-every request runs as one local operator with owner rights. That is the intended
-shape for a self-hosted install — the *perimeter* authenticates (Twingate,
-WireGuard, Cloudflare Access, an SSH tunnel) and whoever reaches the port has
-already proved who they are to it.
+**Off by default on a fresh install.** The app asks for no credentials and the
+perimeter — Twingate, a VPN, an access proxy — is the door. Whoever reaches the
+port is an operator, and an operator can read every server's access token, so
+do not publish it without one in front.
 
-> **Read this before publishing the port.** Owner rights include reading each
-> server's access token, and that token IS the controller: deploy, exec, logs, on
-> every box this dashboard manages. Exposing port 3000 to the internet with
-> sign-in off does not leak a dashboard, it hands over the infrastructure. The app
-> warns at boot in `docker logs` and puts a banner on every page once a request
-> arrives from a public address — silence it with `VOODU_TRUSTED_PERIMETER=1` only
-> when a proxy that forwards real client IPs is genuinely in front.
+For per-person identity, `CLOWK_ENABLED=1` with a publishable key, or configure
+it at `/ops/sso` while already running. **Upgrades never remove sign-in**: a
+configured `CLOWK_PUBLISHABLE_KEY` keeps it on even without the flag.
 
-Anonymous mode is not a bypass. It provisions a real user with a real owner
-membership, so authorization keeps running through the one path every request
-uses — there is simply exactly one membership to find.
-
-**Upgrades never remove sign-in.** A publishable key with no `CLOWK_ENABLED`
-keeps sign-in on: an install already configured for Clowk is one where somebody
-chose it, and a release that read "unset" as "anonymous" would silently open
-that dashboard to whoever reaches the port. Set `CLOWK_ENABLED=0` to go
-anonymous deliberately.
-
-**Turn sign-in on** for a multi-tenant install — several people, each reaching
-only what a membership grants them. Either in the environment:
-
-```sh
-# .env
-CLOWK_ENABLED=1
-CLOWK_PUBLISHABLE_KEY=pk_live_...
-```
-
-**Or migrate from SSO** (`/ops/sso`), if you decided you wanted it
-after already running. Paste the publishable key and the address you will sign
-in with; the next request asks for authentication.
-
-Turning it on **moves nothing**. An anonymous installation holds everything
-under one local operator, and the first Clowk sign-in is a stranger to that row
-— so the address you name is offered the workspace on a confirmation screen
-*after* signing in successfully, and takes it over from there. Until you
-confirm, the workspace is exactly where it was, which is what makes a mistyped
-key survivable rather than terminal.
-
-**The environment always wins**, and that is the way out. If a key saved here is
-wrong you would be locked out of your own dashboard with no UI to fix it from —
-restart with `CLOWK_ENABLED=0` and you are anonymous again, whatever is stored.
-
-The app verifies the JWT Clowk issues and mirrors the subject onto a local
-`users` row. With the flag on and no publishable key, it **refuses to boot**
-rather than start unprotected.
-
-Two optional companions:
-
-- `CLOWK_SECRET_KEY` — server-to-server calls to the Clowk API and the legacy
-  HS256 path. Verifying a current token does not need it: that runs against the
-  published key set.
-- `CLOWK_SUBDOMAIN_URL` — the instance's auth domain. Set it and the gem stops
-  resolving it through `api.clowk.dev`, taking one network dependency off the
-  path that authenticates every request (and off the JWKS fetch behind it).
-
-In development and test neither is needed — the app falls back to a local secret
-and `/dev/sign_in?email=you@example.com` mints a token the real verifier
-accepts. That route is defined only under `Rails.env.development?`, and
-`ClowkDevToken` raises in production.
-
-Two surfaces stay outside the session requirement by design:
-
-- `/up` — the image `HEALTHCHECK` curls it every 30s and has no session to offer
-- `/internal/poller/*` — the Go poller authenticates with `POLLER_TOKEN` plus a
-  private-IP guard
+→ [docs/sso.md](docs/sso.md) — turning it on, the workspace handover, and how to
+get back out.
 
 ### Accounts, orgs and who sees what
 
@@ -245,9 +184,7 @@ days.
 
 ## Deployment shapes
 
-One image, two shapes. Neither is a build flag — both are the same
-`ghcr.io/thadeu/voodu-webui`, and the difference is two environment variables
-that are **independent of each other**.
+One image, two independent switches. Neither is a build flag.
 
 | | `CLOWK_ENABLED` | `DATABASE_URL` |
 |---|---|---|
@@ -255,150 +192,17 @@ that are **independent of each other**.
 | **Multi-tenant SaaS** — many people, your Postgres | `1` | `postgres://…` |
 | **Enterprise** — behind your VPN, on your own Postgres | unset | `postgres://…` |
 
-That third row is the point of keeping them independent: a company can put the
-control plane on the RDS instance they already back up without also adopting a
-hosted identity provider.
+That third row is why they are independent: a company can put the control plane
+on the RDS they already back up without also adopting a hosted identity
+provider.
 
-### What `DATABASE_URL` moves, and what it does not
-
-Setting it moves the **primary** database to Postgres and nothing else:
-
-| database | unset | set | holds |
-|---|---|---|---|
-| primary | SQLite | **Postgres** | orgs, users, accounts, memberships, servers, encrypted PATs |
-| cache | SQLite | SQLite | sessions and cache — high churn, disposable |
-| queue | SQLite | SQLite | pending background jobs |
-| cable | SQLite | SQLite | ephemeral by nature |
-| metrics | SQLite | SQLite | ~31 days of telemetry, refilled by the poller |
-| hep | SQLite | SQLite | ~31 days of SIP capture, same |
-
-You do not edit `config/database.yml` for this. Rails routes `DATABASE_URL` to
-the `primary` entry natively and replaces that entry's whole configuration — the
-YAML keeps declaring SQLite, and the URL overrides adapter, host and database
-name on top of it.
-
-The warehouse stays on SQLite deliberately, not for lack of trying: those two
-databases are built on ground only SQLite has — generated columns computed with
-`json_extract` and `strftime`, a `REGEXP` operator registered on the connection,
-`COLLATE NOCASE`. Postgres could not create those tables at all.
-
-**So the storage volume is still required with Postgres.** Losing it costs the
-telemetry window (which the poller rebuilds within minutes), every session
-(people sign in again) and any pending job. It does not cost an org, a user or a
-PAT — those live in Postgres.
-
-First boot needs nothing extra: the entrypoint's `rails db:prepare` creates the
-Postgres database if the role may (`CREATEDB`), loads the schema into it, then
-creates the five SQLite files. Pre-create the database by hand if you would
-rather not grant `CREATEDB`.
-
-### Plans
-
-The free tier is a complete product and the default: one account, one org, one
-operator, behind your own perimeter. An Enterprise licence lifts the limits.
-
-| | Free | Enterprise |
-|---|---|---|
-| accounts / orgs | 1 / 1 | unlimited |
-| invited members | none | unlimited |
-| searchable window | 3 days | configurable, 90 by default |
-| control plane in Postgres | — | ✓ |
-
-Two ways in, and the second is the one most people will use:
-
-```sh
-VOODU_LICENSE=eyJhbGciOiJSUzI1NiJ9...      # or VOODU_LICENSE_FILE=/path/to.jwt
-```
-
-**Or paste it into License** (`/ops/license`). Buy a licence while already running the
-free tier, paste the token, and the installation is Enterprise on the next
-request — no env var, no redeploy, no restarting a dashboard someone is
-watching. Renewal is the same act.
-
-When both exist, **the newer token wins** (by its `iat`), whichever side it came
-from. That is the only rule that serves an operator who only sets the env var,
-one who renews through the UI, and one who keeps compose in git and updates the
-env — without either side silently undoing the other.
-
-Expiry needs no restart either: the status is read from the clock every time it
-is asked. A daily job re-verifies the stored token and warns as the date
-approaches, but nothing depends on it having run.
-
-**Verified offline.** The public key ships in the image and nothing calls home,
-so a licence works in a closed network and our availability is not part of your
-risk. Check what the app sees with `rake 'license:inspect[<token>]'`, or in
-`/ops/license`.
-
-The token is a plain RS256 JWT — nothing voodu-specific, issuable from any
-language. Format, worked example and reference implementations:
-[docs/license-token-format.md](docs/license-token-format.md).
-
-**A licence can never take anything away.** Absent, malformed and lapsed are
-ordinary states that drop to the free tier — none of them stops the app. Expiry
-has a 30-day grace period, after which the only changes are that new orgs and
-new invitations are refused and the searchable window narrows. Specifically:
-
-- **Nothing is deleted.** `VOODU_RETENTION_DAYS` decides how long bytes stay on
-  disk and the licence never touches it. What a licence caps is how far back you
-  can *search*. A lapse hides history; renewal reveals the same bytes again.
-- **Postgres keeps being read.** If your control plane is in Postgres and the
-  licence lapses, the app keeps serving it and says so in the UI. Locking an
-  operator out of their own database is not a term we are willing to enforce.
-- **Existing orgs and members stay.** Only the *next* one is refused.
-
-That the enforcement stops there is deliberate. Anyone running the image can
-modify it, so a harder technical gate would inconvenience customers without
-stopping anyone — which is why the Elastic License 2.0 covers circumventing
-licence-key functionality, and why the product's job here is to be honest about
-the state rather than to fight its own operator.
-
-### Switching SQLite → Postgres
-
-Setting `DATABASE_URL` on an installation that has been running is **a fresh
-start, not a migration**. The new database is empty: orgs, servers and PATs are
-re-registered by hand. That is a deliberate contract — the control plane is
-small, and a reliable cross-adapter data migration is a great deal of machinery
-for a few minutes of typing.
-
-What is NOT fresh is the volume, and that is the part worth knowing. Telemetry
-is keyed by a bare `server_id` in databases with no foreign key to `servers`, so
-when a Postgres sequence restarts at 1 the first server you register afterwards
-would inherit the first old server's history — a web box convincingly reporting
-a database's CPU.
-
-The entrypoint clears that on boot: rows and log directories matching no server
-are unreachable through any authorized path anyway, so they are removed before
-they can be mistaken for someone else's. Nothing you can still reach is touched.
-
-### Backups
-
-The two shapes have different jobs, so they get different procedures.
-
-**SQLite (all six, or the five satellites).** Snapshot the volume, or use the
-online backup so you do not copy a file mid-write:
-
-```sh
-docker exec voodu-webui sh -c \
-  'for db in /rails/storage/production*.sqlite3; do
-     sqlite3 "$db" ".backup /rails/storage/backup-$(basename "$db")"
-   done'
-```
-
-Also in that volume, and worth more than the databases: `.secret_key_base` and
-`.ar_encryption.env`. **Losing the encryption keys makes every stored PAT
-unreadable** — a restored database without them is a list of servers you can no
-longer talk to.
-
-**Postgres (the primary, when `DATABASE_URL` is set).** Whatever you already do
-for your other apps:
-
-```sh
-pg_dump "$DATABASE_URL" -Fc -f voodu-$(date +%F).dump
-```
-
-The two halves can drift apart in time without harm: warehouse rows for a server
-that no longer exists are simply never read. Restore the primary from whenever
-you like; the telemetry catches up on its own.
+- → [docs/self-hosted.md](docs/self-hosted.md) — `docker run`, the perimeter,
+  the volume, backups
+- → [docs/enterprise.md](docs/enterprise.md) — what a licence lifts, activating
+  it, what a lapse can and cannot do
+- → [docs/sso.md](docs/sso.md) — per-person identity and the workspace handover
+- → [docs/database.md](docs/database.md) — what `DATABASE_URL` moves, retention,
+  and why switching is a fresh start
 
 ## Registering an server (server address)
 
