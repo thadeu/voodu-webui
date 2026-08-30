@@ -181,7 +181,7 @@ CLOWK_ENABLED=1
 CLOWK_PUBLISHABLE_KEY=pk_live_...
 ```
 
-**Or migrate from Settings → Authentication**, if you decided you wanted it
+**Or migrate from SSO** (`/ops/sso`), if you decided you wanted it
 after already running. Paste the publishable key and the address you will sign
 in with; the next request asks for authentication.
 
@@ -310,7 +310,7 @@ Two ways in, and the second is the one most people will use:
 VOODU_LICENSE=eyJhbGciOiJSUzI1NiJ9...      # or VOODU_LICENSE_FILE=/path/to.jwt
 ```
 
-**Or paste it into Settings → Plan.** Buy a licence while already running the
+**Or paste it into License** (`/ops/license`). Buy a licence while already running the
 free tier, paste the token, and the installation is Enterprise on the next
 request — no env var, no redeploy, no restarting a dashboard someone is
 watching. Renewal is the same act.
@@ -327,7 +327,7 @@ approaches, but nothing depends on it having run.
 **Verified offline.** The public key ships in the image and nothing calls home,
 so a licence works in a closed network and our availability is not part of your
 risk. Check what the app sees with `rake 'license:inspect[<token>]'`, or in
-Settings → Plan.
+`/ops/license`.
 
 The token is a plain RS256 JWT — nothing voodu-specific, issuable from any
 language. Format, worked example and reference implementations:

@@ -22,11 +22,11 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "Turn on sign-in"
   end
 
-  test "the authentication screen is about sign-in" do
-    get authentication_path
+  test "the SSO screen is about sign-in" do
+    get sso_path
 
     assert_response :success
-    assert_includes response.body, "Authentication"
+    assert_includes response.body, "Single sign-on"
     assert_includes response.body, "Sign-in"
   end
 
@@ -35,7 +35,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   test "both are reachable with no server registered" do
     Server.delete_all
 
-    [license_path, authentication_path].each do |path|
+    [license_path, sso_path].each do |path|
       get path
 
       assert_response :success, "#{path} must not need a server"
@@ -48,8 +48,8 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
     assert_response :success
     # Literal paths: license_path picks up the suite's default org_id and would
     # assert against a query string the markup does not (and must not) carry.
-    assert_includes response.body, %(href="/license")
-    assert_includes response.body, %(href="/authentication")
+    assert_includes response.body, %(href="/ops/license")
+    assert_includes response.body, %(href="/ops/sso")
   end
 
   # The account menu does not exist in anonymous mode, so the sidebar is the
@@ -66,7 +66,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_not_includes response.body, "Sign out", "the account menu should be gone"
-    assert_includes response.body, %(href="/license"), "…so the sidebar has to carry it"
+    assert_includes response.body, %(href="/ops/license"), "…so the sidebar has to carry it"
   ensure
     Rails.application.config.x.clowk_enabled = previous
   end

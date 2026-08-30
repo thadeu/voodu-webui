@@ -68,7 +68,7 @@ class Components::Layouts::Sidebar < Components::Base
     # anonymous mode, where there is no account menu to open.
     {id: :license, label: "License", icon: :KeyOutline, path: :license,
      global: true, capability: :manage_account},
-    {id: :authentication, label: "Authentication", icon: :LockClosedOutline, path: :authentication,
+    {id: :sso, label: "SSO", icon: :LockClosedOutline, path: :sso,
      global: true, capability: :manage_account}
   ].freeze
 

@@ -103,7 +103,7 @@ class Components::Layouts::Topbar < Components::Base
         # helper would otherwise append the current one as ?org_id=…, which is
         # noise in the URL bar and in every log line.
         account_link(license_path(org_id: nil, server_key: nil), "License")
-        account_link(authentication_path(org_id: nil, server_key: nil), "Authentication")
+        account_link(sso_path(org_id: nil, server_key: nil), "SSO")
       end
 
       a(

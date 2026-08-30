@@ -93,14 +93,19 @@ Rails.application.routes.draw do
 
   # Installation-wide, so it hangs off the root rather than a server: a licence
   # belongs to whoever runs this container, not to one of the boxes it watches.
-  # Installation-wide, and each named for its subject rather than its scope:
-  # one is what you bought, the other is how people get in. Top level because
-  # neither is a property of a server or an org.
-  resource :license, only: [:show, :create]
+  # Operational settings for the whole container — not a property of any server
+  # or org, which is why they sit outside the /:org_id/:server_key prefix.
+  #
+  # `sso` rather than `clowk`: today Clowk is the only provider, and naming the
+  # route after the vendor would make it a lie the first time another one is
+  # added.
+  scope "ops" do
+    resource :license, only: [:show, :create]
+    get "sso", to: "auth_configs#show", as: :sso
+    resource :auth_config, only: [:create, :destroy]
+  end
 
   # Same shape and the same reason: installation-wide, not per-server.
-  get "authentication", to: "auth_configs#show", as: :authentication
-  resource :auth_config, only: [:create, :destroy]
 
   # Confirming the handover after the first real sign-in — see
   # AuthMigrationsController for why it is a second step.

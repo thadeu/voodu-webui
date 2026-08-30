@@ -24,7 +24,7 @@ the definition.
 
 | claim | type | required | meaning |
 |---|---|---|---|
-| `sub` | string | yes | the customer. Shown in Settings → Plan and in logs |
+| `sub` | string | yes | the customer. Shown in `/ops/license` and in logs |
 | `exp` | integer | **yes** | expiry, seconds since epoch |
 | `iat` | integer | no | issued at, seconds since epoch |
 | `ent` | object | no | entitlement overrides; `{}` or absent means the licensed defaults |
@@ -142,7 +142,7 @@ jwt.encode(
 ## Where the token lives
 
 Either `VOODU_LICENSE` / `VOODU_LICENSE_FILE` in the environment, or a row in
-`license_keys` written when someone pastes it into Settings → Plan. Both are
+`license_keys` written when someone pastes it into `/ops/license`. Both are
 verified the same way; when both are present the one with the newer `iat` is in
 force.
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Authentication — installation-wide, and named for what it is.
+# Single sign-on — how people prove who they are to this installation.
 #
 # Split out of a single "Installation" screen, which described the SCOPE rather
 # than the subject: both live at the container level, but one is what you bought
@@ -14,7 +14,7 @@ class Views::AuthConfigs::Show < Views::Base
 
   def view_template
     render Components::Layouts::Dashboard.new(
-      current_path: @current_path, servers: @servers, breadcrumb: [{label: "Authentication"}]
+      current_path: @current_path, servers: @servers, breadcrumb: [{label: "SSO"}]
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
@@ -27,8 +27,8 @@ class Views::AuthConfigs::Show < Views::Base
 
   def page_header
     div(class: "flex flex-col gap-1") do
-      h1(class: "text-[17px] font-semibold text-voodu-text") { "Authentication" }
-      p(class: "text-[12.5px] text-voodu-muted") { plain "How people sign in to this installation — or whether they need to at all." }
+      h1(class: "text-[17px] font-semibold text-voodu-text") { "Single sign-on" }
+      p(class: "text-[12.5px] text-voodu-muted") { plain "Which provider proves who someone is — or whether this installation asks at all." }
     end
   end
 
