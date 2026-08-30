@@ -52,8 +52,20 @@ volume, so an unbounded window is a disk that fills and a container that dies.
 ## Keys
 
 The **public** key ships in the image at `config/license/public_key.pem` (SPKI
-PEM, RSA-4096). The **private** key never enters this repository and lives
-wherever you keep signing material.
+PEM, RSA-4096) and is what verifies. The **private** key mints licences and is
+never committed — `rake license:issue` looks for it at
+`config/license/private_key.pem` (gitignored by pattern), or wherever
+`VOODU_LICENSE_PRIVATE_KEY` points.
+
+Sitting beside the public half makes it easy to find and hard to lose, and that
+is the whole of the tradeoff: a signing key in a working tree is one `git add
+-f` from disaster. `.gitignore` covers the accident and
+`test/architecture/no_private_keys_test.rb` fails the build if one is ever
+tracked. A vault is still the right long-term home — nothing about issuing
+requires the key to be in the checkout.
+
+It never belongs on the SaaS VM or in any image. Only the machine you issue
+from needs it.
 
 Rotating means shipping a new public key in a new image, so old tokens stop
 verifying on upgrade. There is no `kid` and no key list yet — add both before

@@ -7,10 +7,17 @@
 # a record of who bought — this is the script. Validation stays offline in the
 # product (see License), so nothing here ever has to be reachable.
 #
-# THE PRIVATE KEY NEVER LIVES IN THIS REPOSITORY. Point one of these at it:
+# THE PRIVATE KEY IS NEVER COMMITTED. It is looked for in this order:
 #
-#   VOODU_LICENSE_PRIVATE_KEY=/secure/path/voodu-license-private-key.pem
-#   VOODU_LICENSE_PRIVATE_KEY_PEM="$(cat …)"
+#   VOODU_LICENSE_PRIVATE_KEY_PEM   the PEM itself
+#   VOODU_LICENSE_PRIVATE_KEY       a path
+#   config/license/private_key.pem  the default, gitignored by pattern
+#
+# The default sits beside the public half so it is easy to find and hard to
+# lose, which is the tradeoff being made: a key in a working tree is one
+# `git add -f` from disaster, so .gitignore covers the accident and
+# test/architecture/no_private_keys_test.rb covers the rest. A vault is still
+# the right home for it.
 #
 # Usage:
 #   rake 'license:issue[acme-corp,365]'
@@ -61,12 +68,19 @@ end
 module LicenseIssuing
   NUMERIC = /\A-?\d+\z/
 
+  DEFAULT_PATH = Rails.root.join("config/license/private_key.pem")
+
   def self.private_key
     pem = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"].presence
     path = ENV["VOODU_LICENSE_PRIVATE_KEY"].presence
+    path ||= DEFAULT_PATH.to_s if pem.nil? && DEFAULT_PATH.exist?
 
     pem ||= File.read(path) if path
-    abort "set VOODU_LICENSE_PRIVATE_KEY (path) or VOODU_LICENSE_PRIVATE_KEY_PEM" if pem.nil?
+
+    if pem.nil?
+      abort "no signing key: put it at #{DEFAULT_PATH}, or set " \
+            "VOODU_LICENSE_PRIVATE_KEY (path) or VOODU_LICENSE_PRIVATE_KEY_PEM"
+    end
 
     OpenSSL::PKey::RSA.new(pem)
   rescue Errno::ENOENT

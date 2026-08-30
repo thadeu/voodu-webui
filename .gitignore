@@ -42,3 +42,12 @@
 /design-webui-inspiration
 CLAUDE.local.md
 tmp
+
+# The licence signing key. NEVER committed — the public half in
+# config/license/public_key.pem ships in the image and is what verifies; this
+# half mints licences, so anyone holding it can issue their own. Ignored by
+# pattern rather than by filename so a rename does not quietly un-ignore it,
+# and test/architecture/no_private_keys_test.rb fails the build if one ever
+# lands in git anyway.
+/config/license/*private*
+*.private.pem
