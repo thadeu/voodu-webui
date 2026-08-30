@@ -39,5 +39,5 @@ class LicensesController < ApplicationController
   # scope here to rebuild the URL from. The form carries where it came from and
   # Returnable validates it — the same guard the alert modal uses, which is what
   # keeps an attacker-supplied return_to from becoming an open redirect.
-  def back_to_settings = return_to_path(root_path)
+  def back_to_settings = return_to_path(installation_path)
 end

@@ -60,7 +60,13 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
-     org_only: true, capability: :invite_member, clowk_only: true}
+     org_only: true, capability: :invite_member, clowk_only: true},
+
+    # The licence and the sign-in method configure the container, not an org —
+    # but this is the nav an operator is already in, and a second nav for one
+    # entry would be worse than a slightly wrong home.
+    {id: :installation, label: "Installation", icon: :CubeOutline, path: :installation,
+     global: true, capability: :manage_account}
   ].freeze
 
   def initialize(current_path: "/", servers: [], recent_servers: nil, current_server: nil)
@@ -362,6 +368,9 @@ class Components::Layouts::Sidebar < Components::Base
     # server_key: nil explicitly — ApplicationController#default_url_options
     # injects it from request.path_parameters, so simply not passing one still
     # produces ?server_key=… on a route that has no such segment.
+    # `global` — the route takes neither :org_id nor :server_key. Passing either
+    # appends it as a query string, which is noise in the URL and in every log.
+    return public_send("#{item[:path]}_path", org_id: nil, server_key: nil) if item[:global]
     return public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nil) if item[:org_only]
 
     public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)

@@ -17,8 +17,9 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   teardown { Rails.application.config.x.license = @previous }
 
+  # The licence lives at the installation level, not inside a server.
   def settings
-    get settings_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
+    get installation_path
   end
 
   def stub_license(status, customer: "acme-corp", expires: 30.days.from_now)
@@ -73,5 +74,21 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
     assert_includes response.body, "could not be verified"
     assert_not_includes response.body, "Enterprise ·"
+  end
+
+  # Why this screen is not inside /:org_id/:server_key/settings.
+  #
+  # The licence and the sign-in method configure the container, so an operator
+  # who has not registered a server yet — which is everyone on their first day —
+  # must still be able to reach them. Hanging them off a server meant buying a
+  # licence required already having somewhere to put it.
+  test "reachable with no server registered at all" do
+    Server.delete_all
+
+    get installation_path
+
+    assert_response :success
+    assert_includes response.body, "Installation"
+    assert_includes response.body, "Plan"
   end
 end

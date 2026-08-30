@@ -93,6 +93,10 @@ Rails.application.routes.draw do
 
   # Installation-wide, so it hangs off the root rather than a server: a licence
   # belongs to whoever runs this container, not to one of the boxes it watches.
+  # Container-wide settings: the licence and the sign-in method. Top level
+  # because they are not a property of any one server or org.
+  get "installation", to: "installations#show", as: :installation
+
   resource :license, only: [:create]
 
   # Same shape and the same reason: installation-wide, not per-server.
