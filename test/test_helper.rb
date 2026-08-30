@@ -3,6 +3,19 @@
 ENV["RAILS_ENV"] ||= "test"
 
 require_relative "../config/environment"
+
+# The suite runs LICENSED, and has to.
+#
+# Almost everything here exercises multi-tenancy — several orgs, invitations,
+# per-server grants — which the free tier caps at one org and zero invites. Left
+# unlicensed, hundreds of tests would fail for a reason none of them are about.
+#
+# Set after the environment loads because License is autoloaded and cannot be
+# named from config/environments. Tests that are ABOUT the limits build their
+# own Entitlements or replace this value for the duration.
+Rails.application.config.x.license = License.new(
+  status: :valid, claims: {"sub" => "test-suite", "exp" => 10.years.from_now.to_i}
+)
 require "rails/test_help"
 require "webmock/minitest"
 

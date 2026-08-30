@@ -429,6 +429,45 @@ class Views::Settings::Index < Views::Base
     div(class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]") { "no tokens registered." }
   end
 
+  # ── Plan (the Enterprise licence, not the software licence above) ──
+
+  def license = Rails.application.config.x.license || License.new(status: :none)
+
+  # Shown even on the free tier, and deliberately: an operator who cannot see
+  # which plan they are on files a ticket to ask. A lapsed or unverifiable
+  # licence has to be loud here — it is the only place that explains why a
+  # capability they paid for stopped applying.
+  def plan_value
+    case license.status
+    when :none
+      span(class: "text-voodu-text-2") { "Free" }
+    when :valid
+      span(class: "text-voodu-text") { "Enterprise · #{license.customer}" }
+    when :grace
+      span(class: "text-voodu-amber") { "Enterprise · #{license.customer} — expired, in grace" }
+    when :lapsed
+      span(class: "text-voodu-red") { "Free — licence for #{license.customer} lapsed" }
+    when :invalid
+      span(class: "text-voodu-red") { "Free — licence could not be verified" }
+    end
+  end
+
+  def plan_expiry_value
+    expires = license.expires_at
+    return span(class: "text-voodu-muted") { "—" } if expires.nil?
+
+    days = license.days_until_expiry
+    tone = if days.negative? then "text-voodu-red"
+    elsif days <= 30 then "text-voodu-amber"
+    else "text-voodu-text-2"
+    end
+
+    span(class: "font-voodu-mono #{tone}") do
+      plain expires.to_date.to_s
+      plain days.negative? ? " (#{days.abs}d ago)" : " (in #{days}d)"
+    end
+  end
+
   # ── About card ───────────────────────────────────────────────────
 
   def about_card
@@ -439,6 +478,8 @@ class Views::Settings::Index < Views::Base
       div do
         render(Components::UI::KvRow.new(key: "Version")) { version_value }
         render(Components::UI::KvRow.new(key: "License")) { span(class: "font-voodu-mono") { "Elastic-2.0" } }
+        render(Components::UI::KvRow.new(key: "Plan")) { plan_value }
+        render(Components::UI::KvRow.new(key: "Plan expires")) { plan_expiry_value } if license.present?
         render(Components::UI::KvRow.new(key: "Hostname")) { agent_field("host", "hostname") }
         render(Components::UI::KvRow.new(key: "Kernel")) { agent_field("host", "kernel") }
         render(Components::UI::KvRow.new(key: "CPU cores")) { cpu_cores_value }
