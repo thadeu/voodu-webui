@@ -35,7 +35,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
                 "exp" => 365.days.from_now.to_i}.merge(claims), KEY, "RS256")
   end
 
-  def settings_url = license_path
+  def settings_url = ops_license_path
 
   test "an operator starts on the free tier" do
     assert Entitlements.current.free?
@@ -43,7 +43,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
   test "pasting a licence activates Enterprise on the next request" do
     assert_difference("LicenseKey.count", 1) do
-      post license_path, params: {license_token: token, return_to: settings_url}
+      post ops_license_path, params: {license_token: token, return_to: settings_url}
     end
 
     assert_redirected_to settings_url
@@ -56,7 +56,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   test "the activation is recorded with who did it" do
-    post license_path, params: {license_token: token, return_to: settings_url}
+    post ops_license_path, params: {license_token: token, return_to: settings_url}
 
     key = LicenseKey.current
 
@@ -71,7 +71,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
       OpenSSL::PKey::RSA.new(2048), "RS256")
 
     assert_no_difference("LicenseKey.count") do
-      post license_path, params: {license_token: forged}
+      post ops_license_path, params: {license_token: forged}
     end
 
     assert_match(/could not be verified/i, flash[:alert])
@@ -79,18 +79,18 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   test "an empty paste is told what to paste" do
-    assert_no_difference("LicenseKey.count") { post license_path, params: {license_token: "  "} }
+    assert_no_difference("LicenseKey.count") { post ops_license_path, params: {license_token: "  "} }
 
     assert_match(/paste the licence token/i, flash[:alert])
   end
 
   # Renewal is the same act as activation, and the newer token must win.
   test "renewing replaces which licence is in force" do
-    post license_path, params: {license_token: token({"sub" => "old", "iat" => 2.days.ago.to_i})}
+    post ops_license_path, params: {license_token: token({"sub" => "old", "iat" => 2.days.ago.to_i})}
 
     assert_equal "old", License.current.customer
 
-    post license_path, params: {license_token: token({"sub" => "renewed"})}
+    post ops_license_path, params: {license_token: token({"sub" => "renewed"})}
 
     assert_equal "renewed", License.current.customer
     assert_equal 2, LicenseKey.count, "the history is kept"
@@ -99,7 +99,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   # Expired is expired. Re-pasting the same lapsed token buys nothing — the only
   # way out is a new one, which is what makes the exp claim mean anything.
   test "re-activating a lapsed licence does not revive it" do
-    post license_path, params: {license_token: token({"exp" => 400.days.ago.to_i, "iat" => 800.days.ago.to_i})}
+    post ops_license_path, params: {license_token: token({"exp" => 400.days.ago.to_i, "iat" => 800.days.ago.to_i})}
 
     assert_equal :lapsed, License.current.status
     assert Entitlements.current.free?
@@ -109,7 +109,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     sign_out
     sign_in_as(email: users(:contractor).email)
 
-    assert_no_difference("LicenseKey.count") { post license_path, params: {license_token: token, return_to: settings_url} }
+    assert_no_difference("LicenseKey.count") { post ops_license_path, params: {license_token: token, return_to: settings_url} }
 
     assert_not_equal 200, response.status
   end
@@ -121,11 +121,11 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   # whose name, and who pasted it.
 
   test "every activation is listed, newest first, with who did it" do
-    post license_path, params: {license_token: token({"sub" => "first-purchase", "iat" => 3.days.ago.to_i}),
-                                return_to: settings_url}
-    post license_path, params: {license_token: token({"sub" => "renewal"}), return_to: settings_url}
+    post ops_license_path, params: {license_token: token({"sub" => "first-purchase", "iat" => 3.days.ago.to_i}),
+                                    return_to: settings_url}
+    post ops_license_path, params: {license_token: token({"sub" => "renewal"}), return_to: settings_url}
 
-    get license_path
+    get ops_license_path
 
     assert_response :success
     assert_includes response.body, "License history"
@@ -136,11 +136,11 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   test "only the licence in force is marked as such" do
-    post license_path, params: {license_token: token({"sub" => "acme-2025", "iat" => 3.days.ago.to_i}),
-                                return_to: settings_url}
-    post license_path, params: {license_token: token({"sub" => "acme-2026"}), return_to: settings_url}
+    post ops_license_path, params: {license_token: token({"sub" => "acme-2025", "iat" => 3.days.ago.to_i}),
+                                    return_to: settings_url}
+    post ops_license_path, params: {license_token: token({"sub" => "acme-2026"}), return_to: settings_url}
 
-    get license_path
+    get ops_license_path
     body = response.body
 
     assert_operator body.index("acme-2026"), :<, body.index("acme-2025"), "newest first"
@@ -149,7 +149,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
   # Nothing to show is nothing shown, rather than an empty heading.
   test "no history section before the first activation" do
-    get license_path
+    get ops_license_path
 
     assert_not_includes response.body, "License history"
   end

@@ -14,7 +14,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   end
 
   test "the licence screen is about the licence" do
-    get license_path
+    get ops_license_path
 
     assert_response :success
     assert_includes response.body, "License"
@@ -23,7 +23,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   end
 
   test "the SSO screen is about sign-in" do
-    get sso_path
+    get ops_sso_path
 
     assert_response :success
     assert_includes response.body, "Single sign-on"
@@ -35,7 +35,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   test "both are reachable with no server registered" do
     Server.delete_all
 
-    [license_path, sso_path].each do |path|
+    [ops_license_path, ops_sso_path].each do |path|
       get path
 
       assert_response :success, "#{path} must not need a server"
@@ -46,7 +46,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
     get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
 
     assert_response :success
-    # Literal paths: license_path picks up the suite's default org_id and would
+    # Literal paths: ops_license_path picks up the suite's default org_id and would
     # assert against a query string the markup does not (and must not) carry.
     assert_includes response.body, %(href="/ops/license")
     assert_includes response.body, %(href="/ops/sso")

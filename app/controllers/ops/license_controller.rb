@@ -8,13 +8,13 @@
 #
 # Owner-only. It is the commercial state of the whole installation, which is the
 # same bracket as the account itself.
-class LicensesController < ApplicationController
+class Ops::LicenseController < ApplicationController
   skip_before_action :require_server!
 
   authorize :manage_account
 
-  def show
-    render Views::Licenses::Show.new(current_path: request.path, servers: all_servers)
+  def index
+    render Views::Ops::License::Index.new(current_path: request.path, servers: all_servers)
   end
 
   def create
@@ -43,5 +43,5 @@ class LicensesController < ApplicationController
   # scope here to rebuild the URL from. The form carries where it came from and
   # Returnable validates it — the same guard the alert modal uses, which is what
   # keeps an attacker-supplied return_to from becoming an open redirect.
-  def back_to_settings = return_to_path(license_path)
+  def back_to_settings = return_to_path(ops_license_path)
 end

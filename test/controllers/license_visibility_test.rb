@@ -20,7 +20,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   # The licence has its own screen, named for what it is — not a card inside a
   # server's settings.
   def settings
-    get license_path
+    get ops_license_path
   end
 
   def stub_license(status, customer: "acme-corp", expires: 30.days.from_now)
@@ -86,7 +86,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   test "reachable with no server registered at all" do
     Server.delete_all
 
-    get license_path
+    get ops_license_path
 
     assert_response :success
     assert_includes response.body, "License"

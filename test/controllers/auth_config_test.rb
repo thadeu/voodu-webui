@@ -28,7 +28,7 @@ class AuthConfigTest < ActionDispatch::IntegrationTest
   teardown { @env.each { |k, v| v.nil? ? ENV.delete(k) : ENV[k] = v } }
 
   def turn_on(params = {})
-    post auth_config_path, params: {
+    post ops_sso_path, params: {
       publishable_key: "pk_live_abc123", owner_email: "operator@company.com"
     }.merge(params)
   end
@@ -136,7 +136,7 @@ class AuthConfigTest < ActionDispatch::IntegrationTest
 
     assert AuthSettings.current.enabled?
 
-    delete auth_config_path
+    delete ops_sso_path
 
     assert_not AuthSettings.current.enabled?
     assert_match(/anonymous again/i, flash[:notice])

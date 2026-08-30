@@ -66,9 +66,9 @@ class Components::Layouts::Sidebar < Components::Base
     # second nav for two entries would be worse than a slightly wide one. They
     # are ALSO in the account menu; the sidebar is what makes them reachable in
     # anonymous mode, where there is no account menu to open.
-    {id: :license, label: "License", icon: :KeyOutline, path: :license,
+    {id: :license, label: "License", icon: :KeyOutline, path: :ops_license,
      global: true, capability: :manage_account},
-    {id: :sso, label: "SSO", icon: :LockClosedOutline, path: :sso,
+    {id: :sso, label: "SSO", icon: :LockClosedOutline, path: :ops_sso,
      global: true, capability: :manage_account}
   ].freeze
 

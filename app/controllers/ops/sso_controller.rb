@@ -20,13 +20,13 @@
 #   2. THE ENVIRONMENT STILL OVERRIDES THIS. A wrong key here would lock the
 #      operator out of their own dashboard; restarting with CLOWK_ENABLED=0
 #      always gets them back. See AuthSettings.
-class AuthConfigsController < ApplicationController
+class Ops::SsoController < ApplicationController
   skip_before_action :require_server!
 
   authorize :manage_account
 
-  def show
-    render Views::AuthConfigs::Show.new(current_path: request.path, servers: all_servers)
+  def index
+    render Views::Ops::Sso::Index.new(current_path: request.path, servers: all_servers)
   end
 
   def create
@@ -47,7 +47,7 @@ class AuthConfigsController < ApplicationController
   def destroy
     AuthConfig.delete_all
 
-    redirect_to return_to_path(sso_path),
+    redirect_to return_to_path(ops_sso_path),
       notice: "Clowk sign-in turned off. This installation is anonymous again — " \
               "make sure a VPN or access proxy is in front of it."
   end
@@ -65,7 +65,7 @@ class AuthConfigsController < ApplicationController
 
     AuthSettings.apply!
 
-    redirect_to return_to_path(sso_path),
+    redirect_to return_to_path(ops_sso_path),
       notice: "Sign-in is on. Your next request will ask you to authenticate — sign in " \
               "as #{email} and you will be offered this workspace. Nothing has moved yet."
   end
@@ -83,5 +83,5 @@ class AuthConfigsController < ApplicationController
       "take precedence. Change CLOWK_ENABLED / CLOWK_PUBLISHABLE_KEY there instead."
   end
 
-  def refuse(message) = redirect_to(return_to_path(sso_path), alert: message)
+  def refuse(message) = redirect_to(return_to_path(ops_sso_path), alert: message)
 end

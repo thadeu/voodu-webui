@@ -102,8 +102,8 @@ class Components::Layouts::Topbar < Components::Base
         # org_id: nil explicitly — these routes take no org segment, so the
         # helper would otherwise append the current one as ?org_id=…, which is
         # noise in the URL bar and in every log line.
-        account_link(license_path(org_id: nil, server_key: nil), "License")
-        account_link(sso_path(org_id: nil, server_key: nil), "SSO")
+        account_link(ops_license_path(org_id: nil, server_key: nil), "License")
+        account_link(ops_sso_path(org_id: nil, server_key: nil), "SSO")
       end
 
       a(

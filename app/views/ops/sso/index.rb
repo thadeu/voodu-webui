@@ -6,7 +6,7 @@
 # than the subject: both live at the container level, but one is what you bought
 # and the other is how people get in. Nobody looking for either searches for
 # "installation".
-class Views::AuthConfigs::Show < Views::Base
+class Views::Ops::Sso::Index < Views::Base
   def initialize(current_path:, servers: [])
     @current_path = current_path
     @servers = servers
@@ -67,7 +67,7 @@ class Views::AuthConfigs::Show < Views::Base
     return auth_env_notice if AuthSettings.env_decides?
     return auth_disable_form if settings.source == :database
 
-    form(action: auth_config_path, method: "post",
+    form(action: ops_sso_path, method: "post",
       class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "return_to", value: @current_path)
@@ -105,7 +105,7 @@ class Views::AuthConfigs::Show < Views::Base
   end
 
   def auth_disable_form
-    form(action: auth_config_path, method: "post",
+    form(action: ops_sso_path, method: "post",
       class: "flex flex-col vmd:flex-row vmd:items-center gap-2 pt-3 mt-3 border-t border-voodu-border") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "delete")

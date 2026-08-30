@@ -99,10 +99,19 @@ Rails.application.routes.draw do
   # `sso` rather than `clowk`: today Clowk is the only provider, and naming the
   # route after the vendor would make it a lie the first time another one is
   # added.
-  scope "ops" do
-    resource :license, only: [:show, :create]
-    get "sso", to: "auth_configs#show", as: :sso
-    resource :auth_config, only: [:create, :destroy]
+  # One controller per subject, each owning its own screen and its own actions.
+  #
+  # No `update` anywhere on purpose: replacing a licence or a set of SSO
+  # credentials is a `create`. Each writes a new row and leaves the old one, and
+  # that history is what answers "when did this change, and who changed it" —
+  # an update that overwrote would throw away the only record of it.
+  namespace :ops do
+    get "license", to: "license#index"
+    post "license", to: "license#create"
+
+    get "sso", to: "sso#index"
+    post "sso", to: "sso#create"
+    delete "sso", to: "sso#destroy"
   end
 
   # Same shape and the same reason: installation-wide, not per-server.

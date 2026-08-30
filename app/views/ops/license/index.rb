@@ -6,7 +6,7 @@
 # than the subject: both live at the container level, but one is what you bought
 # and the other is how people get in. Nobody looking for either searches for
 # "installation".
-class Views::Licenses::Show < Views::Base
+class Views::Ops::License::Index < Views::Base
   def initialize(current_path:, servers: [])
     @current_path = current_path
     @servers = servers
@@ -97,7 +97,7 @@ class Views::Licenses::Show < Views::Base
   end
 
   def activation_form
-    form(action: license_path, method: "post", class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
+    form(action: ops_license_path, method: "post", class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "return_to", value: @current_path)
 
