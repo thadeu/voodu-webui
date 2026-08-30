@@ -41,4 +41,18 @@ class NoPrivateKeysTest < ActiveSupport::TestCase
 
     assert ignored, "config/license/private_key.pem is not gitignored"
   end
+
+  # The image is PUBLISHED. The Dockerfile does `COPY . .`, so anything the
+  # build context can see ends up in a registry anyone can pull — and a copy of
+  # the signing key there hands every customer the ability to mint their own
+  # licences, against a public half shipping in the same image, so rotating
+  # would invalidate everything already sold.
+  #
+  # Verified by removing the line and rebuilding: the key appears in the context.
+  test "the signing key is kept out of the Docker build context" do
+    patterns = Rails.root.join(".dockerignore").read.lines.map(&:strip)
+
+    assert_includes patterns, "/config/license/*private*",
+      ".dockerignore no longer excludes the signing key — it would ship in the image"
+  end
 end

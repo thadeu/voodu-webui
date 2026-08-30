@@ -14,6 +14,15 @@
 /config/master.key
 /config/credentials/*.key
 
+# The licence SIGNING key. The image is published, so a copy here would hand
+# every customer who pulls it the ability to mint their own licences — and the
+# public half it verifies against ships in the same image, so rotating would
+# invalidate every licence already sold. Matched by shape, not by filename, so
+# a rename does not quietly un-ignore it. The Dockerfile does `COPY . .`;
+# nothing else stands between this file and the registry.
+/config/license/*private*
+*.private.pem
+
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp/*
