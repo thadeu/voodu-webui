@@ -55,4 +55,8 @@ end
 
 group :test do
   gem "webmock", require: false
+
+  # Minitest 6 dropped minitest/mock from the gem; it now ships separately.
+  # Loaded in test_helper so `stub` is available the way it always was.
+  gem "minitest-mock", require: false
 end
