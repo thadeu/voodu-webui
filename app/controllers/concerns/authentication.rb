@@ -57,7 +57,12 @@ module Authentication
   # Read from config rather than ENV so one value answers for the whole process
   # and a test can flip it without reaching into the environment.
   def clowk_enabled?
-    Rails.application.config.x.clowk_enabled
+    return Rails.application.config.x.clowk_enabled if [true, false].include?(Rails.application.config.x.clowk_enabled)
+
+    settings = AuthSettings.current
+    AuthSettings.apply!(settings) if settings.enabled?
+
+    settings.enabled?
   end
 
   private

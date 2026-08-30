@@ -372,6 +372,13 @@ class ApplicationController < ActionController::Base
   #
   # Asked of the live connection rather than of DATABASE_URL, because the
   # adapter actually in use is the fact; the env var is only how it got there.
+  # Which database holds the control plane, for Settings to state plainly. The
+  # licence grants the OPTION of Postgres; the operator takes it by setting
+  # DATABASE_URL, so "what am I actually on" is a real question.
+  def primary_adapter
+    ActiveRecord::Base.connection_db_config.adapter.to_s
+  end
+
   def unlicensed_postgres?
     entitlements.unlicensed_adapter?(ActiveRecord::Base.connection_db_config.adapter)
   end
@@ -385,5 +392,5 @@ class ApplicationController < ActionController::Base
     !clowk_enabled? && PerimeterCheck.exposed?(request.remote_ip)
   end
 
-  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?, :entitlements, :unlicensed_postgres?
+  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?, :entitlements, :unlicensed_postgres?, :primary_adapter
 end

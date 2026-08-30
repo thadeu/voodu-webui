@@ -63,6 +63,7 @@ class Views::Settings::Index < Views::Base
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5 items-start") do
         server_card
         plan_card
+        auth_card
         about_card
       end
     end
@@ -430,6 +431,92 @@ class Views::Settings::Index < Views::Base
     div(class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]") { "no tokens registered." }
   end
 
+  # ── Authentication ─────────────────────────────────────────────────
+
+  def auth_card
+    settings = AuthSettings.current
+
+    render Components::UI::SectionCard.new(title: "Authentication") do
+      div do
+        render(Components::UI::KvRow.new(key: "Sign-in")) { auth_state_value(settings) }
+        render(Components::UI::KvRow.new(key: "Configured by")) { auth_source_value(settings) }
+      end
+
+      auth_form(settings) if allowed?(:manage_account)
+    end
+  end
+
+  def auth_state_value(settings)
+    if settings.enabled?
+      span(class: "text-voodu-text") { "Clowk — every request carries an identity" }
+    else
+      span(class: "text-voodu-amber") { "Anonymous — the perimeter authenticates" }
+    end
+  end
+
+  def auth_source_value(settings)
+    label = {env: "Environment variables", database: "This screen", none: "—"}.fetch(settings.source)
+
+    span(class: "text-[12px] text-voodu-text-2") { label }
+  end
+
+  # Environment wins, so when it is in play the form would be a lie. Say why
+  # instead of showing a control that silently does nothing.
+  def auth_form(settings)
+    return auth_env_notice if AuthSettings.env_decides?
+    return auth_disable_form if settings.source == :database
+
+    form(action: auth_config_path, method: "post",
+      class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "return_to", value: @current_path)
+
+      auth_field("publishable_key", "Publishable key", "pk_live_…", required: true)
+      auth_field("owner_email", "Your email — this address will own the workspace",
+        "you@company.com", required: true)
+      auth_field("subdomain_url", "Auth domain (optional)", "https://auth.company.com")
+
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 pt-1") do
+        render Components::UI::Button.new(type: "submit", variant: :primary, size: :sm) { "Turn on sign-in" }
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "Takes effect on the next request. Recover with CLOWK_ENABLED=0."
+        end
+      end
+    end
+  end
+
+  def auth_field(name, label_text, placeholder, required: false)
+    div(class: "flex flex-col gap-1") do
+      label(class: "text-[12px] text-voodu-muted", for: "auth-#{name}") { label_text }
+      input(
+        id: "auth-#{name}", name: name, type: "text", placeholder: placeholder, required: required,
+        class: "w-full font-voodu-mono text-[12px] px-2.5 py-1.5 bg-voodu-surface-2 " \
+               "border border-voodu-border text-voodu-text focus:outline-none focus:border-voodu-accent"
+      )
+    end
+  end
+
+  def auth_env_notice
+    p(class: "text-[12px] text-voodu-muted pt-3 mt-3 border-t border-voodu-border") do
+      plain "Sign-in is set by environment variables here, which take precedence over " \
+            "this screen. Change CLOWK_ENABLED or CLOWK_PUBLISHABLE_KEY there."
+    end
+  end
+
+  def auth_disable_form
+    form(action: auth_config_path, method: "post",
+      class: "flex flex-col vmd:flex-row vmd:items-center gap-2 pt-3 mt-3 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "_method", value: "delete")
+      input(type: "hidden", name: "return_to", value: @current_path)
+
+      render Components::UI::Button.new(type: "submit", variant: :danger, size: :sm) { "Turn off sign-in" }
+      span(class: "text-[11.5px] text-voodu-muted") do
+        plain "Returns to anonymous — keep a VPN in front."
+      end
+    end
+  end
+
   # ── Plan ───────────────────────────────────────────────────────────
 
   # Its own card rather than a row in About, because it is the only place an
@@ -442,6 +529,7 @@ class Views::Settings::Index < Views::Base
         render(Components::UI::KvRow.new(key: "Plan")) { plan_value }
         render(Components::UI::KvRow.new(key: "Expires")) { plan_expiry_value } if license.present?
         render(Components::UI::KvRow.new(key: "Limits")) { plan_limits_value }
+        render(Components::UI::KvRow.new(key: "Database")) { database_value }
       end
 
       activation_form if allowed?(:manage_account)
@@ -460,6 +548,19 @@ class Views::Settings::Index < Views::Base
   end
 
   def plan_count(value) = value.nil? ? "∞" : value.to_s
+
+  # The licence grants the OPTION of Postgres; DATABASE_URL is how an operator
+  # takes it. Both facts belong here, because "am I on Postgres" and "may I be"
+  # are different questions and only one of them is about the plan.
+  def database_value
+    postgres = primary_adapter.start_with?("postgres")
+
+    span(class: "font-voodu-mono text-[12px]") do
+      span(class: "text-voodu-text") { postgres ? "Postgres" : "SQLite" }
+      span(class: "text-voodu-muted") { " · control plane" }
+      span(class: "text-voodu-muted") { " · warehouse always SQLite" }
+    end
+  end
 
   def activation_form
     form(action: license_path, method: "post", class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do

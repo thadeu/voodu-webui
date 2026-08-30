@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_210000) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -99,6 +99,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_200000) do
     t.index ["server_id", "firing"], name: "index_alert_rules_on_server_id_and_firing"
     t.index ["server_id", "name"], name: "index_alert_rules_on_server_id_and_name", unique: true
     t.index ["server_id"], name: "index_alert_rules_on_server_id"
+  end
+
+  create_table "auth_configs", force: :cascade do |t|
+    t.string "configured_by_id"
+    t.datetime "created_at", null: false
+    t.string "publishable_key", null: false
+    t.text "secret_key_ciphertext"
+    t.string "subdomain_url"
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_auth_configs_on_created_at"
   end
 
   create_table "license_keys", force: :cascade do |t|
@@ -246,6 +256,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_200000) do
   add_foreign_key "alert_rule_destinations", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_rules", "orgs"
   add_foreign_key "alert_rules", "servers", on_delete: :cascade
+  add_foreign_key "auth_configs", "users", column: "configured_by_id", on_delete: :nullify
   add_foreign_key "license_keys", "users", column: "activated_by_id", on_delete: :nullify
   add_foreign_key "metric_dashboards", "orgs"
   add_foreign_key "org_memberships", "orgs", on_delete: :cascade

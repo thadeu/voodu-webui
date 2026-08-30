@@ -173,13 +173,26 @@ that dashboard to whoever reaches the port. Set `CLOWK_ENABLED=0` to go
 anonymous deliberately.
 
 **Turn sign-in on** for a multi-tenant install — several people, each reaching
-only what a membership grants them:
+only what a membership grants them. Either in the environment:
 
 ```sh
 # .env
 CLOWK_ENABLED=1
 CLOWK_PUBLISHABLE_KEY=pk_live_...
 ```
+
+**Or from Settings → Authentication**, if you decided you wanted it after
+already running. Paste the publishable key and the address that will sign in,
+and the next request asks for authentication.
+
+That address matters: anonymous mode runs as one local operator, so the screen
+hands the existing workspace over to it. Without that, the first real sign-in
+would be a brand-new person with no membership, and every server would sit in an
+org nobody could reach.
+
+**The environment always wins**, and that is the way out. If a key saved here is
+wrong you would be locked out of your own dashboard with no UI to fix it from —
+restart with `CLOWK_ENABLED=0` and you are anonymous again, whatever is stored.
 
 The app verifies the JWT Clowk issues and mirrors the subject onto a local
 `users` row. With the flag on and no publishable key, it **refuses to boot**

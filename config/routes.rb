@@ -95,6 +95,9 @@ Rails.application.routes.draw do
   # belongs to whoever runs this container, not to one of the boxes it watches.
   resource :license, only: [:create]
 
+  # Same shape and the same reason: installation-wide, not per-server.
+  resource :auth_config, only: [:create, :destroy]
+
   # Internal-only API for the out-of-process log poller binary.
   # Deliberately OUTSIDE the `:server_key` scope — the binary is
   # global and wants every server in one shot. Auth + loopback/

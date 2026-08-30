@@ -77,6 +77,7 @@ class Components::Base < Phlex::HTML
   register_value_helper :perimeter_warning?
   register_value_helper :entitlements
   register_value_helper :unlicensed_postgres?
+  register_value_helper :primary_adapter
 
   # ── Form + dropdown primitives ─────────────────────────────────────────
   # Moved down from Views::Base when Components::UI::Select needed them: a
