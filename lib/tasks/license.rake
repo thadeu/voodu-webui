@@ -52,7 +52,7 @@ namespace :license do
 
   desc "Inspect a licence the way the app would: license:inspect[token]"
   task :inspect, [:token] => :environment do |_task, args|
-    license = License.resolve(args[:token].to_s.strip)
+    license = LicenseToken.resolve(args[:token].to_s.strip)
 
     puts "status:      #{license.status}"
     puts "summary:     #{license.summary}"

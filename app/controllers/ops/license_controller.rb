@@ -18,7 +18,7 @@ class Ops::LicenseController < ApplicationController
   end
 
   def create
-    license = LicenseKey.activate!(params[:license_token], by: Current.user)
+    license = Ops::License.activate!(params[:license_token], by: Current.user)
 
     if license.verified?
       redirect_to back_to_settings, notice: "Licence activated — #{license.summary}."

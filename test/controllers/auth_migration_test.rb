@@ -16,7 +16,7 @@ class AuthMigrationTest < ActionDispatch::IntegrationTest
       email_verified: false)
     @org = Account.provision!(owner: @operator, account_name: "Local", org_name: "Default")
 
-    @config = SsoConfiguration.create!(provider: "clowk", publishable_key: "pk_live_abc",
+    @config = Ops::SsoConfig.create!(provider: "clowk", publishable_key: "pk_live_abc",
       pending_owner_email: "newowner@company.com")
   end
 

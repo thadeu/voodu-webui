@@ -34,10 +34,10 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   end
 
   test "turning on sign-in stores the credentials" do
-    assert_difference("SsoConfiguration.count", 1) { turn_on }
+    assert_difference("Ops::SsoConfig.count", 1) { turn_on }
 
-    assert_equal "pk_live_abc123", SsoConfiguration.current.publishable_key
-    assert_equal users(:owner).id, SsoConfiguration.current.configured_by_id
+    assert_equal "pk_live_abc123", Ops::SsoConfig.current.publishable_key
+    assert_equal users(:owner).id, Ops::SsoConfig.current.configured_by_id
   end
 
   # ── Turning it on moves NOTHING ────────────────────────────────────────
@@ -49,8 +49,8 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   test "the address is recorded as a pending claim, not applied" do
     turn_on
 
-    assert_equal "operator@company.com", SsoConfiguration.current.pending_owner_email
-    assert SsoConfiguration.current.pending_migration?
+    assert_equal "operator@company.com", Ops::SsoConfig.current.pending_owner_email
+    assert Ops::SsoConfig.current.pending_migration?
   end
 
   test "the local operator is untouched until someone confirms" do
@@ -67,8 +67,8 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     named = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s1")
     stranger = User.create!(email: "someone@else.com", email_verified: true, clowk_user_id: "s2")
 
-    assert SsoConfiguration.current.claimable_by?(named)
-    assert_not SsoConfiguration.current.claimable_by?(stranger)
+    assert Ops::SsoConfig.current.claimable_by?(named)
+    assert_not Ops::SsoConfig.current.claimable_by?(stranger)
   end
 
   # An unverified address is not identity. A provider that lets someone assert
@@ -77,16 +77,16 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     turn_on
     unproven = User.create!(email: "operator@company.com", email_verified: false, clowk_user_id: "s3")
 
-    assert_not SsoConfiguration.current.claimable_by?(unproven)
+    assert_not Ops::SsoConfig.current.claimable_by?(unproven)
   end
 
   test "a claim is offered once and not again" do
     turn_on
     claimant = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s4")
 
-    SsoConfiguration.current.migrate_to!(claimant)
+    Ops::SsoConfig.current.migrate_to!(claimant)
 
-    assert_not SsoConfiguration.current.reload.claimable_by?(claimant)
+    assert_not Ops::SsoConfig.current.reload.claimable_by?(claimant)
   end
 
   # ── The handover itself ────────────────────────────────────────────────
@@ -95,7 +95,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     turn_on
     claimant = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s5")
 
-    SsoConfiguration.current.migrate_to!(claimant)
+    Ops::SsoConfig.current.migrate_to!(claimant)
 
     assert_equal 1, claimant.reload.active_orgs.count
     assert_equal 0, @operator.reload.active_orgs.count
@@ -103,19 +103,19 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   end
 
   test "an address that already belongs to someone else is refused" do
-    assert_no_difference("SsoConfiguration.count") { turn_on(owner_email: users(:contractor).email) }
+    assert_no_difference("Ops::SsoConfig.count") { turn_on(owner_email: users(:contractor).email) }
 
     assert_match(/already has an account/i, flash[:alert])
   end
 
   test "an address is required, because the handover needs one" do
-    assert_no_difference("SsoConfiguration.count") { turn_on(owner_email: "  ") }
+    assert_no_difference("Ops::SsoConfig.count") { turn_on(owner_email: "  ") }
 
     assert_match(/address that will sign in/i, flash[:alert])
   end
 
   test "a malformed publishable key is refused rather than stored" do
-    assert_no_difference("SsoConfiguration.count") { turn_on(publishable_key: "not-a-key") }
+    assert_no_difference("Ops::SsoConfig.count") { turn_on(publishable_key: "not-a-key") }
 
     assert_match(/pk_live/i, flash[:alert])
   end
@@ -125,7 +125,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   test "the environment wins, and the screen says so instead of lying" do
     ENV["CLOWK_ENABLED"] = "0"
 
-    assert_no_difference("SsoConfiguration.count") { turn_on }
+    assert_no_difference("Ops::SsoConfig.count") { turn_on }
 
     assert_match(/environment variables/i, flash[:alert])
     assert_not AuthSettings.current.enabled?, "the env must still decide"
@@ -146,7 +146,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     sign_out
     sign_in_as(email: users(:contractor).email)
 
-    assert_no_difference("SsoConfiguration.count") { turn_on }
+    assert_no_difference("Ops::SsoConfig.count") { turn_on }
   end
 
   # ── The shape, not the provider ────────────────────────────────────────
@@ -158,7 +158,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   test "provider settings live in JSON, reachable as attributes" do
     turn_on
 
-    config = SsoConfiguration.current
+    config = Ops::SsoConfig.current
 
     assert_equal "clowk", config.provider
     assert_equal "pk_live_abc123", config.publishable_key
@@ -166,7 +166,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   end
 
   test "an unknown provider is refused" do
-    config = SsoConfiguration.new(provider: "auth0", publishable_key: "pk_live_x")
+    config = Ops::SsoConfig.new(provider: "auth0", publishable_key: "pk_live_x")
 
     assert_not config.valid?
     assert_includes config.errors.full_messages.join, "Provider"
@@ -175,7 +175,7 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   # The pk_ shape is Clowk's, so asserting it of every provider would be a bug
   # the day the second one arrives.
   test "the key format check is scoped to the provider that uses it" do
-    clowk = SsoConfiguration.new(provider: "clowk", publishable_key: "nope")
+    clowk = Ops::SsoConfig.new(provider: "clowk", publishable_key: "nope")
 
     assert_not clowk.valid?
     assert_includes clowk.errors.full_messages.join, "pk_live"
@@ -184,12 +184,12 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
   test "the secret is encrypted at rest" do
     turn_on(secret_key: "sk_live_supersecret")
 
-    row = SsoConfiguration.connection.select_value(
-      "SELECT secret_ciphertext FROM sso_configurations ORDER BY created_at DESC LIMIT 1"
+    row = Ops::SsoConfig.connection.select_value(
+      "SELECT secret_ciphertext FROM ops_sso_configs ORDER BY created_at DESC LIMIT 1"
     )
 
     assert_not_nil row
     assert_not_includes row.to_s, "supersecret", "the secret must not sit in the clear"
-    assert_equal "sk_live_supersecret", SsoConfiguration.current.secret_key
+    assert_equal "sk_live_supersecret", Ops::SsoConfig.current.secret_key
   end
 end

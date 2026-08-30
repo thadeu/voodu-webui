@@ -20,11 +20,11 @@ class EntitlementLimitsTest < ActionDispatch::IntegrationTest
   teardown { Rails.application.config.x.license = @licensed }
 
   def free_tier!
-    Rails.application.config.x.license = License.new(status: :none)
+    Rails.application.config.x.license = LicenseToken.new(status: :none)
   end
 
   def lapsed!
-    Rails.application.config.x.license = License.new(
+    Rails.application.config.x.license = LicenseToken.new(
       status: :lapsed, claims: {"sub" => "acme", "exp" => 90.days.ago.to_i}
     )
   end
@@ -49,7 +49,7 @@ class EntitlementLimitsTest < ActionDispatch::IntegrationTest
   end
 
   test "a licence naming a number caps at that number" do
-    Rails.application.config.x.license = License.new(
+    Rails.application.config.x.license = LicenseToken.new(
       status: :valid, claims: {"sub" => "acme", "exp" => 1.year.from_now.to_i,
                                "ent" => {"orgs" => Org.count}}
     )
@@ -81,7 +81,7 @@ class EntitlementLimitsTest < ActionDispatch::IntegrationTest
   # The owner each org is created with must not consume a seat — otherwise a
   # one-seat licence would be spent before anyone was invited.
   test "the owner membership does not count against the invite limit" do
-    Rails.application.config.x.license = License.new(
+    Rails.application.config.x.license = LicenseToken.new(
       status: :valid, claims: {"sub" => "acme", "exp" => 1.year.from_now.to_i,
                                "ent" => {"member_invites" => 1}}
     )

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# SsoConfiguration — which identity provider this installation trusts, and how
+# Ops::SsoConfig — which identity provider this installation trusts, and how
 # to reach it.
 #
 # The second thing an installation can pay for. A free-tier operator running
@@ -17,7 +17,7 @@
 #
 # One row per change. For an authentication setting, "who turned this on and
 # when" is worth more than for most things.
-class SsoConfiguration < ApplicationRecord
+class Ops::SsoConfig < ApplicationRecord
   PROVIDERS = %w[clowk].freeze
 
   # Public identifiers, per provider. Adding one means a new key here and a

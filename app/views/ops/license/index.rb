@@ -61,7 +61,7 @@ class Views::Ops::License::Index < Views::Base
   # Extracted rather than inline: it is a filtered table, and the house already
   # has a shape for those (Components::Orgs::MembersTable).
   def license_history
-    keys = LicenseKey.newest_first.to_a
+    keys = Ops::License.newest_first.to_a
     return if keys.empty?
 
     div(class: "flex flex-col gap-1.5 pt-3 mt-3 border-t border-voodu-border") do
@@ -124,7 +124,7 @@ class Views::Ops::License::Index < Views::Base
 
   # ── Plan values ────────────────────────────────────────────────────
 
-  def license = License.current
+  def license = LicenseToken.current
 
   # Shown even on the free tier, and deliberately: an operator who cannot see
   # which plan they are on files a ticket to ask. A lapsed or unverifiable

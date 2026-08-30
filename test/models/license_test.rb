@@ -18,7 +18,7 @@ class LicenseTest < ActiveSupport::TestCase
                 "exp" => 30.days.from_now.to_i}.merge(claims), key, alg)
   end
 
-  def resolve(t, **kw) = License.resolve(t, key: PUBLIC, **kw)
+  def resolve(t, **kw) = LicenseToken.resolve(t, key: PUBLIC, **kw)
 
   test "no token is the free tier, not a failure" do
     license = resolve("")
@@ -52,7 +52,7 @@ class LicenseTest < ActiveSupport::TestCase
   end
 
   test "past grace is lapsed, and grants nothing" do
-    license = resolve(token({"exp" => (License::GRACE_PERIOD + 1.day).ago.to_i}))
+    license = resolve(token({"exp" => (LicenseToken::GRACE_PERIOD + 1.day).ago.to_i}))
 
     assert_equal :lapsed, license.status
     assert_not license.entitled?
@@ -106,7 +106,7 @@ class LicenseTest < ActiveSupport::TestCase
   end
 
   test "a missing public key is the free tier, not a crash" do
-    license = License.resolve(token, key: nil)
+    license = LicenseToken.resolve(token, key: nil)
 
     assert_equal :invalid, license.status
     assert_not license.entitled?
@@ -119,7 +119,7 @@ class LicenseTest < ActiveSupport::TestCase
     path.write(token)
     ENV["VOODU_LICENSE_FILE"] = path.to_s
 
-    assert_equal token.split(".").first, License.token_from_env.split(".").first
+    assert_equal token.split(".").first, LicenseToken.token_from_env.split(".").first
   ensure
     ENV.delete("VOODU_LICENSE_FILE")
     File.delete(path) if path&.exist?
@@ -128,7 +128,7 @@ class LicenseTest < ActiveSupport::TestCase
   test "an unreadable licence file is empty, not an exception" do
     ENV["VOODU_LICENSE_FILE"] = "/nonexistent/nowhere.jwt"
 
-    assert_equal "", License.token_from_env
+    assert_equal "", LicenseToken.token_from_env
   ensure
     ENV.delete("VOODU_LICENSE_FILE")
   end
@@ -148,7 +148,7 @@ class LicenseTest < ActiveSupport::TestCase
       assert_equal :grace, license.status, "the same object must notice it expired"
     end
 
-    travel_to (10.days + License::GRACE_PERIOD + 1.day).from_now do
+    travel_to (10.days + LicenseToken::GRACE_PERIOD + 1.day).from_now do
       assert_equal :lapsed, license.status
     end
   end

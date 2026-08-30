@@ -34,7 +34,7 @@ class AuthMigrationsController < ApplicationController
   # the address check, anyone who managed to sign in could claim an entire
   # installation on their first request.
   def require_claimable_migration!
-    @config = SsoConfiguration.current
+    @config = Ops::SsoConfig.current
 
     return if @config&.claimable_by?(Current.user)
 

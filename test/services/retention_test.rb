@@ -22,13 +22,13 @@ class RetentionTest < ActiveSupport::TestCase
   end
 
   def entitled(days)
-    Entitlements.new(License.new(
+    Entitlements.new(LicenseToken.new(
       status: :valid, claims: {"sub" => "acme", "exp" => 1.year.from_now.to_i,
                                "ent" => {"retention_days" => days}}
     ))
   end
 
-  def free = Entitlements.new(License.new(status: :none))
+  def free = Entitlements.new(LicenseToken.new(status: :none))
 
   test "keep_days defaults to what the sweeper always kept" do
     ENV.delete("VOODU_RETENTION_DAYS")
@@ -75,7 +75,7 @@ class RetentionTest < ActiveSupport::TestCase
     baseline = Retention.keep_days
 
     [:none, :valid, :grace, :lapsed, :invalid].each do |status|
-      Rails.application.config.x.license = License.new(status: status, claims: {"exp" => 1.day.ago.to_i})
+      Rails.application.config.x.license = LicenseToken.new(status: status, claims: {"exp" => 1.day.ago.to_i})
 
       assert_equal baseline, Retention.keep_days,
         "a #{status} licence changed how long bytes are kept — that deletes customer data"
@@ -84,7 +84,7 @@ class RetentionTest < ActiveSupport::TestCase
 
   test "a lapsed licence narrows what is served without touching what is kept" do
     ENV["VOODU_RETENTION_DAYS"] = "90"
-    lapsed = Entitlements.new(License.new(status: :lapsed, claims: {"exp" => 90.days.ago.to_i}))
+    lapsed = Entitlements.new(LicenseToken.new(status: :lapsed, claims: {"exp" => 90.days.ago.to_i}))
 
     assert_equal 90, Retention.keep_days, "the bytes stay"
     assert_equal 3, Retention.serve_days(lapsed), "the view narrows to the free tier"

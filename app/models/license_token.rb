@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
-# License — what this deployment bought, read from a signed token.
+# LicenseToken — what this deployment bought, read from a signed token.
+#
+# Named for the token rather than the licence because Ops::License is the stored
+# activation. Inside the Ops namespace a bare `License` resolves to that model,
+# so a verifier called `License` would be reachable only as `::License` — the
+# kind of shadowing that is invisible until something quietly resolves to the
+# wrong class.
 #
 # Verified OFFLINE. The public key ships in the image (config/license/
 # public_key.pem) and the private half never touches this repository, so a
@@ -19,7 +25,7 @@
 #
 # Expiry is a slope, not a cliff: GRACE_PERIOD keeps entitlements alive after
 # `exp` so a renewal that lands late is an inconvenience rather than an outage.
-class License
+class LicenseToken
   # Read at boot into config.x.license (config/initializers/license.rb), which
   # is what the rest of the app talks to.
   PUBLIC_KEY_PATH = Rails.root.join("config/license/public_key.pem")
@@ -82,7 +88,7 @@ class License
   # because config.x returns a truthy empty OrderedOptions for anything unset.
   def self.current
     configured = Rails.application.config.x.license
-    return configured if configured.is_a?(License)
+    return configured if configured.is_a?(LicenseToken)
 
     candidates = [resolve(token_from_env), from_database].reject { |l| l.status == :none }
     verified = candidates.select(&:verified?)
@@ -95,7 +101,7 @@ class License
   end
 
   def self.from_database
-    key = LicenseKey.current
+    key = Ops::License.current
     return new(status: :none) if key.nil?
 
     resolve(key.token)

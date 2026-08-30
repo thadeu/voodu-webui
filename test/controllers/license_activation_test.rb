@@ -21,13 +21,13 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
     # The suite ships a test keypair; the app verifies against the production
     # public key, so point it at ours for the duration.
-    License.instance_variable_set(:@public_key, PUBLIC)
+    LicenseToken.instance_variable_set(:@public_key, PUBLIC)
   end
 
   teardown do
     ENV["VOODU_LICENSE"] = @env if @env
     Rails.application.config.x.license = @configured
-    License.remove_instance_variable(:@public_key) if License.instance_variable_defined?(:@public_key)
+    LicenseToken.remove_instance_variable(:@public_key) if LicenseToken.instance_variable_defined?(:@public_key)
   end
 
   def token(claims = {})
@@ -42,7 +42,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   test "pasting a licence activates Enterprise on the next request" do
-    assert_difference("LicenseKey.count", 1) do
+    assert_difference("Ops::License.count", 1) do
       post ops_license_path, params: {license_token: token, return_to: settings_url}
     end
 
@@ -52,13 +52,13 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     # The point: no restart, no env var, and the entitlements are live.
     assert_not Entitlements.current.free?
     assert Entitlements.current.postgres?
-    assert_equal "acme-corp", License.current.customer
+    assert_equal "acme-corp", LicenseToken.current.customer
   end
 
   test "the activation is recorded with who did it" do
     post ops_license_path, params: {license_token: token, return_to: settings_url}
 
-    key = LicenseKey.current
+    key = Ops::License.current
 
     assert_equal "acme-corp", key.subject
     assert_equal users(:owner).id, key.activated_by_id
@@ -70,7 +70,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     forged = JWT.encode({"sub" => "pirate", "exp" => 1.year.from_now.to_i},
       OpenSSL::PKey::RSA.new(2048), "RS256")
 
-    assert_no_difference("LicenseKey.count") do
+    assert_no_difference("Ops::License.count") do
       post ops_license_path, params: {license_token: forged}
     end
 
@@ -79,7 +79,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   test "an empty paste is told what to paste" do
-    assert_no_difference("LicenseKey.count") { post ops_license_path, params: {license_token: "  "} }
+    assert_no_difference("Ops::License.count") { post ops_license_path, params: {license_token: "  "} }
 
     assert_match(/paste the licence token/i, flash[:alert])
   end
@@ -88,12 +88,12 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   test "renewing replaces which licence is in force" do
     post ops_license_path, params: {license_token: token({"sub" => "old", "iat" => 2.days.ago.to_i})}
 
-    assert_equal "old", License.current.customer
+    assert_equal "old", LicenseToken.current.customer
 
     post ops_license_path, params: {license_token: token({"sub" => "renewed"})}
 
-    assert_equal "renewed", License.current.customer
-    assert_equal 2, LicenseKey.count, "the history is kept"
+    assert_equal "renewed", LicenseToken.current.customer
+    assert_equal 2, Ops::License.count, "the history is kept"
   end
 
   # Expired is expired. Re-pasting the same lapsed token buys nothing — the only
@@ -101,7 +101,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   test "re-activating a lapsed licence does not revive it" do
     post ops_license_path, params: {license_token: token({"exp" => 400.days.ago.to_i, "iat" => 800.days.ago.to_i})}
 
-    assert_equal :lapsed, License.current.status
+    assert_equal :lapsed, LicenseToken.current.status
     assert Entitlements.current.free?
   end
 
@@ -109,7 +109,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     sign_out
     sign_in_as(email: users(:contractor).email)
 
-    assert_no_difference("LicenseKey.count") { post ops_license_path, params: {license_token: token, return_to: settings_url} }
+    assert_no_difference("Ops::License.count") { post ops_license_path, params: {license_token: token, return_to: settings_url} }
 
     assert_not_equal 200, response.status
   end

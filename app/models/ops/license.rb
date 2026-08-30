@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# LicenseKey — an activated licence, stored so renewal does not need a restart.
+# Ops::License — an activated licence, stored so renewal does not need a restart.
 #
 # The upgrade path this exists for: someone runs the free tier, decides they
 # want more, buys a licence, pastes the token into Settings, and is Enterprise
@@ -9,12 +9,12 @@
 #
 # One row per activation. The history costs nothing and answers "when did they
 # upgrade, and who did it" during a support conversation. The ACTIVE licence is
-# whichever has the newest issued_at — see License.resolve, where a token in the
+# whichever has the newest issued_at — see LicenseToken.resolve, where a token in the
 # environment competes on the same footing.
 #
 # Nothing here decides whether a licence is any good. Verification lives in
-# License and runs against the public key; this only remembers what verified.
-class LicenseKey < ApplicationRecord
+# LicenseToken and runs against the public key; this only remembers what verified.
+class Ops::License < ApplicationRecord
   belongs_to :activated_by, class_name: "User", optional: true
 
   validates :token, presence: true
@@ -31,7 +31,7 @@ class LicenseKey < ApplicationRecord
   # that does not verify is NOT stored: a row that never grants anything would
   # sit in Settings looking like a licence and behaving like nothing.
   def self.activate!(token, by: nil)
-    license = License.resolve(token.to_s.strip)
+    license = LicenseToken.resolve(token.to_s.strip)
     return license unless license.verified?
 
     create!(

@@ -14,7 +14,7 @@ require "minitest/mock"
 # Set after the environment loads because License is autoloaded and cannot be
 # named from config/environments. Tests that are ABOUT the limits build their
 # own Entitlements or replace this value for the duration.
-Rails.application.config.x.license = License.new(
+Rails.application.config.x.license = LicenseToken.new(
   status: :valid, claims: {"sub" => "test-suite", "exp" => 10.years.from_now.to_i}
 )
 require "rails/test_help"

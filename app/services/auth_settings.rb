@@ -51,7 +51,7 @@ class AuthSettings
   end
 
   def self.from_database
-    config = SsoConfiguration.current
+    config = Ops::SsoConfig.current
     return Resolved.new(enabled: false, source: :none) if config.nil?
 
     # One provider today. When there is a second, this is where it branches —

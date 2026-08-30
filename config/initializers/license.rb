@@ -4,12 +4,12 @@
 # agrees — the entitlement table, the settings screen, and the tests that
 # exercise both.
 #
-# Inside `to_prepare` rather than at the top level because License is an
+# Inside `to_prepare` rather than at the top level because LicenseToken is an
 # autoloaded model: referencing it while initializers run is exactly what Rails
 # refuses to allow. This also means development re-resolves on reload, which is
 # what you want while fiddling with a token.
 #
-# Verification is offline and cannot fail loudly — see License. The worst
+# Verification is offline and cannot fail loudly — see LicenseToken. The worst
 # possible token produces a :invalid licence and the free tier, never a boot
 # failure, because a licence that can stop the app from starting is a licence
 # that can take a customer's monitoring down during an incident.
@@ -18,7 +18,7 @@
 # lapsed or unverifiable licence is worth a warning: it means capabilities the
 # operator is paying for silently stopped applying.
 Rails.application.config.after_initialize do
-  license = License.current
+  license = LicenseToken.current
   next if license.status == :none
 
   message = "[license] #{license.summary}"

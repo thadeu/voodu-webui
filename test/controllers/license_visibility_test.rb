@@ -24,13 +24,13 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   end
 
   def stub_license(status, customer: "acme-corp", expires: 30.days.from_now)
-    Rails.application.config.x.license = License.new(
+    Rails.application.config.x.license = LicenseToken.new(
       status: status, claims: {"sub" => customer, "exp" => expires.to_i}
     )
   end
 
   test "the free tier says so" do
-    Rails.application.config.x.license = License.new(status: :none)
+    Rails.application.config.x.license = LicenseToken.new(status: :none)
 
     settings
 
@@ -69,7 +69,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   end
 
   test "an unverifiable licence admits it rather than showing Enterprise" do
-    Rails.application.config.x.license = License.new(status: :invalid, reason: "VerificationError")
+    Rails.application.config.x.license = LicenseToken.new(status: :invalid, reason: "VerificationError")
 
     settings
 

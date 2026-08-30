@@ -29,10 +29,10 @@ class LicenseCheckJob < ApplicationJob
   NOTICE_WITHIN = 30
 
   def perform
-    key = LicenseKey.current
+    key = Ops::License.current
     return if key.nil?
 
-    license = License.current
+    license = LicenseToken.current
     key.update_column(:last_checked_at, Time.current)
 
     report(license)
@@ -55,7 +55,7 @@ class LicenseCheckJob < ApplicationJob
     when :grace
       Rails.logger.warn(
         "[license] #{license.summary}. Entitlements still apply for " \
-        "#{(license.expires_at + License::GRACE_PERIOD - Time.current).to_i / 1.day} more days."
+        "#{(license.expires_at + LicenseToken::GRACE_PERIOD - Time.current).to_i / 1.day} more days."
       )
     when :valid
       return unless days <= NOTICE_WITHIN

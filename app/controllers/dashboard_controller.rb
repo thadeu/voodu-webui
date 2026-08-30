@@ -48,7 +48,7 @@ class DashboardController < ApplicationController
   end
 
   def claimable_migration?
-    SsoConfiguration.current&.claimable_by?(Current.user)
+    Ops::SsoConfig.current&.claimable_by?(Current.user)
   rescue ActiveRecord::ActiveRecordError
     false
   end

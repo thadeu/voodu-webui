@@ -38,12 +38,12 @@ class Entitlements
     postgres: true
   }.freeze
 
-  def self.current(license = License.current)
+  def self.current(license = LicenseToken.current)
     new(license)
   end
 
   def initialize(license)
-    @license = license || License.new(status: :none)
+    @license = license || LicenseToken.new(status: :none)
   end
 
   attr_reader :license

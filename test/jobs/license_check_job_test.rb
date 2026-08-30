@@ -17,18 +17,18 @@ class LicenseCheckJobTest < ActiveJob::TestCase
     @env = ENV.delete("VOODU_LICENSE")
     @configured = Rails.application.config.x.license
     Rails.application.config.x.license = nil
-    License.instance_variable_set(:@public_key, PUBLIC)
+    LicenseToken.instance_variable_set(:@public_key, PUBLIC)
   end
 
   teardown do
     ENV["VOODU_LICENSE"] = @env if @env
     Rails.application.config.x.license = @configured
-    License.remove_instance_variable(:@public_key) if License.instance_variable_defined?(:@public_key)
+    LicenseToken.remove_instance_variable(:@public_key) if LicenseToken.instance_variable_defined?(:@public_key)
   end
 
   def activate(exp:, iat: Time.current)
     token = JWT.encode({"sub" => "acme", "iat" => iat.to_i, "exp" => exp.to_i}, KEY, "RS256")
-    LicenseKey.activate!(token)
+    Ops::License.activate!(token)
   end
 
   test "no licence is nothing to do" do
@@ -38,11 +38,11 @@ class LicenseCheckJobTest < ActiveJob::TestCase
   test "it records that the check ran" do
     activate(exp: 365.days.from_now)
 
-    assert_nil LicenseKey.current.last_checked_at
+    assert_nil Ops::License.current.last_checked_at
 
     LicenseCheckJob.perform_now
 
-    assert_not_nil LicenseKey.current.reload.last_checked_at
+    assert_not_nil Ops::License.current.reload.last_checked_at
   end
 
   # The whole point of the job's design: it changes nothing.
@@ -53,15 +53,15 @@ class LicenseCheckJobTest < ActiveJob::TestCase
     LicenseCheckJob.perform_now
 
     assert_equal before, Entitlements.current.table
-    assert_equal 1, LicenseKey.count, "it must not delete or replace keys"
+    assert_equal 1, Ops::License.count, "it must not delete or replace keys"
   end
 
   test "and NOT running it does not delay expiry" do
     activate(exp: 1.day.from_now)
 
-    travel_to (1.day + License::GRACE_PERIOD + 1.day).from_now do
+    travel_to (1.day + LicenseToken::GRACE_PERIOD + 1.day).from_now do
       # No job has run in that window. The licence is lapsed anyway.
-      assert_equal :lapsed, License.current.status
+      assert_equal :lapsed, LicenseToken.current.status
       assert Entitlements.current.free?
     end
   end
@@ -93,7 +93,7 @@ class LicenseCheckJobTest < ActiveJob::TestCase
   test "it is loud when a stored licence stops verifying" do
     activate(exp: 365.days.from_now)
     # What an upgrade that rotated the signing key would look like.
-    License.instance_variable_set(:@public_key, OpenSSL::PKey::RSA.new(2048).public_key)
+    LicenseToken.instance_variable_set(:@public_key, OpenSSL::PKey::RSA.new(2048).public_key)
 
     assert_includes captured_log { LicenseCheckJob.perform_now }, "no longer verifies"
   end

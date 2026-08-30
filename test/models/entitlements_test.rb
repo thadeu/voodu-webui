@@ -8,11 +8,11 @@ require "test_helper"
 # failure mode is a place it can be rather than an error it hits.
 class EntitlementsTest < ActiveSupport::TestCase
   def licensed(ent = {}, status: :valid)
-    License.new(status: status, claims: {"sub" => "acme", "ent" => ent})
+    LicenseToken.new(status: status, claims: {"sub" => "acme", "ent" => ent})
   end
 
   test "no licence is the free tier" do
-    e = Entitlements.new(License.new(status: :none))
+    e = Entitlements.new(LicenseToken.new(status: :none))
 
     assert e.free?
     assert_equal 1, e.limit(:orgs)
@@ -66,7 +66,7 @@ class EntitlementsTest < ActiveSupport::TestCase
   # ── within? — the question every creation point asks ───────────────────
 
   test "within? counts against the limit" do
-    e = Entitlements.new(License.new(status: :none))
+    e = Entitlements.new(LicenseToken.new(status: :none))
 
     assert e.within?(:orgs, 0), "the first org is allowed on the free tier"
     assert_not e.within?(:orgs, 1), "the second is not"
@@ -92,7 +92,7 @@ class EntitlementsTest < ActiveSupport::TestCase
   # than enforce anything. The product's job is to make the state visible.
 
   test "Postgres without an entitlement is flagged" do
-    assert Entitlements.new(License.new(status: :none)).unlicensed_adapter?("postgresql")
+    assert Entitlements.new(LicenseToken.new(status: :none)).unlicensed_adapter?("postgresql")
   end
 
   test "Postgres with an entitlement is not flagged" do
@@ -100,7 +100,7 @@ class EntitlementsTest < ActiveSupport::TestCase
   end
 
   test "SQLite is never flagged, licensed or not" do
-    assert_not Entitlements.new(License.new(status: :none)).unlicensed_adapter?("sqlite3")
+    assert_not Entitlements.new(LicenseToken.new(status: :none)).unlicensed_adapter?("sqlite3")
     assert_not Entitlements.new(licensed).unlicensed_adapter?("sqlite3")
   end
 end
