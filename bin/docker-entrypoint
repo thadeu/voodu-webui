@@ -54,6 +54,15 @@ fi
 # db:prepare is idempotent: first boot = create + schema load + seed; subsequent boots = pending migrations only.
 if [ "${@: -2:1}" = "./bin/rails" ] && [ "${@: -1:1}" = "server" ]; then
   ./bin/rails db:prepare
+
+  # Telemetry outlives the control plane: it sits in its own databases and on
+  # disk, keyed by a bare server_id. Replace the control plane — switching to
+  # Postgres is a deliberate fresh start — and the sequence restarts at 1, so
+  # the first server registered afterwards would inherit the first old server's
+  # history. A web box showing a database's CPU, convincingly. Rows matching no
+  # server are unreachable anyway; this clears them before they can be mistaken
+  # for somebody else's.
+  ./bin/rails voodu:purge_orphan_warehouse
 fi
 
 exec "$@"

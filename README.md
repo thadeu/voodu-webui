@@ -352,6 +352,24 @@ stopping anyone — which is why the Elastic License 2.0 covers circumventing
 licence-key functionality, and why the product's job here is to be honest about
 the state rather than to fight its own operator.
 
+### Switching SQLite → Postgres
+
+Setting `DATABASE_URL` on an installation that has been running is **a fresh
+start, not a migration**. The new database is empty: orgs, servers and PATs are
+re-registered by hand. That is a deliberate contract — the control plane is
+small, and a reliable cross-adapter data migration is a great deal of machinery
+for a few minutes of typing.
+
+What is NOT fresh is the volume, and that is the part worth knowing. Telemetry
+is keyed by a bare `server_id` in databases with no foreign key to `servers`, so
+when a Postgres sequence restarts at 1 the first server you register afterwards
+would inherit the first old server's history — a web box convincingly reporting
+a database's CPU.
+
+The entrypoint clears that on boot: rows and log directories matching no server
+are unreachable through any authorized path anyway, so they are removed before
+they can be mistaken for someone else's. Nothing you can still reach is touched.
+
 ### Backups
 
 The two shapes have different jobs, so they get different procedures.
