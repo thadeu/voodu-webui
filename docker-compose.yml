@@ -48,6 +48,13 @@ services:
       # Skips the api.clowk.dev lookup on the request path. Optional; the gem
       # derives it from the publishable key when unset.
       CLOWK_SUBDOMAIN_URL: ${CLOWK_SUBDOMAIN_URL:-}
+      # Enterprise licence. Empty = the free tier, which is a complete product.
+      # Verified offline against a public key in the image; never calls home.
+      VOODU_LICENSE: ${VOODU_LICENSE:-}
+      VOODU_LICENSE_FILE: ${VOODU_LICENSE_FILE:-}
+      # Days of logs kept ON DISK. Never touched by the licence — the licence
+      # caps how far back you can search, which is a different number.
+      VOODU_RETENTION_DAYS: ${VOODU_RETENTION_DAYS:-}
       WAREHOUSE: ${WAREHOUSE:-1}
       POLLER_SPAWN: ${POLLER_SPAWN:-1}
       POLLER_INTERVAL_SECONDS: ${POLLER_INTERVAL_SECONDS:-15}

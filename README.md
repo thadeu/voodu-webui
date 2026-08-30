@@ -277,6 +277,46 @@ Postgres database if the role may (`CREATEDB`), loads the schema into it, then
 creates the five SQLite files. Pre-create the database by hand if you would
 rather not grant `CREATEDB`.
 
+### Plans
+
+The free tier is a complete product and the default: one account, one org, one
+operator, behind your own perimeter. An Enterprise licence lifts the limits.
+
+| | Free | Enterprise |
+|---|---|---|
+| accounts / orgs | 1 / 1 | unlimited |
+| invited members | none | unlimited |
+| searchable window | 3 days | configurable, 90 by default |
+| control plane in Postgres | — | ✓ |
+
+```sh
+VOODU_LICENSE=eyJhbGciOiJSUzI1NiJ9...      # or VOODU_LICENSE_FILE=/path/to.jwt
+```
+
+**Verified offline.** The public key ships in the image and nothing calls home,
+so a licence works in a closed network and our availability is not part of your
+risk. Check what the app sees with `rake 'license:inspect[<token>]'`, or in
+Settings → Plan.
+
+**A licence can never take anything away.** Absent, malformed and lapsed are
+ordinary states that drop to the free tier — none of them stops the app. Expiry
+has a 30-day grace period, after which the only changes are that new orgs and
+new invitations are refused and the searchable window narrows. Specifically:
+
+- **Nothing is deleted.** `VOODU_RETENTION_DAYS` decides how long bytes stay on
+  disk and the licence never touches it. What a licence caps is how far back you
+  can *search*. A lapse hides history; renewal reveals the same bytes again.
+- **Postgres keeps being read.** If your control plane is in Postgres and the
+  licence lapses, the app keeps serving it and says so in the UI. Locking an
+  operator out of their own database is not a term we are willing to enforce.
+- **Existing orgs and members stay.** Only the *next* one is refused.
+
+That the enforcement stops there is deliberate. Anyone running the image can
+modify it, so a harder technical gate would inconvenience customers without
+stopping anyone — which is why the Elastic License 2.0 covers circumventing
+licence-key functionality, and why the product's job here is to be honest about
+the state rather than to fight its own operator.
+
 ### Backups
 
 The two shapes have different jobs, so they get different procedures.
