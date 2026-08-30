@@ -62,6 +62,7 @@ class Views::Settings::Index < Views::Base
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5 items-start") do
         server_card
+        plan_card
         about_card
       end
     end
@@ -429,9 +430,66 @@ class Views::Settings::Index < Views::Base
     div(class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]") { "no tokens registered." }
   end
 
-  # ── Plan (the Enterprise licence, not the software licence above) ──
+  # ── Plan ───────────────────────────────────────────────────────────
 
-  def license = Rails.application.config.x.license || License.new(status: :none)
+  # Its own card rather than a row in About, because it is the only place an
+  # operator can act on their licence: see what they have, and paste a new one.
+  # Renewal without a restart is the point — the alternative is editing an env
+  # var and bouncing the dashboard someone is watching.
+  def plan_card
+    render Components::UI::SectionCard.new(title: "Plan") do
+      div do
+        render(Components::UI::KvRow.new(key: "Plan")) { plan_value }
+        render(Components::UI::KvRow.new(key: "Expires")) { plan_expiry_value } if license.present?
+        render(Components::UI::KvRow.new(key: "Limits")) { plan_limits_value }
+      end
+
+      activation_form if allowed?(:manage_account)
+    end
+  end
+
+  def plan_limits_value
+    e = entitlements
+
+    span(class: "font-voodu-mono text-[12px] text-voodu-text-2") do
+      plain "#{plan_count(e.limit(:orgs))} orgs · "
+      plain "#{plan_count(e.limit(:member_invites))} invites · "
+      plain "#{e.retention_days}d searchable"
+      plain " · Postgres" if e.postgres?
+    end
+  end
+
+  def plan_count(value) = value.nil? ? "∞" : value.to_s
+
+  def activation_form
+    form(action: license_path, method: "post", class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "return_to", value: @current_path)
+
+      label(class: "text-[12px] text-voodu-muted", for: "license-token") do
+        plain license.present? ? "Replace the licence" : "Activate a licence"
+      end
+
+      textarea(
+        id: "license-token", name: "license_token", rows: "3",
+        placeholder: "eyJhbGciOiJSUzI1NiJ9…",
+        class: "w-full font-voodu-mono text-[11.5px] break-all px-2.5 py-2 " \
+               "bg-voodu-surface-2 border border-voodu-border text-voodu-text " \
+               "focus:outline-none focus:border-voodu-accent"
+      )
+
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
+        render Components::UI::Button.new(type: "submit", variant: :primary, size: :sm) { "Activate" }
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "Takes effect immediately — no restart."
+        end
+      end
+    end
+  end
+
+  # ── Plan values ────────────────────────────────────────────────────
+
+  def license = License.current
 
   # Shown even on the free tier, and deliberately: an operator who cannot see
   # which plan they are on files a ticket to ask. A lapsed or unverifiable
@@ -478,8 +536,6 @@ class Views::Settings::Index < Views::Base
       div do
         render(Components::UI::KvRow.new(key: "Version")) { version_value }
         render(Components::UI::KvRow.new(key: "License")) { span(class: "font-voodu-mono") { "Elastic-2.0" } }
-        render(Components::UI::KvRow.new(key: "Plan")) { plan_value }
-        render(Components::UI::KvRow.new(key: "Plan expires")) { plan_expiry_value } if license.present?
         render(Components::UI::KvRow.new(key: "Hostname")) { agent_field("host", "hostname") }
         render(Components::UI::KvRow.new(key: "Kernel")) { agent_field("host", "kernel") }
         render(Components::UI::KvRow.new(key: "CPU cores")) { cpu_cores_value }
@@ -592,6 +648,7 @@ class Views::Settings::Index < Views::Base
       data: {turbo: false}, class: "inline-flex"
     ) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "return_to", value: @current_path)
       button(
         type: "submit",
         class: "inline-flex items-center gap-1.5 px-2.5 h-7 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"

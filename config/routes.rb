@@ -91,6 +91,10 @@ Rails.application.routes.draw do
   # list update in place, no reload. M1 puts the org's short_id in the path.
   resources :orgs, only: [:create, :update, :destroy]
 
+  # Installation-wide, so it hangs off the root rather than a server: a licence
+  # belongs to whoever runs this container, not to one of the boxes it watches.
+  resource :license, only: [:create]
+
   # Internal-only API for the out-of-process log poller binary.
   # Deliberately OUTSIDE the `:server_key` scope — the binary is
   # global and wants every server in one shot. Auth + loopback/
