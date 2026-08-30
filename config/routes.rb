@@ -98,6 +98,10 @@ Rails.application.routes.draw do
   # Same shape and the same reason: installation-wide, not per-server.
   resource :auth_config, only: [:create, :destroy]
 
+  # Confirming the handover after the first real sign-in — see
+  # AuthMigrationsController for why it is a second step.
+  resource :auth_migration, only: [:show, :create]
+
   # Internal-only API for the out-of-process log poller binary.
   # Deliberately OUTSIDE the `:server_key` scope — the binary is
   # global and wants every server in one shot. Auth + loopback/

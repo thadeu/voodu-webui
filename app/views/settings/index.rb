@@ -472,14 +472,14 @@ class Views::Settings::Index < Views::Base
       input(type: "hidden", name: "return_to", value: @current_path)
 
       auth_field("publishable_key", "Publishable key", "pk_live_…", required: true)
-      auth_field("owner_email", "Your email — this address will own the workspace",
+      auth_field("owner_email", "Your Clowk email — you will be offered this workspace after signing in",
         "you@company.com", required: true)
       auth_field("subdomain_url", "Auth domain (optional)", "https://auth.company.com")
 
       div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 pt-1") do
-        render Components::UI::Button.new(type: "submit", variant: :primary, size: :sm) { "Turn on sign-in" }
+        render Components::UI::Button.new(type: "submit", variant: :primary, size: :sm) { "Migrate to Clowk" }
         span(class: "text-[11.5px] text-voodu-muted") do
-          plain "Takes effect on the next request. Recover with CLOWK_ENABLED=0."
+          plain "Nothing moves until you sign in and confirm. Recover with CLOWK_ENABLED=0."
         end
       end
     end

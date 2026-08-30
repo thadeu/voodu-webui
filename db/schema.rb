@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_210000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_29_220000) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -104,6 +104,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_210000) do
   create_table "auth_configs", force: :cascade do |t|
     t.string "configured_by_id"
     t.datetime "created_at", null: false
+    t.datetime "migrated_at"
+    t.string "pending_owner_email"
     t.string "publishable_key", null: false
     t.text "secret_key_ciphertext"
     t.string "subdomain_url"

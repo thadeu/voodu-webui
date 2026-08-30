@@ -34,10 +34,23 @@ class DashboardController < ApplicationController
     elsif Current.user&.active_orgs&.exists?
       redirect_to all_servers_path
     else
-      # No org at all: a first sign-in, or someone whose last membership was
-      # removed. Onboarding is the only screen they can act on.
+      # No org at all. Before offering to build a new workspace, check whether
+      # there is an EXISTING one waiting for this person — an installation that
+      # ran anonymously and named them when it turned sign-in on. Sending them
+      # to onboarding instead would have them build a second workspace beside
+      # the one they came to claim.
+      return redirect_to(auth_migration_path) if claimable_migration?
+
+      # A first sign-in, or someone whose last membership was removed.
+      # Onboarding is the only screen they can act on.
       redirect_to new_onboarding_path
     end
+  end
+
+  def claimable_migration?
+    AuthConfig.current&.claimable_by?(Current.user)
+  rescue ActiveRecord::ActiveRecordError
+    false
   end
 
   # org_root — /<org8>/ (org in the URL, no server). Lands on the org's first

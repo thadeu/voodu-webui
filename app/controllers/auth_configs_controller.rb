@@ -9,12 +9,13 @@
 #
 # Two things make this safe to offer, and neither is optional:
 #
-#   1. THE WORKSPACE IS HANDED OVER FIRST. Anonymous mode runs as one local
-#      operator row, and a Clowk sign-in provisions by subject — so without
-#      this, the first real sign-in would create a NEW user with no membership,
-#      land on onboarding, and strand every server and PAT in an org nobody
-#      could reach. Renaming the local operator to the address that will sign in
-#      makes User.claimable_row adopt that row instead, memberships and all.
+#   1. NOTHING IS MOVED YET. Anonymous mode runs as one local operator row, and
+#      a Clowk sign-in provisions by subject — so the first real sign-in would
+#      otherwise create a NEW user with no membership and strand every server
+#      and PAT in an org nobody could reach. This only RECORDS which address may
+#      claim the workspace; the handover happens in AuthMigrationsController,
+#      after that person has actually signed in. Doing it here instead would
+#      mean a wrong publishable key left the operator renamed AND locked out.
 #
 #   2. THE ENVIRONMENT STILL OVERRIDES THIS. A wrong key here would lock the
 #      operator out of their own dashboard; restarting with CLOWK_ENABLED=0
@@ -50,22 +51,19 @@ class AuthConfigsController < ApplicationController
   private
 
   def activate!(email)
-    ActiveRecord::Base.transaction do
-      adoptable_operator&.update!(email: email, email_verified: false)
-
-      AuthConfig.create!(
-        publishable_key: params[:publishable_key].to_s.strip,
-        subdomain_url: params[:subdomain_url].to_s.strip.presence,
-        secret_key: params[:secret_key].to_s.strip.presence,
-        configured_by: Current.user
-      )
-    end
+    AuthConfig.create!(
+      publishable_key: params[:publishable_key].to_s.strip,
+      subdomain_url: params[:subdomain_url].to_s.strip.presence,
+      secret_key: params[:secret_key].to_s.strip.presence,
+      pending_owner_email: (email if adoptable_operator),
+      configured_by: Current.user
+    )
 
     AuthSettings.apply!
 
     redirect_to return_to_path(root_path),
-      notice: "Sign-in is on. Your next request will ask you to authenticate — " \
-              "use #{email}, which now owns this workspace."
+      notice: "Sign-in is on. Your next request will ask you to authenticate — sign in " \
+              "as #{email} and you will be offered this workspace. Nothing has moved yet."
   end
 
   # The anonymous operator, when that is who is running this. Nil once the

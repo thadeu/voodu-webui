@@ -40,36 +40,66 @@ class AuthConfigTest < ActionDispatch::IntegrationTest
     assert_equal users(:owner).id, AuthConfig.current.configured_by_id
   end
 
-  # ── The handover ───────────────────────────────────────────────────────
+  # ── Turning it on moves NOTHING ────────────────────────────────────────
+  #
+  # This is the property that makes a wrong publishable key survivable. Until a
+  # real login proves the credentials work, the workspace is exactly where it
+  # was, and CLOWK_ENABLED=0 puts everything back.
 
-  test "the local operator is renamed to the address that will sign in" do
+  test "the address is recorded as a pending claim, not applied" do
     turn_on
 
-    assert_equal "operator@company.com", @operator.reload.email
-    assert_not @operator.email_verified, "unproven until they actually sign in"
+    assert_equal "operator@company.com", AuthConfig.current.pending_owner_email
+    assert AuthConfig.current.pending_migration?
   end
 
-  test "the workspace survives the handover" do
-    servers_before = @org.servers.count
+  test "the local operator is untouched until someone confirms" do
     turn_on
 
-    assert_equal 1, @operator.reload.active_orgs.count, "the org must still be theirs"
-    assert_equal servers_before, @org.reload.servers.count
+    assert_equal User::LOCAL_OPERATOR_EMAIL, @operator.reload.email
+    assert_equal 1, @operator.active_orgs.count, "the workspace has not moved"
   end
 
-  # The mechanism, end to end: the first Clowk sign-in with that address adopts
-  # the operator row instead of creating a stranger.
-  test "the first Clowk sign-in inherits the workspace rather than starting over" do
+  # ── Who may claim it ───────────────────────────────────────────────────
+
+  test "only the named address may claim the workspace" do
     turn_on
+    named = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s1")
+    stranger = User.create!(email: "someone@else.com", email_verified: true, clowk_user_id: "s2")
 
-    adopted = User.provision_from_clowk!(
-      sub: "clowk-sub-1", email: "operator@company.com", name: "Operator",
-      email_verified: true, provider: "google"
-    )
+    assert AuthConfig.current.claimable_by?(named)
+    assert_not AuthConfig.current.claimable_by?(stranger)
+  end
 
-    assert_equal @operator.id, adopted.id, "a new row here means the workspace was stranded"
-    assert_equal 1, adopted.active_orgs.count
-    assert_equal "clowk-sub-1", adopted.clowk_user_id
+  # An unverified address is not identity. A provider that lets someone assert
+  # an arbitrary email would otherwise hand over the whole installation.
+  test "an unproven address may not claim it" do
+    turn_on
+    unproven = User.create!(email: "operator@company.com", email_verified: false, clowk_user_id: "s3")
+
+    assert_not AuthConfig.current.claimable_by?(unproven)
+  end
+
+  test "a claim is offered once and not again" do
+    turn_on
+    claimant = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s4")
+
+    AuthConfig.current.migrate_to!(claimant)
+
+    assert_not AuthConfig.current.reload.claimable_by?(claimant)
+  end
+
+  # ── The handover itself ────────────────────────────────────────────────
+
+  test "confirming moves the whole workspace onto the real identity" do
+    turn_on
+    claimant = User.create!(email: "operator@company.com", email_verified: true, clowk_user_id: "s5")
+
+    AuthConfig.current.migrate_to!(claimant)
+
+    assert_equal 1, claimant.reload.active_orgs.count
+    assert_equal 0, @operator.reload.active_orgs.count
+    assert_equal claimant.id, @org.reload.account.reload.owner_id, "the account moves too"
   end
 
   test "an address that already belongs to someone else is refused" do

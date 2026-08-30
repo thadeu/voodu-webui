@@ -181,14 +181,16 @@ CLOWK_ENABLED=1
 CLOWK_PUBLISHABLE_KEY=pk_live_...
 ```
 
-**Or from Settings → Authentication**, if you decided you wanted it after
-already running. Paste the publishable key and the address that will sign in,
-and the next request asks for authentication.
+**Or migrate from Settings → Authentication**, if you decided you wanted it
+after already running. Paste the publishable key and the address you will sign
+in with; the next request asks for authentication.
 
-That address matters: anonymous mode runs as one local operator, so the screen
-hands the existing workspace over to it. Without that, the first real sign-in
-would be a brand-new person with no membership, and every server would sit in an
-org nobody could reach.
+Turning it on **moves nothing**. An anonymous installation holds everything
+under one local operator, and the first Clowk sign-in is a stranger to that row
+— so the address you name is offered the workspace on a confirmation screen
+*after* signing in successfully, and takes it over from there. Until you
+confirm, the workspace is exactly where it was, which is what makes a mistyped
+key survivable rather than terminal.
 
 **The environment always wins**, and that is the way out. If a key saved here is
 wrong you would be locked out of your own dashboard with no UI to fix it from —
