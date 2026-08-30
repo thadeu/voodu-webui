@@ -33,6 +33,10 @@ class Org
     # The row is created `invited` and grants nothing until the person follows
     # the link and proves they are that row — see InvitesController.
     def create
+      unless entitlements.room_for_another_invite?
+        return redirect_to org_members_path, alert: invite_limit_message
+      end
+
       email = params[:email].to_s.strip.downcase
       role = %w[member admin].include?(params[:role]) ? params[:role] : "member"
 
@@ -50,6 +54,17 @@ class Org
       redirect_to org_members_path, notice: "Invitation ready for #{email} — copy the link on their row."
     rescue ActiveRecord::RecordInvalid => e
       redirect_to org_members_path, alert: e.record.errors.full_messages.to_sentence
+    end
+
+    def invite_limit_message
+      limit = entitlements.limit(:member_invites)
+
+      if limit.to_i.zero?
+        "This installation is licensed for a single operator. An Enterprise licence " \
+          "adds people."
+      else
+        "This installation is licensed for #{limit} invited #{"member".pluralize(limit)}."
+      end
     end
 
     def update

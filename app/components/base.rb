@@ -75,6 +75,8 @@ class Components::Base < Phlex::HTML
   # members screen, the org switcher.
   register_value_helper :clowk_enabled?
   register_value_helper :perimeter_warning?
+  register_value_helper :entitlements
+  register_value_helper :unlicensed_postgres?
 
   # ── Form + dropdown primitives ─────────────────────────────────────────
   # Moved down from Views::Base when Components::UI::Select needed them: a

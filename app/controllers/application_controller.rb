@@ -360,6 +360,22 @@ class ApplicationController < ActionController::Base
     }
   end
 
+  # What this installation bought. Distinct from Permissions, which answers who
+  # you are inside an org — an unlicensed install and an under-privileged member
+  # are refused for unrelated reasons and deserve unrelated messages.
+  def entitlements
+    @entitlements ||= Entitlements.current
+  end
+
+  # unlicensed_postgres? — the control plane is in Postgres without an
+  # entitlement for it.
+  #
+  # Asked of the live connection rather than of DATABASE_URL, because the
+  # adapter actually in use is the fact; the env var is only how it got there.
+  def unlicensed_postgres?
+    entitlements.unlicensed_adapter?(ActiveRecord::Base.connection_db_config.adapter)
+  end
+
   # perimeter_warning? — anonymous mode reached from outside a perimeter.
   #
   # Both halves matter. With sign-in on, a public address is simply the internet
@@ -369,5 +385,5 @@ class ApplicationController < ActionController::Base
     !clowk_enabled? && PerimeterCheck.exposed?(request.remote_ip)
   end
 
-  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?
+  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?, :entitlements, :unlicensed_postgres?
 end

@@ -27,6 +27,18 @@ class OrgsController < ApplicationController
   before_action :require_org_management!, only: [:update, :destroy]
 
   def create
+    # The free tier is one org. Refusing CREATION is the whole enforcement —
+    # nothing existing is touched, so a licence that lapses leaves every org
+    # readable and only stops the next one. That asymmetry is deliberate: an
+    # entitlement that could remove access would be a way to lock a customer
+    # out of their own dashboard.
+    unless entitlements.room_for_another_org?
+      return render(
+        turbo_stream: turbo_stream.replace("org-manager-panel", panel(error: org_limit_message)),
+        status: :unprocessable_entity
+      )
+    end
+
     @org = Org.new(org_params.merge(account: current_account))
 
     # The creator gets an owner membership in the same transaction — membership
@@ -75,6 +87,13 @@ class OrgsController < ApplicationController
   # guarantees it exists before any org-creating screen is reachable.
   def current_account
     Current.user&.owned_accounts&.order(:created_at)&.first
+  end
+
+  def org_limit_message
+    limit = entitlements.limit(:orgs)
+
+    "This installation is licensed for #{limit} #{"org".pluralize(limit)}. " \
+      "An Enterprise licence lifts the limit."
   end
 
   def grant_creator_ownership

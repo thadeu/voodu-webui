@@ -31,6 +31,14 @@ class OnboardingsController < ApplicationController
       ), status: :unprocessable_entity)
     end
 
+    unless entitlements.room_for_another_account?
+      return render(Views::Onboardings::New.new(
+        account_name: account_name, org_name: org_name,
+        error: "This installation is licensed for a single account. An Enterprise " \
+               "licence allows more — ask whoever runs it to invite you into theirs."
+      ), status: :unprocessable_entity)
+    end
+
     org = Account.provision!(owner: Current.user, account_name: account_name, org_name: org_name)
 
     redirect_to org_root_path(org_id: org.short_id), notice: "Welcome. #{org.name} is ready."
