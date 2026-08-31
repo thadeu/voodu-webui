@@ -35,6 +35,14 @@ Puma::Plugin.create do
       # and the Go side never learns that licences exist.
       env = {"RAILS_INTERNAL_URL" => rails_url, "POLLER_RETENTION_DAYS" => Retention.keep_days.to_s}
 
+      if Poller.stale_binary?
+        launcher.log_writer.log(
+          "[poller] WARNING: dist/poller is older than gems/poller/src — run " \
+          "`make -C gems/poller build`. Until then this runs the previous " \
+          "build, and a protocol change surfaces as a flat 401."
+        )
+      end
+
       @pid = spawn(env, binary, out: $stdout, err: $stderr)
 
       launcher.log_writer.log("[poller] spawned PID #{@pid} → #{rails_url}")

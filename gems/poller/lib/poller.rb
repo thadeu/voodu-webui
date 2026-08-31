@@ -33,6 +33,30 @@ module Poller
   # `dist/` (not `src/`) because `src/poller/` is the Go package dir;
   # `bin/` (not `bin/poller`) because that holds the Ruby binstub
   # template the Railtie installs into the Rails app.
+  # stale_binary? — is the compiled binary older than the Go source it came from?
+  #
+  # `dist/poller` is gitignored and built by hand (`make build`), so editing the
+  # Go side and restarting only reruns the OLD binary. That cost a debugging
+  # session once: the signing change landed in source, the four-day-old binary
+  # kept sending `Authorization: Bearer`, and the controller answered every
+  # request with a flat 401 "invalid or expired token" — which reads as a
+  # credential problem and is a build problem.
+  #
+  # Nil when there is nothing to compare (no compiled binary, or no source tree
+  # — the shipped image has one and not the other, and must stay quiet).
+  def self.stale_binary?
+    compiled = File.join(GEM_ROOT, "dist", "poller")
+    return nil unless File.executable?(compiled)
+
+    # _test.go is excluded: it never reaches the binary, so counting it would
+    # cry stale every time somebody edited a test.
+    sources = Dir.glob(File.join(GEM_ROOT, "src", "**", "*.go")).grep_v(/_test\.go\z/)
+    newest = sources.max_by { |f| File.mtime(f) }
+    return nil if newest.nil?
+
+    File.mtime(newest) > File.mtime(compiled)
+  end
+
   def self.binary_path
     compiled = File.join(GEM_ROOT, "dist", "poller")
 
