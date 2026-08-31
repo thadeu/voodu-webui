@@ -103,4 +103,23 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   ensure
     original.nil? ? ENV.delete("APP_VERSION") : ENV["APP_VERSION"] = original
   end
+
+  # Which role you hold decides every refusal you hit, and the same person is
+  # often owner of one org and member of another — so the menu names it.
+  test "the account menu shows the role held in the org being viewed" do
+    sign_in_as(email: users(:owner).email)
+
+    get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
+
+    assert_select "span", text: "owner"
+  end
+
+  test "a member sees member, not the role they hold elsewhere" do
+    sign_in_as(email: users(:contractor).email)
+
+    get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
+
+    assert_select "span", text: "member"
+    assert_select "span", text: "owner", count: 0
+  end
 end

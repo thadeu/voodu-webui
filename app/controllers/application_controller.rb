@@ -204,6 +204,21 @@ class ApplicationController < ActionController::Base
     @all_servers ||= authorized_servers.order(:name).to_a
   end
 
+  # sidebar_servers — the list the nav draws, and the source of the recent LRU.
+  #
+  # Normally the current org's servers. But the installation screens (/ops/*)
+  # name no org, so all_servers is empty there BY DESIGN — and the sidebar beside
+  # them drew nothing but its two container-wide icons, with no way back to any
+  # server at all. Those screens belong to the installation rather than to one
+  # org, so the list widens to every server this person reaches.
+  #
+  # Still the authorized producer, so nothing widens past what they may see, and
+  # each row links through its OWN org (Sidebar#server_row reads server.org), so
+  # a list spanning two orgs stays correct rather than pointing them all at one.
+  def sidebar_servers
+    @sidebar_servers ||= current_org ? all_servers : reachable_servers.order(:name).to_a
+  end
+
   # all_orgs — the orgs THIS PERSON belongs to, for the topbar switcher. Never
   # every org: the switcher would otherwise list every tenant's name, and the
   # markup carries their ids.
@@ -267,9 +282,9 @@ class ApplicationController < ActionController::Base
     @recent_servers ||= begin
       ids = Array(session[:recent_server_ids])
       if ids.empty?
-        all_servers.first(MAX_RECENT_SERVERS)
+        sidebar_servers.first(MAX_RECENT_SERVERS)
       else
-        by_id = all_servers.index_by(&:id)
+        by_id = sidebar_servers.index_by(&:id)
         ids.map { |id| by_id[id] }.compact.first(MAX_RECENT_SERVERS)
       end
     end

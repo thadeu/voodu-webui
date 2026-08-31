@@ -11,10 +11,10 @@
 class Ops::LicenseController < ApplicationController
   skip_before_action :require_server!
 
-  authorize :manage_account
+  authorize_anywhere :manage_account
 
   def index
-    render Views::Ops::License::Index.new(current_path: request.path, servers: all_servers)
+    render Views::Ops::License::Index.new(current_path: request.path, servers: sidebar_servers)
   end
 
   def create

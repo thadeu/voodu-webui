@@ -79,7 +79,22 @@ class User < ApplicationRecord
   # `email_verified` stays false, so verified_email? is false and nothing that
   # treats an address as proof of a person (invitations, session revocation)
   # ever matches it.
-  LOCAL_OPERATOR_EMAIL = "operator@voodu.local"
+  LOCAL_OPERATOR_EMAIL = "free@voodu.clowk.in"
+
+  # What this address used to be. An installation that ran an earlier build
+  # already holds a workspace under it — its org, its servers, its PATs, its
+  # licence history. Looking only for the current address would find none of
+  # that, provision a SECOND operator beside it, and strand the first behind a
+  # sign-in that anonymous mode never shows. So the old address is adopted, not
+  # ignored, and the row is renamed in place the first time it is seen.
+  LEGACY_LOCAL_OPERATOR_EMAILS = ["operator@voodu.local"].freeze
+
+  # The name shown wherever this row is displayed as a person. "Free Tier"
+  # rather than "Local operator" because it answers the question someone
+  # actually has when they open the account menu — which plan am I on — and the
+  # address beside it already says the account is a local one.
+  LOCAL_OPERATOR_NAME = "Free Tier"
+  LEGACY_LOCAL_OPERATOR_NAMES = ["Local operator"].freeze
 
   # local_operator — the identity behind every request in anonymous mode.
   #
@@ -95,15 +110,38 @@ class User < ApplicationRecord
   # the SAME transaction — so the loser's account and org roll back with its
   # user instead of leaving a second orphan workspace behind.
   def self.local_operator
-    existing = find_by(email: LOCAL_OPERATOR_EMAIL)
-    return repair_local_workspace(existing) if existing
+    existing = find_by(email: LOCAL_OPERATOR_EMAIL) || find_by(email: LEGACY_LOCAL_OPERATOR_EMAILS)
+    return repair_local_workspace(carry_forward_identity(existing)) if existing
 
     create_local_operator!
   end
 
+  # Both the seeded address and the seeded name have changed since earlier
+  # builds. They are corrected ON THE ROW THAT ALREADY EXISTS rather than by
+  # creating a new one: the whole workspace — the org, its servers, their PATs,
+  # the licence history — hangs off this row, and a second operator beside it
+  # would strand all of it behind a sign-in that anonymous mode never shows.
+  #
+  # Only values this code seeded are replaced, so anything a later feature sets
+  # deliberately survives. The current address is looked up FIRST, so if both
+  # somehow exist the current row wins and the legacy one is left untouched:
+  # merging two workspaces is not something to attempt inside a request.
+  def self.carry_forward_identity(user)
+    changes = {}
+    changes[:email] = LOCAL_OPERATOR_EMAIL if LEGACY_LOCAL_OPERATOR_EMAILS.include?(user.email)
+    changes[:name] = LOCAL_OPERATOR_NAME if LEGACY_LOCAL_OPERATOR_NAMES.include?(user.name)
+    return user if changes.empty?
+
+    user.update!(**changes)
+    Rails.logger.info("[auth] local operator identity carried forward: #{changes.keys.join(", ")}")
+
+    user
+  end
+  private_class_method :carry_forward_identity
+
   def self.create_local_operator!
     transaction do
-      user = create!(email: LOCAL_OPERATOR_EMAIL, name: "Local operator", email_verified: false)
+      user = create!(email: LOCAL_OPERATOR_EMAIL, name: LOCAL_OPERATOR_NAME, email_verified: false)
       Account.provision!(owner: user, account_name: "Local", org_name: "Default")
 
       user

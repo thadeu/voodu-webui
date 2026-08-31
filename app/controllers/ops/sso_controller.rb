@@ -23,24 +23,24 @@
 class Ops::SsoController < ApplicationController
   skip_before_action :require_server!
 
-  authorize :manage_account
+  authorize_anywhere :manage_account
 
   def index
-    render Views::Ops::Sso::Index.new(current_path: request.path, servers: all_servers)
+    render Views::Ops::Sso::Index.new(current_path: request.path, servers: sidebar_servers)
   end
 
   def create
-    return refuse(env_pinned_message) if AuthSettings.env_decides?
+    return bounce(env_pinned_message) if AuthSettings.env_decides?
 
     email = params[:owner_email].to_s.strip.downcase
-    return refuse("Enter the address that will sign in and own this workspace.") if email.blank?
+    return bounce("Enter the address that will sign in and own this workspace.") if email.blank?
 
     conflict = User.where(email: email).where.not(id: adoptable_operator&.id).first
-    return refuse("#{email} already has an account here — sign in as them instead.") if conflict
+    return bounce("#{email} already has an account here — sign in as them instead.") if conflict
 
     activate!(email)
   rescue ActiveRecord::RecordInvalid => e
-    refuse(e.record.errors.full_messages.to_sentence)
+    bounce(e.record.errors.full_messages.to_sentence)
   end
 
   # The safety valve, while there is still a session to use it from.
@@ -86,5 +86,8 @@ class Ops::SsoController < ApplicationController
       "take precedence. Change CLOWK_ENABLED / CLOWK_PUBLISHABLE_KEY there instead."
   end
 
-  def refuse(message) = redirect_to(return_to_path(ops_sso_path), alert: message)
+  # NOT `refuse` — that is Authorization#refuse(capability), and defining it
+  # here overrode it: a denied authorization redirected to this very page, which
+  # denied again, until the browser gave up.
+  def bounce(message) = redirect_to(return_to_path(ops_sso_path), alert: message)
 end

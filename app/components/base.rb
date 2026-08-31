@@ -69,6 +69,10 @@ class Components::Base < Phlex::HTML
   # allowed_in?(org, capability) — the same question about a NAMED org, for the
   # chrome that renders on pages with no :org_id in the URL.
   register_value_helper :allowed_in?
+  # allowed_anywhere?(:capability) — the org-less question, for the account menu
+  # links to /ops/*. Must be the SAME predicate the endpoint enforces, or the
+  # menu hides a page you can open (or offers one you cannot).
+  register_value_helper :allowed_anywhere?
 
   # Which deployment shape this is. Components use it to drop the surfaces that
   # only mean something with per-person identity — sign-out, invitations, the

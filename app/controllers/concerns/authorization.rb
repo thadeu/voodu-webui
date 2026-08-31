@@ -11,14 +11,19 @@
 module Authorization
   extend ActiveSupport::Concern
 
-  included do
-    helper_method :allowed?
-  end
-
   class_methods do
     def authorize(capability, **options)
       before_action(**options) { require_permission!(capability) }
     end
+
+    # For the installation-wide screens (/ops/*), which carry no :org_id.
+    def authorize_anywhere(capability, **options)
+      before_action(**options) { require_permission_anywhere!(capability) }
+    end
+  end
+
+  included do
+    helper_method :allowed?, :allowed_anywhere?
   end
 
   private
@@ -27,8 +32,32 @@ module Authorization
     Permissions.allow?(Current.role, capability)
   end
 
+  # The same table, asked about the STRONGEST role the person holds ANYWHERE.
+  #
+  # `allowed?` reads Current.role, which answers for the org in the URL — and
+  # /ops/license and /ops/sso have no :org_id segment by design, so Current.role
+  # is nil there by construction and every check against it denies. Not a
+  # missing membership: there is no org for the question to be about. Licence
+  # and sign-in belong to the installation, not to one org in it.
+  #
+  # The trade this accepts, stated because it is not obvious: on a hosted
+  # multi-tenant installation every customer is owner of their own org, so every
+  # customer satisfies this. These screens are safe to reach only where the
+  # people who can sign in are the people who run the box.
+  def allowed_anywhere?(capability)
+    memberships = Current.user&.org_memberships&.active || []
+
+    memberships.any? { |membership| Permissions.allow?(membership.role, capability) }
+  end
+
   def require_permission!(capability)
     return if allowed?(capability)
+
+    refuse(capability)
+  end
+
+  def require_permission_anywhere!(capability)
+    return if allowed_anywhere?(capability)
 
     refuse(capability)
   end

@@ -162,4 +162,191 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
 
     assert_equal 1, User.local_operator.active_orgs.count
   end
+
+  # The upgrade path this product is sold on: run the free tier, buy a licence,
+  # paste it in. It was impossible — /ops/license carries no :org_id, so the
+  # capability table had no org to answer about and refused the one operator
+  # this installation has.
+  #
+  # Drops the test-only global default_url_options[:org_id]: a real /ops/*
+  # request has no org in its path, and with the global left in place these
+  # rendered while the browser got a 500.
+  test "the anonymous operator can open the licence screen they paid for" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/license"
+
+    assert_response :success
+    assert_select "form[action=?]", "/ops/license"
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  test "the anonymous operator can open the sign-in screen to upgrade" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/sso"
+
+    assert_response :success
+    assert_select "form[action=?]", "/ops/sso"
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # The account menu was hidden entirely in anonymous mode. It also carries the
+  # License and SSO links, so hiding it left a free-tier operator with no way to
+  # reach the licence they had just paid for.
+  test "the account menu is shown in anonymous mode, with the same details" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/license"
+
+    assert_select "summary[aria-label=?]", "Account"
+    assert_includes response.body, User::LOCAL_OPERATOR_EMAIL
+    assert_select "span", text: "owner"
+    assert_includes response.body, "voodu-webui"
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # What does NOT belong there: anonymous mode has no sign-in to end, and the
+  # link would promise a way back in that does not exist.
+  test "the account menu offers no way to sign out of anonymous mode" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/license"
+
+    assert_response :success
+    assert_select "a", text: "Sign out", count: 0
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # The address was renamed. An installation that ran an earlier build already
+  # holds its whole workspace under the old one, so the row is adopted rather
+  # than passed over — otherwise a second operator appears beside the first and
+  # the servers, PATs and licence history end up behind a sign-in anonymous mode
+  # never shows.
+  test "an operator provisioned under the old address is adopted, not duplicated" do
+    User.where(email: User::LOCAL_OPERATOR_EMAIL).destroy_all
+    legacy = User.create!(email: User::LEGACY_LOCAL_OPERATOR_EMAILS.first,
+      name: "Local operator", email_verified: false)
+    Account.provision!(owner: legacy, account_name: "Local", org_name: "Default")
+    before = User.count
+
+    adopted = User.local_operator
+
+    assert_equal legacy.id, adopted.id
+    assert_equal User::LOCAL_OPERATOR_EMAIL, adopted.email
+    assert_equal User::LOCAL_OPERATOR_NAME, adopted.name
+    assert_equal before, User.count
+    assert_not User.exists?(email: User::LEGACY_LOCAL_OPERATOR_EMAILS.first)
+  end
+
+  # And the workspace it carried comes with it — the point of adopting at all.
+  test "the adopted operator keeps the org it already owned" do
+    User.where(email: User::LOCAL_OPERATOR_EMAIL).destroy_all
+    legacy = User.create!(email: User::LEGACY_LOCAL_OPERATOR_EMAILS.first,
+      name: "Local operator", email_verified: false)
+    Account.provision!(owner: legacy, account_name: "Local", org_name: "Default")
+    org_ids = legacy.active_orgs.pluck(:id)
+
+    assert_equal org_ids, User.local_operator.active_orgs.pluck(:id)
+  end
+
+  # The sidebar beside the installation screens drew only its two container-wide
+  # icons: the server list is scoped to the org in the URL, and /ops/* names
+  # none. Everything this operator may reach belongs there instead.
+  test "the sidebar on an installation screen still reaches the servers" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+    operator = User.local_operator
+    org = operator.active_orgs.sole
+    server = Server.create!(org: org, name: "box", endpoint: "http://box.example:8687",
+      pat: "pat_" + ("a" * 28))
+
+    get "/ops/license"
+
+    assert_response :success
+    assert_select "a[href=?]", server_root_path(org_id: org.short_id, server_key: server.key)
+    assert_select "a[href=?]", pods_path(org_id: org.short_id, server_key: server.key)
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # An installation whose ADDRESS was already carried forward by a previous boot
+  # still holds the old display name — so the name is corrected on its own, not
+  # only as a passenger of the address change.
+  test "the display name is carried forward even when the address already was" do
+    User.where(email: User::LOCAL_OPERATOR_EMAIL).destroy_all
+    current = User.create!(email: User::LOCAL_OPERATOR_EMAIL,
+      name: User::LEGACY_LOCAL_OPERATOR_NAMES.first, email_verified: false)
+    Account.provision!(owner: current, account_name: "Local", org_name: "Default")
+
+    assert_equal User::LOCAL_OPERATOR_NAME, User.local_operator.name
+    assert_equal current.id, User.local_operator.id
+  end
+
+  # A name set deliberately is not seed data, and must survive the correction.
+  test "a name this code never seeded is left alone" do
+    User.where(email: User::LOCAL_OPERATOR_EMAIL).destroy_all
+    named = User.create!(email: User::LOCAL_OPERATOR_EMAIL, name: "Night shift", email_verified: false)
+    Account.provision!(owner: named, account_name: "Local", org_name: "Default")
+
+    assert_equal "Night shift", User.local_operator.name
+  end
+
+  test "the account menu shows the free-tier name" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/license"
+
+    assert_includes response.body, User::LOCAL_OPERATOR_NAME
+    assert_not_includes response.body, User::LEGACY_LOCAL_OPERATOR_NAMES.first
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # "none" is the self-hosted default, not a fault: the perimeter authenticates
+  # and this app is deliberately not a second door. Saying so in the menu beats
+  # leaving an operator to wonder whether sign-in is broken.
+  test "the sign-in row says none when the perimeter is what authenticates" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/license"
+
+    assert_select "a[href='/ops/sso'] span", text: "none"
+    assert_select "a[href='/ops/sso'] span", text: "clowk", count: 0
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # The pitch that matters most on a free self-hosted box: it is the one screen
+  # where an operator is looking at anonymous mode and might not know there is
+  # an alternative.
+  test "the anonymous installation is told sign-in can be bought" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+
+    get "/ops/sso"
+
+    assert_response :success
+    assert_select "a[href=?]", "https://clowk.in"
+    assert_select "a[rel~=?]", "noopener"
+  ensure
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
+
+  # But not when the ENVIRONMENT decides sign-in: the form beside it is inert
+  # there, and a purchase link would point at the wrong lever — the fix is an
+  # env var on the host, which the card already says.
+  test "an env-pinned installation is not sold sign-in" do
+    pinned = Rails.application.routes.default_url_options.delete(:org_id)
+    ENV["CLOWK_ENABLED"] = "0"
+
+    get "/ops/sso"
+
+    assert_select "a[href=?]", "https://clowk.in", false
+  ensure
+    ENV.delete("CLOWK_ENABLED")
+    Rails.application.routes.default_url_options[:org_id] = pinned if pinned
+  end
 end

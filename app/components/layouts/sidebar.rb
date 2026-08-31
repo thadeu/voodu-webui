@@ -60,12 +60,19 @@ class Components::Layouts::Sidebar < Components::Base
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
-     org_only: true, capability: :invite_member, clowk_only: true},
+     org_only: true, capability: :invite_member, clowk_only: true}
+  ].freeze
 
-    # Container-wide, so neither belongs to the org this nav is scoped to — but a
-    # second nav for two entries would be worse than a slightly wide one. They
-    # are ALSO in the account menu; the sidebar is what makes them reachable in
-    # anonymous mode, where there is no account menu to open.
+  # INSTALLATION_NAV — the container itself: what it is licensed for, and how
+  # people prove who they are. Neither belongs to an org, and neither needs a
+  # server. That is why they are their own group rather than guests in ORG_NAV:
+  # /ops/* renders with no server selected, so the Server and Org groups
+  # correctly draw nothing there — and these two vanished with them, on the very
+  # screens they name.
+  #
+  # `global` — the route takes neither :org_id nor :server_key. Passing either
+  # appends it as a query string, which is noise in the URL and in every log.
+  INSTALLATION_NAV = [
     {id: :license, label: "License", icon: :KeyOutline, path: :ops_license,
      global: true, capability: :manage_account},
     {id: :sso, label: "SSO", icon: :LockClosedOutline, path: :ops_sso,
@@ -182,12 +189,14 @@ class Components::Layouts::Sidebar < Components::Base
             span(class: "font-voodu-mono text-[10.5px] text-voodu-muted-2") { "(#{@servers.size})" }
           end
         end
-        a(
-          href: new_server_path(server_key: nil),
-          class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
-          aria: {label: "Add server"}
-        ) do
-          render Icon::PlusOutline.new(class: "w-3 h-3")
+        if add_server_href
+          a(
+            href: add_server_href,
+            class: "inline-flex items-center justify-center w-5 h-5 text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2",
+            aria: {label: "Add server"}
+          ) do
+            render Icon::PlusOutline.new(class: "w-3 h-3")
+          end
         end
       end
 
@@ -217,7 +226,7 @@ class Components::Layouts::Sidebar < Components::Base
   # "manage servers" affordance never disappears.
   def see_all_link
     a(
-      href: servers_path(server_key: nil),
+      href: see_all_href,
       title: "See all servers",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-9 border border-transparent text-[12px] text-voodu-text-2",
@@ -237,7 +246,9 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "px-2 py-3 text-[11px] text-voodu-muted-2 vmd:group-data-[collapsed]:hidden") do
       plain "no servers yet."
       br
-      a(href: new_server_path(server_key: nil), class: "text-voodu-link hover:underline") { "add one →" }
+      if add_server_href
+        a(href: add_server_href, class: "text-voodu-link hover:underline") { "add one →" }
+      end
     end
   end
 
@@ -351,16 +362,22 @@ class Components::Layouts::Sidebar < Components::Base
     "background: transparent; color: #{color}; box-shadow: inset 0 0 0 1px #{border};"
   end
 
+  # The Server and Org groups need a server to point at; the Installation group
+  # does not, and used to be dropped along with them — leaving /ops/* with an
+  # empty sidebar and no way across to its sibling screen.
   def nav_section
-    return if nav_server_key.nil?
-
     nav(
       class: "flex flex-col gap-3.5 px-2.5 pt-3.5 vmd:group-data-[collapsed]:px-1.5",
       aria: {label: "Primary"}
     ) do
-      nav_group("Server", SERVER_NAV)
-      nav_divider
-      nav_group("Org", ORG_NAV)
+      if nav_server_key
+        nav_group("Server", SERVER_NAV)
+        nav_divider
+        nav_group("Org", ORG_NAV)
+        nav_divider
+      end
+
+      nav_group("Installation", INSTALLATION_NAV)
     end
   end
 
@@ -387,18 +404,55 @@ class Components::Layouts::Sidebar < Components::Base
   # sidebar is collapsed (icons only); a thin divider-like gap (the nav's
   # `gap-3.5`) separates the Server + Org blocks.
   def nav_group(label, items)
+    permitted = items.select { |item| nav_permitted?(item) }
+    return if permitted.empty?
+
     div(class: "flex flex-col gap-1.5") do
       div(class: "px-2 pb-0.5 vmd:group-data-[collapsed]:hidden") do
         span(class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { label }
       end
       div(class: "flex flex-col gap-px") do
-        items.each { |item| nav_item(item) if nav_permitted?(item) }
+        permitted.each { |item| nav_item(item) }
       end
     end
   end
 
   def nav_server_key
     nav_server&.key
+  end
+
+  # see_all_href — where "See all servers" points.
+  #
+  # servers_path is /:org_id/servers, and the org comes from the URL — which the
+  # installation screens do not carry, so the helper raised UrlGenerationError
+  # the moment this list had anything in it to see. all_servers_path is the
+  # org-less door built for exactly this (servers#redirect_to_org resolves one
+  # server-side); the direct path is kept where an org IS known, to save the hop.
+  def see_all_href
+    org_id = nav_org_id || manageable_org&.short_id
+    return all_servers_path if org_id.nil?
+
+    servers_path(org_id: org_id, server_key: nil)
+  end
+
+  # add_server_href — where "+ Add server" points, or nil.
+  #
+  # new_server_path is /:org_id/servers/new, and default_url_options fills
+  # :org_id in only when the URL already carries one. The /ops/* screens render
+  # this same chrome with no org in their path, so the helper raised
+  # UrlGenerationError and took the whole page down — a 500 on the licence
+  # screen an operator had just paid to use.
+  #
+  # Resolved the way every other nav link already resolves it (nav_org_id),
+  # then falling back to an org this person may actually manage. Nil when there
+  # is none, and the control is then omitted: a "+" that raises is worse than
+  # no "+".
+  def add_server_href
+    return @add_server_href if defined?(@add_server_href)
+
+    org_id = nav_org_id || manageable_org&.short_id
+
+    @add_server_href = org_id && new_server_path(org_id: org_id, server_key: nil)
   end
 
   # nav_org_id — the org short_id for the nav's server-scoped path helpers (M1
@@ -420,8 +474,14 @@ class Components::Layouts::Sidebar < Components::Base
   # invite, so the door would open onto a table with a single permanent row.
   def nav_permitted?(item)
     return false if item[:clowk_only] && !clowk_enabled?
+    return true if item[:capability].nil?
 
-    item[:capability].nil? || allowed_in?(nav_server&.org, item[:capability])
+    # A container-wide screen has no org to be asked about, so it asks the same
+    # org-less question its endpoint enforces. Measured against nav_server.org
+    # it hid License and SSO exactly where there is no server to lend an org.
+    return allowed_anywhere?(item[:capability]) if item[:global]
+
+    allowed_in?(nav_server&.org, item[:capability])
   end
 
   def nav_item(item)
@@ -488,6 +548,12 @@ class Components::Layouts::Sidebar < Components::Base
   end
 
   def nav_active?(item)
+    # Built the same way nav_href builds it. Passing org_id/server_key to a
+    # route that takes neither appends them as a query string, so the comparison
+    # was "/ops/license" against "/ops/license?org_id=…" — never equal, and the
+    # item never lit up on its own page.
+    return @current_path == nav_href(item) if item[:global]
+
     return @current_path == public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key) if item[:path] == :server_root
 
     # `active_prefix` lets an item highlight across a URL family wider

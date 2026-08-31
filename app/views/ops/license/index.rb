@@ -18,12 +18,51 @@ class Views::Ops::License::Index < Views::Base
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
-        div(class: "max-w-3xl") { plan_card }
+        columns
       end
     end
   end
 
   private
+
+  # Two columns above 1280px: what this installation HAS, beside what it could
+  # have. One column below that, because a 340px pitch squeezed next to a table
+  # of limits is unreadable — and on a phone the plan is what someone came for,
+  # so it stays first in the source and therefore first on the page.
+  #
+  # max-w-5xl rather than the old max-w-3xl: the card kept its width and the
+  # pitch was given the room that was empty anyway.
+  def columns
+    div(class: "grid grid-cols-1 vlg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] " \
+               "items-start gap-4 vmd:gap-5 max-w-5xl") do
+      plan_card
+      upgrade_cta
+    end
+  end
+
+  # Nothing to sell to someone who already bought. An installation inside its
+  # grace period is still entitled, and being advertised at while holding a
+  # licence that merely needs renewing would read as the product not knowing
+  # what it had sold — the expiry on the left already says what to do.
+  def upgrade_cta
+    return if license.entitled?
+
+    render Components::UI::UpsellCard.new(
+      title: "Enterprise",
+      headline: "Run it without the limits",
+      blurb: "The free tier is meant for one operator on one box. Enterprise lifts " \
+             "the caps and lets the control plane live in your own Postgres.",
+      features: [
+        "Unlimited orgs and member invites",
+        "90 days of searchable history, up from 3",
+        "Postgres for the control plane — bring your own database",
+        "Single sign-on, so people arrive as themselves"
+      ],
+      primary: {label: "See Enterprise", href: "https://voodu.clowk.in/license/enterprise"},
+      secondary: {label: "Email us", href: "mailto:hello@clowk.in?subject=Voodu%20Enterprise"},
+      footnote: "Paste the licence into the form on the left — it takes effect immediately, no restart."
+    )
+  end
 
   def page_header
     div(class: "flex flex-col gap-1") do
@@ -47,8 +86,8 @@ class Views::Ops::License::Index < Views::Base
         render(Components::UI::KvRow.new(key: "Database")) { database_value }
       end
 
-      license_history if allowed?(:manage_account)
-      activation_form if allowed?(:manage_account)
+      license_history if allowed_anywhere?(:manage_account)
+      activation_form if allowed_anywhere?(:manage_account)
     end
   end
 
@@ -64,7 +103,7 @@ class Views::Ops::License::Index < Views::Base
     keys = Ops::License.newest_first.to_a
     return if keys.empty?
 
-    div(class: "flex flex-col gap-1.5 pt-3 mt-3 border-t border-voodu-border") do
+    div(class: "flex flex-col gap-1.5 p-3.5 border-t border-voodu-border") do
       span(class: "text-[11px] uppercase tracking-wide text-voodu-muted") { "License history" }
       render Components::Licenses::HistoryTable.new(keys: keys)
     end
@@ -97,7 +136,7 @@ class Views::Ops::License::Index < Views::Base
   end
 
   def activation_form
-    form(action: ops_license_path, method: "post", class: "flex flex-col gap-2 pt-3 mt-3 border-t border-voodu-border") do
+    form(action: ops_license_path, method: "post", class: "flex flex-col gap-2 p-3.5 border-t border-voodu-border") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "return_to", value: @current_path)
 

@@ -53,6 +53,7 @@ class Components::Layouts::Topbar < Components::Base
       div(class: "hidden vmd:block flex-1")
       search_box
       search_icon
+      license_badge
       theme_toggle
       account_menu
     end
@@ -60,17 +61,82 @@ class Components::Layouts::Topbar < Components::Base
 
   private
 
+  # license_badge — which plan this installation runs on, on every page.
+  #
+  # Two words, because that is the question: is this the free tier or a bought
+  # one. The states underneath are five, and the extra three are exceptions an
+  # operator has to act on — so the WORD stays Free or Licensed and the colour
+  # and tooltip carry the rest. A licence in grace still says Licensed because
+  # the entitlements are still granted; a lapsed one says Free because they are
+  # not, which is the fact that matters at a glance.
+  #
+  # Reads the licence off `entitlements`, which the controller already memoised
+  # for this request. LicenseToken.current verifies an RSA signature and queries
+  # the database, and the topbar renders on every page — resolving it a second
+  # time here would put that on every request in the app.
+  #
+  # Hidden below the breakpoint: the bar is already tight at 360px, and the
+  # licence screen carries the whole story anyway.
+  def license_badge
+    state = LICENSE_BADGES[entitlements.license.status]
+    return if state.nil?
+
+    # Wrapped rather than given `hidden` directly: Badge's own class already
+    # carries `inline-flex`, and both are the same CSS property — `.inline-flex`
+    # is emitted AFTER `.hidden` in the compiled sheet, so it wins and the badge
+    # would have stayed visible at 360px. The wrapper has no competing display
+    # utility, so `hidden` applies alone below the breakpoint and the `vmd:`
+    # variant (emitted after every base utility) takes over above it.
+    div(class: "hidden vmd:flex items-center shrink-0") do
+      # h-8 px-3 text-[12px] to sit at the height of the search box and the
+      # theme button beside it — Badge's own px-2/text-[11px] are tuned for
+      # inline use inside a table row. Both overrides set the same CSS property
+      # Badge already sets, so both were checked against the compiled sheet
+      # rather than assumed: .px-3 and .text-[12px] are emitted after their
+      # smaller siblings and win. Overridden here rather than in Badge, which
+      # every other screen uses at the smaller size.
+      render Components::UI::Badge.new(
+        variant: state[:variant],
+        title: license_badge_title,
+        class: "h-8 px-3 text-[12px]"
+      ) { state[:label] }
+    end
+  end
+
+  LICENSE_BADGES = {
+    none: {label: "Free", variant: :neutral},
+    valid: {label: "Licensed", variant: :accent},
+    grace: {label: "Licensed", variant: :warning},
+    lapsed: {label: "Free", variant: :danger},
+    invalid: {label: "Free", variant: :danger}
+  }.freeze
+
+  def license_badge_title
+    license = entitlements.license
+
+    case license.status
+    when :none then "Free tier — no licence installed"
+    when :valid then "Licensed to #{license.customer}"
+    when :grace then "Licence for #{license.customer} expired — still granted, for now"
+    when :lapsed then "Licence for #{license.customer} lapsed — back on the free tier"
+    when :invalid then "Licence could not be verified — running as free tier"
+    end
+  end
+
   # account_menu — who you are, and the way out.
   #
   # A <details> rather than a Stimulus popover: one element, closes on Escape
   # and on click-outside for free, and it is the only floating thing in the bar.
   # The avatar comes from the Clowk claims mirrored onto the User; providers
   # that hand back none fall through to the initial.
-  # Nothing to show in anonymous mode: the address is a handle rather than a
-  # person, and "Sign out" would lead to a door that is not the way in.
+  # Shown in anonymous mode too. It used to be hidden there — the reasoning was
+  # that the address is a handle rather than a person, and that "Sign out" leads
+  # to a door which is not the way in. Both still hold; neither is a reason to
+  # withhold the whole menu. It also carries License and SSO, so hiding it left
+  # a free-tier operator with no way to reach the licence they had just bought.
+  # Sign out is what goes, not the menu.
   def account_menu
     return if current_user.nil?
-    return unless clowk_enabled?
 
     details(class: "relative shrink-0", data: {controller: "details-dismiss"}) do
       summary(
@@ -96,24 +162,58 @@ class Components::Layouts::Topbar < Components::Base
       div(class: "flex flex-col gap-0.5 px-3 py-2.5 border-b border-voodu-border") do
         span(class: "text-[12.5px] text-voodu-text truncate") { current_user.display_name }
         span(class: "text-[11px] text-voodu-muted font-mono truncate") { current_user.email }
+        role_chip
       end
 
-      if allowed?(:manage_account)
+      if allowed_anywhere?(:manage_account)
         # org_id: nil explicitly — these routes take no org segment, so the
         # helper would otherwise append the current one as ?org_id=…, which is
         # noise in the URL bar and in every log line.
-        account_link(ops_license_path(org_id: nil, server_key: nil), "License")
-        account_link(ops_sso_path(org_id: nil, server_key: nil), "SSO")
+        account_link(ops_license_path(org_id: nil, server_key: nil), "License") { plan_badge }
+        account_link(ops_sso_path(org_id: nil, server_key: nil), "SSO") { sso_badge }
       end
 
-      a(
-        href: clowk_sign_out_path,
-        class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 " \
-               "hover:text-voodu-text border-t border-voodu-border"
-      ) { "Sign out" }
+      sign_out_link
 
       build_row
     end
+  end
+
+  # Anonymous mode has no sign-in to end: there is one local operator, the
+  # perimeter decides who reaches the door, and offering a way out would only
+  # promise a way back in that does not exist.
+  def sign_out_link
+    return unless clowk_enabled?
+
+    a(
+      href: clowk_sign_out_path,
+      class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 " \
+             "hover:text-voodu-text border-t border-voodu-border"
+    ) { "Sign out" }
+  end
+
+  # Which role you hold HERE — the org in the URL, not a property of the person.
+  #
+  # Worth the line because the same person is often owner of one org and member
+  # of another, and every refusal they hit is decided by this word. Absent
+  # rather than guessed on the org-less screens, where there is no org to hold a
+  # role in and any value shown would be a different org's.
+  def role_chip
+    role = Current.role || unambiguous_role
+    return if role.blank?
+
+    render Components::UI::Badge.new(class: "self-start mt-1 capitalize") { role.to_s }
+  end
+
+  # The org-less screens (/ops/*) have no org in the URL for Current.role to
+  # answer about, and that is where a free-tier operator spends their time — so
+  # the chip would be missing exactly there. When every membership agrees, the
+  # answer is unambiguous and worth showing; when they disagree there is nothing
+  # honest to print, and the chip stays away rather than picking one.
+  def unambiguous_role
+    roles = (Current.user&.org_memberships&.active || []).map(&:role).uniq
+
+    roles.first if roles.one?
   end
 
   # Which build this is, at the bottom where a footer belongs.
@@ -125,7 +225,7 @@ class Components::Layouts::Topbar < Components::Base
   def build_row
     div(class: "flex items-baseline justify-between gap-2 px-3 py-1.5 " \
                "border-t border-voodu-border text-[11px] text-voodu-muted") do
-      span { "version" }
+      span { "voodu-webui" }
       span(class: "font-voodu-mono") { AppVersion.current }
     end
   end
@@ -135,11 +235,41 @@ class Components::Layouts::Topbar < Components::Base
   # of them. They are in the sidebar too, and that is not redundancy: this menu
   # does not exist in anonymous mode, which is exactly the free tier that would
   # be going looking for the licence screen.
-  def account_link(href, label_text)
+  # Each row names its own current setting. Without it the menu offered two
+  # doors and no way to tell whether either needed opening — "am I on the free
+  # tier" and "does this installation ask anyone to sign in" is the reason
+  # somebody opens them at all.
+  def account_link(href, label_text, &badge)
     a(
       href: href,
-      class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) { label_text }
+      class: "flex items-center justify-between gap-2 px-3 py-2 text-[12.5px] " \
+             "text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+    ) do
+      span { label_text }
+      badge&.call
+    end
+  end
+
+  # The PLAN, not the licence's health — the topbar badge beside this menu
+  # already carries the exception states in its colour. Reads `entitled?`, the
+  # same predicate Entitlements uses to pick which table applies, so this word
+  # can never disagree with the limits actually in force: a licence inside its
+  # grace period still grants them, and still says enterprise.
+  def plan_badge
+    entitled = entitlements.license.entitled?
+
+    render Components::UI::Badge.new(variant: entitled ? :accent : :neutral) do
+      entitled ? "enterprise" : "free"
+    end
+  end
+
+  # Whether anyone is asked to prove who they are. "none" is not a failure: it
+  # is the self-hosted default, where the perimeter authenticates and this app
+  # is deliberately not a second door.
+  def sso_badge
+    render Components::UI::Badge.new(variant: clowk_enabled? ? :accent : :neutral) do
+      clowk_enabled? ? "clowk" : "none"
+    end
   end
 
   # theme_toggle — sun/moon quick switch. The initial theme is resolved
