@@ -124,7 +124,14 @@ COPY --chown=rails:rails --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --chown=rails:rails --from=build /rails /rails
 
 # OCI image labels — links package to repo on GHCR + marks license.
-LABEL org.opencontainers.image.source="https://github.com/thadeu/voodu-webui" \
+# The tag that produced this image, baked in so the dashboard can say which
+# build it is. Empty outside a release build, and the app then reports "dev" —
+# more honest than a stale number.
+ARG APP_VERSION=""
+ENV APP_VERSION=$APP_VERSION
+
+LABEL org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.source="https://github.com/thadeu/voodu-webui" \
       org.opencontainers.image.description="Voodu Web UI — zero-config Rails 8 dashboard for the voodu PaaS." \
       org.opencontainers.image.licenses="Elastic-2.0"
 

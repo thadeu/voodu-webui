@@ -70,4 +70,37 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
   ensure
     Rails.application.config.x.clowk_enabled = previous
   end
+
+  # Which build this is, in the menu someone already has open when they are
+  # about to report something — "which version" is the first question back.
+  test "the account menu names the build" do
+    get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
+
+    assert_response :success
+    assert_includes response.body, "voodu-webui"
+    assert_includes response.body, AppVersion.current
+  end
+
+  # Outside a release build there is no tag baked in, and saying so beats a
+  # stale number: an operator reporting from a build that calls itself dev has
+  # told us something true.
+  test "an unbuilt checkout reports dev rather than a stale number" do
+    original = ENV["APP_VERSION"]
+    ENV.delete("APP_VERSION")
+
+    assert_equal "dev", AppVersion.current
+    assert_not AppVersion.released?
+  ensure
+    ENV["APP_VERSION"] = original if original
+  end
+
+  test "a release build reports the tag without its v" do
+    original = ENV["APP_VERSION"]
+    ENV["APP_VERSION"] = "v0.2.1"
+
+    assert_equal "0.2.1", AppVersion.current
+    assert AppVersion.released?
+  ensure
+    original.nil? ? ENV.delete("APP_VERSION") : ENV["APP_VERSION"] = original
+  end
 end

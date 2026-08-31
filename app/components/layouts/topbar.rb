@@ -111,6 +111,22 @@ class Components::Layouts::Topbar < Components::Base
         class: "px-3 py-2 text-[12.5px] text-voodu-text-2 hover:bg-voodu-surface-2 " \
                "hover:text-voodu-text border-t border-voodu-border"
       ) { "Sign out" }
+
+      build_row
+    end
+  end
+
+  # Which build this is, at the bottom where a footer belongs.
+  #
+  # Here rather than only in Settings because this is the menu someone already
+  # has open when they are about to report something, and "which version" is
+  # the first question back. Not a link: there is nothing to do with it except
+  # read it out.
+  def build_row
+    div(class: "flex items-baseline justify-between gap-2 px-3 py-1.5 " \
+               "border-t border-voodu-border text-[11px] text-voodu-muted") do
+      span { "voodu-webui" }
+      span(class: "font-voodu-mono") { AppVersion.current }
     end
   end
 

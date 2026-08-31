@@ -58,6 +58,9 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
+          # So the running dashboard can report which build it is.
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
           provenance: false
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
