@@ -87,7 +87,12 @@ class Views::Ops::License::Index < Views::Base
       end
 
       license_history if allowed_anywhere?(:manage_account)
-      activation_form if allowed_anywhere?(:manage_account)
+
+      if license.unlimited?
+        hosted_notice
+      elsif allowed_anywhere?(:manage_account)
+        activation_form
+      end
     end
   end
 
@@ -108,6 +113,8 @@ class Views::Ops::License::Index < Views::Base
       render Components::Licenses::HistoryTable.new(keys: keys)
     end
   end
+
+  def plan_name = license.unlimited? ? "Unlimited" : "Enterprise"
 
   def plan_limits_value
     e = entitlements
@@ -169,14 +176,26 @@ class Views::Ops::License::Index < Views::Base
   # which plan they are on files a ticket to ask. A lapsed or unverifiable
   # licence has to be loud here — it is the only place that explains why a
   # capability they paid for stopped applying.
+  # Shown INSTEAD of the form, not beside it. A disabled textarea invites
+  # somebody to paste into it and wonder why nothing happened.
+  #
+  # Only on the hosted plan. A self-hosted operator always keeps the form, env
+  # licence or not: theirs expires, they buy another, and they paste it here.
+  def hosted_notice
+    p(class: "m-0 p-3.5 border-t border-voodu-border text-[12px] text-voodu-muted leading-relaxed") do
+      plain "This installation runs on a hosted plan — its licence is managed by whoever "
+      plain "operates it. Everything above is what you are entitled to."
+    end
+  end
+
   def plan_value
     case license.status
     when :none
       span(class: "text-voodu-text-2") { "Free" }
     when :valid
-      span(class: "text-voodu-text") { "Enterprise · #{license.customer}" }
+      span(class: "text-voodu-text") { "#{plan_name} · #{license.customer}" }
     when :grace
-      span(class: "text-voodu-amber") { "Enterprise · #{license.customer} — expired, in grace" }
+      span(class: "text-voodu-amber") { "#{plan_name} · #{license.customer} — expired, in grace" }
     when :lapsed
       span(class: "text-voodu-red") { "Free — licence for #{license.customer} lapsed" }
     when :invalid

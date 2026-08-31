@@ -44,7 +44,15 @@ class Ops::SsoController < ApplicationController
   end
 
   # The safety valve, while there is still a session to use it from.
+  #
+  # Refused when the environment decides, which `create` has always checked and
+  # this had not. On a host that sets CLOWK_ENABLED the deletion would not even
+  # change sign-in — the env wins on the next resolve — so all it could do is
+  # destroy stored configuration for no effect. On a multi-tenant installation
+  # that is an unguarded destructive endpoint on installation-wide config.
   def destroy
+    return bounce(env_pinned_message) if AuthSettings.env_decides?
+
     Ops::SsoConfig.delete_all
 
     redirect_to return_to_path(ops_sso_path),

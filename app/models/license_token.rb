@@ -90,7 +90,7 @@ class LicenseToken
     configured = Rails.application.config.x.license
     return configured if configured.is_a?(LicenseToken)
 
-    candidates = [resolve(token_from_env), from_database].reject { |l| l.status == :none }
+    candidates = [resolve(token_from_env, source: :env), from_database].reject { |l| l.status == :none }
     verified = candidates.select(&:verified?)
 
     return verified.max_by { |l| l.issued_at || Time.zone.at(0) } if verified.any?
@@ -104,7 +104,7 @@ class LicenseToken
     key = Ops::License.current
     return new(status: :none) if key.nil?
 
-    resolve(key.token)
+    resolve(key.token, source: :database)
   rescue ActiveRecord::ActiveRecordError => e
     # A licence must never be the reason a page 500s — not even when the table
     # is missing because a migration has not run yet.
@@ -112,32 +112,44 @@ class LicenseToken
     new(status: :none)
   end
 
-  def self.resolve(token = token_from_env, key: public_key, now: Time.current)
+  def self.resolve(token = token_from_env, key: public_key, now: Time.current, source: :env)
     return new(status: :none) if token.blank?
-    return new(status: :invalid, reason: "no public key") if key.nil?
+    return new(status: :invalid, reason: "no public key", source: source) if key.nil?
 
     # verify_expiration is off so an expired licence still yields its claims —
     # the settings screen has to be able to say WHOSE licence expired and when,
     # and grace needs the date to measure against.
     claims, = JWT.decode(token, key, true, algorithm: "RS256", verify_expiration: false)
 
-    return new(status: :invalid, reason: "no exp") if claims["exp"].blank?
+    return new(status: :invalid, reason: "no exp", source: source) if claims["exp"].blank?
 
-    new(status: :signed, claims: claims, token: token)
+    new(status: :signed, claims: claims, token: token, source: source)
   rescue JWT::DecodeError, OpenSSL::PKey::PKeyError => e
-    new(status: :invalid, reason: e.class.name.demodulize)
+    new(status: :invalid, reason: e.class.name.demodulize, source: source)
   end
 
   # :signed marks "the signature held" and nothing about time. Where the licence
   # sits in its lifetime is decided in #status, on every read.
-  def initialize(status:, claims: {}, reason: nil, token: nil)
+  def initialize(status:, claims: {}, reason: nil, token: nil, source: :none)
     @verified = status
     @claims = claims || {}
     @reason = reason
     @token = token
+    @source = source
   end
 
   attr_reader :token
+
+  # Where this licence came from: :env, :database or :none. Reported so the
+  # screen can say it; it does NOT decide precedence.
+  #
+  # Precedence is by issue date — see .current. An operator whose env-supplied
+  # licence expires buys a newer one and pastes it into the form, and the newer
+  # one wins. Making the environment win outright would have made that flow
+  # impossible: the form would be gone at exactly the moment it was needed.
+  attr_reader :source
+
+  def env_supplied? = source == :env
 
   # Derived on READ, never stored.
   #
@@ -175,6 +187,30 @@ class LicenseToken
   end
 
   def customer = claims["sub"].presence
+
+  # Which product this licence is. Three exist:
+  #
+  #   free        no licence at all — the self-hosted default
+  #   enterprise  a licence somebody bought for their own installation
+  #   unlimited   the hosted service's own licence, on the box we run
+  #
+  # A claim rather than something inferred from the entitlements: "unlimited"
+  # and "a very generous enterprise licence" would otherwise be the same thing
+  # to read, and the screen has to name what somebody is running.
+  #
+  # Unknown values fall back to enterprise. A licence signed by us with a tier
+  # this build has not heard of is still a licence, and refusing to honour it
+  # would turn a forward-compatible claim into an outage.
+  TIERS = %w[enterprise unlimited].freeze
+
+  def tier
+    return "free" unless entitled?
+
+    claimed = claims["tier"].to_s
+    TIERS.include?(claimed) ? claimed : "enterprise"
+  end
+
+  def unlimited? = tier == "unlimited"
 
   def expires_at
     exp = claims["exp"]

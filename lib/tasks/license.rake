@@ -20,9 +20,9 @@
 # the right home for it.
 #
 # Usage:
-#   rake 'license:issue[acme-corp,365]'
-#   rake 'license:issue[acme-corp,365,retention_days=180 orgs=5]'
-#   rake 'license:inspect[eyJhbGciOi…]'
+#   bundle exec rake 'license:issue[acme-corp,365]'
+#   bundle exec rake 'license:issue[acme-corp,365,retention_days=180 orgs=5]'
+#   bundle exec rake 'license:inspect[eyJhbGciOi…]'
 namespace :license do
   desc "Issue a signed licence: license:issue[customer,days,'k=v k=v']"
   task :issue, [:customer, :days, :overrides] => :environment do |_task, args|

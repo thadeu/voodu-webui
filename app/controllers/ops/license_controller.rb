@@ -17,7 +17,16 @@ class Ops::LicenseController < ApplicationController
     render Views::Ops::License::Index.new(current_path: request.path, servers: sidebar_servers)
   end
 
+  # Refused only on the hosted service, whose licence belongs to whoever runs
+  # the box rather than to the customer reading the screen.
+  #
+  # NOT refused merely because the environment supplied it. An operator whose
+  # env licence expires buys a newer one and pastes it here — precedence is by
+  # issue date, so the newer one wins — and locking the form would have removed
+  # it at exactly the moment it was needed.
   def create
+    return refuse_unlimited if LicenseToken.current.unlimited?
+
     license = Ops::License.activate!(params[:license_token], by: Current.user)
 
     if license.verified?
@@ -44,4 +53,10 @@ class Ops::LicenseController < ApplicationController
   # Returnable validates it — the same guard the alert modal uses, which is what
   # keeps an attacker-supplied return_to from becoming an open redirect.
   def back_to_settings = return_to_path(ops_license_path)
+
+  def refuse_unlimited
+    redirect_to back_to_settings,
+      alert: "This installation runs on a hosted plan. Its licence is managed by whoever " \
+             "operates it, not from here."
+  end
 end

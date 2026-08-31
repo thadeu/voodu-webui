@@ -192,4 +192,23 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     assert_not_includes row.to_s, "supersecret", "the secret must not sit in the clear"
     assert_equal "sk_live_supersecret", Ops::SsoConfig.current.secret_key
   end
+
+  # `create` has always refused while the environment decides; `destroy` had
+  # not. On a host that sets CLOWK_ENABLED the deletion cannot even change
+  # sign-in — the env wins on the next resolve — so all it could do is destroy
+  # stored configuration for no effect. On a multi-tenant installation that is
+  # an unguarded destructive endpoint on installation-wide config.
+  test "turning sign-in off is refused while the environment decides" do
+    Ops::SsoConfig.create!(provider: "clowk", publishable_key: "pk_live_x")
+    ENV["CLOWK_ENABLED"] = "1"
+    ENV["CLOWK_PUBLISHABLE_KEY"] = "pk_live_env"
+
+    delete ops_sso_path
+
+    assert_equal 1, Ops::SsoConfig.count, "the stored config was deleted anyway"
+    assert_match(/environment variables/, flash[:alert])
+  ensure
+    ENV.delete("CLOWK_ENABLED")
+    ENV.delete("CLOWK_PUBLISHABLE_KEY")
+  end
 end

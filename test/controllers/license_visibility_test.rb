@@ -92,4 +92,127 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "License"
     assert_includes response.body, "Plan"
   end
+
+  # ── Env-pinned: the host decided ──────────────────────────────────
+  #
+  # The rule sign-in already follows, applied to the licence: configuration the
+  # HOST set wins, so the screen shows it and does not offer an edit the next
+  # boot would silently undo. This is what makes the hosted service safe to
+  # leave these screens visible on — every tenant can read them, none can write.
+
+  def env_pinned(tier: "enterprise")
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid,
+      claims: {"sub" => "voodu-hosted", "exp" => 30.days.from_now.to_i, "tier" => tier},
+      source: :env
+    )
+  end
+
+  # The renewal flow, which is why the environment does NOT lock the form: an
+  # operator's env-supplied licence expires, they buy another, and the only
+  # place to put it is this form. Locking it would remove the form at exactly
+  # the moment it was needed.
+  test "an env-supplied licence still offers the form, so a renewal can land" do
+    env_pinned
+
+    settings
+
+    assert_response :success
+    assert_select "textarea[name=license_token]"
+  end
+
+  test "an env-supplied licence accepts a newer one pasted in" do
+    env_pinned
+
+    post ops_license_path, params: {license_token: "eyJhbGciOiJSUzI1NiJ9.whatever"}
+
+    # Refused for being unverifiable, not for coming from the wrong place —
+    # the distinction the alert has to make.
+    assert_no_match(/hosted plan/, flash[:alert].to_s)
+  end
+
+  # The hosted service is the exception: its licence belongs to whoever runs
+  # the box, not to the customer reading the screen.
+  test "the hosted plan offers no form" do
+    env_pinned(tier: "unlimited")
+
+    settings
+
+    assert_select "textarea[name=license_token]", false
+    assert_includes response.body, "hosted plan"
+  end
+
+  test "the hosted plan refuses a write, even a direct one" do
+    env_pinned(tier: "unlimited")
+
+    post ops_license_path, params: {license_token: "eyJhbGciOiJSUzI1NiJ9.whatever"}
+
+    assert_match(/hosted plan/, flash[:alert])
+    assert_equal 0, Ops::License.count
+  end
+
+  # The third tier, named. Somebody on the hosted service should see what they
+  # are actually running, not a word that belongs to a product they did not buy.
+  test "the hosted tier is named Unlimited" do
+    env_pinned(tier: "unlimited")
+
+    settings
+
+    assert_includes response.body, "Unlimited · voodu-hosted"
+    assert_not_includes response.body, "Enterprise · voodu-hosted"
+  end
+
+  test "a licence with no tier claim reads as Enterprise" do
+    env_pinned
+
+    settings
+
+    assert_includes response.body, "Enterprise · voodu-hosted"
+  end
+
+  # Forward compatibility: a tier this build has not heard of is still a
+  # licence, and refusing to honour it would turn a new claim into an outage.
+  test "an unknown tier falls back to Enterprise rather than failing" do
+    env_pinned(tier: "galactic")
+
+    settings
+
+    assert_response :success
+    assert_includes response.body, "Enterprise · voodu-hosted"
+  end
+
+  # ── Current, as the app-wide question ─────────────────────────────
+
+  test "Current reports the tier for anything that needs to branch on it" do
+    Rails.application.config.x.license = LicenseToken.new(status: :none)
+    Current.reset
+
+    assert Current.free?
+    assert_not Current.licensed?
+
+    env_pinned(tier: "unlimited")
+    Current.reset
+
+    assert Current.unlimited?
+    assert Current.licensed?
+    assert_not Current.enterprise?
+    assert_not Current.free?
+  end
+
+  # The tiers must stay mutually exclusive: two of them true at once means
+  # somewhere in the app both branches run.
+  test "exactly one tier is ever true" do
+    [nil, "enterprise", "unlimited"].each do |tier|
+      if tier
+        env_pinned(tier: tier)
+      else
+        Rails.application.config.x.license = LicenseToken.new(status: :none)
+      end
+
+      Current.reset
+
+      assert_equal 1, [Current.free?, Current.enterprise?, Current.unlimited?].count(true),
+        "tier #{tier.inspect} matched more or fewer than one predicate"
+    end
+  end
 end
