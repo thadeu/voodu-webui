@@ -140,8 +140,14 @@ func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotQuery = r.URL.RawQuery
-		if r.Header.Get("Authorization") != "Bearer pat-1" {
-			t.Errorf("missing bearer auth: %q", r.Header.Get("Authorization"))
+		// Signed, and the PAT itself must not appear anywhere in the header.
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Voodu ") {
+			t.Errorf("request was not signed: %q", auth)
+		}
+
+		if strings.Contains(auth, "pat-1") {
+			t.Errorf("the PAT travelled on the wire: %q", auth)
 		}
 		_, _ = w.Write([]byte("2026-06-18T02:45:00Z hello\n"))
 	}))
@@ -252,14 +258,24 @@ func TestLiveVooduClient_PicksUpRotatedPAT(t *testing.T) {
 	}
 	body.Close()
 
-	want := []string{"Bearer pat-old", "Bearer pat-new"}
-	if len(seen) != len(want) {
-		t.Fatalf("got %d requests, want %d", len(seen), len(want))
+	if len(seen) != 2 {
+		t.Fatalf("got %d requests, want 2", len(seen))
 	}
 
-	for i := range want {
-		if seen[i] != want[i] {
-			t.Errorf("request %d sent %q, want %q", i, seen[i], want[i])
+	// The PAT is no longer in the header, so a rotation shows up as a change
+	// in the SIGNATURE rather than in the token — which is a stronger check
+	// anyway: identical signatures would mean the new key was never used.
+	if seen[0] == seen[1] {
+		t.Errorf("both requests signed identically (%q) — the rotated PAT was not picked up", seen[0])
+	}
+
+	for i, auth := range seen {
+		if !strings.HasPrefix(auth, "Voodu ") {
+			t.Errorf("request %d was not signed: %q", i, auth)
+		}
+
+		if strings.Contains(auth, "pat-old") || strings.Contains(auth, "pat-new") {
+			t.Errorf("request %d put the PAT on the wire: %q", i, auth)
 		}
 	}
 }

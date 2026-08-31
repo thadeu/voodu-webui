@@ -104,8 +104,8 @@ func TestFetcher_HappyPath_WritesFolderAndNotifies(t *testing.T) {
 		if r.URL.Path != "/api/pat/v1/metrics/dump" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		if r.Header.Get("Authorization") != "Bearer pat-1" {
-			t.Errorf("missing bearer auth: %q", r.Header.Get("Authorization"))
+		if !strings.HasPrefix(r.Header.Get("Authorization"), "Voodu ") {
+			t.Errorf("request was not signed: %q", r.Header.Get("Authorization"))
 		}
 		fetchedSince.Store(r.URL.Query().Get("since"))
 		_, _ = w.Write([]byte(

@@ -13,7 +13,7 @@
 #
 # Every call:
 #   - Targets <server.endpoint>/api/pat/v1/<path>
-#   - Sends Authorization: Bearer <server.pat>
+#   - Signs each request (Authorization: Voodu …); the PAT never travels
 #   - 6s read timeout (the WebUI is doing user-facing polling; we'd
 #     rather show a "controller slow" message than hang the page)
 #   - Returns the parsed `data` slice from the JSON envelope. Errors
@@ -346,7 +346,10 @@ module Voodu
         f.response :json, content_type: /\bjson$/
         f.options.timeout = @timeout
         f.options.open_timeout = @timeout
-        f.headers["Authorization"] = "Bearer #{@server.pat}"
+        # Signed per request rather than a Bearer header fixed on the connection:
+        # the PAT never goes on the wire, so an intercepted request is one
+        # request and not a credential. See Voodu::Signature.
+        f.use SigningMiddleware, pat: @server.pat
         f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end
@@ -359,7 +362,7 @@ module Voodu
       @streaming_conn ||= Faraday.new(url: @server.endpoint) do |f|
         f.options.timeout = nil
         f.options.open_timeout = @timeout
-        f.headers["Authorization"] = "Bearer #{@server.pat}"
+        f.use SigningMiddleware, pat: @server.pat
         f.headers["User-Agent"] = "voodu-webui/0.1"
       end
     end

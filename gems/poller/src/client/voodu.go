@@ -96,7 +96,10 @@ func (c *VooduClient) FetchLogs(ctx context.Context, since time.Time) (io.ReadCl
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+cr.PAT)
+	if err := SignRequest(req, cr.PAT); err != nil {
+		return nil, err
+	}
+
 	req.Header.Set("Accept", "text/plain")
 
 	resp, err := c.HTTP.Do(req)
@@ -237,7 +240,7 @@ func (c *VooduClient) FetchSystem(ctx context.Context) (io.ReadCloser, error) {
 	return c.doGet(ctx, cr, cr.Endpoint+"/api/pat/v1/system", "application/json")
 }
 
-// doGet is the shared GET helper for the PAT plane: Bearer auth, single
+// doGet is the shared GET helper for the PAT plane: signed auth, single
 // Accept header, surfaces non-2xx with a truncated body in the error.
 //
 // Takes the credentials the caller already resolved rather than resolving
@@ -247,7 +250,12 @@ func (c *VooduClient) doGet(ctx context.Context, cr Credentials, url, accept str
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+cr.PAT)
+	// Signed rather than bearing the PAT: an intercepted request is one
+	// request, not a credential. See signature.go.
+	if err := SignRequest(req, cr.PAT); err != nil {
+		return nil, err
+	}
+
 	req.Header.Set("Accept", accept)
 
 	resp, err := c.HTTP.Do(req)
