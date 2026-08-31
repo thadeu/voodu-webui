@@ -54,7 +54,7 @@ class ServersController < ApplicationController
 
   def new
     @server = Server.new
-    render Views::Servers::New.new(current_path: current_path, server: @server, orgs: sorted_orgs)
+    render Views::Servers::New.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs)
   end
 
   def create
@@ -65,7 +65,7 @@ class ServersController < ApplicationController
     # avoids spending a network round-trip telling the operator
     # they typed an empty endpoint.
     unless @server.valid?
-      render Views::Servers::New.new(current_path: current_path, server: @server, orgs: sorted_orgs),
+      render Views::Servers::New.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs),
         status: :unprocessable_entity
       return
     end
@@ -78,7 +78,7 @@ class ServersController < ApplicationController
     # failed" state.
     if (probe_error = ServerHealth.probe!(@server))
       render Views::Servers::New.new(
-        current_path: current_path,
+        current_path: current_path, servers: all_servers,
         server: @server,
         orgs: sorted_orgs,
         connection_error: probe_error
@@ -95,14 +95,14 @@ class ServersController < ApplicationController
       redirect_to server_root_path(org_id: @server.org.short_id, server_key: @server.key),
         notice: "Server #{@server.name} registered."
     else
-      render Views::Servers::New.new(current_path: current_path, server: @server, orgs: sorted_orgs),
+      render Views::Servers::New.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs),
         status: :unprocessable_entity
     end
   end
 
   def edit
     render Views::Servers::Edit.new(
-      current_path: current_path,
+      current_path: current_path, servers: all_servers,
       server: @server,
       orgs: sorted_orgs,
       return_to: safe_return_to
@@ -120,7 +120,7 @@ class ServersController < ApplicationController
     @server.assign_attributes(attrs)
 
     unless @server.valid?
-      render Views::Servers::Edit.new(current_path: current_path, server: @server, orgs: sorted_orgs, return_to: safe_return_to),
+      render Views::Servers::Edit.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs, return_to: safe_return_to),
         status: :unprocessable_entity
       return
     end
@@ -129,7 +129,7 @@ class ServersController < ApplicationController
     # want a "successful save" that points at an unreachable host.
     if (probe_error = ServerHealth.probe!(@server))
       render Views::Servers::Edit.new(
-        current_path: current_path,
+        current_path: current_path, servers: all_servers,
         server: @server,
         orgs: sorted_orgs,
         return_to: safe_return_to,
@@ -142,7 +142,7 @@ class ServersController < ApplicationController
       ServerHealth.warm(@server, online: true)
       redirect_to (safe_return_to || servers_path), notice: "Server #{@server.name} updated."
     else
-      render Views::Servers::Edit.new(current_path: current_path, server: @server, orgs: sorted_orgs, return_to: safe_return_to),
+      render Views::Servers::Edit.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs, return_to: safe_return_to),
         status: :unprocessable_entity
     end
   end

@@ -1,34 +1,47 @@
 # frozen_string_literal: true
 
-# Views::Servers::New — the "Add server" modal.
+# Views::Servers::New — the "Add server" page.
 #
-# Mirrors design-webui-inspiration/modal-add-server.jsx layout
-# (header avatar + title + close X, body fields, footer Cancel +
-# primary action). Component is Components::UI::Modal — every modal
-# in the app shares its backdrop/blur/ESC/scroll-lock plumbing.
+# Was a modal over the servers list. A page instead, matching the licence and
+# sign-in screens: this form is not a quick confirmation, it is four fields plus
+# an endpoint and a token that people paste from a terminal in another window.
+# A modal is the wrong container for that — it cannot be linked to or reloaded
+# without losing what was typed, it traps the page behind a backdrop while
+# someone goes to fetch a token, and it has nowhere to put a connection failure
+# except on top of the fields that caused it.
+#
+# The route never changed: /:org_id/servers/new was always a real page that
+# happened to draw a modal on top of the dashboard. Every entry point is a plain
+# anchor, so nothing about navigation moved either.
 #
 # Onboarding contract: when the operator has zero servers registered
-# DashboardController#redirect_to_default bounces "/" here. The
-# sidebar behind shows the empty-servers state, the backdrop blurs
-# it; the operator's only meaningful action is the form. After save
-# ServersController#create redirects to /<key>/.
+# DashboardController#redirect_to_default bounces "/" here. The sidebar shows
+# its empty-servers state alongside; the operator's only meaningful action is
+# the form. After save ServersController#create redirects to /<key>/.
 class Views::Servers::New < Views::Base
-  def initialize(current_path:, server:, orgs: [], connection_error: nil)
+  def initialize(current_path:, server:, orgs: [], servers: [], connection_error: nil)
     @current_path = current_path
+    @servers = servers
     @server = server
     @orgs = orgs
     @connection_error = connection_error
   end
 
   def view_template
-    render Components::Layouts::Dashboard.new(current_path: @current_path, breadcrumb: [{label: "Servers"}]) do
-      # The org-manager controller wraps the form + the overlay (siblings) so
-      # the "New org" trigger inside the form reaches it and the overlay's CRUD
-      # forms aren't nested in the add-server form.
-      render(modal) do
-        div(data: {controller: "org-manager"}) do
-          form_body
-          render Components::Orgs::Overlay.new(orgs: @orgs)
+    render Components::Layouts::Dashboard.new(
+      current_path: @current_path, servers: @servers,
+      breadcrumb: [{label: "Servers", href: servers_path}, {label: "Add server"}]
+    ) do
+      div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+        page_head
+        div(class: "max-w-3xl") do
+          # The org-manager controller wraps the card + the overlay (siblings) so
+          # the "New org" trigger inside the form reaches it, and the overlay's
+          # own CRUD forms are not nested inside this one.
+          div(data: {controller: "org-manager"}) do
+            form_card
+            render Components::Orgs::Overlay.new(orgs: @orgs)
+          end
         end
       end
     end
@@ -36,79 +49,109 @@ class Views::Servers::New < Views::Base
 
   private
 
-  def modal
-    Components::UI::Modal.new(
-      title: "Add server",
-      subtitle: "Connect a Docker host running the voodu agent",
-      icon: :PlusOutline,
-      size: :md,
-      close_to: servers_path
-    ).with_footer { footer_actions }
+  # page_head, not `header` — that is a Phlex HTML tag method.
+  def page_head
+    div(class: "flex flex-col gap-1") do
+      h1(class: "text-[17px] font-semibold text-voodu-text") { "Add server" }
+      p(class: "text-[12.5px] text-voodu-muted") { "Connect a Docker host running the voodu agent" }
+    end
+  end
+
+  def form_card
+    render Components::UI::SectionCard.new(title: "Server") { form_body }
   end
 
   def form_body
     form(
       action: servers_path, method: "post",
       data: {turbo: false}, id: "add-server-form",
-      class: "flex flex-col gap-4 px-5 py-4"
+      class: "flex flex-col"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      div(class: "flex flex-col gap-4 p-3.5") do
+        input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
 
-      connection_error_banner if @connection_error
+        connection_error_banner if @connection_error
 
-      field(
-        label: "Name",
-        hint: "Display name shown in the sidebar.",
-        error: @server.errors[:name].first
-      ) do
-        text_input(name: "server[name]", value: @server.name, placeholder: "prod-edge-02")
-      end
-
-      render Components::Orgs::Field.new(orgs: @orgs, selected_id: @server.org_id)
-
-      field(
-        label: "Server endpoint",
-        hint: endpoint_hint,
-        error: @server.errors[:endpoint].first
-      ) do
-        text_input(
-          name: "server[endpoint]", value: @server.endpoint,
-          placeholder: "https://edge-02.example.com:8687", mono: true,
-          spellcheck: "false"
-        )
-      end
-
-      field(
-        label: "Personal access token",
-        hint: pat_hint,
-        error: @server.errors[:pat_ciphertext].first
-      ) do
-        pat_input
-      end
-
-      # Region + infra remain part of the model (topbar chips) but
-      # they're operator metadata, not connection-critical. Tuck
-      # them under a disclosure so the modal stays focused on the
-      # required three.
-      details(class: "group") do
-        summary(class: "list-none cursor-pointer text-[12px] text-voodu-muted hover:text-voodu-text-2 inline-flex items-center gap-1.5 select-none") do
-          render Icon::ChevronRightOutline.new(class: "w-3 h-3 transition-transform group-open:rotate-90")
-          plain "Optional metadata (region · infra)"
+        field(
+          label: "Name",
+          hint: "Display name shown in the sidebar.",
+          error: @server.errors[:name].first
+        ) do
+          text_input(name: "server[name]", value: @server.name, placeholder: "prod-edge-02")
         end
-        div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3 mt-3") do
-          field(label: "Region", hint: "fra1 · us-east-1 · homelab") do
-            text_input(name: "server[region]", value: editable_region, placeholder: "fra1")
+
+        render Components::Orgs::Field.new(orgs: @orgs, selected_id: @server.org_id)
+
+        field(
+          label: "Server endpoint",
+          hint: endpoint_hint,
+          error: @server.errors[:endpoint].first
+        ) do
+          text_input(
+            name: "server[endpoint]", value: @server.endpoint,
+            placeholder: "https://edge-02.example.com:8687", mono: true,
+            spellcheck: "false"
+          )
+        end
+
+        field(
+          label: "Personal access token",
+          hint: pat_hint,
+          error: @server.errors[:pat_ciphertext].first
+        ) do
+          pat_input
+        end
+
+        # Region + infra remain part of the model (topbar chips) but
+        # they're operator metadata, not connection-critical. Tuck
+        # them under a disclosure so the modal stays focused on the
+        # required three.
+        details(class: "group") do
+          summary(class: "list-none cursor-pointer text-[12px] text-voodu-muted hover:text-voodu-text-2 inline-flex items-center gap-1.5 select-none") do
+            render Icon::ChevronRightOutline.new(class: "w-3 h-3 transition-transform group-open:rotate-90")
+            plain "Optional metadata (region · infra)"
           end
-          field(label: "Infra", hint: "hetzner · aws · bare-metal") do
-            text_input(name: "server[infra]", value: @server.infra, placeholder: "hetzner")
+          div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3 mt-3") do
+            field(label: "Region", hint: "fra1 · us-east-1 · homelab") do
+              text_input(name: "server[region]", value: editable_region, placeholder: "fra1")
+            end
+            field(label: "Infra", hint: "hetzner · aws · bare-metal") do
+              text_input(name: "server[infra]", value: @server.infra, placeholder: "hetzner")
+            end
           end
         end
+
+        # Hidden submit so Enter in any input submits the form (the
+        # footer's "Add server" button is OUTSIDE the <form> — it
+        # references it via form="add-server-form").
       end
 
-      # Hidden submit so Enter in any input submits the form (the
-      # footer's "Add server" button is OUTSIDE the <form> — it
-      # references it via form="add-server-form").
-      input(type: "submit", class: "hidden", "aria-hidden": "true")
+      form_actions
+    end
+  end
+
+  # Inside the form now. In the modal these lived in a footer OUTSIDE it, which
+  # is why the submit carried a `form:` attribute and a hidden submit input had
+  # to exist so Enter still worked. On a page neither is needed.
+  def form_actions
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 p-3.5 " \
+               "border-t border-voodu-border") do
+      button(
+        type: "submit",
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border " \
+               "border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent " \
+               "text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover"
+      ) do
+        render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
+        span { "Add server" }
+      end
+
+      a(
+        href: servers_path,
+        class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border " \
+               "bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium " \
+               "hover:bg-voodu-surface-2 hover:text-voodu-text"
+      ) { "Cancel" }
     end
   end
 
@@ -174,30 +217,6 @@ class Views::Servers::New < Views::Base
         div(class: "text-voodu-red font-semibold text-[12.5px] mb-0.5") { "Connection failed" }
         div(class: "text-voodu-text-2 text-[12px]") { @connection_error }
       end
-    end
-  end
-
-  def footer_actions
-    span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") do
-      plain "Need help? See "
-      a(href: "#", class: "text-voodu-link hover:underline") { "docs" }
-      plain "."
-    end
-
-    div(class: "flex-1")
-
-    a(
-      href: servers_path,
-      class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) { "Cancel" }
-
-    button(
-      type: "submit",
-      form: "add-server-form",
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-accent-2"
-    ) do
-      render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
-      span { "Add server" }
     end
   end
 
