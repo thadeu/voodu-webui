@@ -864,6 +864,23 @@ body.log-cols-resizing * {
   --voodu-accent-dim:  #34d39922;
   --voodu-accent-line: #34d39966;
 
+  /* ── Button fill ──
+   * The accent above is a CHROME colour: it backs small tinted surfaces
+   * (active nav, selected chips, focus rings) where its brightness is
+   * exactly the point. Behind white LABEL text it is not — #34d399
+   * against #ffffff measures 1.92:1, and the hover (--voodu-accent-2,
+   * #6ee7b7) is brighter still, so the label faded further the moment
+   * you reached for the button.
+   *
+   * Filled buttons get their own green instead: same hue, dark enough to
+   * carry white text. 5.5:1 here, 7.2:1 on hover — both past the 4.5:1
+   * normal text needs. Hover DEEPENS rather than brightens: on a dark
+   * ground that reads as pressed, and brightening is what caused this.
+   *
+   * Buttons only. Nothing else puts white text on top of the accent. */
+  --voodu-btn-accent:       #047857;
+  --voodu-btn-accent-hover: #036349;
+
   /* ── Link: blue ──
    * Navigational anchors (pod names, breadcrumbs). Deliberately NOT
    * the accent green, so "navigate here" never reads as "healthy /
@@ -1010,6 +1027,13 @@ html[data-theme="light"] {
   --voodu-accent-dim:  #05966918;
   --voodu-accent-line: #05966955;
 
+  /* Light keeps what it had — the complaint was the dark ground, and
+   * moving both would change a surface nobody asked about. (This pair
+   * measures 3.8:1 with white, short of 4.5:1 as well; left as found
+   * rather than fixed unasked.) */
+  --voodu-btn-accent:       #059669;
+  --voodu-btn-accent-hover: #047857;
+
   /* Link blue — darker for legibility on the near-white chrome. */
   --voodu-link:   #0b6bcb;
   --voodu-link-2: #084d96;
@@ -1083,6 +1107,23 @@ html[data-theme="light"] .voodu-dark {
   --voodu-accent-dim:  #34d39922;
   --voodu-accent-line: #34d39966;
 
+  /* ── Button fill ──
+   * The accent above is a CHROME colour: it backs small tinted surfaces
+   * (active nav, selected chips, focus rings) where its brightness is
+   * exactly the point. Behind white LABEL text it is not — #34d399
+   * against #ffffff measures 1.92:1, and the hover (--voodu-accent-2,
+   * #6ee7b7) is brighter still, so the label faded further the moment
+   * you reached for the button.
+   *
+   * Filled buttons get their own green instead: same hue, dark enough to
+   * carry white text. 5.5:1 here, 7.2:1 on hover — both past the 4.5:1
+   * normal text needs. Hover DEEPENS rather than brightens: on a dark
+   * ground that reads as pressed, and brightening is what caused this.
+   *
+   * Buttons only. Nothing else puts white text on top of the accent. */
+  --voodu-btn-accent:       #047857;
+  --voodu-btn-accent-hover: #036349;
+
   --voodu-link:   #60a5fa;
   --voodu-link-2: #93c5fd;
 
@@ -1121,6 +1162,9 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-accent-2:    var(--voodu-accent-2);
   --color-voodu-accent-dim:  var(--voodu-accent-dim);
   --color-voodu-accent-line: var(--voodu-accent-line);
+
+  --color-voodu-btn-accent:       var(--voodu-btn-accent);
+  --color-voodu-btn-accent-hover: var(--voodu-btn-accent-hover);
   --color-voodu-link:        var(--voodu-link);
   --color-voodu-link-2:      var(--voodu-link-2);
   --color-voodu-hover:     var(--voodu-hover);
@@ -1164,6 +1208,9 @@ html[data-theme="light"] .voodu-dark {
   --color-voodu-accent-2:    var(--voodu-accent-2);
   --color-voodu-accent-dim:  var(--voodu-accent-dim);
   --color-voodu-accent-line: var(--voodu-accent-line);
+
+  --color-voodu-btn-accent:       var(--voodu-btn-accent);
+  --color-voodu-btn-accent-hover: var(--voodu-btn-accent-hover);
 
   /* Link */
   --color-voodu-link:   var(--voodu-link);

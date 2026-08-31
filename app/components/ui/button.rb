@@ -15,7 +15,9 @@
 # buttons).
 class Components::UI::Button < Components::Base
   VARIANTS = {
-    primary: "bg-voodu-accent text-voodu-on-accent hover:bg-voodu-accent-2",
+    # btn-accent, not accent: the chrome accent is tuned to sit BEHIND small
+    # tinted surfaces, and white label text on it measures 1.92:1. See the token.
+    primary: "bg-voodu-btn-accent text-voodu-on-accent hover:bg-voodu-btn-accent-hover",
     secondary: "bg-voodu-surface text-voodu-text border border-voodu-border hover:bg-voodu-surface-2",
     ghost: "bg-transparent text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text",
     danger: "bg-transparent text-voodu-red border border-voodu-red/40 hover:bg-voodu-red-dim",

@@ -117,7 +117,7 @@ class Components::UI::ConfirmDialog < Components::Base
         class: tokens(
           "inline-flex items-center gap-1.5 px-3 h-9 border text-voodu-on-accent text-[12.5px] font-medium",
           @danger ? "border-voodu-red/60 bg-voodu-red hover:bg-voodu-red/90"
-                  : "border-voodu-accent-line bg-voodu-accent hover:bg-voodu-accent-2"
+                  : "border-voodu-accent-line bg-voodu-btn-accent hover:bg-voodu-btn-accent-hover"
         )
       ) do
         render Icon.const_get(@icon).new(class: "w-3.5 h-3.5")

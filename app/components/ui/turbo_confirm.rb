@@ -62,7 +62,7 @@ class Components::UI::TurboConfirm < Components::Base
   # Per-theme confirm-button colors. Amber is light → dark text; the others
   # keep the on-accent (light) text.
   BTN_THEME =
-    "group-data-[theme=confirm]:border-voodu-accent-line group-data-[theme=confirm]:bg-voodu-accent group-data-[theme=confirm]:hover:bg-voodu-accent-2 group-data-[theme=confirm]:text-voodu-on-accent " \
+    "group-data-[theme=confirm]:border-voodu-accent-line group-data-[theme=confirm]:bg-voodu-btn-accent group-data-[theme=confirm]:hover:bg-voodu-btn-accent-hover group-data-[theme=confirm]:text-voodu-on-accent " \
     "group-data-[theme=danger]:border-voodu-red/60 group-data-[theme=danger]:bg-voodu-red group-data-[theme=danger]:hover:bg-voodu-red/90 group-data-[theme=danger]:text-voodu-on-accent " \
     "group-data-[theme=warn]:border-voodu-amber/60 group-data-[theme=warn]:bg-voodu-amber group-data-[theme=warn]:hover:bg-voodu-amber/90 group-data-[theme=warn]:text-voodu-bg"
 

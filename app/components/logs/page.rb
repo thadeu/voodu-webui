@@ -724,7 +724,7 @@ class Components::Logs::Page < Components::Base
         log_stream_target: "jumpToLive",
         action: "click->log-stream#jumpToLive"
       },
-      class: "absolute left-1/2 -translate-x-1/2 bottom-3.5 inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-accent text-voodu-on-accent text-[12px] font-medium shadow-2xl"
+      class: "absolute left-1/2 -translate-x-1/2 bottom-3.5 inline-flex items-center gap-1.5 px-3 h-8 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12px] font-medium shadow-2xl"
     ) do
       render Icon::ChevronDownOutline.new(class: "w-3 h-3")
       span { "Jump to live" }
