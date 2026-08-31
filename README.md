@@ -136,6 +136,14 @@ The password stays plain text in `.env` and is bcrypt-hashed at container boot, 
 rotating it is one edit plus `docker compose up -d`. `/up` is excluded from the
 prompt so healthchecks and uptime monitors keep working without credentials.
 
+### How the dashboard authenticates to a controller
+
+Signed requests, not a bearer token: the PAT never travels, so an intercepted
+request is one request rather than a credential.
+
+→ [docs/pat-authorization.md](docs/pat-authorization.md) — the scheme, how to
+sign one by hand, and what it does and does not protect.
+
 ### Operator sign-in
 
 **Off by default on a fresh install.** The app asks for no credentials and the

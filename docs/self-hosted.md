@@ -88,6 +88,13 @@ One thing an upgrade will never do is remove authentication: if
 `CLOWK_PUBLISHABLE_KEY` is set, sign-in stays on even when `CLOWK_ENABLED` is
 not.
 
+## How it talks to your controllers
+
+Over the PAT plane on port 8687, with every request signed rather than carrying
+the token — see [pat-authorization.md](pat-authorization.md). That traffic is
+still plain HTTP, which is fine inside a private network and is not fine across
+the internet: the credential is safe, the log contents are not.
+
 ## Deploying it with voodu instead
 
 If this host already runs a voodu controller, the dashboard can be a manifest
