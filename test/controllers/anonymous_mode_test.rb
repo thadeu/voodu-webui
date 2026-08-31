@@ -204,7 +204,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
     assert_select "summary[aria-label=?]", "Account"
     assert_includes response.body, User::LOCAL_OPERATOR_EMAIL
     assert_select "span", text: "owner"
-    assert_includes response.body, "voodu-webui"
+    assert_select "span", text: "version"
   ensure
     Rails.application.routes.default_url_options[:org_id] = pinned if pinned
   end

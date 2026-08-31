@@ -225,7 +225,7 @@ class Components::Layouts::Topbar < Components::Base
   def build_row
     div(class: "flex items-baseline justify-between gap-2 px-3 py-1.5 " \
                "border-t border-voodu-border text-[11px] text-voodu-muted") do
-      span { "voodu-webui" }
+      span { "version" }
       span(class: "font-voodu-mono") { AppVersion.current }
     end
   end

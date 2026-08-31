@@ -77,7 +77,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
     get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
 
     assert_response :success
-    assert_includes response.body, "voodu-webui"
+    assert_select "span", text: "version"
     assert_includes response.body, AppVersion.current
   end
 
