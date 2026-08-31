@@ -182,7 +182,7 @@ class User < ApplicationRecord
     verified = claims[:email_verified] == true
 
     user = find_by(clowk_user_id: clowk_id)
-    user ||= claimable_row(email) if real_email && verified
+    user ||= row_for_verified_address(email) if real_email && verified
     user ||= new(email: address_for_new_row(email, verified: verified, subject: clowk_id))
 
     user.clowk_user_id = clowk_id
@@ -235,13 +235,25 @@ class User < ApplicationRecord
   end
   private_class_method :address_for_new_row
 
-  # An invited row waiting to be claimed: the address matches and nobody has
-  # bound a Clowk subject to it yet. A row that IS bound belongs to someone
-  # else, whatever address the incoming claims assert.
-  def self.claimable_row(email)
-    candidate = find_by(email: email)
-
-    candidate if candidate && candidate.clowk_user_id.nil?
+  # The row that owns a VERIFIED address — invited, or already signed in.
+  #
+  # A verified address is the identity. Somebody who signs up with Google and
+  # later signs in with GitHub on the same address is one person, and the two
+  # providers hand us two different subjects; treating those as two accounts
+  # meant the second sign-in tried to insert a duplicate address and died with
+  # "Email has already been taken". On a service with open sign-up that is not
+  # an edge case, it is a Tuesday.
+  #
+  # So the subject follows the address: the row is found by email and its
+  # clowk_user_id is rebound to whichever provider was used this time. Safe
+  # because nothing else in the app keys off that column — it is the lookup
+  # handle, not an identifier anything stores.
+  #
+  # VERIFIED is doing the work. An unverified address is an assertion, not a
+  # fact, and matching on one would let anyone who can get a provider to echo
+  # an address walk into that person's orgs. Callers check it before asking.
+  def self.row_for_verified_address(email)
+    find_by(email: email)
   end
-  private_class_method :claimable_row
+  private_class_method :row_for_verified_address
 end

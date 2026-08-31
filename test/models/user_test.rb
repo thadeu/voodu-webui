@@ -38,13 +38,43 @@ class UserTest < ActiveSupport::TestCase
     assert_equal "clowk-sub-1", user.reload.clowk_user_id
   end
 
-  # The takeover: a provider that lets someone assert an arbitrary address would
-  # otherwise hand them the row that address already belongs to.
-  test "refuses to claim a row already bound to a different subject" do
-    User.create!(email: "ada@example.com", clowk_user_id: "clowk-sub-OTHER")
+  # A VERIFIED address is the identity, whichever provider carried it.
+  #
+  # Signing up with Google and later signing in with GitHub on the same address
+  # is one person, and the two hand us different subjects. Treating them as two
+  # accounts meant the second sign-in tried to insert a duplicate address and
+  # died with "Email has already been taken" — on a service with open sign-up,
+  # not an edge case.
+  #
+  # This test used to assert the opposite, as defence in depth: it refused to
+  # bind a second subject to an address already bound. That refusal is gone by
+  # decision, and what remains standing between an address and somebody else's
+  # orgs is `email_verified` ALONE. It is now load-bearing rather than a second
+  # opinion: a provider that could assert verified for an address it had not
+  # checked would be handing over accounts. The test below is the other half.
+  test "a verified address is the same person, whichever provider carried it" do
+    first = User.provision_from_clowk!(CLAIMS)
 
-    assert_raises(ActiveRecord::RecordInvalid) { User.provision_from_clowk!(CLAIMS) }
-    assert_equal "clowk-sub-OTHER", User.find_by(email: "ada@example.com").clowk_user_id
+    second = User.provision_from_clowk!(CLAIMS.merge(sub: "clowk-sub-GITHUB", provider: "github"))
+
+    assert_equal first.id, second.id, "one address is one person"
+    assert_equal "clowk-sub-GITHUB", second.reload.clowk_user_id,
+      "the subject follows the address — nothing else in the app keys off it"
+  end
+
+  # The half that must never move. An unverified address is an assertion, not a
+  # fact, and matching on one would hand over whatever that address already
+  # owns.
+  test "an unverified address never adopts an existing account" do
+    owner = User.provision_from_clowk!(CLAIMS)
+
+    intruder = User.provision_from_clowk!(
+      CLAIMS.merge(sub: "clowk-sub-INTRUDER", email_verified: false)
+    )
+
+    assert_not_equal owner.id, intruder.id
+    assert intruder.email.end_with?(User::PLACEHOLDER_EMAIL_SUFFIX),
+      "an unproven address must not even be recorded as the address"
   end
 
   # An unproven address is a claim on a string, not a person.
