@@ -61,6 +61,33 @@ module Voodu
     #   data.net.{rx_bytes_per_sec, tx_bytes_per_sec}
     def system = get("system")
 
+    # plugins — what is installed on this controller, plus anything still
+    # installing or recently failed. The controller merges both into one list
+    # because an install is asynchronous: the card has to be able to say
+    # "installing…" and then "failed: …", and a separate job endpoint would
+    # make the page hold an id across a reload it may not survive.
+    def plugins = get("plugins")
+
+    # install_plugin — starts an install and returns immediately (202).
+    #
+    # `source` is what an operator would type after `vd plugins:install`:
+    # `owner/repo`, `github.com/owner/repo`, a git URL, or a path on the box.
+    # `version` pins a tag; blank takes the default branch.
+    #
+    # The outcome does NOT come back here. It arrives on the next `plugins`
+    # call, as the state of that plugin's card.
+    def install_plugin(source, version: nil)
+      body = {source: source.to_s.strip}
+      body[:version] = version.to_s.strip if version.present?
+
+      post("plugins/install", body)
+    end
+
+    # remove_plugin — synchronous, unlike install: it is a directory removal
+    # plus an uninstall hook, and the operator has just confirmed a destructive
+    # action, so an immediate answer is what the confirmation was for.
+    def remove_plugin(name) = delete("plugins/#{ERB::Util.url_encode(name)}")
+
     # metrics — time-series chart data backed by the controller's
     # NDJSON store (see internal/metrics on the Go side).
     #
@@ -374,8 +401,14 @@ module Voodu
       raise TransportError, e.message
     end
 
-    def post(path)
-      resp = conn.post("/api/pat/v1/#{path}")
+    def post(path, body = nil)
+      resp = conn.post("/api/pat/v1/#{path}") do |req|
+        if body
+          req.headers["Content-Type"] = "application/json"
+          req.body = body.to_json
+        end
+      end
+
       handle(resp)
     rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
       raise TransportError, e.message

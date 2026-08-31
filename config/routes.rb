@@ -306,6 +306,18 @@ Rails.application.routes.draw do
     resources :alert_destinations, path: "alerts/destinations", only: [:new, :create, :edit, :update, :destroy] do
       member { post :test }
     end
+    # Plugins — per server, because a plugin is installed on a controller
+    # rather than owned by the org. Nothing about them is persisted here: the
+    # list is the box's answer, cached briefly so a page refresh does not
+    # reach across the network for something that changes rarely.
+    #
+    # `index` is dual-mode like metrics and logs: a Turbo-Frame request
+    # re-renders only the grid, so an install that is still running resolves
+    # itself without the operator reloading.
+    get "/plugins", to: "plugins#index", as: :plugins
+    post "/plugins", to: "plugins#create", as: :install_plugin
+    delete "/plugins/:name", to: "plugins#destroy", as: :plugin, constraints: {name: %r{[^/]+}}
+
     get "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same server scope so the
     # per-server context (current_server) flows through naturally.
