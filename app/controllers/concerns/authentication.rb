@@ -54,15 +54,33 @@ module Authentication
     end
   end
 
-  # Read from config rather than ENV so one value answers for the whole process
-  # and a test can flip it without reaching into the environment.
+  # Whether this installation asks anyone to prove who they are.
+  #
+  # Resolved through AuthSettings.effective, which owns the precedence — a
+  # pinned boolean, then the environment, then the row the SSO screen writes.
+  # This used to read the pin itself and return early on it, which silently
+  # amounted to "the environment decides, forever": the initializer always left
+  # a boolean there, so the stored row was never reached and the SSO screen
+  # could not turn sign-in on or off at all.
+  #
+  # MEMOISED PER REQUEST, and that is not an optimisation now that a database
+  # read is behind it. Two before_actions, the sidebar (once per nav item), the
+  # topbar badge and the perimeter check all ask, so an unmemoised reader would
+  # put half a dozen queries on every page.
   def clowk_enabled?
-    return Rails.application.config.x.clowk_enabled if [true, false].include?(Rails.application.config.x.clowk_enabled)
+    auth_settings.enabled?
+  end
 
-    settings = AuthSettings.current
-    AuthSettings.apply!(settings) if settings.enabled?
-
-    settings.enabled?
+  # Resolved once per request by Middleware::ClowkCredentials, which needs the
+  # answer before routing anyway — the engine's own controllers do not inherit
+  # from ours, so the credentials have to be in force below the point where a
+  # controller filter could put them. Read from the Rack env rather than
+  # resolved again, so the database read is paid for once.
+  #
+  # The fallback is for the paths that never went through the stack — a
+  # controller exercised directly in a unit test. It resolves the same way.
+  def auth_settings
+    @auth_settings ||= request.env[Middleware::ClowkCredentials::ENV_KEY] || AuthSettings.effective
   end
 
   private
@@ -155,8 +173,14 @@ module Authentication
   # — the local flow mints its own token — and without this the first page a
   # developer meets is a 500. Production always has the key (the initializer
   # refuses to boot otherwise), so this branch never fires there.
+  #
+  # Asked of Clowk.credentials and NOT of Clowk.config. The key can arrive from
+  # the SSO screen, in which case it is scoped to this request by
+  # Middleware::ClowkCredentials and the process configuration stays empty —
+  # so reading the global here sent a developer who had just configured a real
+  # instance to the local pretend door instead, with no way past it.
   def sign_in_destination
-    if Rails.env.development? && Clowk.config.publishable_key.blank?
+    if Rails.env.development? && Clowk.credentials.publishable_key.blank?
       return dev_sign_in_path(return_to: request.fullpath)
     end
 

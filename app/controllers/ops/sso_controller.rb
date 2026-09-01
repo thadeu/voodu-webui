@@ -37,9 +37,19 @@ class Ops::SsoController < ApplicationController
     email = params[:owner_email].to_s.strip.downcase
     return bounce("Enter the address that will sign in and own this workspace.") if email.blank?
 
-    conflict = User.where(email: email).where.not(id: adoptable_operator&.id).first
-    return bounce("#{email} already has an account here — sign in as them instead.") if conflict
-
+    # No refusal for an address that already exists here, and that removal is
+    # deliberate. It read as a safety check and was really a guess about intent:
+    # turning sign-in off and on again for the same person is the SAME
+    # configuration, but by then that person had a real user row — created by
+    # the sign-in the operator had just performed — so re-enabling SSO for
+    # themselves was refused with "sign in as them instead", from a screen that
+    # offered no way to do anything else.
+    #
+    # Nothing was protected by it. The handover is gated where it always was:
+    # pending_owner_email is only recorded when there is an anonymous workspace
+    # to hand over, Ops::SsoConfig#claimable_by? demands a PROVEN address that
+    # matches, and the person has to confirm on a screen of their own. Naming an
+    # address here has never been enough to move anything.
     activate!(email)
   rescue ActiveRecord::RecordInvalid => e
     bounce(e.record.errors.full_messages.to_sentence)
@@ -89,11 +99,25 @@ class Ops::SsoController < ApplicationController
       configured_by: Current.user
     )
 
-    AuthSettings.apply!
+    # Nothing to apply here any more. Middleware::ClowkCredentials resolves the
+    # instance at the top of every request, so the row just written governs the
+    # next one — the old AuthSettings.apply! reached into the gem's process
+    # configuration from inside this action to get the same effect.
+    redirect_to return_to_path(ops_sso_path), notice: activation_notice(email)
+  end
 
-    redirect_to return_to_path(ops_sso_path),
-      notice: "Sign-in is on. Your next request will ask you to authenticate — sign in " \
-              "as #{email} and you will be offered this workspace. Nothing has moved yet."
+  # Says what will actually happen, and the two cases differ on one thing only:
+  # whether there is an anonymous workspace waiting to be claimed. Promising a
+  # handover on an installation that already runs on real identities would be
+  # describing a step that never comes — which is what re-enabling sign-in after
+  # a migration does.
+  def activation_notice(email)
+    if adoptable_operator.nil?
+      return "Sign-in is on. Your next request will ask you to authenticate — sign in as #{email}."
+    end
+
+    "Sign-in is on. Your next request will ask you to authenticate — sign in as #{email} " \
+      "and you will be offered this workspace. Nothing has moved yet."
   end
 
   # The anonymous operator, when that is who is running this. Nil once the

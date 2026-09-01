@@ -18,6 +18,12 @@ require "action_cable/engine"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# Not autoloadable, and required by hand: the middleware stack takes a real
+# class at boot (it stopped constantizing strings), and referencing an
+# autoloaded constant while initializers run is what Zeitwerk refuses. `lib/
+# middleware` is therefore excluded from autoload_lib below.
+require_relative "../lib/middleware/clowk_credentials"
+
 module VooduWebui
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
@@ -26,7 +32,7 @@ module VooduWebui
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks])
+    config.autoload_lib(ignore: %w[assets tasks middleware])
 
     # Configuration for the application, engines, and railties goes here.
     #
@@ -38,6 +44,12 @@ module VooduWebui
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    # Which Clowk instance answers for each request. Appended, so it runs inside
+    # ActionDispatch::Static and the executor — static assets never reach it,
+    # and the database is connected by the time it reads. See the class for why
+    # this is middleware and not an around_action.
+    config.middleware.use Middleware::ClowkCredentials
 
     # db/schema.rb has to LOAD on both adapters — the self-hosted install runs
     # SQLite, the SaaS runs Postgres on the primary — so only SQLite may WRITE

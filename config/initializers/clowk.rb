@@ -39,58 +39,65 @@
 # the real verifier accepts (see ClowkDevToken for why that is safe only outside
 # production, and for the two locks that keep it there).
 
-# Resolved once, here, so every reader agrees — the concern that guards requests,
-# the components that decide what to draw, and the tests that exercise both.
+# NOTHING RESOLVES THE FLAG HERE ANY MORE, and that removal is the fix.
 #
-# The `true`/`false` test is NOT a nil check, and that distinction is the whole
-# correctness of the default. `config.x.anything_unset` returns an empty
-# ActiveSupport::OrderedOptions, which is neither nil NOR falsey — so `.nil?`
-# here would never fire, ENV would never be read, and every deployment would
-# come up with sign-in ON. Exactly backwards, and invisible to the suite,
-# because config/environments/test.rb assigns a real boolean.
+# This used to read ENV at boot and write the answer into
+# config.x.clowk_enabled, which Authentication#clowk_enabled? then returned
+# without consulting anything else. The trouble was not the caching, it was that
+# SILENCE WAS RECORDED AS AN ANSWER: with neither variable set — which is every
+# self-hosted box — it pinned `false`, so AuthSettings.from_database was
+# unreachable and the SSO screen's whole promise was dead code. Turning sign-in
+# on stored a row nothing ever read: the screen reported success, the badge kept
+# saying `none`, and every request went on running as the anonymous operator
+# with the dashboard open to whoever reached the port. Being told the door is
+# shut while it stands open is worse than knowing it is open.
 #
-# Anything that is not already a real boolean means "nobody has decided yet".
-# An environment file may decide (it loads BEFORE initializers; the test env
-# pins true so the existing suite keeps exercising the multi-tenant path);
-# otherwise ENV decides, and its default is off.
-unless [true, false].include?(Rails.application.config.x.clowk_enabled)
-  flag = ENV["CLOWK_ENABLED"].to_s.strip.downcase
-
-  Rails.application.config.x.clowk_enabled =
-    if flag.empty?
-      # Unset does NOT mean off when Clowk is already configured. An install
-      # running with a publishable key today is an install where somebody chose
-      # sign-in; shipping a release that reads "unset" as "anonymous" would turn
-      # their dashboard into one that answers to whoever reaches the port, on a
-      # restart, silently. Upgrades must not remove authentication.
-      #
-      # Fresh installs have no key, so they still land on anonymous — the
-      # self-hosted default is intact. To go anonymous while keeping a key
-      # around, say so: CLOWK_ENABLED=0.
-      ENV["CLOWK_PUBLISHABLE_KEY"].to_s.strip.present?
-    else
-      %w[1 true yes on].include?(flag)
-    end
-end
+# It also meant the environment's rule was written twice — here and in
+# AuthSettings.from_env — and only one of the two knew about the stored row.
+# One copy survives, in AuthSettings, which already owns the precedence:
+#
+#   1. a real boolean in config.x.clowk_enabled — an environment file or a test
+#   2. the ENVIRONMENT — CLOWK_ENABLED / CLOWK_PUBLISHABLE_KEY
+#   3. the DATABASE — the row the SSO screen writes
+#
+# config.x.clowk_enabled is therefore left alone: config/environments/test.rb
+# pins `true` so the suite keeps exercising the multi-tenant path, and nothing
+# in development or production writes it at all. Undecided stays undecided, and
+# sign-in turns on and off from the screen on the next request, no redeploy.
+clowk_publishable_key = ENV["CLOWK_PUBLISHABLE_KEY"].to_s.strip
 
 # Said once, at boot, so it lands in `docker logs` where an operator setting the
 # container up will actually see it — the UI banner only fires once a request
 # arrives from outside, and by then the exposure already happened.
-unless Rails.application.config.x.clowk_enabled
-  Rails.application.config.after_initialize do
-    Rails.logger.warn(
-      "[auth] CLOWK_ENABLED is off — no sign-in. Every request runs as one local " \
-      "operator with owner rights, which includes reading each server's access " \
-      "token. Keep this behind a VPN or an access proxy; do not publish the port."
-    )
-  end
+#
+# Asked of AuthSettings rather than of the pin, and inside `after_initialize`
+# rather than here, because the stored row is now a real source: an installation
+# that turned sign-in on from the screen is NOT anonymous, and warning that it
+# is would teach operators to ignore the one line that matters. Deferred because
+# AuthSettings is autoloaded, and reading it while initializers run is what
+# Rails refuses to allow. from_database never raises — a missing table during
+# `db:prepare` or an assets build resolves to "off", which is the safe way to be
+# wrong about a warning.
+Rails.application.config.after_initialize do
+  next if AuthSettings.effective.enabled?
+
+  Rails.logger.warn(
+    "[auth] sign-in is off — no identity. Every request runs as one local " \
+    "operator with owner rights, which includes reading each server's access " \
+    "token. Keep this behind a VPN or an access proxy; do not publish the port."
+  )
 end
 
-clowk_publishable_key = ENV["CLOWK_PUBLISHABLE_KEY"].to_s.strip
-
-# Only when sign-in is actually the door. Raising here with the flag off would
-# make the self-hosted `docker run` — the default shape — die at boot.
-if Rails.application.config.x.clowk_enabled && Rails.env.production? && clowk_publishable_key.empty?
+# Only when the ENVIRONMENT is what demands sign-in, which is the only case this
+# can speak to. Asked of ENV rather than of config.x.clowk_enabled: a stored
+# configuration carries its own key and is validated when it is saved, so the
+# operator who turns sign-in on from the screen must not be refused a boot for a
+# variable they were never asked to set.
+#
+# Raising with sign-in off would make the self-hosted `docker run` — the default
+# shape — die at boot, so the flag has to be read strictly.
+if %w[1 true yes on].include?(ENV["CLOWK_ENABLED"].to_s.strip.downcase) &&
+    Rails.env.production? && clowk_publishable_key.empty?
   raise "CLOWK_PUBLISHABLE_KEY is required when CLOWK_ENABLED=1 — the Clowk instance, " \
         "its JWKS endpoint and the token audience are all derived from it."
 end

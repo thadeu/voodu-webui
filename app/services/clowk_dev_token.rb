@@ -40,6 +40,10 @@ class ClowkDevToken
       exp: ttl.from_now.to_i
     }
 
-    JWT.encode(payload, Clowk.config.secret_key, "HS256")
+    # The same source the verifier reads, so what this mints is what
+    # Clowk::JwtVerifier will accept. Reading the global while verification had
+    # moved to the scoped credentials would make the dev door mint tokens the
+    # app then rejects.
+    JWT.encode(payload, Clowk.credentials.secret_key, "HS256")
   end
 end

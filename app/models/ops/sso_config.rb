@@ -21,7 +21,7 @@ class Ops::SsoConfig < ApplicationRecord
   PROVIDERS = %w[clowk].freeze
 
   # Public identifiers, per provider. Adding one means a new key here and a
-  # branch in AuthSettings#apply! — not a migration.
+  # branch in AuthSettings::Resolved#to_clowk — not a migration.
   store_accessor :settings, :publishable_key, :subdomain_url
 
   encrypts :secret_ciphertext

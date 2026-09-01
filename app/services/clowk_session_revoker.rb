@@ -28,8 +28,12 @@ class ClowkSessionRevoker
     @user = user
   end
 
+  # Clowk.credentials and not Clowk.config: this runs inside a member-removal
+  # request, so the instance in force is the one Middleware::ClowkCredentials
+  # scoped — which on an installation configured from the SSO screen is the
+  # only place the secret exists at all.
   def revoke!
-    return :not_configured if Clowk.config.secret_key.blank?
+    return :not_configured if Clowk.credentials.secret_key.blank?
     return :no_identity unless @user&.verified_email?
 
     sessions = find_sessions
@@ -48,7 +52,7 @@ class ClowkSessionRevoker
   private
 
   def client
-    @client ||= Clowk::SDK::Client.new(secret_key: Clowk.config.secret_key)
+    @client ||= Clowk::SDK::Client.new(secret_key: Clowk.credentials.secret_key)
   end
 
   # The search is by address, which is the only handle we hold: the session ids
