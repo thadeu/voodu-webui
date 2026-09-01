@@ -5,7 +5,7 @@
 # `pods` table's row set for one server.
 #
 # Sibling of `SystemSnapshot`; together they are the only two writers
-# of snapshot data. Called from `StateSyncServerJob` every 10s.
+# of snapshot data. Called from StateDigestService on every poller digest (~15s).
 #
 # Atomicity model:
 #

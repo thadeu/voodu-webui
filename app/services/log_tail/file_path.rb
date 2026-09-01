@@ -33,7 +33,7 @@ module LogTail
     PER_SERVER_CAP_BYTES = 2 * 1024 * 1024 * 1024
 
     # Retention window: anything with mtime older than this gets
-    # reaped by LogTailCleanupJob.
+    # reaped by the poller's retention sweep.
     RETENTION_DAYS = 2
 
     # Root directory absolute path. Created on demand by the writer.

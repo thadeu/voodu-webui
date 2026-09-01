@@ -112,7 +112,7 @@ class LogsController < ApplicationController
   end
 
   # warehouse_stream — reads from the local warehouse (NDJSON files
-  # populated by LogTailServerJob) instead of opening yet another
+  # populated by the poller's log stream) instead of opening yet another
   # `docker logs -f` SSE through the controller.
   #
   # The tail job already maintains ONE multi-pod connection per

@@ -669,7 +669,7 @@ class MetricsPageData
 
   # host_system_payload — system info for the current server. In
   # warehouse mode this is a sub-millisecond local read off the
-  # latest StateSyncServerJob snapshot; in HTTP mode it falls back
+  # latest state snapshot the poller wrote
   # to a live /system call. Memoised per-instance so multiple
   # capacity lookups don't re-hit the source.
   def host_system_payload

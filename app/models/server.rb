@@ -30,7 +30,7 @@ class Server < ApplicationRecord
   # picks or creates an org. See app/models/org.rb.
   belongs_to :org
 
-  # Local snapshots maintained by `StateSyncServerJob` (every 10s).
+  # Local snapshots maintained by the poller's state stream (every ~15s).
   # Pages read from these instead of making a fresh HTTP call to
   # the controller — page-instant render + offline resilience. See
   # `app/services/server_state.rb` for the read facade and
@@ -52,17 +52,11 @@ class Server < ApplicationRecord
 
   before_validation :normalize_endpoint
 
-  # Kick the first sync jobs immediately on server creation. Without
-  # this, a newly-added server would wait up to 10s (state) / 14s
-  # (metrics) for the next orchestrator tick before pages stop
-  # rendering "—". Both jobs are no-op-safe / idempotent, so this
-  # and the orchestrators can both fire without double-work.
-  after_create_commit { MetricsSyncServerJob.perform_later(id) }
-  # StateSyncServerJob ships in C4 — guarded so this commit (C2)
-  # boots cleanly without the job class on disk yet.
-  after_create_commit do
-    StateSyncServerJob.perform_later(id) if defined?(StateSyncServerJob)
-  end
+  # No "sync right now" kick on creation. The poller re-reads the server list
+  # from Internal::PollerController on every tick, so a new server is picked
+  # up within one interval (~15s); until then its pages render "—", which is
+  # the truth. The Ruby jobs this used to enqueue were already no-ops under
+  # the poller before they were removed.
 
   # Unique per ORG, not globally: a global index would answer "has already been
   # taken" for another tenant's server name, and would block two customers from
@@ -93,7 +87,7 @@ class Server < ApplicationRecord
 
   # plugin_installed? — does this server's controller have the named
   # plugin installed (matching its canonical name or any alias)? Reads
-  # the locally-synced System row (StateSyncServerJob, 10s), so feature
+  # the locally-synced System row (the poller's state stream, ~15s), so feature
   # gates resolve offline and free at render time. False when no system
   # snapshot has landed yet.
   def plugin_installed?(name)

@@ -42,7 +42,7 @@ class ServerHealth
   # tick, then the Turbo Stream broadcast flips the pill live.
   #
   # The cache is the single source of truth, and the sync pipeline is
-  # what warms it: `StateSyncServerJob` writes after every fetch and
+  # what warms it: StateDigestService writes after every poller digest and
   # broadcasts to `server-state-#{id}`. Three writes per TTL, so the
   # cache is always warm and the status flips within one tick of a
   # `systemctl stop`. This IS the only probe path — no page render

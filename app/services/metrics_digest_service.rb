@@ -1,16 +1,15 @@
 # frozen_string_literal: true
 
-# MetricsDigestService — persist + broadcast layer shared by:
+# MetricsDigestService — persist + broadcast layer for the poller's metrics
+# stream. The Go binary streams /metrics/dump and writes the NDJSON to
+# `storage/poller/metrics/<sync_hash>/data.ndjson`; PollerDigestJob hands
+# the folder to `.from_folder`, which batches the rows through
+# `MetricSample.bulk_insert` and fires the `metrics_tick` broadcast that
+# wakes the chart frames.
 #
-#   - MetricsSyncServerJob (Ruby streams /metrics/dump via
-#     Voodu::Client; pipes the body into `.from_io`)
-#   - PollerDigestJob (Go binary fetched + wrote the NDJSON to
-#     `storage/poller/metrics/<sync_hash>/data.ndjson`; the job
-#     hands the folder path to `.from_folder`)
-#
-# Both paths converge on `.ingest_lines`, which batches the rows
-# through `MetricSample.bulk_insert` and fires the `metrics_tick`
-# broadcast that wakes the chart frames.
+# There used to be a second writer — a Ruby job streaming the same endpoint
+# — and this class was where both converged. The job is gone; the batching
+# it needed is still the right shape for the digest.
 #
 # Folder shape (Go side contract):
 #
@@ -19,8 +18,8 @@
 #                   controller's /metrics/dump endpoint emits.
 #                   Lines without `ts` or `source` are skipped.
 #
-# Batching mirrors MetricsSyncServerJob: BATCH_SIZE rows per
-# insert_all round-trip, bounded peak memory, amortised INSERT cost.
+# BATCH_SIZE rows per insert_all round-trip: bounded peak memory,
+# amortised INSERT cost.
 class MetricsDigestService
   BATCH_SIZE = 500
   NDJSON_FILE = "data.ndjson"
@@ -34,7 +33,7 @@ class MetricsDigestService
     end
   end
 
-  # from_io — entry point for the Ruby-fetch path and the file-read
+  # from_io — streams NDJSON from any IO; the file-read
   # path. Walks the stream line-by-line, parses each line into the
   # MetricSample row shape, flushes in BATCH_SIZE-row chunks.
   #
@@ -76,10 +75,8 @@ class MetricsDigestService
     total
   end
 
-  # ingest_lines — convenience entry point for callers that already
-  # have an Enumerable of pre-parsed Hashes (e.g. the existing
-  # MetricsSyncServerJob that walks Voodu::Client#metrics_dump via a
-  # yield block).
+  # ingest_lines — entry point for callers that already hold an Enumerable
+  # of pre-parsed Hashes. `from_folder` and `from_io` both end up here.
   def self.ingest_lines(server:, rows:)
     return 0 if rows.blank?
 
@@ -106,8 +103,8 @@ class MetricsDigestService
 
   # broadcast_metrics_tick — wakes every browser subscribed to the
   # server's metrics channel; each subscriber re-fetches its chart
-  # frame at its current scope/range. Same shape MetricsSyncServerJob
-  # uses so the wire contract is one place.
+  # frame at its current scope/range. One method so the wire contract
+  # lives in one place.
   def self.broadcast_metrics_tick(server)
     Turbo::StreamsChannel.broadcast_action_to(
       "metrics-#{server.id}",

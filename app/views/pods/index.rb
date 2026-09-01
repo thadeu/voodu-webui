@@ -33,7 +33,7 @@ class Views::Pods::Index < Views::Base
 
   private
 
-  # body — wrapped in a Turbo Frame so StateSyncServerJob's
+  # body — wrapped in a Turbo Frame so the state ingest's
   # state_tick broadcast can refresh it without a page reload. No
   # src= on the frame (would cause Turbo to auto-fetch on connect
   # and possibly blank the body). The state-tick JS handler sets

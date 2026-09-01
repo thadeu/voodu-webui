@@ -4,10 +4,9 @@
 # server that actually has enabled rules. Recurs every 30s (see
 # config/recurring.yml).
 #
-# No POLLER_SPAWN guard on purpose: unlike the sync orchestrators,
-# evaluation never touches the controller — it reads the local
-# warehouse regardless of which process fills it (Ruby jobs or the
-# Go poller), so it must keep running in both modes.
+# Evaluation never touches the controller — it reads the local warehouse
+# the Go poller fills — which is why it stayed a Ruby job when the fetching
+# did not: rules, thresholds and notifications are the app's business.
 class AlertsEvaluationOrchestratorJob < ApplicationJob
   queue_as :default
 

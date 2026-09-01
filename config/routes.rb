@@ -41,7 +41,7 @@ Rails.application.routes.draw do
   # ActionCable WebSocket endpoint.
   #
   # Required so `turbo_stream_from` subscribers in any view (currently
-  # Views::Metrics::Index for live chart updates after MetricsSyncServerJob
+  # Views::Metrics::Index for live chart updates after a metrics digest
   # broadcasts) can actually establish a WebSocket connection. Without
   # this mount, Rails generates the right
   # `<turbo-cable-stream-source>` HTML but the browser hits 404 on
@@ -221,8 +221,8 @@ Rails.application.routes.draw do
     #
     # Trade-off vs the SSE endpoints above: ~2s of latency between
     # log emission and visible-in-tab, but ZERO additional `docker
-    # logs -f` connections on the controller (the LogTailServerJob
-    # already maintains one per server for the warehouse).
+    # logs -f` connections on the controller (the poller already
+    # maintains one per server for the warehouse).
     get "/logs/warehouse_stream", to: "logs#warehouse_stream", as: :logs_warehouse_stream
 
     # Pods picker drawer body. MUST live BEFORE `/logs/:name` —

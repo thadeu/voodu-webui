@@ -2,7 +2,7 @@
 
 # System — local snapshot of `/api/pat/v1/system` for one server.
 # Exactly one row per server, kept in lockstep with the controller by
-# `StateSyncServerJob` (every 10s). Topbar uptime chip + Overview
+# the poller's state stream (every ~15s). Topbar uptime chip + Overview
 # host CPU/Mem cards read from this row instead of making a fresh
 # HTTP call per page render.
 #

@@ -79,12 +79,11 @@ plugin :tmp_restart
 # Run the Solid Queue supervisor inside of Puma for single-server deployments.
 plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]
 
-# Run the poller Go binary inside Puma. The plugin itself is a
-# noop unless POLLER_SPAWN=1 — that gate lives in the plugin AND in
-# the binary, so spinning Puma without the env var is silent. When
-# enabled, the plugin spawns the binary on :booted and drains it via
-# SIGTERM on :stopped.
-plugin :poller if ENV["POLLER_SPAWN"] == "1"
+# Run the poller Go binary inside Puma: spawned on :booted, drained via
+# SIGTERM on :stopped. Unconditional — it is the only thing that fills the
+# warehouse, and Poller::Railtie has already refused to boot without the
+# compiled binary, so there is nothing to gate on here.
+plugin :poller
 
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.
 # In other environments, only set the PID file if requested.

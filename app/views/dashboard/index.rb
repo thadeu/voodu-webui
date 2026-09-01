@@ -39,7 +39,7 @@ class Views::Dashboard::Index < Views::Base
 
   private
 
-  # overview_body — wrapped in a Turbo Frame so StateSyncServerJob's
+  # overview_body — wrapped in a Turbo Frame so the state ingest's
   # state_tick broadcast can refresh it without a page reload. We
   # DON'T set src= on the frame (would cause Turbo to auto-fetch on
   # connect, which can blank out the body before the network round-

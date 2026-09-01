@@ -50,7 +50,7 @@ class Views::Pods::Show < Views::Base
   private
 
   # framed_body — wraps the page body in a Turbo Frame so the
-  # state-tick broadcast from StateSyncServerJob can refresh it
+  # state-tick broadcast from the state ingest can refresh it
   # without a manual reload. Same pattern as Dashboard + Pods::Index:
   # no `src=` on the frame (the JS handler sets it to
   # `window.location.href` right before reload(), preserving the
@@ -68,7 +68,7 @@ class Views::Pods::Show < Views::Base
   # sync — operator doesn't have to manually refresh after a pod
   # creation.
   def framed_body
-    # `refresh="morph"` — when StateSyncServerJob's state_tick triggers
+    # `refresh="morph"` — when the state ingest's state_tick triggers
     # frame.reload(), Turbo 8 uses Idiomorph to diff the response
     # against the current DOM instead of replacing the frame body
     # wholesale. Two big wins:

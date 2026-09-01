@@ -7,14 +7,21 @@ module Poller
   # Railtie — Rails-side wiring for the poller gem.
   #
   # On boot:
-  #   - Copies `gems/poller/bin/poller` into the Rails app's
-  #     `bin/` directory if it does not already exist. The shipped file
-  #     is a thin Ruby shim that boots the app and calls
-  #     `Poller::Runner.start`.
-  #
-  # No middleware, no initializers — keeps the surface tiny.
+  #   - Refuses to continue unless the compiled binary exists. The poller is
+  #     the only thing that fills the warehouse — there is no Ruby fallback —
+  #     so an app without it is not degraded, it is empty. Raising here turns
+  #     "dashboard shows nothing, no error" into one message with the fix.
+  #     Every boot, including console and migrations: a mode that comes up
+  #     without the poller is exactly what this removes.
+  #   - Copies `gems/poller/bin/poller` into the Rails app's `bin/` directory
+  #     if it does not already exist. The shipped file is a thin Ruby shim
+  #     that boots the app and calls `Poller::Runner.start`.
   class Railtie < Rails::Railtie
     config.poller = ActiveSupport::OrderedOptions.new
+
+    initializer "poller.require_binary", before: :load_config_initializers do
+      Poller.require_binary!
+    end
 
     initializer "poller.install_binstub" do |app|
       template = File.join(Poller::GEM_ROOT, "bin", "poller")

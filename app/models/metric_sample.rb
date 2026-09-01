@@ -20,7 +20,7 @@
 # the primary DB and cross-DB ActiveRecord joins are out of scope.
 # Callers pass `server_id` directly to the scopes below.
 class MetricSample < MetricsRecord
-  # bulk_insert (BulkInsertable): MetricsSyncServerJob hands column-shaped rows
+  # bulk_insert (BulkInsertable): the poller's ingest (Internal::PollerController) hands column-shaped rows
   # [{ server_id:, source:, ts_iso:, payload: }]; generated columns (ts_epoch /
   # scope / name / pod) are computed by SQLite. parsed_payload (PayloadParsable)
   # exposes `payload` as a Hash.
@@ -30,7 +30,7 @@ class MetricSample < MetricsRecord
   extend ServerScoped
 
   # last_ts_for — highest ts_epoch we've persisted for this server.
-  # MetricsSyncServerJob uses this as the `?since=<ts>` boundary on
+  # Internal::PollerController#metrics_watermark uses this as the `?since=<ts>` boundary on
   # the next incremental pull. Hits idx_metric_samples_watermark.
   #
   # Returns 0 when the warehouse is empty for this server (cold boot

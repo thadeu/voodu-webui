@@ -4,7 +4,7 @@
 # `/system` response and upserts the single `systems` row for one
 # server.
 #
-# Sibling of `PodSnapshot`; both are called from `StateSyncServerJob`
+# Sibling of `PodSnapshot`; both are called from StateDigestService
 # every 10s, inside the same outer transaction so pods + system +
 # `server.last_synced_at` commit together or roll back together.
 #

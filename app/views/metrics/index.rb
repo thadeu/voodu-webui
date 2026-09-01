@@ -70,7 +70,7 @@ class Views::Metrics::Index < Views::Base
         auto_refresh_storage_key_value: "voodu:auto-refresh:#{@current_server.id}"
       }
     ) do
-      # Subscribe to live ticks broadcast by MetricsSyncServerJob
+      # Subscribe to live ticks broadcast by the metrics ingest
       # whenever new samples land in the warehouse for this server.
       # The custom `metrics_tick` Turbo Stream action (see
       # turbo_actions/metrics.js) calls `frame.reload()` on the
@@ -594,7 +594,7 @@ class Views::Metrics::Index < Views::Base
   # cleanly either way.
   #
   # Update strategy: ActionCable broadcast over Solid Cable. The
-  # MetricsSyncServerJob fires `metrics_tick` after inserting new
+  # metrics ingest fires `metrics_tick` after inserting new
   # samples, every page subscribed to `metrics-#{server.id}`
   # reloads its per-card frames in place (see
   # turbo_actions/metrics.js). Polling tick was removed: with

@@ -3,8 +3,7 @@
 # Retention — two windows, and they are not the same number.
 #
 #   keep_days  — how long bytes stay on disk. Set by the OPERATOR, never by the
-#                licence, and honoured by every sweeper (LogTailCleanupJob and
-#                the Go poller, which owns the sweep when POLLER_SPAWN=1).
+#                licence, and honoured by the Go poller, which owns the sweep.
 #
 #   serve_days — how far back a query may look. Capped by the LICENCE, and
 #                never more than what is actually kept.

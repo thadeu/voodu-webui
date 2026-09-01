@@ -2,7 +2,7 @@
 
 # Pod — local snapshot of one container the voodu controller manages.
 # One row per replica per server, kept in lockstep with the controller
-# by `StateSyncServerJob` (every 10s). Pages render entirely from this
+# by the poller's state stream (every ~15s). Pages render entirely from this
 # table — no synchronous HTTP to the controller on the page render
 # path. When the controller is offline the table stays put with the
 # last-known state, so pages keep rendering useful data instead of

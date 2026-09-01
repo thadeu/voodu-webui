@@ -16,9 +16,9 @@
 # tabs) hitting the same chart share the cached fetch — same pattern
 # as ServerHealth + pods_count.
 class MetricsData
-  # Pinned 4s SHORTER than MetricsSyncServerJob's 14s recurring
-  # cadence (see config/recurring.yml). The gap guarantees: whenever
-  # the job ticks at T and broadcasts metrics_tick, the cache cell
+  # Pinned 4s SHORTER than the poller's 14s metrics interval
+  # (POLLER_METRICS_INTERVAL_SECONDS, gems/poller/src/main.go). The gap
+  # guarantees: whenever a digest lands at T and broadcasts metrics_tick, the cache cell
   # populated at the previous tick (T−14s) has already expired
   # (T−4s past TTL). Frame.reload() always cache-misses and pulls
   # fresh data. Going EQUAL or HIGHER reintroduces the "served

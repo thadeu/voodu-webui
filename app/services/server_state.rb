@@ -66,11 +66,10 @@ class ServerState
   end
 
   # synced_at — when the data on screen was actually last written. The
-  # freshest of the System snapshot's updated_at (bumped by BOTH ingest
-  # paths — the Ruby StateSyncServerJob AND the Go-poller digest) and the
-  # last_synced_at column (only the Ruby path maintains it). Reading the
-  # column alone froze the "updated Ns ago" pill at the last Ruby sync
-  # while the poller kept the snapshot fresh. nil for brand-new servers.
+  # freshest of the System snapshot's updated_at and the last_synced_at
+  # column; StateDigestService bumps both on every digest. Taking the max
+  # dates from when two writers maintained them unevenly, and it costs
+  # nothing to keep. nil for brand-new servers.
   def synced_at
     [@server.system&.updated_at, @server.last_synced_at].compact.max
   end

@@ -79,9 +79,9 @@ module Internal
     #
     # Returns the newest metric ts (unix seconds) the warehouse holds
     # for this server, so the Go binary can resume `/metrics/dump?since=`
-    # from there on a cold start instead of now-30s. This is the SAME
-    # boundary the Ruby MetricsSyncServerJob uses (MetricSample.last_ts_for),
-    # bringing the Go poller to parity: a global-max `since` means the
+    # from there on a cold start instead of now-30s. This is
+    # MetricSample.last_ts_for — the boundary the Ruby sync job used before the
+    # poller replaced it, kept for parity: a global-max `since` means the
     # controller re-delivers only strictly-newer rows — backfills the
     # offline gap with zero duplicates (the warehouse has no unique index).
     #

@@ -155,7 +155,7 @@ Never reuse a color for a different signal.
 `MetricSample` ActiveRecord lives in a dedicated SQLite DB
 (`storage/*_metrics.sqlite3`). Schema in `db/metrics_schema.rb`,
 migrations in `db/metrics_migrate/`. Rows are written by
-`MetricsSyncServerJob` (solid_queue recurring) and read by
+the Go poller (through `Internal::PollerController`) and read by
 `MetricsWarehouse` + `MetricsData` / `MetricsPageData`.
 
 Per-metric aggregation matters: counters (`req_count`, `req_2xx..5xx`,

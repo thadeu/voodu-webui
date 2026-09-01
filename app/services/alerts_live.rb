@@ -10,7 +10,7 @@
 #      sent over the EXISTING `server-state-#{id}` channel (the
 #      sidebar already subscribes to it for status dots — no new
 #      subscription needed). `update` not `replace`, same reasoning
-#      as StateSyncServerJob#broadcast_status_change: replace would
+#      as StateDigestService.broadcast_state_tick: replace would
 #      remove the id-bearing wrapper and orphan every later
 #      broadcast.
 #

@@ -347,7 +347,7 @@ class Components::Layouts::Topbar < Components::Base
       # DOM id = Turbo Stream broadcast target. State-sync job
       # re-renders this span on every sync (success → :online,
       # failure → :offline) and pushes it to the client without
-      # a refresh. See StateSyncServerJob#broadcast_status_change.
+      # a refresh, broadcast by the state ingest after every poller digest.
       span(id: "server-status-pill-#{@current_server.id}", class: "inline-flex") do
         render Components::UI::StatusPill.new(status: @current_server.status || :stopped)
       end

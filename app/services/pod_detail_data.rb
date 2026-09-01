@@ -299,7 +299,7 @@ class PodDetailData
   end
 
   # fetch_from_warehouse! — read the pod's snapshot from the local
-  # `pods` table populated by StateSyncServerJob. Sub-millisecond.
+  # `pods` table the poller's state stream populates. Sub-millisecond.
   # When the pod isn't in the snapshot (sync hasn't run yet, or it
   # was just deleted), @raw stays nil and the view renders the
   # "—" sentinels — same as a 404 from the HTTP path, no error.

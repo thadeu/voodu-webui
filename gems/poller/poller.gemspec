@@ -5,8 +5,8 @@ require_relative "lib/poller/version"
 Gem::Specification.new do |spec|
   spec.name = "poller"
   spec.version = Poller::VERSION
-  spec.authors = ["voodu-webui"]
-  spec.summary = "Go-based log NDJSON poller for voodu servers"
+  spec.authors = ["tadeuu@gmail.com"]
+  spec.summary = "Go-based log NDJSON poller"
   spec.description = <<~DESC
     Ships a Go binary that polls multiple voodu controllers in parallel
     over the PAT plane, deduplicates lines, and writes per-pod NDJSON
@@ -19,15 +19,21 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir[
     "lib/**/*",
-    "exe/*",
     "bin/*",
     "src/**/*",
     "Makefile",
     "README.md"
   ]
 
-  spec.bindir = "exe"
-  spec.executables = ["poller"]
+  # No `executables`: there used to be a shell wrapper here that exited 0 when
+  # the Go binary was not built, so a fresh checkout "ran" the poller and synced
+  # nothing, silently. The binary is built by `make build` (see README) and the
+  # Railtie refuses to boot the app without it.
+  #
+  # No `extensions` either, and not for lack of trying: Bundler installs path
+  # gems with `disable_extensions: true` (bundler/source/path.rb), so an
+  # extconf here would never run under `bundle install`. A build hook that
+  # looks wired up and is not would be the same silence in a new place.
   spec.require_paths = ["lib"]
 
   spec.add_runtime_dependency "puma", ">= 5.0"

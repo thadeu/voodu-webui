@@ -55,7 +55,6 @@ services:
       # Days of logs kept ON DISK. Never touched by the licence — the licence
       # caps how far back you can search, which is a different number.
       VOODU_RETENTION_DAYS: ${VOODU_RETENTION_DAYS:-}
-      POLLER_SPAWN: ${POLLER_SPAWN:-1}
       POLLER_INTERVAL_SECONDS: ${POLLER_INTERVAL_SECONDS:-15}
       POLLER_LOG_BACKFILL_SECONDS: ${POLLER_LOG_BACKFILL_SECONDS:-86400}
       POLLER_TOKEN: ${POLLER_TOKEN:-}

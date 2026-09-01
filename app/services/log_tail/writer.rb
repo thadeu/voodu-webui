@@ -2,7 +2,7 @@
 
 # LogTail::Writer — buffered NDJSON appender for one server.
 #
-# Lifecycle: open one Writer per LogTailServerJob run; call
+# Lifecycle: open one Writer per tail run; call
 # #append(pod, parsed_hash) for each line; #close on shutdown.
 # Internally caches one File handle per (pod, date) and rotates
 # at midnight without dropping bytes.
@@ -26,7 +26,7 @@
 #     orchestrator before scheduling the server's job.
 #
 # Concurrency: ONE writer per (server_id, pod) at a time, because
-# only one LogTailServerJob runs per server (TailLock serialises).
+# only one writer runs per server.
 # Within an server, pods don't share file handles, so per-pod
 # files have no concurrent writers.
 module LogTail

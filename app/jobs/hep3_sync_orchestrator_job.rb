@@ -4,7 +4,7 @@
 # every 15s, see config/recurring.yml). Each tick enqueues one
 # Hep3PollerJob per (server, configured reader instance), so each
 # reader's /export drain runs in parallel on solid_queue's pool with
-# per-instance retry isolation (same pattern as MetricsSyncOrchestratorJob).
+# per-instance retry isolation (same pattern as LogMetricsSyncOrchestratorJob).
 #
 # Gated on local state: only servers whose controller has the voodu-hep3
 # plugin installed (System#plugin_installed?, from the /system sync) AND

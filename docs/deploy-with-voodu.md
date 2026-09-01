@@ -12,7 +12,7 @@ ingress, `vd logs` — instead of a `docker run` you have to remember.
 // voodu-webui — the operator dashboard, deployed by the controller it watches.
 //
 // Single replica on purpose. The Go poller runs inside this process
-// (POLLER_SPAWN=1) and the storage volume is single-writer SQLite: a second
+// and the storage volume is single-writer SQLite: a second
 // replica would spawn a second poller and both would write the same files.
 // This is a control plane for a handful of servers, not a tier that scales.
 

@@ -172,7 +172,7 @@ class OverviewData
   end
 
   # fetch_from_warehouse! — read the local snapshot tables populated
-  # by `StateSyncServerJob` (every 10s). Sub-millisecond, no HTTP, no
+  # by the poller's state stream (every ~15s). Sub-millisecond, no HTTP, no
   # error paths to handle — the sync job is the only thing that can
   # fail, and we accept whatever it last wrote.
   #

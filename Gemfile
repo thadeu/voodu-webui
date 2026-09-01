@@ -39,9 +39,12 @@ gem "csv", "~> 3.3", require: false
 # and keeps the claims in the Rails session.
 gem "clowk", "~> 0.6"
 
-# poller — Go-based NDJSON poller for voodu servers. Ships a
-# compiled binary that the Puma plugin (config/puma.rb) spawns when
-# `POLLER_SPAWN=1`. Path-resolved local gem; no rubygems.org publish.
+# poller — Go-based NDJSON poller for voodu servers. Ships a compiled
+# binary that the Puma plugin (config/puma.rb) always spawns: it is the only
+# thing that fills the warehouse, and Poller::Railtie refuses to boot without
+# it. Built with `make -C gems/poller build` — Bundler will not build it
+# (path gems install with extensions disabled). Path-resolved local gem; no
+# rubygems.org publish.
 gem "poller", path: "gems/poller"
 
 group :development, :test do

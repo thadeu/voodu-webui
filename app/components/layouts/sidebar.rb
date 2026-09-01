@@ -290,10 +290,10 @@ class Components::Layouts::Sidebar < Components::Base
       )
     ) do
       # Status dot — expanded view only. DOM id is the Turbo
-      # Stream broadcast target. StateSyncServerJob re-renders
+      # Stream broadcast target. The state ingest re-renders
       # this span on every sync result and the dot flips live
       # without a page refresh. See
-      # StateSyncServerJob#broadcast_status_change.
+      # the state ingest, which broadcasts after every poller digest.
       span(
         id: "server-status-dot-#{server.id}",
         class: "shrink-0 vmd:group-data-[collapsed]:hidden"

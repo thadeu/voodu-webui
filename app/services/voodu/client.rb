@@ -151,15 +151,15 @@ module Voodu
     #     render probes / env / resources from the source of truth
     #     in a single request instead of fanning out to /apply.
     #
-    # Composable: passing both is the shape `StateSyncServerJob` uses
+    # Composable: passing both is the shape the state stream uses
     # to populate the snapshot table — full runtime + declared spec
-    # in one fetch per sync tick.
+    # in one fetch per tick.
     # stats: false → opt OUT of the live docker stats batch the
     # controller normally joins when detail=true. That batch is
     # the single biggest CPU consumer on the controller side
     # (`docker stats --no-stream` samples cgroup files TWICE per
     # container to compute CPU%, in a synchronous batch). Polling
-    # consumers like StateSyncServerJob pass `stats: false` —
+    # consumers pass `stats: false` —
     # their UI table can show "—" for live CPU/Mem (operator has
     # /metrics charts for that anyway) in exchange for letting
     # the controller breathe between ticks.
@@ -289,9 +289,9 @@ module Voodu
     # No return value (streaming). Caller counts rows via the yield
     # callback if it needs a tally.
     #
-    # Errors surface as Voodu::Client::Error subclasses — the
-    # MetricsSyncServerJob lets solid_queue retry transient transport
-    # failures and logs auth errors for operator follow-up.
+    # Errors surface as Voodu::Client::Error subclasses, so a caller can
+    # retry transient transport failures and log auth errors for operator
+    # follow-up.
     def metrics_dump(since:, &on_row)
       raise ArgumentError, "block required" unless on_row
 

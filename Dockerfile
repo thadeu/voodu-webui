@@ -42,10 +42,10 @@ RUN apt-get update -qq && \
 # Container's external contract: bind 3000. Rails runs internally on 3001 behind Thruster.
 # Thruster overrides $PORT to $TARGET_PORT when spawning Rails, so TARGET_PORT is the knob.
 #
-# Poller ON by default (the binary copied above owns log/metric/state sync; the
-# Ruby orchestrators step aside when POLLER_SPAWN=1). The operator must still
-# supply POLLER_TOKEN (a secret — never baked into the image) and configure
-# servers; set POLLER_SPAWN=0 to opt out and let the Ruby jobs poll instead.
+# The poller binary (copied in below) owns log/metric/state sync — it is the
+# only thing that fills the warehouse, and the app refuses to boot without it.
+# The operator must still supply POLLER_TOKEN (a secret — never baked into the
+# image) and configure servers.
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
@@ -54,7 +54,6 @@ ENV RAILS_ENV="production" \
     HTTP_PORT="3000" \
     TARGET_PORT="3001" \
     SOLID_QUEUE_IN_PUMA="true" \
-    POLLER_SPAWN="1" \
     POLLER_INTERVAL_SECONDS="15" \
     POLLER_LOG_BACKFILL_SECONDS="86400"
 
@@ -94,10 +93,10 @@ RUN corepack prepare --activate && pnpm install --frozen-lockfile
 # Copy application code
 COPY . .
 
-# Drop the prebuilt poller binary in place. The Puma plugin
-# (lib/puma/plugin/poller.rb) + binstub (bin/poller) both
-# resolve the executable via Poller.binary_path, which expects
-# `gems/poller/dist/poller` to exist when POLLER_SPAWN=1.
+# Drop the prebuilt poller binary in place. Poller::Railtie refuses to boot
+# the app without `gems/poller/dist/poller`, and the Puma plugin + binstub
+# both exec it via Poller.binary_path — so this COPY has to land before
+# the assets:precompile below, which is the first thing here that boots.
 COPY --from=poller-build /out/poller ./gems/poller/dist/poller
 
 # Precompile bootsnap code for faster boot times.

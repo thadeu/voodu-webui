@@ -68,7 +68,7 @@ class Views::Settings::Index < Views::Base
   end
 
   # plugins_card — installed plugins on this server, synced in the
-  # /system payload (StateSyncServerJob, 10s). Read-only here; the
+  # /system payload (the poller's state stream, ~15s). Read-only here; the
   # same list backs feature gates (Server#plugin_installed?) so a
   # plugin-specific UI only appears when its plugin is present.
   def plugins_card

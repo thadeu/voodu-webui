@@ -1,4 +1,4 @@
-// Custom Turbo Stream actions broadcast from MetricsSyncServerJob
+// Custom Turbo Stream actions broadcast by MetricsDigestService
 // over ActionCable.
 //
 // metrics_tick fires whenever the job inserts new samples for an

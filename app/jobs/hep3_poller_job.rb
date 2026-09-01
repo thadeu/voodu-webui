@@ -3,7 +3,7 @@
 # Hep3PollerJob — drains ONE voodu-hep3 reader instance's /export NDJSON
 # tail into the local read model (HepMessage on the `hep` SQLite DB).
 #
-# Cursor mechanics (the HEP3 analogue of MetricsSyncServerJob's ts
+# Cursor mechanics (the HEP3 analogue of the metrics watermark's ts
 # watermark):
 #
 #   - The reader reports its resume point as an opaque "<file>:<offset>"
@@ -52,7 +52,7 @@ class Hep3PollerJob < ApplicationJob
   # behind it (→ duplicates). Returns the number of rows inserted.
   #
   # `client` is injected so tests drive it with a fake reader instead of
-  # stubbing the network (same seam as LogTailServerJob#poll_once).
+  # stubbing the network (the poll_once seam).
   def drain(server, scope, name, client)
     cursor = HepCursor.cursor_for(server, scope, name)
     inserted = 0

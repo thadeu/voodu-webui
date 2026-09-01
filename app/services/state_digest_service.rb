@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-# StateDigestService — persist + broadcast layer shared by:
+# StateDigestService — persist + broadcast layer for the poller's state
+# stream. The Go binary fetches /pods + /system, writes two files to
+# `storage/poller/state/<sync_hash>/`, and PollerDigestJob hands the folder
+# to `.from_folder`. `.persist` does the atomic snapshot replace and the
+# `state-tick` broadcast that pages everywhere react to.
 #
-#   - StateSyncServerJob (Ruby fetches /pods + /system via
-#     Voodu::Client, hands the parsed JSON to `.from_parsed`)
-#   - PollerDigestJob (Go binary fetched + wrote two files to
-#     `storage/poller/state/<sync_hash>/`; the job reads them and
-#     hands to `.from_folder`)
-#
-# Both paths converge on `.persist`, which does the atomic snapshot
-# replace + `state-tick` broadcast that pages everywhere react to.
+# There used to be a second writer — a Ruby job fetching the same two
+# endpoints per tick — and this class was the seam where both converged.
+# The job is gone; the unwrap-and-persist shape it left behind is still the
+# contract the Go side writes against.
 #
 # Folder shape (Go side contract):
 #
@@ -39,11 +39,10 @@ class StateDigestService
     #
     # `PodSnapshot.replace_for_server!` + `SystemSnapshot.replace_for_server!`
     # expect the already-unwrapped shapes (Array of pod Hash, system Hash).
-    # `StateSyncServerJob` does that unwrap via `Voodu::Client#pods/#system`
-    # (which strips `status` + returns `data`) and then `pods_payload_from`
-    # (which pulls `data.pods` out). The digest path bypasses both layers,
-    # so we replicate the same unwrap here so the two ingest paths feed
-    # PodSnapshot the same shape.
+    # `Voodu::Client#pods/#system` do that unwrap for in-process callers
+    # (strip `status`, return `data`, then pull `data.pods` out). The digest
+    # path bypasses the client entirely, so the same unwrap is replicated
+    # here: PodSnapshot gets one shape no matter who fetched.
     pods_envelope = read_json(folder.join(PODS_FILE), default: {})
     system_envelope = read_json(folder.join(SYSTEM_FILE), default: {})
 
@@ -53,7 +52,7 @@ class StateDigestService
     from_parsed(pods: pods, system: system, server_id: server_id)
   end
 
-  # from_parsed — entry point for the Ruby-fetch path. Caller has
+  # from_parsed — the persist step once the two payloads are unwrapped. Caller has
   # already parsed both responses out of the JSON envelope.
   #
   # `server_id` is the Server primary key (legacy domain table is
@@ -65,24 +64,21 @@ class StateDigestService
     return unless server
 
     persist(server, pods, system)
-    # Keep last_synced_at honest from the poller/digest path too — the
-    # Ruby StateSyncServerJob bumps it itself, but this path skipped it,
-    # freezing the column (and anything reading it directly) at the last
-    # Ruby sync even while snapshots stayed fresh.
+    # last_synced_at is bumped HERE, and this is the only place that does it
+    # now. It used to be skipped on this path (the Ruby job bumped its own),
+    # which froze the column — and the "updated Ns ago" pill — while the
+    # snapshots underneath stayed fresh.
     server.update_columns(last_synced_at: Time.current)
     # A successful digest means the poller just reached the controller —
-    # confirm it online, exactly like StateSyncServerJob does. Without
-    # this, poller-mode servers have NO health-warm path, so status_for
-    # read :unknown and the pill flickered offline→online between the
-    # sporadic Ruby ticks that did warm it.
+    # confirm it online. This is the ONLY health-warm path: without it
+    # status_for reads :unknown forever and the pill never turns green.
     ServerHealth.warm(server, online: true)
     broadcast_state_tick(server)
     server
   end
 
-  # persist — the snapshot replace half. Public so the existing
-  # StateSyncServerJob can wrap it in its own outer transaction
-  # alongside `server.update_columns(last_synced_at: ...)`.
+  # persist — the snapshot replace half, in one transaction so a reader
+  # never sees new pods beside an old system row.
   def self.persist(server, pods, system)
     ActiveRecord::Base.transaction do
       PodSnapshot.replace_for_server!(server, pods)
@@ -90,10 +86,9 @@ class StateDigestService
     end
   end
 
-  # broadcast_state_tick — same triple-broadcast (status pill +
-  # status dot + state_tick action) that StateSyncServerJob does.
-  # Extracted here so the Go-fed path produces an identical UI
-  # update to the Ruby-fed path.
+  # broadcast_state_tick — the triple broadcast (status pill + status dot +
+  # state_tick action) every page subscribes to. One method so the wire
+  # contract lives in one place.
   #
   # Rescued generically — a Solid Cable transport blip mid-process
   # shouldn't fail the digest; the next tick will refresh the UI.

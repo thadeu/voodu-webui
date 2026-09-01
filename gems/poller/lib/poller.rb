@@ -21,18 +21,13 @@ module Poller
 
   GEM_ROOT = File.expand_path("..", __dir__)
 
-  # Resolves the path the Puma plugin / Runner should exec.
-  #
-  # Preference order:
-  #   1. `gems/poller/dist/poller`    — compiled Go binary
-  #   2. `gems/poller/exe/poller`     — shell wrapper (env-gated noop)
-  #
-  # The shell wrapper exists so a fresh checkout (no `make build` yet)
-  # still has a callable executable — it just exits 0 immediately.
-  #
-  # `dist/` (not `src/`) because `src/poller/` is the Go package dir;
-  # `bin/` (not `bin/poller`) because that holds the Ruby binstub
-  # template the Railtie installs into the Rails app.
+  # Where the compiled binary lives: `dist/`, not `src/` (that is the Go
+  # package dir) and not `bin/` (that holds the Ruby binstub template the
+  # Railtie installs into the Rails app).
+  BINARY = File.join(GEM_ROOT, "dist", "poller")
+
+  class BinaryMissing < StandardError; end
+
   # stale_binary? — is the compiled binary older than the Go source it came from?
   #
   # `dist/poller` is gitignored and built by hand (`make build`), so editing the
@@ -57,12 +52,38 @@ module Poller
     File.mtime(newest) > File.mtime(compiled)
   end
 
-  def self.binary_path
-    compiled = File.join(GEM_ROOT, "dist", "poller")
+  # The executable the Puma plugin and the Runner exec. Only ever the compiled
+  # binary: there used to be a shell wrapper underneath it that exited 0 when
+  # nothing was built, so a fresh checkout booted, "ran" the poller, and synced
+  # nothing — no pods, no metrics, no logs, and no error anywhere. A path that
+  # points at nothing is what require_binary! exists to catch, before that.
+  def self.binary_path = BINARY
 
-    return compiled if File.executable?(compiled)
+  def self.binary? = File.executable?(BINARY)
 
-    File.join(GEM_ROOT, "exe", "poller")
+  # Refuse to go on without the binary. Called by the Railtie on every boot and
+  # by the Runner before exec, so the failure is one sentence with the fix in
+  # it rather than a dashboard that stays empty.
+  #
+  # The binary is built by `make -C gems/poller build` (needs a Go toolchain)
+  # and shipped ready-made in the Docker image, where the poller-build stage
+  # produces it. Missing therefore means one of two things, and the message
+  # names both. Bundler cannot do this for us: it installs path gems with
+  # extensions disabled, so there is no install-time hook to lean on.
+  def self.require_binary!
+    return if binary?
+
+    raise BinaryMissing, <<~MSG.strip
+      poller binary not found at #{BINARY}
+
+      The poller is the only thing that fills this app's warehouse, so it
+      will not start without it. Build it once (needs Go — https://go.dev/dl):
+
+        make -C gems/poller build
+
+      In the Docker image it is copied in from the poller-build stage; if you
+      are seeing this there, that stage did not run.
+    MSG
   end
 end
 

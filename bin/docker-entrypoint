@@ -30,13 +30,18 @@ if [ -z "${RAILS_MASTER_KEY:-}" ] && [ ! -f /rails/config/master.key ]; then
   fi
 fi
 
-# Auto-generate the internal poller token when the poller is on (POLLER_SPAWN=1,
-# the image default) and none was supplied, so `docker run` stays near-zero-config.
-# Rails (the InternalEndpointAuth check) and the poller binary the Puma plugin
-# spawns both read POLLER_TOKEN from the env, so exporting one value here makes
-# them agree. Persisted to the storage volume (like SECRET_KEY_BASE) so it's
-# stable across restarts. An operator-supplied POLLER_TOKEN always wins.
-if [ "${POLLER_SPAWN:-}" = "1" ] && [ -z "${POLLER_TOKEN:-}" ]; then
+# Auto-generate the internal poller token when none was supplied, so
+# `docker run` stays near-zero-config. The poller is always on — it is the only
+# thing that fills the warehouse — and Rails (the InternalEndpointAuth check)
+# and the binary the Puma plugin spawns both read POLLER_TOKEN from the env, so
+# exporting one value here makes them agree. Persisted to the storage volume
+# (like SECRET_KEY_BASE) so it's stable across restarts. An operator-supplied
+# POLLER_TOKEN always wins.
+#
+# This used to be gated on POLLER_SPAWN=1 as well. That flag is gone, and had
+# the gate stayed, a bare `docker run` would have spawned a poller with no
+# token and watched every digest POST come back 401.
+if [ -z "${POLLER_TOKEN:-}" ]; then
   mkdir -p /rails/storage
   PT_FILE="/rails/storage/.poller_token"
 

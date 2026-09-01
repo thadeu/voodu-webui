@@ -23,16 +23,6 @@ import (
 	statestream "github.com/voodu/poller/streams/state"
 )
 
-// envGate exits cleanly when POLLER_SPAWN is not set to "1". Puma /
-// foreman see a 0-exit and DO NOT restart-storm.
-func envGate() {
-	if os.Getenv("POLLER_SPAWN") != "1" {
-		log.Print("[poller] POLLER_SPAWN != 1 — exiting cleanly")
-
-		os.Exit(0)
-	}
-}
-
 // Config captures every env var the binary reads. Populated once at
 // startup; immutable for the lifetime of the process.
 type Config struct {
@@ -110,16 +100,13 @@ func loadConfig() (*Config, error) {
 	stateInterval := envIntSeconds("POLLER_STATE_INTERVAL_SECONDS", 15, 5)
 	logBackfill := envIntSeconds("POLLER_LOG_BACKFILL_SECONDS", 24*60*60, 60)
 
-	// All three lanes default ON. `POLLER_SPAWN=1` alone is meant to
-	// be the single switch operators flip — the binary owns logs,
-	// state and metrics; the Ruby orchestrators check the same
-	// `POLLER_SPAWN` and step aside. The per-stream flags are kept
-	// as rollback levers: setting `POLLER_METRICS=0` disables that
-	// one lane in the binary while logs + state keep flowing. (When
-	// a per-stream flag is `0`, Ruby still defers — operator must
-	// also flip `POLLER_SPAWN=0` to bring Ruby back; this avoids the
-	// "nobody is doing X" trap that a finer-grained Ruby/Go gate
-	// would create on misalignment.)
+	// All three lanes default ON. The binary owns logs, state and
+	// metrics — there is no Ruby pipeline behind it any more, so
+	// there is no gate to flip either. The per-stream flags remain
+	// as narrow levers: `POLLER_METRICS=0` stops that one lane
+	// while logs + state keep flowing. Turning a lane off means
+	// nobody fills it; that is the operator's call to make knowingly,
+	// not something a second implementation quietly picks up.
 	logsEnabled := envFlag("POLLER_LOGS", true)
 	metricsEnabled := envFlag("POLLER_METRICS", true)
 	stateEnabled := envFlag("POLLER_STATE", true)
@@ -244,8 +231,6 @@ func (r *credRegistry) fn(serverID string) client.CredentialsFunc {
 const DrainBudget = 5 * time.Second
 
 func main() {
-	envGate()
-
 	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatalf("[poller] config: %v", err)

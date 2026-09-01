@@ -7,12 +7,10 @@
 # (source="log", metric="log_count"), so the card reads a cheap indexed series
 # (with history → sparkline) and updates live on the broadcast.
 #
-# MODE-AGNOSTIC BY DESIGN: it reads the on-disk NDJSON warehouse
-# (storage/logs/<server>/<pod>/<date>.ndjson), which BOTH the Ruby
-# LogTailServerJob AND the out-of-process Go poller write to (see
-# Internal::PollerController — the binary writes to storage/logs/<id>/...). So
-# there is NO `POLLER_SPAWN` guard: in poller mode this is the ONLY thing
-# turning logs into counts.
+# It reads the on-disk NDJSON warehouse (storage/logs/<server>/<pod>/<date>
+# .ndjson) that the Go poller writes, and it is the only thing turning those
+# lines into counts — it stays a Solid Queue job because counting is Ruby's
+# half of the deal, and the binary never learns about alert rules.
 #
 # IDEMPOTENT recompute-window strategy (no fragile watermark):
 #

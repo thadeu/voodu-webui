@@ -23,12 +23,13 @@ A `/healthz` and `/metrics` endpoint runs on `:9999` for liveness probes.
 
 ## Environment
 
-Both the Ruby shim and the Go binary check `POLLER_SPAWN`. If it is not
-exactly `"1"`, they exit 0 immediately so Puma will not restart-storm.
+The poller is always on. It is the only thing that fills the app's
+warehouse — there is no Ruby pipeline behind it — so `Poller::Railtie`
+refuses to boot the Rails app when the compiled binary is missing, and
+`config/puma.rb` loads the plugin unconditionally.
 
 | Env var                          | Default                     | Notes                              |
 | -------------------------------- | --------------------------- | ---------------------------------- |
-| `POLLER_SPAWN`                 | unset (disabled)            | Set to `1` to enable               |
 | `POLLER_TOKEN`      | required                    | Auth to Rails internal endpoint    |
 | `RAILS_INTERNAL_URL`             | `http://127.0.0.1:3000`     | Rails app base URL                 |
 | `POLLER_INTERVAL_SECONDS`    | `15` (min `5`)              | Per-server poll cadence            |
@@ -42,8 +43,15 @@ exactly `"1"`, they exit 0 immediately so Puma will not restart-storm.
 cd gems/poller && make build
 ```
 
-Produces `gems/poller/src/poller`. The Puma plugin and the Ruby
-binstub both resolve to that path via `Poller.binary_path`.
+Produces `gems/poller/dist/poller` (gitignored). The Puma plugin and the
+Ruby binstub both resolve to that path via `Poller.binary_path`, and the
+Railtie raises `Poller::BinaryMissing` with this command in the message
+when it is absent.
+
+Bundler does not run this for you: it installs path gems with extensions
+disabled, so there is no install-time hook to build on. Run it once after
+cloning (needs Go), and again after editing anything under `src/` — the
+Puma plugin warns at boot when the binary is older than the source.
 
 ## Running standalone
 
@@ -51,7 +59,7 @@ The Rails binstub (installed by the Railtie on first boot) execs the
 compiled binary, inheriting env from the parent shell:
 
 ```sh
-POLLER_SPAWN=1 POLLER_TOKEN=... bin/poller
+POLLER_TOKEN=... bin/poller
 ```
 
 ## Production / Docker
@@ -59,7 +67,7 @@ POLLER_SPAWN=1 POLLER_TOKEN=... bin/poller
 The repo's `Dockerfile` builds the binary in a dedicated multi-stage
 `poller-build` stage (alpine + Go toolchain, isolated from the
 Ruby image) and `COPY --from=poller-build` lands the artifact at
-`gems/poller/src/poller` in the final image. No Go toolchain
+`gems/poller/dist/poller` in the final image. No Go toolchain
 ships in the runtime image. The binary inherits the container's env
 vars, so set `POLLER_TOKEN` via kamal secrets / docker
 `-e` / systemd `Environment=` / .env — same place you set
@@ -73,5 +81,5 @@ vars, so set `POLLER_TOKEN` via kamal secrets / docker
 plugin :poller
 ```
 
-If `POLLER_SPAWN=1`, the plugin spawns the binary on `on_booted`, sends
-`SIGTERM` on `on_stopped`, and waits for the process to drain.
+The plugin spawns the binary on `on_booted`, sends `SIGTERM` on
+`on_stopped`, and waits for the process to drain.

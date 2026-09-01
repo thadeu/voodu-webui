@@ -21,6 +21,10 @@ module Poller
     module_function
 
     def start
+      # The binstub loads config/boot only, so the Railtie's check never ran
+      # here. Ask again rather than exec a path that may point at nothing.
+      Poller.require_binary!
+
       ENV["RAILS_INTERNAL_URL"] ||= "http://127.0.0.1:#{ENV.fetch("PORT", 3000)}"
       exec(Poller.binary_path)
     end

@@ -57,6 +57,20 @@ jobs:
       # clean checkout needs no db:test:prepare step. CI=1 also turns on eager
       # loading (config/environments/test.rb), so this catches load errors that
       # a local run would not.
+      # The poller binary is a build artifact of this repo, like the assets:
+      # gitignored, produced from gems/poller/src, and required at boot —
+      # Poller::Railtie refuses to start the app without it. Bundler will not
+      # build it for us (path gems install with extensions disabled), so CI
+      # builds it the same way the Dockerfile's poller-build stage does.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: gems/poller/src/go.mod
+          cache-dependency-path: gems/poller/src/go.sum
+
+      - name: Build the poller
+        run: make -C gems/poller build
+
       - name: Run tests
         env:
           CI: "1"
