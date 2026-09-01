@@ -20,6 +20,20 @@ class HostedUiDetailsTest < ActionDispatch::IntegrationTest
   # place — and the alt was the full display name, at the container's font
   # size, inside a 28px circle. It spilled over the topbar.
 
+  # The src FIRST. The alt and the clipping below are about what a broken
+  # image does; this is about the image being there at all — and it went
+  # missing exactly while those two were being added, because the edit that
+  # replaced `alt: @name` swallowed the `src:` line above it. Both of those
+  # tests passed the whole time: neither one looks at the source.
+  test "the avatar renders the image it was given" do
+    users(:owner).update!(avatar_url: "https://lh3.googleusercontent.com/a/ABC=s96-c")
+
+    a_page
+
+    assert_equal "https://lh3.googleusercontent.com/a/ABC=s96-c",
+      css_select("header img").first&.[]("src")
+  end
+
   test "the avatar image describes nothing, so a broken one paints nothing" do
     users(:owner).update!(avatar_url: "https://example.com/gone.png")
 

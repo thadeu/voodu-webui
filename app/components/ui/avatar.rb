@@ -28,6 +28,7 @@ class Components::UI::Avatar < Components::Base
       ) do
         plain initial
         img(
+          src: @url,
           # Deliberately empty, and NOT the name. A broken or slow image URL
           # made the browser paint the alt text instead — the whole display
           # name, at the container's font size, spilling out of a 28px circle
