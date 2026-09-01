@@ -1,58 +1,100 @@
-# frozen_string_literal: true
-
-# Entitlements — what this deployment may do, in one table.
-#
-# Same shape as Permissions, and deliberately a DIFFERENT axis from it. A
-# permission answers "who are you inside this org"; an entitlement answers "what
-# did this installation buy". Mixing them makes both unreadable — a member who
-# cannot invite and an unlicensed install that cannot invite fail for unrelated
-# reasons and deserve unrelated messages.
-#
-# The free tier is the DEFAULT, not a penalty: FREE is what an install gets with
-# no licence, and it is a complete product. What Enterprise buys is scale —
-# more than one org, people to invite, a longer window, and the control plane in
-# your own Postgres.
-#
-# `nil` means no limit. Except for retention, which never means that: see below.
 class Entitlements
-  FREE = {
-    accounts: 1,
-    orgs: 1,
-    member_invites: 0,
-    retention_days: 3,
-    postgres: false
-  }.freeze
-
-  # What a licence grants when it does not say otherwise. A token may narrow or
-  # widen any of these by naming them in its `ent` claim.
+  # Two questions, two sources. Keeping them apart is what makes one counting
+  # model work for every kind of installation.
   #
-  # retention_days is 90 rather than nil ON PURPOSE. The warehouse is SQLite on
-  # a volume, so "unlimited retention" is a disk that fills and a container that
-  # dies — selling it would be selling an outage on a delay. Enterprise gets a
-  # number it can raise knowingly, not a promise nobody can keep.
-  LICENSED = {
-    accounts: nil,
-    orgs: nil,
-    member_invites: nil,
-    retention_days: 90,
-    postgres: true
-  }.freeze
+  #   the TIER says what the BOX is        → how many accounts fit, and whether
+  #                                          the control plane may be Postgres
+  #   the PLAN says what an ACCOUNT bought → orgs, invited people, history
+  #
+  # Postgres sits with the box on purpose: whoever deployed it chose the
+  # database, and it is not a thing a customer of a hosted service can pick.
+  # Everything else is per-account, so a limit means the same thing whether one
+  # customer or a hundred share the installation — and there is no second
+  # counting mode that only one deployment shape ever exercises.
 
-  def self.current(license = LicenseToken.current)
+  # How many accounts an installation may hold.
+  #
+  # Enterprise is capped at one, deliberately. It is an upgrade of ONE account
+  # to unlimited orgs, bought to run on the buyer's own infrastructure — not a
+  # licence to operate a service of their own on top of Voodu.
+  ACCOUNTS_BY_TIER = {"free" => 1, "enterprise" => 1, "unlimited" => nil}.freeze
+
+  # What a plan grants. Free is the same everywhere: a customer of the hosted
+  # service on the free plan gets exactly what somebody running it themselves
+  # gets, which is the only version of "free" that needs explaining once.
+  FREE_PLAN = {orgs: 1, member_invites: 0, retention_days: 3}.freeze
+  PRO_PLAN = {orgs: nil, member_invites: nil, retention_days: 90}.freeze
+
+  # Kept for the callers that still ask about the installation as a whole.
+  FREE = FREE_PLAN.merge(accounts: 1, postgres: false).freeze
+  LICENSED = PRO_PLAN.merge(accounts: 1, postgres: true).freeze
+
+  # Current.license, not LicenseToken.current: resolving verifies an RSA
+  # signature and reads the database, and several things per request want to
+  # know the tier. Current memoises it for the request and Rails clears it
+  # between them, so a licence activated mid-session still lands on the next.
+  def self.current(license = Current.license)
     new(license)
   end
 
-  def initialize(license)
-    @license = license || LicenseToken.new(status: :none)
+  # for(account) — what governs this account, on any installation.
+  #
+  # One path now. The tier decides how many accounts fit and whether Postgres
+  # is allowed; the account's plan decides everything else, and the plan is
+  # resolved the same way whether one customer or a hundred share the box.
+  def self.for(account, license = Current.license)
+    new(license, account: account)
   end
 
-  attr_reader :license
+  def initialize(license, account: nil)
+    @license = license || LicenseToken.new(status: :none)
+    @account = account
+  end
 
-  # The effective table. An unlicensed, lapsed or unverifiable install reads
-  # FREE — which is why none of those states can break anything: the free tier
-  # is a place the app already knows how to be.
+  attr_reader :license, :account
+
+  def tier = license.tier
+
+  # Which plan governs this account.
+  #
+  # On the hosted service the account bought one. Anywhere else there is a
+  # single account and the box's own licence is what upgraded it — an
+  # Enterprise licence IS that account's pro plan, which is what "upgrade to
+  # unlimited orgs on my own infrastructure" means.
+  def plan
+    return account&.plan || LicenseToken::DEFAULT_PLAN if tier == "unlimited"
+
+    license.entitled? ? "pro" : LicenseToken::DEFAULT_PLAN
+  end
+
+  def pro? = plan == "pro"
+
+  # What a limit is measured against.
+  #
+  # Per account, always. `accounts` is the exception and cannot be otherwise —
+  # "how many accounts exist on this box" has no per-account version.
+  def scope_for(capability)
+    case capability
+    when :accounts then ::Account.count
+    when :orgs then account ? account.orgs.count : ::Org.count
+    when :member_invites then invite_count
+    else 0
+    end
+  end
+
   def table
-    @table ||= license.entitled? ? LICENSED.merge(license.granted.slice(*LICENSED.keys)) : FREE
+    @table ||= begin
+      base = pro? ? PRO_PLAN : FREE_PLAN
+      granted = plan_grants
+
+      # The tier's account cap is a DEFAULT, not a wall: an explicit grant in
+      # the licence lifts it, so a multi-account Enterprise can be sold on
+      # purpose rather than requiring a new tier to exist.
+      accounts = granted.key?(:accounts) ? granted[:accounts] : ACCOUNTS_BY_TIER.fetch(tier, 1)
+
+      base.merge(granted.slice(*PRO_PLAN.keys))
+        .merge(accounts: accounts, postgres: license.entitled?)
+    end
   end
 
   def limit(capability) = table[capability]
@@ -85,7 +127,10 @@ class Entitlements
     !postgres? && adapter.to_s.start_with?("postgres")
   end
 
-  def free? = table == FREE
+  # Asks the plan, not the shape of the table. Comparing whole hashes broke the
+  # moment an entitlement override made a free account's table non-identical to
+  # FREE — the question is "did anybody pay", and the plan is the answer.
+  def free? = !pro?
 
   # ── The three questions the creation points ask ────────────────────────
   #
@@ -98,14 +143,31 @@ class Entitlements
   # Counts are per INSTALLATION, not per account: the licence is bought by
   # whoever runs this container, and "one org" means this deployment has one.
 
-  def room_for_another_org? = within?(:orgs, ::Org.count)
+  def room_for_another_org? = within?(:orgs, scope_for(:orgs))
 
-  def room_for_another_account? = within?(:accounts, ::Account.count)
+  def room_for_another_account? = within?(:accounts, scope_for(:accounts))
 
   # An invitation is a membership somebody was invited into — which is exactly
   # what invited_by records. Counting those rather than all memberships keeps
   # the owner each org is created with from consuming a seat.
   def room_for_another_invite?
-    within?(:member_invites, ::Org::Membership.where.not(invited_by_id: nil).count)
+    within?(:member_invites, scope_for(:member_invites))
+  end
+
+  private
+
+  # Entitlement overrides ride on whichever licence granted the plan: the
+  # account's on the hosted service, the box's everywhere else. A customer who
+  # negotiated something specific gets it without a new plan name existing.
+  def plan_grants
+    return account&.plan_license&.granted || {} if tier == "unlimited"
+
+    license.granted
+  end
+
+  def invite_count
+    return ::Org::Membership.where.not(invited_by_id: nil).count if account.nil?
+
+    ::Org::Membership.where(org: account.orgs).where.not(invited_by_id: nil).count
   end
 end

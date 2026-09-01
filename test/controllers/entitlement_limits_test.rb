@@ -48,14 +48,38 @@ class EntitlementLimitsTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # Counted within the ACCOUNT, not across the installation. The number that
+  # matters is how many orgs this customer has, which is the only reading that
+  # means the same thing on a box with one account and on one with a hundred.
   test "a licence naming a number caps at that number" do
+    acting = orgs(:acme).account
+
     Rails.application.config.x.license = LicenseToken.new(
       status: :valid, claims: {"sub" => "acme", "exp" => 1.year.from_now.to_i,
-                               "ent" => {"orgs" => Org.count}}
+                               "ent" => {"orgs" => acting.orgs.count}}
     )
 
     assert_no_difference("Org.count") do
       post orgs_path, params: {org: {name: "Over"}}, as: :turbo_stream
+    end
+  end
+
+  # The property that unified the counting: another account's orgs are not this
+  # account's problem. Global counting made the busiest customer on a box set
+  # everybody else's ceiling.
+  test "another account's orgs do not consume this account's allowance" do
+    acting = orgs(:acme).account
+    other = orgs(:globex).account
+    other.orgs.create!(name: "Noise 1")
+    other.orgs.create!(name: "Noise 2")
+
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid, claims: {"sub" => "acme", "exp" => 1.year.from_now.to_i,
+                               "ent" => {"orgs" => acting.orgs.count + 1}}
+    )
+
+    assert_difference("Org.count", 1) do
+      post orgs_path, params: {org: {name: "Mine"}}, as: :turbo_stream
     end
   end
 

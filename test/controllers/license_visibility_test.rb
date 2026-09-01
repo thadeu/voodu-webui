@@ -133,12 +133,15 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   # The hosted service is the exception: its licence belongs to whoever runs
   # the box, not to the customer reading the screen.
-  test "the hosted plan offers no form" do
+  test "the hosted plan offers no form for the INSTALLATION's licence" do
     env_pinned(tier: "unlimited")
 
     settings
 
-    assert_select "textarea[name=license_token]", false
+    # By id, not by name: the customer's own plan form posts under the same
+    # field name, and asserting on the name would have said "no form at all"
+    # the moment that section existed.
+    assert_select "textarea#license-token", false
     assert_includes response.body, "hosted plan"
   end
 
@@ -214,5 +217,81 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
       assert_equal 1, [Current.free?, Current.enterprise?, Current.unlimited?].count(true),
         "tier #{tier.inspect} matched more or fewer than one predicate"
     end
+  end
+
+  # ── Issuing ───────────────────────────────────────────────────────
+
+  # The tier has to survive a round trip through the issuer, or the hosted
+  # plan cannot be created at all — the reader knew about `tier` before the
+  # writer did.
+  test "a tier issued by the rake task is the tier the app reads" do
+    key = OpenSSL::PKey::RSA.generate(2048)
+    claims = {"sub" => "voodu-hosted", "iat" => Time.current.to_i,
+              "exp" => 365.days.from_now.to_i, "ent" => {}, "tier" => "unlimited"}
+    token = JWT.encode(claims, key, "RS256")
+
+    license = LicenseToken.resolve(token, key: key.public_key)
+
+    assert_equal "unlimited", license.tier
+    assert license.unlimited?
+  end
+
+  # `tier` names the product and must NOT be filed as an entitlement, where
+  # nothing would ever read it.
+  test "the tier is a top-level claim, not an entitlement" do
+    key = OpenSSL::PKey::RSA.generate(2048)
+    token = JWT.encode(
+      {"sub" => "x", "iat" => Time.current.to_i, "exp" => 30.days.from_now.to_i,
+       "ent" => {"tier" => "unlimited"}}, key, "RS256"
+    )
+
+    license = LicenseToken.resolve(token, key: key.public_key)
+
+    assert_equal "enterprise", license.tier,
+      "a tier hidden inside ent must not be honoured — it is not where the app looks"
+  end
+
+  # ── The customer's plan, on the hosted service ────────────────────
+
+  test "the hosted service shows the customer their own plan, editable" do
+    env_pinned(tier: "unlimited")
+
+    settings
+
+    assert_select "textarea#plan-token"
+    assert_includes response.body, "Your plan"
+  end
+
+  # Self-hosted has no plans: the licence on the box already says what the
+  # operator has, and a second answer could only disagree with it.
+  test "a self-hosted installation shows no plan section" do
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid, claims: {"sub" => "acme", "exp" => 30.days.from_now.to_i}, source: :database
+    )
+
+    settings
+
+    assert_select "textarea#plan-token", false
+    assert_not_includes response.body, "Your plan"
+  end
+
+  test "activating a plan on a self-hosted installation is refused" do
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid, claims: {"sub" => "acme", "exp" => 30.days.from_now.to_i}
+    )
+
+    post ops_license_path, params: {scope: "plan", license_token: "whatever"}
+
+    assert_match(/hosted service/, flash[:alert])
+  end
+
+  # The wrong-account refusal reaches the operator by name, so somebody handed
+  # the wrong file knows which one they were handed.
+  test "a plan licence for another account is refused by name" do
+    env_pinned(tier: "unlimited")
+
+    post ops_license_path, params: {scope: "plan", license_token: "not-a-token"}
+
+    assert_match(/could not be verified/, flash[:alert])
   end
 end

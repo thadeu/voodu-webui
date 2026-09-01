@@ -378,8 +378,23 @@ class ApplicationController < ActionController::Base
   # What this installation bought. Distinct from Permissions, which answers who
   # you are inside an org — an unlicensed install and an under-privileged member
   # are refused for unrelated reasons and deserve unrelated messages.
+  # The entitlements governing THIS request.
+  #
+  # On the hosted service that means the current org's account and the plan it
+  # bought; anywhere else it means the licence on the box, and the account is
+  # ignored. Entitlements.for makes that choice — see it for why a request with
+  # no account in hand resolves to the hosted free table rather than to the
+  # installation's unlimited one.
   def entitlements
-    @entitlements ||= Entitlements.current
+    @entitlements ||= Entitlements.for(current_account)
+  end
+
+  # The account behind the org in the URL, or the one this person owns when
+  # there is no org yet — onboarding asks about limits before an org exists.
+  def current_account
+    return @current_account if defined?(@current_account)
+
+    @current_account = current_org&.account || Current.user&.owned_accounts&.first
   end
 
   # unlicensed_postgres? — the control plane is in Postgres without an

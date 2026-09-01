@@ -94,6 +94,28 @@ class Views::Ops::License::Index < Views::Base
         activation_form
       end
     end
+
+    # On the hosted service, the plan card sits BELOW the installation's. The
+    # order says which is which: what the box is, then what this customer
+    # bought. Only one of them is theirs to change.
+    account_plan_card if license.unlimited?
+  end
+
+  def account_plan_card
+    account = current_org&.account
+    return if account.nil?
+
+    render Components::UI::SectionCard.new(title: "Your plan") do
+      div do
+        render(Components::UI::KvRow.new(key: "Plan")) do
+          span(class: "font-voodu-mono text-[12px] text-voodu-text") { account.plan.capitalize }
+        end
+        render(Components::UI::KvRow.new(key: "Limits")) { plan_limits_value }
+        plan_expiry_row(account)
+      end
+
+      plan_form(account) if allowed_anywhere?(:manage_account)
+    end
   end
 
   # Every licence this installation has run under.
@@ -115,6 +137,50 @@ class Views::Ops::License::Index < Views::Base
   end
 
   def plan_name = license.unlimited? ? "Unlimited" : "Enterprise"
+
+  # Only when there IS one — a free account has no licence and no date, and an
+  # empty row would look like something failed to load.
+  def plan_expiry_row(account)
+    expires = account.plan_license.expires_at
+    return if expires.nil?
+
+    render(Components::UI::KvRow.new(key: "Renews")) do
+      span(class: "font-voodu-mono text-[12px] text-voodu-text-2") { expires.to_date.to_s }
+    end
+  end
+
+  # The customer's own licence, which is a different token from the box's and
+  # goes in a different place. Same shape as the installation form so nobody
+  # has to learn two, and the copy says whose it is.
+  def plan_form(account)
+    form(action: ops_license_path, method: "post",
+      class: "flex flex-col gap-2 p-3.5 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "scope", value: "plan")
+      input(type: "hidden", name: "return_to", value: @current_path)
+
+      label(class: "text-[12px] text-voodu-muted", for: "plan-token") do
+        plain account.pro? ? "Replace your plan licence" : "Activate a plan licence"
+      end
+
+      textarea(
+        id: "plan-token", name: "license_token", rows: "3",
+        placeholder: "eyJhbGciOiJSUzI1NiJ9…",
+        class: "w-full font-voodu-mono text-[11.5px] break-all px-2.5 py-2 " \
+               "bg-voodu-surface-2 border border-voodu-border text-voodu-text " \
+               "focus:outline-none focus:border-voodu-accent"
+      )
+
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
+        render Components::UI::Button.new(tag: :button, type: "submit", variant: :primary, size: :sm) do
+          "Activate"
+        end
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "Issued for this account (#{account.short_id}) — a licence for another will be refused."
+        end
+      end
+    end
+  end
 
   def plan_limits_value
     e = entitlements

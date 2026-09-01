@@ -21,6 +21,8 @@ class Current < ActiveSupport::CurrentAttributes
   # second query per request.
   attribute :membership
 
+  attribute :resolved_license
+
   # What this INSTALLATION is licensed as, reachable from anywhere.
   #
   # `entitlements` answers "how many orgs may exist"; this answers "which
@@ -32,8 +34,15 @@ class Current < ActiveSupport::CurrentAttributes
   # the database, and this is now cheap enough to call in a view. Rails clears
   # Current at the end of every request and every job, so a licence activated
   # mid-session is picked up on the next one rather than cached until deploy.
+  # Held in a real attribute, not in `attributes[...]`.
+  #
+  # CurrentAttributes#attributes returns a COPY, so `attributes[:license] ||= …`
+  # writes to a hash that is thrown away — the memoisation looked right and
+  # resolved the licence on every single call, RSA verification and database
+  # read included. Only a declared attribute has a writer that reaches the
+  # store.
   def self.license
-    attributes[:license] ||= LicenseToken.current
+    self.resolved_license ||= LicenseToken.current
   end
 
   # The three tiers, as questions. Deliberately exhaustive and mutually

@@ -51,7 +51,17 @@ class EntitlementsTest < ActiveSupport::TestCase
 
     assert_equal 5, e.limit(:orgs)
     assert_equal 180, e.retention_days
-    assert_nil e.limit(:accounts), "untouched entitlements keep the licensed default"
+    # The licensed default for accounts is ONE now, not unlimited: Enterprise
+    # upgrades a single account to unlimited orgs, and is not a licence to run
+    # a service of your own on top of Voodu.
+    assert_equal 1, e.limit(:accounts), "untouched entitlements keep the licensed default"
+  end
+
+  # The cap is a default, so a licence can still sell more deliberately.
+  test "an explicit accounts grant lifts the tier's cap" do
+    e = Entitlements.new(licensed({"accounts" => nil}))
+
+    assert_nil e.limit(:accounts)
   end
 
   # A signed claim naming something Entitlements does not know must not leak

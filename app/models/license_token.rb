@@ -212,6 +212,29 @@ class LicenseToken
 
   def unlimited? = tier == "unlimited"
 
+  # Which plan a HOSTED customer bought. Meaningless on a self-hosted
+  # installation, where the licence on the box already says what they have.
+  #
+  # Free is the default and the answer for anyone who never bought anything, so
+  # an absent claim is not an error — most accounts will never carry a licence
+  # at all and resolve to free without one.
+  PLANS = %w[free pro].freeze
+  DEFAULT_PLAN = "free"
+
+  def plan
+    claimed = claims["plan"].to_s
+
+    PLANS.include?(claimed) ? claimed : DEFAULT_PLAN
+  end
+
+  # Who this licence was sold to, as an account's short_id.
+  #
+  # A plan licence that named nobody would be a file that circulates by email:
+  # one customer's pro licence pasted into another customer's account. The
+  # activation refuses a subject that is not the account activating it, and
+  # this is the field it checks.
+  def subject_account = claims["sub"].to_s.presence
+
   def expires_at
     exp = claims["exp"]
     exp.present? ? Time.zone.at(exp.to_i) : nil

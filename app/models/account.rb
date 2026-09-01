@@ -25,6 +25,44 @@ class Account < ApplicationRecord
 
   def to_param = short_id
 
+  # ── The plan this account bought, on the hosted service ───────────
+  #
+  # Only consulted when the INSTALLATION is the hosted service. On a
+  # self-hosted box the licence on the box says what the operator has, and a
+  # per-account plan would be a second answer to the same question.
+
+  # The verified plan licence, or a free one. Never raises: an account whose
+  # stored token stopped verifying — key rotated, row corrupted — falls back to
+  # free rather than taking the page down, and the screen says so.
+  def plan_license
+    return @plan_license if defined?(@plan_license)
+
+    @plan_license = resolve_plan_license
+  end
+
+  def plan = plan_license.entitled? ? plan_license.plan : LicenseToken::DEFAULT_PLAN
+
+  def pro? = plan == "pro"
+
+  # activate_plan! — store a licence, but only one issued FOR THIS ACCOUNT.
+  #
+  # The subject check is what stops a plan licence from being a file that
+  # circulates: without it, one customer's pro licence pasted into another
+  # customer's account would upgrade it. Refused before storing, so a rejected
+  # token never sits in the column looking like a plan.
+  def activate_plan!(token)
+    candidate = LicenseToken.resolve(token.to_s.strip, source: :database)
+
+    return [:invalid, candidate.reason] unless candidate.verified?
+    return [:expired, nil] unless candidate.entitled?
+    return [:wrong_account, candidate.subject_account] unless candidate.subject_account == short_id
+
+    update!(plan_license_token: token.to_s.strip, plan_activated_at: Time.current)
+    @plan_license = candidate
+
+    [:ok, candidate]
+  end
+
   # provision! — an account, its first org, and the owner membership that
   # actually grants access, in one transaction.
   #
@@ -68,5 +106,21 @@ class Account < ApplicationRecord
     end
 
     update!(owner: new_owner)
+  end
+
+  private
+
+  def resolve_plan_license
+    return LicenseToken.new(status: :none) if plan_license_token.blank?
+
+    license = LicenseToken.resolve(plan_license_token, source: :database)
+
+    # A licence for a different account is not this account's plan, however it
+    # got into the column. Checked on READ as well as on write: a row that
+    # predates the check, or one written straight to the database, must not
+    # grant anything either.
+    return LicenseToken.new(status: :none) unless license.subject_account == short_id
+
+    license
   end
 end
