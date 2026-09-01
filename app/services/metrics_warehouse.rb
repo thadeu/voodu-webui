@@ -5,8 +5,8 @@
 # served from the MetricSample warehouse instead of round-tripping
 # the controller.
 #
-# Wired in via MetricsData#fetch: when ENV["WAREHOUSE"]=true,
-# fetch routes through here. Drop-in replacement — the chart code
+# Wired in via MetricsData#fetch, which routes every chart through
+# here. Drop-in replacement — the chart code
 # below (formatters, latest cache, points_for, latest_for) sees an
 # identical Hash and doesn't care which path produced it.
 #

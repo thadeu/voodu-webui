@@ -32,29 +32,16 @@ class OverviewData
   #     "we don't know if these are actually running right now"
   #     instead of confidently showing yesterday's :running.
   #
-  # Only meaningful under WAREHOUSE=1 (the warehouse path is what
-  # makes stale-but-rendered possible — the HTTP path raises into
-  # @error and pods_raw stays empty).
+  # Reading the snapshot is what makes stale-but-rendered possible at
+  # all: asking the controller per request had nothing to show when the
+  # controller was the thing that was down.
   def stale?
     @stale == true
   end
 
-  # Cache TTL for one server's overview snapshot. Short enough that
-  # the operator's view is "live-ish" (≤ this many seconds stale), long
-  # enough that browsing — opening the dashboard, flipping pod-status
-  # filters, glancing at the table — doesn't fan out into N HTTP calls
-  # to the PAT plane.
-  #
-  # Filters (?status=running, etc.) are pure Ruby operations on the
-  # cached snapshot — they NEVER hit the network. Only a page load
-  # past TTL, or an explicit "Refresh all" (`?refresh=1`), bypasses
-  # the cache.
-  CACHE_TTL = 10.seconds
-
-  def initialize(client, server, force_refresh: false)
+  def initialize(client, server)
     @client = client
     @server = server
-    @force = force_refresh
     @system = nil
     @pods_raw = []
     @updated_at = Time.current
@@ -178,26 +165,10 @@ class OverviewData
   #   - Cache MISS → one /system + one /pods?detail=true call to the
   #                  PAT plane. Both responses cached under a
   #                  per-server key.
-  #   - force_refresh → cache invalidated up front (the "Refresh all"
-  #                  button passes `?refresh=1`).
-  #   - Voodu::Client::Error → stored on @error and NOT cached. The
-  #                  next request retries immediately rather than
-  #                  serving a stale failure for TTL seconds.
-  #
-  # Note on /system being request-driven, not background: the IO+Net
-  # rates are server-side deltas between consecutive calls. With our
-  # 10s cache TTL, every page load past TTL forces a fresh sample,
-  # so the rates settle into a real average across the operator's
-  # actual page-view cadence rather than a synthetic ticker. The
-  # first page load after controller boot shows 0 for IO/Net — the
-  # second shows real rates. We document this in the WebUI badge
-  # ("warming up" hint is a future polish).
   def fetch!
     return if @client.nil?
 
-    return fetch_from_warehouse! if ServerState.warehouse?
-
-    fetch_from_http!
+    fetch_from_warehouse!
   end
 
   # fetch_from_warehouse! — read the local snapshot tables populated
@@ -223,74 +194,6 @@ class OverviewData
     # :offline (see `stale?` doc above + `prepare_pod` below). We trust
     # ServerHealth as the single source of truth for agent health.
     @stale = @server.status != :online && state.synced_at.present?
-  end
-
-  # fetch_from_http! — the legacy path. Direct controller call per
-  # request, cached 10s in Rails.cache. Stays in place for
-  # WAREHOUSE=0 (during rollout) and as a defensive fallback should
-  # the warehouse path ever need a quick-disable.
-  def fetch_from_http!
-    Rails.cache.delete(cache_key) if @force
-
-    cached = Rails.cache.read(cache_key)
-    if cached
-      @cache_hit = true
-      @system = cached[:system]
-      @pods_raw = cached[:pods]
-      @updated_at = cached[:fetched_at]
-      return
-    end
-
-    @system = @client.system
-    # detail=true asks the controller for the enriched list (ports,
-    # env, networks, restart_policy …). Same payload `vd describe pod`
-    # consumes. The CLI/WebUI parity work guarantees the response is
-    # byte-identical across the two planes.
-    @pods_raw = @client.pods(detail: true)["pods"] || []
-    @updated_at = Time.current
-
-    Rails.cache.write(
-      cache_key,
-      {system: @system, pods: @pods_raw, fetched_at: @updated_at},
-      expires_in: CACHE_TTL
-    )
-
-    # Successful fetch == controller is reachable + PAT is valid +
-    # process is alive. Warm the ServerHealth cache so the sidebar
-    # and topbar render :online without spending their own probe.
-    ServerHealth.warm(@server, online: true)
-
-    # Warm the sidebar's pods-count badge ("0 pods" → real count).
-    # TTL slightly longer than the snapshot's 10s so the sidebar
-    # doesn't briefly blank out between page renders within the
-    # same browsing session. Stale-after-expiry behaviour is OK
-    # because the next overview render rewrites it.
-    Server.write_pods_count(@server, @pods_raw.size)
-
-    # Warm the topbar's uptime chip. Same cache pattern — every
-    # page (Pods, Logs, pod show, …) reads from this key without
-    # needing to fetch /system itself. Without this warm, the
-    # topbar uptime would show "—" on every non-Overview page.
-    Server.write_uptime_seconds(@server, uptime_seconds)
-  rescue Voodu::Client::Error => e
-    # Don't poison the cache with a failure — let the next request
-    # retry. Operators iterating on a misconfigured PAT shouldn't have
-    # to wait TTL seconds to see their fix take effect.
-    @error = e
-
-    # The error still tells us something: this server isn't reachable
-    # right now. Flip the health cache to :offline so the sidebar /
-    # topbar reflects the symptom without triggering a redundant
-    # probe of their own.
-    ServerHealth.warm(@server, online: false)
-  end
-
-  # cache_key — namespaced per-server so two servers don't clobber
-  # each other's snapshot. Bumped (`:v1`) so a schema change in the
-  # cached hash (e.g. adding a `:degraded` key) won't read garbage from
-  # old entries — change the suffix and old keys auto-expire on TTL.
-  def cache_key
-    "voodu:overview:v1:server:#{@server.id}"
   end
 
   # ── Stat cards ──────────────────────────────────────────────────

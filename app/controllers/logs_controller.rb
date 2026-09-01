@@ -209,7 +209,7 @@ class LogsController < ApplicationController
   # cache cell (avoids double round-trips when the operator
   # bounces between the two surfaces).
   def pods_for_picker
-    ServerPods.compact(voodu_client, current_server)
+    ServerPods.compact(current_server)
   end
 
   # came_from_pod_page? — true when the Referer header points at the

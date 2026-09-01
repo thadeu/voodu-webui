@@ -18,26 +18,15 @@ class ServerSystem
   # failure (no server, network error, malformed). Callers should
   # gracefully degrade — Settings shows "—" for the affected fields.
   #
-  # WAREHOUSE=1 → read from the local snapshot maintained by
-  # `StateSyncServerJob` (every 10s). Sub-millisecond + offline-
-  # resilient: when the controller is down the Settings "About"
-  # card keeps showing the last-known hostname / kernel / CPU /
-  # memory / disk / uptime / voodu version — instead of dashing
-  # every field. The sync job refreshes this on every tick so the
-  # values track the agent live.
-  def self.fetch(client, server)
+  # Read from the local snapshot the sync pipeline maintains.
+  # Sub-millisecond, and it keeps answering while the controller is
+  # down: the Settings "About" card goes on showing the last-known
+  # hostname / kernel / CPU / memory / disk / uptime / voodu version
+  # instead of dashing every field.
+  def self.fetch(server)
     return nil if server.nil?
 
-    return server.system&.payload_hash if ServerState.warehouse?
-
-    return nil if client.nil?
-
-    Rails.cache.fetch(cache_key(server), expires_in: TTL) do
-      client.system
-    end
-  rescue Voodu::Client::Error => e
-    Rails.logger.warn("server_system: #{e.class} #{e.message}")
-    nil
+    server.system&.payload_hash
   end
 
   def self.invalidate(server)

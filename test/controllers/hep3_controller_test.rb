@@ -12,8 +12,6 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
 
     HepMessage.bulk_insert([
       msg("INVITE", 0, "10.0.0.1", "10.0.0.2", ts: "01", raw: "INVITE sip:bob@10.0.0.2 SIP/2.0"),
@@ -22,8 +20,6 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
       msg("ACK", 0, "10.0.0.1", "10.0.0.2", ts: "04")
     ])
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   def msg(method, code, src, dst, ts:, raw: "", corr: "call-1")
     payload = {

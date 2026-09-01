@@ -206,7 +206,7 @@ class MetricDashboardsController < ApplicationController
   # isolation boundary, so no server outside current_org is ever listed.
   def org_server_pods
     @org_server_pods ||= current_org.servers.order(:name).map do |server|
-      [server, ServerPods.compact(Voodu::Client.new(server), server)]
+      [server, ServerPods.compact(server)]
     end
   end
 

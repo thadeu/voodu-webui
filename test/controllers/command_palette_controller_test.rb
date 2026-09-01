@@ -11,11 +11,7 @@ class CommandPaletteControllerTest < ActionDispatch::IntegrationTest
   fixtures :orgs, :servers
 
   setup do
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1" # read pods from the (empty) warehouse table, no network
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   def commands_for(**params)
     get command_palette_path, params: params

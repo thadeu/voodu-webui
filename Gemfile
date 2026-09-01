@@ -28,7 +28,6 @@ gem "solid_queue"
 gem "solid_cable"
 gem "bootsnap", require: false
 gem "thruster", require: false
-gem "image_processing", "~> 1.2"
 gem "phlex-rails", "~> 2.4"
 gem "phlex-icons", "~> 2.56"
 gem "faraday", "~> 2.12"

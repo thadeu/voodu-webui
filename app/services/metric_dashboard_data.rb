@@ -75,7 +75,7 @@ class MetricDashboardData
   def pods_for(server)
     return [] if server.nil?
 
-    (@pods_cache ||= {})[server.id] ||= ServerPods.compact(client_for(server), server)
+    (@pods_cache ||= {})[server.id] ||= ServerPods.compact(server)
   end
 
   # any_server — a fallback server for panels with no server of their own
@@ -160,10 +160,6 @@ class MetricDashboardData
 
   def panels
     Array(@dashboard&.panels)
-  end
-
-  def warehouse?
-    defined?(ServerState) && ServerState.warehouse?
   end
 
   # chart_for — resolve the panel's scope, then reuse
@@ -836,8 +832,8 @@ class MetricDashboardData
   end
 
   # field — read a key from a pod hash that may use string OR symbol
-  # keys (ServerPods.compact returns string-keyed in warehouse mode,
-  # and the live path mirrors it — but be defensive).
+  # keys (ServerPods.compact returns the controller's own string-keyed
+  # payload verbatim — but be defensive).
   def field(pod, key)
     return "" if pod.nil?
 

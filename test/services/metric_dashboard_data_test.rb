@@ -14,12 +14,9 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   setup do
     @server = servers(:alpha)
     @org = @server.org
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
 
   teardown do
-    ENV["WAREHOUSE"] = @prev_wh
     dir = LogTail::FilePath.server_dir(@server)
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end

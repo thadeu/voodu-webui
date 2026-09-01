@@ -2,22 +2,24 @@
 
 # ServerState — read facade over the local snapshot tables.
 #
-# When `WAREHOUSE=1` is set, every page-render path (OverviewData,
-# PodDetailData, ServerPods, ServerHealth) routes through here
-# instead of making a fresh HTTP call to the controller. The
-# `StateSyncServerJob` (every 10s) keeps the underlying tables
-# fresh; pages get sub-millisecond reads off SQLite.
+# Every page-render path (OverviewData, PodDetailData, ServerPods,
+# ServerHealth) routes through here rather than calling the controller.
+# The sync pipeline keeps the underlying tables fresh; pages get
+# sub-millisecond reads off SQLite, and they keep rendering while the
+# controller is unreachable — which is when an operator most needs the
+# dashboard to open.
 #
-# When `WAREHOUSE=0` (default during rollout), `warehouse?` returns
-# false and every caller falls back to its legacy HTTP-per-request
-# path. The branch lives in each page service — this class never
-# decides "should I use warehouse data?" on the caller's behalf.
+# There used to be a WAREHOUSE env flag selecting this against an
+# HTTP-per-request path in each page service. It is gone: the HTTP path
+# had no test of its own, two readers of the flag disagreed on what
+# counted as "on" (`"1"` here, `"true"` or `"1"` in MetricsData, so
+# WAREHOUSE=true split the app in half), and the only thing the flag
+# reliably did was fail a test suite when somebody forgot to set it.
 #
-# The page services consume the same shapes they did before — the
-# pod hashes returned by `pods` mirror the controller's
-# `/pods?detail=true&spec=true` payload exactly (they're stored
-# verbatim in `pods.payload`); `system` returns the same hash
-# shape as `/system`. Drop-in replacement at the read boundary.
+# The pod hashes returned by `pods` mirror the controller's
+# `/pods?detail=true&spec=true` payload exactly — they are stored
+# verbatim in `pods.payload`; `system` returns the same shape as
+# `/system`.
 #
 # Staleness model:
 #
@@ -34,14 +36,6 @@ class ServerState
   # preserved.
   ONLINE_THRESHOLD = 30.seconds
   OFFLINE_THRESHOLD = 120.seconds
-
-  # warehouse? — single switch every page service consults to
-  # decide between local-DB and HTTP-per-request. Reads fresh from
-  # ENV each call so tests can flip the flag between examples
-  # without restarting the process.
-  def self.warehouse?
-    ENV["WAREHOUSE"] == "1"
-  end
 
   # for — convenience constructor so callers read
   # `ServerState.for(server)` rather than `ServerState.new(server)`.
@@ -98,10 +92,9 @@ class ServerState
     age.nil? || age > ONLINE_THRESHOLD
   end
 
-  # health_status — :online | :degraded | :offline derived purely
-  # from sync recency. Replaces the active probe ServerHealth runs
-  # under WAREHOUSE=0; same vocabulary so views don't have to
-  # branch.
+  # health_status — :online | :degraded | :offline derived purely from
+  # sync recency, which replaced the per-render probe. Same vocabulary,
+  # so views never had to branch.
   def health_status
     age = synced_age_seconds
     return :offline if age.nil? || age > OFFLINE_THRESHOLD

@@ -11,8 +11,6 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
     # Freeze to midday so the history timeline's relative event times
     # (2.hours.ago / 1.hour.ago) and their "Today" / "Yesterday" day labels
     # never straddle midnight. Without this the suite flaked when run in the
@@ -23,7 +21,6 @@ class AlertsControllerTest < ActionDispatch::IntegrationTest
 
   teardown do
     travel_back
-    ENV["WAREHOUSE"] = @prev_wh
   end
 
   test "index renders the empty state when no rules exist" do

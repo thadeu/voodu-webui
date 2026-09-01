@@ -45,7 +45,7 @@ class CommandPaletteController < ApplicationController
     current = params[:current].present? ? servers.find { |i| i.key == params[:current] } : nil
 
     per_server = servers.flat_map do |server|
-      pods = ServerPods.compact(safe_client(server), server)
+      pods = ServerPods.compact(server)
       CommandSet.for(server: server, pods: pods, helpers: helpers)
     end
 

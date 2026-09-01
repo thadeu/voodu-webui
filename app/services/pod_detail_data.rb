@@ -19,15 +19,12 @@
 # fake numbers that LOOKED live. Better to omit a card than show
 # fabricated data. Reintroduce when stats.go grows network fields.
 class PodDetailData
-  CACHE_TTL = 10.seconds
-
   attr_reader :error, :updated_at, :raw, :name
 
-  def initialize(client, server, name, force_refresh: false)
+  def initialize(client, server, name)
     @client = client
     @server = server
     @name = name
-    @force = force_refresh
 
     @raw = nil
     @error = nil
@@ -65,9 +62,9 @@ class PodDetailData
   # stale? — true when we're rendering a warehoused snapshot while
   # the controller is unreachable. Drives the yellow banner at the
   # top of the page AND forces status_sym to :offline so the
-  # Running pill doesn't lie when the agent is down. Only meaningful
-  # under WAREHOUSE=1 (the HTTP path raises into @error before we
-  # can render anything to be stale ABOUT).
+  # Running pill doesn't lie when the agent is down. Reading the
+  # snapshot is what makes this state reachable at all: asking the
+  # controller per request had nothing to render when it was down.
   def stale?
     @stale == true
   end
@@ -298,9 +295,7 @@ class PodDetailData
   def fetch!
     return if @client.nil?
 
-    return fetch_from_warehouse! if ServerState.warehouse?
-
-    fetch_from_http!
+    fetch_from_warehouse!
   end
 
   # fetch_from_warehouse! — read the pod's snapshot from the local
@@ -318,35 +313,6 @@ class PodDetailData
     # yellow banner + forces status_sym to :offline via PodStatus.
     # Trust ServerHealth as the single source of truth for agent health.
     @stale = @server.status != :online && @updated_at.present?
-  end
-
-  # fetch_from_http! — legacy path: single HTTP fetch + Rails.cache.
-  # Stays in place for WAREHOUSE=0 (rollout) + as a defensive
-  # fallback when an operator wants the live shape.
-  def fetch_from_http!
-    Rails.cache.delete(cache_key) if @force
-
-    cached = Rails.cache.read(cache_key)
-    if cached
-      @raw = cached[:raw]
-      @updated_at = cached[:fetched_at]
-      return
-    end
-
-    @raw = @client.pod(@name, spec: true)
-    @updated_at = Time.current
-
-    Rails.cache.write(
-      cache_key,
-      {raw: @raw, fetched_at: @updated_at},
-      expires_in: CACHE_TTL
-    )
-  rescue Voodu::Client::Error => e
-    @error = e
-  end
-
-  def cache_key
-    "voodu:pod_detail:v1:server:#{@server.id}:pod:#{@name}"
   end
 
   # stat_card — series is now an Array of real Float values from

@@ -4,9 +4,9 @@ require "test_helper"
 
 # Exercises the full request stack for /logs/analytics — these also
 # smoke-render the Phlex Page / FilterBar / Results / Row / Surrounding
-# components (a render error surfaces as a 500 here). WAREHOUSE mode
-# keeps pod-picker resolution off the network; the log lines come from a
-# hand-seeded NDJSON warehouse on disk.
+# components (a render error surfaces as a 500 here). Pod-picker
+# resolution reads the local snapshot rather than the network; the log
+# lines come from a hand-seeded NDJSON warehouse on disk.
 class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   fixtures :orgs, :servers
 
@@ -14,8 +14,6 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     @server = servers(:alpha)
     @key = @server.key
     @base = Time.zone.local(2026, 6, 9, 14, 47, 50)
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
 
     # Pin "now" to the seeded era so LogSearchData#window's retention-floor
     # clamp (RETENTION_DAYS.ago, relative to Time.current) stays behind the
@@ -28,7 +26,6 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   end
 
   teardown do
-    ENV["WAREHOUSE"] = @prev_wh
     clear_server_logs
   end
 

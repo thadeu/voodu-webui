@@ -5,14 +5,20 @@ require "rails"
 require "active_model/railtie"
 require "active_job/railtie"
 require "active_record/railtie"
-require "active_storage/engine"
 require "action_controller/railtie"
 require "action_mailer/railtie"
-require "action_mailbox/engine"
-require "action_text/engine"
 require "action_view/railtie"
 require "action_cable/engine"
 # require "rails/test_unit/railtie"
+
+# ActiveStorage, ActionText and ActionMailbox are deliberately NOT loaded.
+# Nothing here attaches a file, holds rich text or receives mail — their
+# migrations were never even installed, so the schema has none of their
+# tables. What they did cost was real: ActiveStorage's variant processor
+# pulled `image_processing` → ruby-vips → the native libvips, which the
+# production boot then required on every host. Add them back with
+# `rails active_storage:install` if a file upload ever arrives; with no
+# tables and no data there is nothing to migrate back.
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.

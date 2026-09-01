@@ -13,11 +13,7 @@ class ServerUptimeTest < ActiveSupport::TestCase
 
   setup do
     @server = servers(:alpha)
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1" # ServerState.warehouse? reads ENV each call
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   def attach_system(boot_time:, uptime_seconds:, synced_at:)
     payload = {"host" => {"boot_time" => boot_time, "uptime_seconds" => uptime_seconds}}

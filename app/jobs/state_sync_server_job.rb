@@ -95,8 +95,8 @@ class StateSyncServerJob < ApplicationJob
     # Sync succeeded → controller is reachable + PAT valid + process
     # alive. Warm the ServerHealth cache so the sidebar / topbar
     # render :online without each page paying its own probe.
-    # Under WAREHOUSE=1 this IS the only probe path — no other
-    # surface calls /system or /health on the controller.
+    # This IS the only probe path — no other surface calls /system or
+    # /health on the controller.
     ServerHealth.warm(server, online: true)
 
     # Push the fresh status to every open browser tab subscribed to

@@ -14,20 +14,7 @@ require "test_helper"
 # that only checks absence cannot tell "correctly hidden" from "selector typo",
 # and this file has already produced that mistake twice in other places.
 class MemberSeesNoDeadDoorsTest < ActionDispatch::IntegrationTest
-  # ServerState.warehouse? decides whether a page reads pods out of the local
-  # snapshot table or over HTTP, and it reads ENV on every call — which the
-  # comment on that method says is exactly so a test can set it.
-  #
-  # This file ASSUMED it was on and never said so, so it passed only on a
-  # machine whose .env carried WAREHOUSE=1 and failed on CI, which has no .env.
-  # `nil` restores an unset variable, because assigning nil deletes the key.
-  setup do
-    @server = servers(:alpha)
-    @warehouse = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
-  end
-
-  teardown { ENV["WAREHOUSE"] = @warehouse }
+  setup { @server = servers(:alpha) }
 
   def as_member = sign_in_as(email: users(:contractor).email)
 

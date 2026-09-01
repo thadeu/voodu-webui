@@ -178,6 +178,6 @@ class LogsAnalyticsController < ApplicationController
   # ServerPods cache cell with /logs + /metrics (no extra round-trip when
   # the operator bounces between surfaces).
   def pods_for_picker
-    ServerPods.compact(voodu_client, current_server)
+    ServerPods.compact(current_server)
   end
 end

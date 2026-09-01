@@ -146,9 +146,9 @@ class LogMetricsSyncServerJob < ApplicationJob
   # dropped — consistent with the live-scan MVP. Needs a (non-network) client
   # because ServerPods.compact guards on client presence even in warehouse mode.
   def build_pod_map(server)
-    client = Voodu::Client.new(server)
+    Voodu::Client.new(server)
 
-    ServerPods.compact(client, server).each_with_object({}) do |p, map|
+    ServerPods.compact(server).each_with_object({}) do |p, map|
       name = (p["name"] || p[:name]).to_s
       next if name.empty?
 

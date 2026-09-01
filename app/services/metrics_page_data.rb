@@ -263,7 +263,7 @@ class MetricsPageData
   # so we don't pay the inspect cost for the scope picker). Cached
   # by Rails.cache via the wrapper.
   def all_pods
-    @all_pods ||= ServerPods.compact(@client, @server)
+    @all_pods ||= ServerPods.compact(@server)
   end
 
   # ── Class-level spec accessors (used by /metrics/display_settings) ──
@@ -675,12 +675,7 @@ class MetricsPageData
   def host_system_payload
     return @host_system_payload if defined?(@host_system_payload)
 
-    @host_system_payload =
-      if defined?(ServerState) && ServerState.warehouse?
-        ServerState.for(@server)&.system
-      else
-        @client&.system
-      end
+    @host_system_payload = ServerState.for(@server)&.system
   end
 
   # source_for — maps a metric name to its NDJSON source. Resource

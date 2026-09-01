@@ -63,12 +63,19 @@ jobs:
         run: bin/rails test
 
       # The suite cannot cover this. config/environments/test.rb pins
-      # config.x.clowk_enabled to a real boolean, so the ENV resolution in
-      # config/initializers/clowk.rb is never exercised by a test — and that
-      # resolution is what decides whether a bare `docker run` boots at all.
+      # config.x.clowk_enabled to a real boolean, so the ENV resolution is
+      # never exercised by a test — and that resolution is what decides
+      # whether a bare `docker run` boots anonymous or asks for identity.
       # It regressed once already: `config.x.<unset>` returns an empty
       # OrderedOptions, which is neither nil nor falsey, so a `.nil?` guard
       # silently produced sign-in ON for every deployment.
+      #
+      # Asked of AuthSettings.effective rather than of the pin. The pin is no
+      # longer where the answer lives: an environment that says nothing now
+      # stays UNDECIDED on purpose, so the stored configuration the SSO screen
+      # writes can be reached at all. Asserting on the pin tested the cache
+      # instead of the decision, and would pass again the day the cache
+      # stopped feeding anything.
       - name: Boot production in both auth modes
         env:
           SECRET_KEY_BASE: ci-boot-smoke-test-only
@@ -78,15 +85,23 @@ jobs:
 
           echo "--- self-hosted default: no env at all, must boot anonymous"
           env -u CLOWK_ENABLED -u CLOWK_PUBLISHABLE_KEY \
-            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == false ? 0 : 1)'
+            bin/rails runner 'exit(AuthSettings.effective.enabled? == false ? 0 : 1)'
+
+          echo "--- and it must stay UNDECIDED, so a stored config can decide"
+          env -u CLOWK_ENABLED -u CLOWK_PUBLISHABLE_KEY \
+            bin/rails runner 'exit(AuthSettings.pinned_flag.nil? ? 0 : 1)'
 
           echo "--- upgrade: a key already configured keeps sign-in on with no flag"
           env -u CLOWK_ENABLED CLOWK_PUBLISHABLE_KEY=pk_test_ci \
-            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == true ? 0 : 1)'
+            bin/rails runner 'exit(AuthSettings.effective.enabled? == true ? 0 : 1)'
 
           echo "--- SaaS: flag on with a key, must boot with sign-in"
           CLOWK_ENABLED=1 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
-            bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == true ? 0 : 1)'
+            bin/rails runner 'exit(AuthSettings.effective.enabled? == true ? 0 : 1)'
+
+          echo "--- the way out: flag off beats a key that is present"
+          CLOWK_ENABLED=0 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
+            bin/rails runner 'exit(AuthSettings.effective.enabled? == false ? 0 : 1)'
 
           echo "--- no CLOWK_SECRET_KEY: the HS256 path must be SHUT, not defaulted"
           # Clowk::JwtVerifier sends every non-RS256 token down the HS256 path,

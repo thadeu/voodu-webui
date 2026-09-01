@@ -12,11 +12,7 @@ class SettingsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   def attach_system(plugins:)
     System.create!(

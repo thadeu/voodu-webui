@@ -12,14 +12,11 @@ class LogMetricsSyncServerJobTest < ActiveSupport::TestCase
 
   setup do
     @server = servers(:alpha)
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
     clear_server_logs
     MetricSample.where(server_id: @server.id).delete_all
   end
 
   teardown do
-    ENV["WAREHOUSE"] = @prev_wh
     clear_server_logs
     MetricSample.where(server_id: @server.id).delete_all
   end

@@ -41,15 +41,12 @@ class ServerHealth
   # A cold render shows :unknown for the few seconds until the next warm
   # tick, then the Turbo Stream broadcast flips the pill live.
   #
-  # The cache is the single source of truth; WHO warms it:
-  #
-  #   WAREHOUSE=0 — `OverviewData.fetch_from_http!` warms after its
-  #                 /system call (success → :online, failure → :offline).
-  #
-  #   WAREHOUSE=1 — `StateSyncServerJob` warms every ~10s after its fetch
-  #                 + broadcasts to `server-state-#{id}`. 3× per TTL → the
-  #                 cache is always warm, status flips within ~10s of a
-  #                 `systemctl stop`. This IS the only probe path.
+  # The cache is the single source of truth, and the sync pipeline is
+  # what warms it: `StateSyncServerJob` writes after every fetch and
+  # broadcasts to `server-state-#{id}`. Three writes per TTL, so the
+  # cache is always warm and the status flips within one tick of a
+  # `systemctl stop`. This IS the only probe path — no page render
+  # probes on its own.
   #
   # For a user-triggered "check the connection right now" (Settings
   # reconnect), call #refresh! — the only place that probes on demand.

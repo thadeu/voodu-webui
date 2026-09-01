@@ -81,7 +81,7 @@ class Views::Dashboard::Index < Views::Base
   end
 
   # stale_banner — rendered when the controller is unreachable but
-  # we have a local snapshot (WAREHOUSE=1). Tells the operator
+  # we have a local snapshot. Tells the operator
   # "you're looking at saved data, not real-time" so the running
   # counts + chart values aren't misread as live. Different copy
   # from error_banner because there's nothing to fix — just wait

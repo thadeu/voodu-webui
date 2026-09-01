@@ -37,24 +37,15 @@ class ServerPods
   # payload). Callers should NOT raise — the surfaces that consume
   # this (picker dropdowns) gracefully hide themselves on [].
   #
-  # WAREHOUSE=1 → read from the local snapshot table (sub-ms, offline
-  # resilient). Same payload shape since pods.payload stores the
-  # /pods?detail=true&spec=true row verbatim — pickers don't need
-  # to know which path served them.
-  def self.compact(client, server)
-    return [] if client.nil? || server.nil?
+  # Read from the local snapshot table: sub-ms, and it keeps answering
+  # while the controller is unreachable. Same payload shape as the
+  # controller's own response, because pods.payload stores the
+  # /pods?detail=true&spec=true row verbatim — pickers never needed to
+  # know which path served them.
+  def self.compact(server)
+    return [] if server.nil?
 
-    if ServerState.warehouse?
-      return server.pods.order(:container_name).map(&:payload_hash)
-    end
-
-    Rails.cache.fetch(cache_key(server), expires_in: TTL) do
-      payload = client.pods(detail: false)
-      Array(payload && payload["pods"])
-    end
-  rescue Voodu::Client::Error => e
-    Rails.logger.warn("server_pods.compact: #{e.class} #{e.message}")
-    []
+    server.pods.order(:container_name).map(&:payload_hash)
   end
 
   # invalidate — drop the cached entry. Wire this from any action

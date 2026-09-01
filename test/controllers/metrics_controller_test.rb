@@ -13,8 +13,6 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
     @server = servers(:alpha)
     @org = @server.org
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
     # Dashboards live at the org (M2); the host panel carries its server_id.
     @org.metric_dashboards.create!(
       name: "pinned-one", pinned: true,
@@ -22,8 +20,6 @@ class MetricsControllerTest < ActionDispatch::IntegrationTest
                 "label" => "CPU", "color" => "var(--voodu-accent)", "unit" => "%", "server_id" => @server.id}]
     )
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   test "a relative range renders the realtime indicator, not a fixed window" do
     get metrics_path(server_key: @key, range: "1h")

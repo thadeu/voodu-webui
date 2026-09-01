@@ -12,8 +12,6 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
 
     HepMessage.bulk_insert([
       row(call_id: "c1", meth: "INVITE", code: 0, ts: "2026-06-30 10:00:01.000000"),
@@ -21,8 +19,6 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
       row(call_id: "c2", meth: "", code: 486, ts: "2026-06-30 10:00:03.000000")
     ])
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   def row(call_id:, meth:, code:, ts:)
     payload = {ts: ts, call_id: call_id, x_cid: "", method: meth, response_code: code, from_user: "a", raw_sip: "RAW #{call_id}"}.to_json

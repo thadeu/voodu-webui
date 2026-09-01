@@ -33,13 +33,9 @@ class CrossTenantStoresTest < ActionDispatch::IntegrationTest
 
     sign_out
     sign_in_as(email: users(:owner).email) # owner of acme, and nothing in globex
-
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
 
   teardown do
-    ENV["WAREHOUSE"] = @prev_wh
     [@alpha, @gamma].each { |s| clear_logs(s) }
   end
 

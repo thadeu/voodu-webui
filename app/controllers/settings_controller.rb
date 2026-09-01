@@ -15,7 +15,7 @@ class SettingsController < ApplicationController
   def index
     render Views::Settings::Index.new(
       **dashboard_context.merge(
-        system: ServerSystem.fetch(voodu_client, current_server),
+        system: ServerSystem.fetch(current_server),
         pats: ServerPats.fetch(voodu_client, current_server)
       )
     )

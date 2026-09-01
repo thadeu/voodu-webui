@@ -12,11 +12,7 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     @server = servers(:alpha)
     @org = @server.org
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   HOST = {
     "scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",

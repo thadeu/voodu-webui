@@ -23,15 +23,11 @@ class AlertDestinationCrossOrgTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)          # acme
     @foreign = servers(:gamma)         # globex — a different org
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
 
     @foreign_destination = @foreign.org.alert_destinations.create!(
       name: "globex-oncall", kind: "webhook", endpoint: "https://globex.example/hook"
     )
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   test "creating a rule drops a destination id from another org" do
     post alert_rules_path(server_key: @server.key), params: {

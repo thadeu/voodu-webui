@@ -70,10 +70,7 @@ class DashboardController < ApplicationController
   end
 
   def index
-    @data = OverviewData.new(
-      voodu_client, current_server,
-      force_refresh: params[:refresh].present?
-    )
+    @data = OverviewData.new(voodu_client, current_server)
 
     render Views::Dashboard::Index.new(
       **dashboard_context.merge(

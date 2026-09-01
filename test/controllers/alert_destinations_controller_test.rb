@@ -10,11 +10,7 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @server = servers(:alpha)
     @key = @server.key
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   test "new renders the modal form" do
     get new_alert_destination_path(server_key: @key)

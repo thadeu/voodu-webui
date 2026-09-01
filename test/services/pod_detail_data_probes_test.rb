@@ -13,11 +13,7 @@ class PodDetailDataProbesTest < ActiveSupport::TestCase
 
   setup do
     @server = servers(:alpha)
-    @prev_wh = ENV["WAREHOUSE"]
-    ENV["WAREHOUSE"] = "1"
   end
-
-  teardown { ENV["WAREHOUSE"] = @prev_wh }
 
   test "parses declared probes from the k8s-style envelope (spec.spec.probes)" do
     seed_pod(spec: enveloped({

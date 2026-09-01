@@ -22,10 +22,7 @@ class PodsController < ApplicationController
   authorize :manage_servers, only: :restart
 
   def index
-    @data = OverviewData.new(
-      voodu_client, current_server,
-      force_refresh: params[:refresh].present?
-    )
+    @data = OverviewData.new(voodu_client, current_server)
 
     render Views::Pods::Index.new(
       **dashboard_context.merge(
@@ -38,10 +35,7 @@ class PodsController < ApplicationController
 
   def show
     name = params[:name]
-    @data = PodDetailData.new(
-      voodu_client, current_server, name,
-      force_refresh: params[:refresh].present?
-    )
+    @data = PodDetailData.new(voodu_client, current_server, name)
 
     view = Views::Pods::Show.new(
       **dashboard_context.merge(

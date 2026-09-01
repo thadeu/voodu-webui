@@ -102,30 +102,11 @@ class Server < ApplicationRecord
 
   # pods_count — total pod count for the sidebar's row sub-text.
   #
-  # WAREHOUSE=1 → reads `pods.count` directly (SQL COUNT, sub-ms).
-  # The state-sync job (every 10s) keeps the table fresh, so the
-  # sidebar shows accurate counts for EVERY server — not just the
-  # one the operator most recently opened the overview for.
-  #
-  # WAREHOUSE=0 → legacy: reads a Rails.cache key OverviewData
-  # warms after its /pods fetch. Returns nil when the operator has
-  # never opened the dashboard for this server since boot, and
-  # the sidebar renders "—" instead of "0".
+  # A SQL COUNT over the local snapshot, which the state-sync job keeps
+  # fresh, so the sidebar shows an accurate count for EVERY server —
+  # not just the one whose overview the operator opened last.
   def pods_count
-    return pods.count if ServerState.warehouse?
-
-    Rails.cache.read(self.class.pods_count_cache_key(id))
-  end
-
-  # Class-level cache-key + writer so OverviewData (and any future
-  # consumer) can warm the count by id alone, without needing an
-  # Server instance. Same id-keyed pattern ServerHealth uses.
-  def self.pods_count_cache_key(server_id)
-    "voodu:pods_count:v1:server:#{server_id}"
-  end
-
-  def self.write_pods_count(server, count, ttl: 30.seconds)
-    Rails.cache.write(pods_count_cache_key(server.id), count.to_i, expires_in: ttl)
+    pods.count
   end
 
   # status — :online | :offline. Read from ServerHealth's cache.
@@ -168,16 +149,6 @@ class Server < ApplicationRecord
     self[:infra].presence
   end
 
-  # uptime — humanized "Nd Nh" string surfaced in the topbar chip.
-  #
-  # WAREHOUSE=1 → reads `system.uptime_seconds` directly from the
-  # local snapshot maintained by `StateSyncServerJob`. Every page
-  # gets the live uptime, even ones the operator has never opened
-  # for this server.
-  #
-  # WAREHOUSE=0 → legacy Rails.cache lookup that OverviewData
-  # warms after its /system fetch. Returns "—" when no snapshot
-  # exists yet.
   # Beyond this the host snapshot is too old to trust as "live" — used
   # to blank the uptime instead of showing the value captured before a
   # reboot. Keyed on the snapshot's own age (System#synced_at), NOT on
@@ -198,11 +169,7 @@ class Server < ApplicationRecord
   # uptime_seconds_from_source — the raw snapshot number (no boot-time
   # derivation), for callers that want their own format.
   def uptime_seconds_from_source
-    if ServerState.warehouse?
-      system&.uptime_seconds
-    else
-      Rails.cache.read(self.class.uptime_cache_key(id))
-    end
+    system&.uptime_seconds
   end
 
   # live_uptime_seconds — derives uptime from the absolute boot
@@ -210,10 +177,6 @@ class Server < ApplicationRecord
   # every page. Returns nil (→ "—") when the snapshot is stale or
   # missing, so a just-rebooted box doesn't show its PRE-reboot uptime.
   def live_uptime_seconds
-    unless ServerState.warehouse?
-      return Rails.cache.read(self.class.uptime_cache_key(id))
-    end
-
     snap = system
     return nil if snap.nil?
     return nil if snap.synced_at.nil? || snap.synced_at < UPTIME_FRESH_WINDOW.ago
@@ -236,18 +199,6 @@ class Server < ApplicationRecord
     return "#{mins}m" if mins.positive?
 
     "#{secs}s"
-  end
-
-  # Class-level cache-key + writer so OverviewData (the canonical
-  # writer) can warm the value by id alone, without needing an
-  # Server instance. Same id-keyed shape used by ServerHealth and
-  # write_pods_count above.
-  def self.uptime_cache_key(server_id)
-    "voodu:uptime:v1:server:#{server_id}"
-  end
-
-  def self.write_uptime_seconds(server, seconds, ttl: 30.seconds)
-    Rails.cache.write(uptime_cache_key(server.id), seconds.to_i, expires_in: ttl)
   end
 
   # to_param — Rails uses this to interpolate the model into routes.
