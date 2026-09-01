@@ -33,11 +33,9 @@ class LogTailOrchestratorJobTest < ActiveJob::TestCase
   test "runs normal flow when POLLER_SPAWN is unset" do
     ENV.delete("POLLER_SPAWN")
 
-    # Force LogTail::Feature.enabled? -> true and TailLock/FilePath
-    # to their permissive values so every fixture server is
-    # enqueued. We replace methods on the singleton classes and
-    # restore them in the ensure block.
-    LogTail::Feature.singleton_class.define_method(:enabled?) { true }
+    # Force TailLock/FilePath to their permissive values so every
+    # fixture server is enqueued. We replace methods on the singleton
+    # classes and restore them in the ensure block.
     LogTail::TailLock.singleton_class.define_method(:held?) { |_| false }
     LogTail::FilePath.singleton_class.define_method(:server_disk_bytes) { |_| 0 }
 
@@ -46,7 +44,6 @@ class LogTailOrchestratorJobTest < ActiveJob::TestCase
         LogTailOrchestratorJob.new.perform
       end
     ensure
-      LogTail::Feature.singleton_class.send(:remove_method, :enabled?)
       LogTail::TailLock.singleton_class.send(:remove_method, :held?)
       LogTail::FilePath.singleton_class.send(:remove_method, :server_disk_bytes)
     end

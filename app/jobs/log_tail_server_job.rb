@@ -26,9 +26,6 @@
 #     keep re-enqueuing every minute regardless.
 #   - Auth errors → discard immediately (PAT revoked / scope
 #     changed). Operator sees missing data, fixes PAT in /servers.
-#   - Kill switch `LOG_TAIL_ENABLED=0` → early return at the top of
-#     `perform`; orchestrator already filters but we double-check
-#     here for jobs that were enqueued before the flag flipped.
 #
 # Queue: `:log_tail` (dedicated). Long-running here would starve
 # `:default`, so we isolate. Configured in config/queue.yml with
@@ -94,8 +91,6 @@ class LogTailServerJob < ApplicationJob
     # check also catches in-flight enqueues that landed before the
     # flag flipped (orchestrator already filters too).
     return if ENV["POLLER_SPAWN"] == "1"
-
-    return unless LogTail::Feature.enabled?
     return if LogTail::TailLock.held?(server_id)
 
     server = Server.find_by(id: server_id)

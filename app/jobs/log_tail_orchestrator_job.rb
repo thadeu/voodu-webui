@@ -4,10 +4,9 @@
 # LogTailServerJob in flight per server.
 #
 # Runs every 1 minute (see config/recurring.yml). On each tick:
-#   1. Bail if kill switch is off (`LOG_TAIL_ENABLED=0`).
-#   2. For each server, if no tail is currently running
+#   1. For each server, if no tail is currently running
 #      (LogTail::TailLock not held), enqueue a fresh one.
-#   3. Also enforces the per-server disk cap (2GB): skip enqueue
+#   2. Also enforces the per-server disk cap (2GB): skip enqueue
 #      when the server's storage tree is already over budget.
 #      The cap auto-relaxes as LogTailCleanupJob reaps old files.
 #
@@ -25,8 +24,6 @@ class LogTailOrchestratorJob < ApplicationJob
     # alive; the flag is opt-in for the binary rollout AND a
     # rollback lever if the binary misbehaves.
     return if ENV["POLLER_SPAWN"] == "1"
-
-    return unless LogTail::Feature.enabled?
 
     Server.find_each do |server|
       next if LogTail::TailLock.held?(server.id)

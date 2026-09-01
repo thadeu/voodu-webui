@@ -60,7 +60,6 @@ services:
       POLLER_LOG_BACKFILL_SECONDS: ${POLLER_LOG_BACKFILL_SECONDS:-86400}
       POLLER_TOKEN: ${POLLER_TOKEN:-}
       SOLID_QUEUE_IN_PUMA: ${SOLID_QUEUE_IN_PUMA:-1}
-      LOG_TAIL_ENABLED: ${LOG_TAIL_ENABLED:-1}
       # SECRET_KEY_BASE / ACTIVE_RECORD_ENCRYPTION_* auto-generated on first
       # boot if unset and persisted in the storage volume.
     volumes:
