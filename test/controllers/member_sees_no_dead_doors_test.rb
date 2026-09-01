@@ -14,7 +14,20 @@ require "test_helper"
 # that only checks absence cannot tell "correctly hidden" from "selector typo",
 # and this file has already produced that mistake twice in other places.
 class MemberSeesNoDeadDoorsTest < ActionDispatch::IntegrationTest
-  setup { @server = servers(:alpha) }
+  # ServerState.warehouse? decides whether a page reads pods out of the local
+  # snapshot table or over HTTP, and it reads ENV on every call — which the
+  # comment on that method says is exactly so a test can set it.
+  #
+  # This file ASSUMED it was on and never said so, so it passed only on a
+  # machine whose .env carried WAREHOUSE=1 and failed on CI, which has no .env.
+  # `nil` restores an unset variable, because assigning nil deletes the key.
+  setup do
+    @server = servers(:alpha)
+    @warehouse = ENV["WAREHOUSE"]
+    ENV["WAREHOUSE"] = "1"
+  end
+
+  teardown { ENV["WAREHOUSE"] = @warehouse }
 
   def as_member = sign_in_as(email: users(:contractor).email)
 
@@ -31,9 +44,9 @@ class MemberSeesNoDeadDoorsTest < ActionDispatch::IntegrationTest
 
   def nav_hrefs = css_select("nav a").map { |a| a["href"].to_s }
 
-  # A row, not an HTTP stub: ServerState.warehouse? is on here, so the detail
-  # page reads the pod out of the local snapshot table and never makes a
-  # request. Stubbing Faraday produced a page rendering "not found", where the
+  # A row, not an HTTP stub: the setup above turns ServerState.warehouse? on, so
+  # the detail page reads the pod out of the local snapshot table and never
+  # makes a request. Stubbing Faraday produced a page rendering "not found", where the
   # header — and therefore the button under test — does not exist at all, and
   # both halves of the pair passed for the wrong reason.
   def host_panel
