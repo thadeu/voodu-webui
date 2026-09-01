@@ -20,10 +20,15 @@
 # the right home for it.
 #
 # Usage:
+#   bundle exec rake 'license:inspect[eyJhbGciOi…]'
+#
 #   bundle exec rake 'license:issue[acme-corp,365]'
 #   bundle exec rake 'license:issue[acme-corp,365,retention_days=180 orgs=5]'
 #   bundle exec rake 'license:issue[voodu-hosted,365,tier=unlimited]'
-#   bundle exec rake 'license:inspect[eyJhbGciOi…]'
+#
+#   Self-hosted free -> enterprise
+#   bundle exec rake 'license:issue[local-dev,30,tier=enterprise]'
+#
 namespace :license do
   desc "Issue a signed licence: license:issue[customer,days,'k=v k=v']"
   task :issue, [:customer, :days, :overrides] => :environment do |_task, args|
