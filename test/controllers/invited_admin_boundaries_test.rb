@@ -15,9 +15,21 @@ class InvitedAdminBoundariesTest < ActionDispatch::IntegrationTest
     claims: {"sub" => "hosted", "exp" => 1.year.from_now.to_i, "tier" => "unlimited"}
   )
 
+  FIXTURES = Rails.root.join("test/fixtures/files")
+  SIGNING_KEY = OpenSSL::PKey::RSA.new(FIXTURES.join("license_test_private_key.pem").read)
+  TEST_PUBLIC = OpenSSL::PKey::RSA.new(FIXTURES.join("license_test_public_key.pem").read)
+
   setup do
     @installed = Rails.application.config.x.license
     Rails.application.config.x.license = HOSTED
+
+    # The suite's own keypair, and the app pointed at its public half for the
+    # duration. These tests used to sign with config/license/private_key.pem —
+    # the REAL one, which is gitignored precisely so it never leaves a
+    # developer's machine. They passed here and died in CI on a file that
+    # cannot exist there, which is the same trap as reading a local .env: a
+    # test is only as portable as the least portable thing it opens.
+    LicenseToken.instance_variable_set(:@public_key, TEST_PUBLIC)
 
     # Their own account, as PersonalWorkspace would have made it on arrival.
     @guest = users(:contractor)
@@ -31,7 +43,10 @@ class InvitedAdminBoundariesTest < ActionDispatch::IntegrationTest
     sign_in_as(email: @guest.email)
   end
 
-  teardown { Rails.application.config.x.license = @installed }
+  teardown do
+    Rails.application.config.x.license = @installed
+    LicenseToken.remove_instance_variable(:@public_key) if LicenseToken.instance_variable_defined?(:@public_key)
+  end
 
   # ── Inviting is the owner's, not the admin's ──────────────────────
   #
@@ -140,11 +155,9 @@ class InvitedAdminBoundariesTest < ActionDispatch::IntegrationTest
   private
 
   def plan_token_for(account)
-    key = OpenSSL::PKey::RSA.new(Rails.root.join("config/license/private_key.pem").read)
-
     JWT.encode({
       "sub" => account.short_id, "iat" => Time.current.to_i,
       "exp" => 1.year.from_now.to_i, "tier" => "unlimited", "plan" => "pro", "ent" => {}
-    }, key, "RS256")
+    }, SIGNING_KEY, "RS256")
   end
 end
