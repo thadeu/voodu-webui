@@ -24,6 +24,27 @@ class AuthSettings
   ENV_KEY = "CLOWK_PUBLISHABLE_KEY"
   TRUTHY = %w[1 true yes on].freeze
 
+  # Every subdomain URL reaching the gem goes through here first, because the
+  # gem will not do it: Clowk::Subdomain prepends the scheme when it is missing,
+  # but Clowk::Jwks.default_url reads `config.subdomain_url` RAW and skips that
+  # path entirely. A bare host therefore builds "host/.well-known/jwks.json",
+  # which Net::HTTP rejects with `ArgumentError (not an HTTP URI)` — and it does
+  # so inside the OAuth callback, so the failure is a 500 on the one request
+  # that cannot be retried past. Nothing before that point complains: the app
+  # boots, the sign-in redirect is built correctly by Subdomain, and only the
+  # token verification on the way back explodes.
+  #
+  # `clowk.dev` and `https://clowk.dev` mean the same thing to whoever types
+  # one into a form or an env var, so they are made to mean the same thing here
+  # rather than one of them being a trap.
+  def self.normalize_url(value)
+    url = value.to_s.strip
+    return nil if url.empty?
+    return url if url.start_with?("http://", "https://")
+
+    "https://#{url}"
+  end
+
   def self.env_decides?
     ENV[ENV_FLAG].to_s.strip.present? || ENV[ENV_KEY].to_s.strip.present?
   end
@@ -45,7 +66,7 @@ class AuthSettings
 
     Resolved.new(
       enabled: enabled, publishable_key: key.presence,
-      subdomain_url: ENV["CLOWK_SUBDOMAIN_URL"].presence,
+      subdomain_url: normalize_url(ENV["CLOWK_SUBDOMAIN_URL"]),
       secret_key: ENV["CLOWK_SECRET_KEY"].presence, source: :env
     )
   end
@@ -60,7 +81,7 @@ class AuthSettings
 
     Resolved.new(
       enabled: true, publishable_key: config.publishable_key,
-      subdomain_url: config.subdomain_url.presence,
+      subdomain_url: normalize_url(config.subdomain_url),
       secret_key: config.secret_key.presence, source: :database
     )
   rescue ActiveRecord::ActiveRecordError => e

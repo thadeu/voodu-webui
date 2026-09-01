@@ -49,8 +49,15 @@ class Components::Layouts::Sidebar < Components::Base
     # Between Logs and Settings deliberately: plugins are what this server can
     # do, which sits closer to what you watch it doing than to how it is
     # configured.
-    {id: :plugins, label: "Plugins", icon: :PuzzlePieceOutline, path: :plugins},
-    {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings}
+    # `capability` on the three below for the reason spelled out over ORG_NAV:
+    # the endpoint refuses either way, and a member clicking these got "You
+    # need admin access to do that" — a toast for a door we drew ourselves.
+    # Settings reveals the PAT, Plugins installs code on the box, and Alerts
+    # is admin-only end to end.
+    {id: :plugins, label: "Plugins", icon: :PuzzlePieceOutline, path: :plugins,
+     capability: :manage_servers},
+    {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings,
+     capability: :reveal_pat}
   ].freeze
 
   # `org_only` — the route takes :org_id and no :server_key. Passing one anyway
@@ -62,7 +69,8 @@ class Components::Layouts::Sidebar < Components::Base
   # need admin access".
   ORG_NAV = [
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
-    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count},
+    {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count,
+     capability: :read_org_surfaces},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
      org_only: true, capability: :invite_member, clowk_only: true}
   ].freeze
@@ -377,12 +385,48 @@ class Components::Layouts::Sidebar < Components::Base
       if nav_server_key
         nav_group("Server", SERVER_NAV)
         nav_divider
-        nav_group("Org", ORG_NAV)
+      end
+
+      # The Org group used to live inside the branch above, which tied it to a
+      # SERVER being selected. Metrics and Alerts do need one — they are drawn
+      # per server. Members does not: it is the org's list of people, and its
+      # route carries no :server_key at all.
+      #
+      # The cost of that pairing was the whole invitation flow. A new account
+      # has no servers, so the owner landed on /servers with a sidebar holding
+      # nothing but License, and no way to reach Members from anywhere — they
+      # could not add the person who would have helped them add a server. It
+      # was not an error message, it was an absence, which is why it read as
+      # "nothing happens" rather than as a refusal.
+      if nav_org_id
+        nav_group("Org", org_nav_items)
         nav_divider
       end
 
-      nav_group("Installation", INSTALLATION_NAV)
+      nav_group("Installation", installation_nav)
     end
+  end
+
+  # Per-server items drop out when no server is selected; org-level ones stay.
+  # nav_group returns nothing when the result is empty, so an org with neither
+  # draws no heading.
+  def org_nav_items
+    return ORG_NAV if nav_server_key
+
+    ORG_NAV.select { |item| item[:org_only] }
+  end
+
+  # SSO is the installation's question, and on the hosted service the
+  # installation is not the customer's. The screen itself refuses there
+  # (Ops::SsoController#refuse_on_hosted); this keeps the sidebar from
+  # advertising a door that answers with a redirect.
+  #
+  # License stays: on hosted that screen is where a customer activates the plan
+  # they bought, which is very much theirs.
+  def installation_nav
+    return INSTALLATION_NAV unless Current.unlimited?
+
+    INSTALLATION_NAV.reject { |item| item[:id] == :sso }
   end
 
   # nav_divider — a short rule between the Server + Org blocks, shown ONLY when
@@ -451,10 +495,15 @@ class Components::Layouts::Sidebar < Components::Base
   # then falling back to an org this person may actually manage. Nil when there
   # is none, and the control is then omitted: a "+" that raises is worse than
   # no "+".
+  # Nil for anybody who may not register one, which is the question
+  # ServersController asks before letting `new` through: do they administer any
+  # org at all. The picker offered this "+" to members, and the page it opened
+  # refused them — this control and the registry's own button are the two doors
+  # to the same form, and only one of them was gated.
   def add_server_href
     return @add_server_href if defined?(@add_server_href)
 
-    org_id = nav_org_id || manageable_org&.short_id
+    org_id = (nav_org_id || manageable_org&.short_id if administrable_orgs.exists?)
 
     @add_server_href = org_id && new_server_path(org_id: org_id, server_key: nil)
   end
@@ -463,8 +512,21 @@ class Components::Layouts::Sidebar < Components::Base
   # routes are `/:org_id/:server_key/…`, so every per-server link needs it).
   # Derived from the server the nav points at, so on the server-less /servers
   # page (no current_org) the links still resolve to that server's org.
+  # The org the nav points at, and the ONE place that decides it. Off the
+  # selected server when there is one, off the URL when there is not —
+  # /:org_id/servers names an org perfectly well without naming a server.
+  #
+  # It used to be derived from the server in three separate places (the id for
+  # building hrefs, the id for the active check, and the org for the capability
+  # check), so an org with no server was invisible to all three at once. Every
+  # caller reads this now: getting the fallback right in two of three would
+  # have produced a link that renders and then refuses.
+  def nav_org
+    nav_server&.org || current_org
+  end
+
   def nav_org_id
-    nav_server&.org&.short_id
+    nav_org&.short_id
   end
 
   # nav_item — collapsed view: icon centered, label hidden, badge
@@ -485,7 +547,7 @@ class Components::Layouts::Sidebar < Components::Base
     # it hid License and SSO exactly where there is no server to lend an org.
     return allowed_anywhere?(item[:capability]) if item[:global]
 
-    allowed_in?(nav_server&.org, item[:capability])
+    allowed_in?(nav_org, item[:capability])
   end
 
   def nav_item(item)
@@ -560,10 +622,17 @@ class Components::Layouts::Sidebar < Components::Base
 
     return @current_path == public_send("#{item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key) if item[:path] == :server_root
 
-    # `active_prefix` lets an item highlight across a URL family wider
-    # than its href (e.g. Logs links to /logs/analytics but stays active
-    # on /logs too). Falls back to the item's own path.
-    prefix = public_send("#{item[:active_prefix] || item[:path]}_path", org_id: nav_org_id, server_key: nav_server_key)
+    # The same server_key: nil that nav_href passes, for the same reason, and
+    # missing here is why Members never lit up on its own page: the href was
+    # "/acmeorg1/members" and the prefix built here was
+    # "/acmeorg1/members?server_key=alpha", so start_with? was false on every
+    # request. Anything org_only has to be built both times the same way.
+    route = item[:active_prefix] || item[:path]
+    prefix = if item[:org_only]
+      public_send("#{route}_path", org_id: nav_org_id, server_key: nil)
+    else
+      public_send("#{route}_path", org_id: nav_org_id, server_key: nav_server_key)
+    end
     @current_path.start_with?(prefix)
   end
 

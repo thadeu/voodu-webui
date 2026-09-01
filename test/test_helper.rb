@@ -17,6 +17,19 @@ require "minitest/mock"
 Rails.application.config.x.license = LicenseToken.new(
   status: :valid, claims: {"sub" => "test-suite", "exp" => 10.years.from_now.to_i}
 )
+# The suite's own signing secret, for the suite's own harness.
+#
+# config/initializers/clowk.rb deliberately leaves Clowk.config.secret_key nil
+# when the operator supplied none — a default there would be a published
+# credential, because the gem's HS256 path checks a signature and no audience.
+# That rule is about the APPLICATION's configuration, and it stays.
+#
+# The suite still has to sign in, and ClowkDevToken mints HS256, so it needs a
+# secret to exist. Generated per run rather than written down: nothing here is
+# a value anybody could know, nothing reaches production, and the initializer
+# keeps saying nil for every environment it configures.
+Clowk.config.secret_key ||= SecureRandom.hex(32)
+
 require "rails/test_help"
 require "webmock/minitest"
 

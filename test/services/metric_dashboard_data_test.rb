@@ -39,7 +39,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_running_web_pod
     dash = make_dashboard([HOST, WEB_MEM])
 
-    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts
 
     assert_equal 2, charts.size
     assert_equal "CPU", charts[0][:label]
@@ -63,7 +63,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
                {"scope_kind" => "pod", "server_id" => @server.id, "scope" => "web", "name" => "web", "kind" => "deployment"}]}
     dash = @org.metric_dashboards.create!(name: "hp", panels: [panel])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:multi], "host + pod line → a multi-series envelope"
     assert_equal 2, c[:series].size, "one series per member (host + web pod)"
@@ -88,7 +88,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_running_web_pod
     dash = @org.metric_dashboards.create!(name: "np", panels: [multi_number_panel])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :number, c[:kind], "number + 2 pods → a :number tile"
     assert_equal 2, c[:numbers].size, "one stat per pod"
@@ -101,7 +101,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_running_web_pod
     dash = @org.metric_dashboards.create!(name: "np2", panels: [multi_number_panel("show_chart" => false)])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal 2, c[:numbers].size, "the per-pod stats still render"
     assert_empty c[:series], "show_chart false → no timeline"
@@ -109,8 +109,8 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   test "a multi-pod Number carries the colored flag — true by default, false when opted out" do
     seed_running_web_pod
-    default = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc1", panels: [multi_number_panel]), range: "1h").charts.first
-    solid = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc2", panels: [multi_number_panel("colored" => false)]), range: "1h").charts.first
+    default = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc1", panels: [multi_number_panel]), visible_servers: @org.servers, range: "1h").charts.first
+    solid = MetricDashboardData.new(@org, @org.metric_dashboards.create!(name: "nc2", panels: [multi_number_panel("colored" => false)]), visible_servers: @org.servers, range: "1h").charts.first
 
     assert default[:colored], "absent → colored (per-pod)"
     assert_not solid[:colored], "colored:false → the card renders solid stats"
@@ -145,7 +145,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_calls_by_number
     dash = hep_group_panel(chart_type: "table")
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :group_table, c[:kind]
     assert_equal "to_user", c[:field]
@@ -155,7 +155,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "a hep3 group-by Bar renders a grouped-bar snapshot" do
     seed_calls_by_number
 
-    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "bars"), range: "1h").charts.first
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "bars"), visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :group_bar, c[:kind]
     assert_equal "A", c[:groups].first[:group], "biggest group first"
@@ -164,7 +164,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "a hep3 group-by Line renders a multi-series envelope, one series per number" do
     seed_calls_by_number
 
-    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h").charts.first
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:multi], "one line per group → the multi-series card"
     assert_equal %w[A C B], c[:series].map { |s| s[:label] }, "series in snapshot (top-N) order"
@@ -174,7 +174,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "a hep3 group-by Number renders the grand total across groups" do
     seed_calls_by_number
 
-    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "number"), range: "1h").charts.first
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "number"), visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :number, c[:kind]
     assert_equal 6, c[:value], "3 (A) + 2 (C) + 1 (B) messages"
@@ -184,7 +184,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_calls_by_number
     dash = hep_group_panel(chart_type: "table", query: "| count(distinct corr_id) by to_user")
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
     by = c[:groups].to_h { |g| [g[:group], g[:value]] }
 
     assert_equal 3, by["A"], "A has 3 distinct calls"
@@ -194,8 +194,8 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "the panel's view drives the metric: Calls counts distinct calls, Messages counts messages" do
     seed_calls_by_number  # C has 2 messages that are 1 call
 
-    on_messages = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "messages"), range: "1h").charts.first
-    on_calls = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "calls"), range: "1h").charts.first
+    on_messages = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "messages"), visible_servers: @org.servers, range: "1h").charts.first
+    on_calls = MetricDashboardData.new(@org, hep_group_panel(chart_type: "table", view: "calls"), visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal 2, on_messages[:groups].to_h { |g| [g[:group], g[:value]] }["C"], "messages view → 2 messages"
     assert_equal 1, on_calls[:groups].to_h { |g| [g[:group], g[:value]] }["C"], "calls view → 1 call"
@@ -204,15 +204,15 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "the interval sets the HEP3 group-by bucket width (finer interval → more points)" do
     seed_calls_by_number
 
-    coarse = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h", interval: "15m").charts.first
-    fine = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h", interval: "1m").charts.first
+    coarse = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), visible_servers: @org.servers, range: "1h", interval: "15m").charts.first
+    fine = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), visible_servers: @org.servers, range: "1h", interval: "1m").charts.first
 
     assert_operator coarse[:series].first[:points].size, :<, fine[:series].first[:points].size,
       "15m buckets are coarser than 1m over the same 1h window"
   end
 
   test "a hep3 group-by Line with no data in the window renders an empty chart, not a missing card" do
-    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), range: "1h").charts.first
+    c = MetricDashboardData.new(@org, hep_group_panel(chart_type: "line"), visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:multi], "empty group-by still renders a (flat) chart"
     assert_not c[:missing], "not a 'no running replica' card — the reader is up"
@@ -223,7 +223,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_calls_by_number
     dash = hep_group_panel(chart_type: "area", query: "@to_user like /A/")
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_nil c[:kind], "no group-by ⇒ the existing hep count chart (ChartCard), not a grouped card"
     assert_not c[:multi], "single series"
@@ -235,7 +235,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   # index.
   test "chart_at returns one panel's chart by index, nil out of range" do
     dash = make_dashboard([HOST])
-    data = MetricDashboardData.new(@org, dash, range: "1h")
+    data = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h")
 
     assert_equal "cpu_percent", data.chart_at(0)[:metric]
     assert_nil data.chart_at(9)
@@ -251,7 +251,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     forged = HOST.merge("server_id" => gamma.id, "label" => "forged")
     dash = @org.metric_dashboards.new(name: "forged", panels: [forged])
 
-    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts
 
     assert_equal 1, charts.size
     assert charts[0][:missing], "a cross-org panel must be a missing placeholder, never a cross-org read"
@@ -260,7 +260,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "pod panel becomes a missing placeholder when no replica is running" do
     dash = make_dashboard([HOST, WEB_MEM])
 
-    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts
 
     assert_equal 2, charts.size
     assert_not charts[0][:missing], "host panel should still render"
@@ -278,7 +278,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # latest bucket = 3 (count)
 
-    charts = MetricDashboardData.new(@org, dash, range: "1h").charts
+    charts = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts
 
     assert_equal 1, charts.size
     c = charts.first
@@ -295,7 +295,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("show_chart" => false)])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]]) # same data as the chart case
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :number, c[:kind]
     assert_equal 3, c[:value], "count is still computed — only the chart is hidden"
@@ -306,7 +306,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("show_chart" => true)])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:series].any?, "show_chart true → timeline series present"
   end
@@ -318,7 +318,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("chart_type" => "area")])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_nil c[:kind], "chart render → ChartCard (no :number kind)"
     assert_equal "area", c[:chart_type]
@@ -332,7 +332,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   # (zeroed), never a misleading area fallback: the operator chose it knowingly.
   test "a host metric asked to be a Table reads empty (zeroed), not an area fallback" do
     dash = make_dashboard([HOST.merge("chart_type" => "table")])
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:zeroed], "host + table → zeroed"
     assert_empty c[:points], "a zeroed card carries no points"
@@ -344,7 +344,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   # log/HEP3/HTTP tiles use.
   test "a host metric with a Number render is a :number tile of the current value" do
     dash = make_dashboard([HOST.merge("chart_type" => "number")])
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :number, c[:kind], "host + number → a :number tile"
     assert_not c[:zeroed], "a Number tile is a real render, not zeroed"
@@ -355,7 +355,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     dash = make_dashboard([FS_CALLS.merge("chart_type" => "gauge_radial")])
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert c[:zeroed], "log + gauge → zeroed"
     assert_empty c[:points]
@@ -367,8 +367,8 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "log chart and log number of the same filter report the same headline value" do
     seed_log_samples(FS_CALLS["query"], [[5, 7], [1, 3]])
 
-    num = MetricDashboardData.new(@org, make_dashboard([FS_CALLS]), range: "1h").charts.first
-    chart = MetricDashboardData.new(@org, make_dashboard([FS_CALLS.merge("chart_type" => "line")]), range: "1h").charts.first
+    num = MetricDashboardData.new(@org, make_dashboard([FS_CALLS]), visible_servers: @org.servers, range: "1h").charts.first
+    chart = MetricDashboardData.new(@org, make_dashboard([FS_CALLS.merge("chart_type" => "line")]), visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal num[:value], chart[:current], "chart current == number value (parity)"
   end
@@ -376,7 +376,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
   test "log panel with no counted data yet reads zero" do
     dash = make_dashboard([FS_CALLS])
 
-    c = MetricDashboardData.new(@org, dash, range: "1h").charts.first
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
 
     assert_equal :number, c[:kind]
     assert_equal 0, c[:value]
@@ -392,7 +392,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     seed_log_at(q, base + 5.minutes, 7)  # inside
     seed_log_at(q, base + 2.hours, 50)   # after the window
 
-    data = MetricDashboardData.new(@org, dash, range: "1h",
+    data = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h",
       from: base - 1.minute, until_: base + 10.minutes)
 
     assert data.custom?, "explicit from+until → custom mode"
@@ -406,7 +406,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
     base = Time.zone.local(2026, 6, 19, 12, 0, 0)
     dash = make_dashboard([HOST])
 
-    data = MetricDashboardData.new(@org, dash, range: "1h",
+    data = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h",
       from: base - 30.minutes, until_: base)
 
     assert data.custom?
@@ -415,7 +415,7 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   test "invalid range/interval fall back to defaults; range_ms derived" do
     dash = make_dashboard([HOST])
-    data = MetricDashboardData.new(@org, dash, range: "zzz", interval: "bogus")
+    data = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "zzz", interval: "bogus")
 
     assert_equal MetricsPageData::DEFAULT_RANGE, data.range
     assert_equal "auto", data.interval

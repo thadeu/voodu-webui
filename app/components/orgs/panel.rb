@@ -16,8 +16,9 @@
 # selection rides org_manager's DELEGATED click listener (data-org-select /
 # data-org-new), not data-action (which wouldn't resolve off-subtree).
 class Components::Orgs::Panel < Components::Base
-  def initialize(orgs:, create_org: nil, edit_org: nil, error: nil)
+  def initialize(orgs:, create_org: nil, edit_org: nil, error: nil, destination_account: nil)
     @orgs = orgs
+    @destination_account = destination_account
     @create_org = create_org || Org.new
     @edit_org = edit_org
     @error = error
@@ -81,8 +82,16 @@ class Components::Orgs::Panel < Components::Base
       div(class: "min-w-0") do
         span(class: "block text-[12.5px] truncate text-voodu-text group-data-[active=true]:text-voodu-accent-2 group-data-[active=true]:font-medium") { org.name }
 
+        # The account, always, and above the description rather than instead of
+        # it. Somebody invited into another company's org sees both companies'
+        # orgs in this list, and org names are chosen independently by people
+        # who cannot see each other's — so a collision is not an edge case.
+        # Every personal org used to be called "Default", which made this list
+        # two identical rows.
+        span(class: "block text-[11px] text-voodu-muted truncate") { account_label(org) }
+
         if org.description.present?
-          span(class: "block text-[11px] text-voodu-muted truncate") { org.description }
+          span(class: "block text-[11px] text-voodu-muted-2 truncate") { org.description }
         end
       end
     end
@@ -108,6 +117,7 @@ class Components::Orgs::Panel < Components::Base
   def create_pane
     div(data: {org_pane: "new"}, hidden: @edit_org.present?, class: "flex flex-col gap-3") do
       pane_header("New org")
+      destination_note
 
       form(action: orgs_path, method: "post", class: "flex flex-col gap-2") do
         csrf
@@ -134,6 +144,8 @@ class Components::Orgs::Panel < Components::Base
         delete_form(org)
       end
 
+      owning_account_note(org)
+
       form(action: org_path(org), method: "post", class: "flex flex-col gap-2") do
         csrf
         input(type: "hidden", name: "_method", value: "patch")
@@ -150,11 +162,49 @@ class Components::Orgs::Panel < Components::Base
     end
   end
 
+  # "Acme (Pz9IUrm2)" — the short_id because two accounts may be named after
+  # two people with the same name, and it is the id a plan licence is issued
+  # for, so it is the one worth recognising.
+  def account_label(org)
+    account = org.account
+    return "no account" if account.nil?
+
+    "#{account.name} · #{account.short_id}"
+  end
+
+  # An org is created inside ONE account — the one behind the org currently in
+  # scope — and nothing on this form said which. Somebody who belongs to two
+  # accounts had no way to know where a new org would land until it appeared in
+  # the wrong half of the list.
+  def destination_note
+    return if @destination_account.nil?
+
+    p(class: "m-0 text-[11.5px] text-voodu-muted") do
+      plain "Created in "
+      span(class: "font-voodu-mono text-voodu-text-2") { account_label_for(@destination_account) }
+    end
+  end
+
+  def owning_account_note(org)
+    p(class: "m-0 text-[11.5px] text-voodu-muted") do
+      plain "In account "
+      span(class: "font-voodu-mono text-voodu-text-2") { account_label(org) }
+    end
+  end
+
+  def account_label_for(account) = "#{account.name} · #{account.short_id}"
+
   def pane_header(label)
     span(class: "text-[11px] font-medium text-voodu-text-2 uppercase tracking-[0.06em]") { label }
   end
 
+  # Owner only, and of THIS org. `manage_org` is the owner's, so an invited
+  # admin was being offered a Delete button for a company's org they merely
+  # help run — one confirmation away from a toast refusing them, on the most
+  # destructive control in the panel.
   def delete_form(org)
+    return unless allowed_in?(org, :manage_org)
+
     form(action: org_path(org), method: "post", class: "shrink-0", data: {turbo_confirm: "Delete org #{org.name}?"}) do
       csrf
       input(type: "hidden", name: "_method", value: "delete")

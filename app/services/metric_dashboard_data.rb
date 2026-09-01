@@ -33,20 +33,29 @@ class MetricDashboardData
   # server_id, so this takes the org (not a single client/server). Each panel
   # resolves its OWN server (scoped to the org — cross-org ids are dropped) and
   # gets a client + pod list memoised per server.
-  def initialize(org, dashboard, range:, interval: nil, from: nil, until_: nil)
+  # `visible_servers` — the servers the VIEWER may reach, which is not the same
+  # set as the org's. Required, and deliberately without a default: a panel
+  # names a server_id, and org scoping alone only stops a cross-ORG id. Inside
+  # one org it let a member granted server A render a panel pointed at server
+  # B — the per-server grant is the whole point of that grant, and a saved
+  # dashboard was a way around it. A default here would be a way to forget.
+  def initialize(org, dashboard, visible_servers:, range:, interval: nil, from: nil, until_: nil)
     @org = org
     @dashboard = dashboard
+    @visible_servers = visible_servers
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
     @from = from
     @until_ = until_
   end
 
-  # servers_by_id — the org's servers keyed by id-as-string, for the per-panel
-  # server_id lookup. The org scoping IS the isolation guard: a panel with an
-  # server_id outside the org resolves to nil and is dropped.
+  # servers_by_id — the servers the viewer may reach, keyed by id-as-string,
+  # for the per-panel server_id lookup. A panel naming anything else — another
+  # org's server, or one in this org they were not granted — resolves to nil
+  # and is dropped, which is how a panel they may not see renders empty rather
+  # than renders somebody else's data.
   def servers_by_id
-    @servers_by_id ||= (@org&.servers || []).index_by { |i| i.id.to_s }
+    @servers_by_id ||= Array(@visible_servers).index_by { |i| i.id.to_s }
   end
 
   # panel_server — the server a panel reads from. nil when the panel has no

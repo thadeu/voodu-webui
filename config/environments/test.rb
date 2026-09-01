@@ -59,6 +59,29 @@ Rails.application.configure do
   # nil (environment files load first).
   config.x.clowk_enabled = true
 
+  # The pin above is not enough on its own, because AuthSettings reads ENV
+  # DIRECTLY — `env_decides?` asks whether the environment holds either of
+  # these, and the answer decides whether the SSO screen offers its form or
+  # explains that the host has already chosen.
+  #
+  # dotenv loads a developer's .env in the test environment too. So a working
+  # .env with CLOWK_ENABLED=1 in it — which is exactly what a .env looks like
+  # on the machine of anybody developing the hosted shape — silently turns 13
+  # tests red, on code they did not touch, for a reason nothing in the failure
+  # names. CI has no .env and stays green, which is the worst version of this:
+  # it reads as "the suite is flaky locally" and the suite stops being trusted.
+  #
+  # The licence pair is here for the same reason: LicenseToken.token_from_env
+  # reads VOODU_LICENSE, and license_test has a case named "when the env var is
+  # empty" whose whole premise is that nobody set one.
+  #
+  # Deleted rather than blanked so `ENV.key?` is false too, and the tests that
+  # are ABOUT these (sso_configuration_test, anonymous_mode_test, license_test)
+  # set what they need per-test and restore it.
+  %w[CLOWK_ENABLED CLOWK_PUBLISHABLE_KEY VOODU_LICENSE VOODU_LICENSE_FILE].each do |key|
+    ENV.delete(key)
+  end
+
   # Fixtures store PAT values as plaintext (e.g. "pat-alpha-secret")
   # so test files stay readable; this flag tells Rails to encrypt
   # them on fixture load using the test-only encryption keys

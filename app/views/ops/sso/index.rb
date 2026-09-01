@@ -116,7 +116,7 @@ class Views::Ops::Sso::Index < Views::Base
   # Environment wins, so when it is in play the form would be a lie. Say why
   # instead of showing a control that silently does nothing.
   def auth_form(settings)
-    return auth_env_notice if AuthSettings.env_decides?
+    return if AuthSettings.env_decides?
     return auth_disable_form if settings.source == :database
 
     form(action: ops_sso_path, method: "post",
@@ -146,13 +146,6 @@ class Views::Ops::Sso::Index < Views::Base
         class: "w-full font-voodu-mono text-[12px] px-2.5 py-1.5 bg-voodu-surface-2 " \
                "border border-voodu-border text-voodu-text focus:outline-none focus:border-voodu-accent"
       )
-    end
-  end
-
-  def auth_env_notice
-    p(class: "text-[12px] text-voodu-muted p-3.5 border-t border-voodu-border") do
-      plain "Sign-in is set by environment variables here, which take precedence over " \
-            "this screen. Change CLOWK_ENABLED or CLOWK_PUBLISHABLE_KEY there."
     end
   end
 

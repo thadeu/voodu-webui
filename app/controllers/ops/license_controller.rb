@@ -66,8 +66,12 @@ class Ops::LicenseController < ApplicationController
   def activate_plan
     return refuse_not_hosted unless LicenseToken.current.unlimited?
 
-    account = current_org&.account
-    return redirect_to(back_to_settings, alert: "No account in scope.") if account.nil?
+    # plan_account, not the visited org's. /ops/license takes no :org_id at all,
+    # so `current_org&.account` was nil on every direct visit and this refused
+    # with "No account in scope" — and when it was NOT nil, it was somebody
+    # else's account, reachable by any invited admin.
+    account = plan_account
+    return redirect_to(back_to_settings, alert: "You do not own an account to put a plan on.") if account.nil?
 
     status, detail = account.activate_plan!(params[:license_token])
 

@@ -70,7 +70,9 @@ class Components::Overview::DashboardsPreview < Components::Base
   def empty_state
     div(class: "px-3.5 py-6 flex flex-col items-center text-center gap-1.5") do
       span(class: "text-[12px] text-voodu-text-2") { "No dashboards yet" }
-      a(href: new_metric_dashboard_path, class: "text-[11.5px] text-voodu-link hover:underline") { "Build your first dashboard" }
+      if allowed?(:manage_dashboards)
+        a(href: new_metric_dashboard_path, class: "text-[11.5px] text-voodu-link hover:underline") { "Build your first dashboard" }
+      end
     end
   end
 end

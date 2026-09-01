@@ -95,10 +95,45 @@ class AuthorizationTest < ActionDispatch::IntegrationTest
     assert_not_equal 200, response.status
   end
 
-  test "a member cannot reach saved dashboards" do
+  # The MANAGE surface, and a member manages nothing. They still READ every
+  # dashboard: the picker on /metrics lists each one as a selectable row and
+  # stacks the chosen ones, which is where a dashboard is actually looked at.
+  test "a member cannot reach the dashboard manager" do
     get metric_dashboards_path(org_id: ACME, server_key: @alpha.key)
 
     assert_not_equal 200, response.status
+  end
+
+  test "nor create a dashboard" do
+    assert_no_difference "MetricDashboard.count" do
+      post metric_dashboards_path(org_id: ACME, server_key: @alpha.key),
+        params: {metric_dashboard: {name: "Theirs", panels: "[]"}}
+    end
+
+    assert_not_equal 200, response.status
+  end
+
+  # The guard that lets READING one on /metrics be safe — that page has no
+  # authorize at all, by design, because a member is meant to watch metrics.
+  # A panel naming a server this person was never granted resolves to nothing;
+  # without it, opening a dashboard is a way around the per-server grant that
+  # the grant exists to enforce.
+  test "a panel pointed at an ungranted server renders no data for a member" do
+    ungranted = servers(:beta)
+    dashboard = orgs(:acme).metric_dashboards.create!(
+      name: "Cross", panels: [{
+        "scope_kind" => "host", "metric" => "cpu_percent", "scale" => "percent",
+        "label" => "CPU", "color" => "var(--voodu-purple)", "unit" => "%",
+        "server_id" => ungranted.id
+      }]
+    )
+
+    data = MetricDashboardData.new(
+      orgs(:acme), dashboard, visible_servers: [servers(:alpha)], range: "1h"
+    )
+
+    assert_nil data.send(:panel_server, dashboard.panels.first),
+      "a panel may not resolve a server outside the viewer's own list"
   end
 
   # An outbound request primitive aimed at the private network the app lives in.

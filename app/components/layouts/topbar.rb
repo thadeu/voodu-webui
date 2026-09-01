@@ -78,6 +78,12 @@ class Components::Layouts::Topbar < Components::Base
   # Hidden below the breakpoint: the bar is already tight at 360px, and the
   # licence screen carries the whole story anyway.
   def license_badge
+    # Nothing to tell a hosted customer. This badge reports the health of the
+    # INSTALLATION's licence — ours, on the hosted service — and its two words
+    # are Free and Licensed, neither of which describes anything they bought.
+    # What they did buy is their plan, and the account menu carries that.
+    return if Current.unlimited?
+
     state = LICENSE_BADGES[entitlements.license.status]
     return if state.nil?
 
@@ -170,7 +176,14 @@ class Components::Layouts::Topbar < Components::Base
         # helper would otherwise append the current one as ?org_id=…, which is
         # noise in the URL bar and in every log line.
         account_link(ops_license_path(org_id: nil, server_key: nil), "License") { plan_badge }
-        account_link(ops_sso_path(org_id: nil, server_key: nil), "SSO") { sso_badge }
+
+        # Dropped on the hosted service along with the screen it opens. A row
+        # that reports "SSO — clowk" and leads somewhere that redirects away is
+        # worse than either keeping the screen or removing the row: it tells a
+        # customer they have a setting, then refuses to show it to them.
+        unless Current.unlimited?
+          account_link(ops_sso_path(org_id: nil, server_key: nil), "SSO") { sso_badge }
+        end
       end
 
       sign_out_link
@@ -250,16 +263,24 @@ class Components::Layouts::Topbar < Components::Base
     end
   end
 
-  # The PLAN, not the licence's health — the topbar badge beside this menu
-  # already carries the exception states in its colour. Reads `entitled?`, the
-  # same predicate Entitlements uses to pick which table applies, so this word
-  # can never disagree with the limits actually in force: a licence inside its
-  # grace period still grants them, and still says enterprise.
+  # What governs THIS viewer's limits, which is a different question on each
+  # kind of installation — so the word comes from a different place on each.
+  #
+  # Self-hosted, the licence on the box is the answer: free or enterprise.
+  # Hosted, the box is `unlimited` and saying so would be true and useless — the
+  # customer shares it with every other tenant and it caps nothing they have.
+  # What caps them is the plan their account bought, so that is what shows.
+  #
+  # Both readings come off `entitlements`, which the controller already resolved
+  # against the account in scope, so this word cannot disagree with the limits
+  # actually in force — including inside a licence's grace period, where the
+  # entitlements are still granted and the word still says so.
   def plan_badge
-    entitled = entitlements.license.entitled?
+    license = entitlements.license
+    word = license.unlimited? ? entitlements.plan : license.tier
 
-    render Components::UI::Badge.new(variant: entitled ? :accent : :neutral) do
-      entitled ? "enterprise" : "free"
+    render Components::UI::Badge.new(variant: entitlements.pro? ? :accent : :neutral) do
+      word
     end
   end
 

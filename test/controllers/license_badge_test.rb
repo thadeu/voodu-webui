@@ -177,4 +177,50 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
     assert_select "a[href='/ops/sso'] span", text: "clowk"
   end
+
+  # ── The word inside the account menu ───────────────────────────────
+  #
+  # A different question from the badge above: not "is this licence healthy"
+  # but "what governs my limits". The answer comes from a different place on
+  # each kind of installation, and the reading that is right on one is useless
+  # on the other.
+  #
+  # It regressed exactly once, and silently: the chip was written as a two-way
+  # `entitled? ? "enterprise" : "free"` when there were two tiers, so the
+  # hosted service — a third tier that is very much entitled — described
+  # itself as Enterprise on every page.
+
+  # Matched on the markup rather than by walking the DOM: the row is one label
+  # span followed by one badge span, and naming that shape is what makes the
+  # test fail loudly if the row is ever restructured, instead of quietly
+  # selecting some other "License" on the page — the sidebar has one too.
+  def account_menu_chip
+    a_page
+
+    response.body[%r{<span>License</span><span[^>]*>([^<]+)</span>}, 1]
+  end
+
+  test "a self-hosted box names its licence" do
+    stub_license(:valid)
+
+    assert_equal "enterprise", account_menu_chip
+  end
+
+  test "an unlicensed box says free" do
+    Rails.application.config.x.license = LicenseToken.new(status: :none)
+
+    assert_equal "free", account_menu_chip
+  end
+
+  # The hosted service is `unlimited`, and saying so would be true and useless:
+  # the customer shares that tier with every other tenant and it caps nothing
+  # they have. What caps them is the plan their own account bought.
+  test "on the hosted service the customer sees their own plan, not the tier" do
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid,
+      claims: {"sub" => "hosted", "exp" => 1.year.from_now.to_i, "tier" => "unlimited"}
+    )
+
+    assert_equal "free", account_menu_chip, "a hosted account with no plan licence is on free"
+  end
 end

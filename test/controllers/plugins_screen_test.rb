@@ -140,25 +140,33 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "Nothing to show"
   end
 
-  # Installing clones a repository and runs its hooks on the operator's
-  # machine. That is not the same bracket as reading a list.
-  test "a member can read the screen" do
+  # REVERSED on 2026-09-01. This used to read "a member can read the screen",
+  # on the reasoning that installing (which clones a repository and runs its
+  # hooks on the operator's machine) is a different bracket from reading a
+  # list. True, and it left a member with a marketplace they could browse and
+  # not use — every control on it refusing them.
+  #
+  # The sidebar item is hidden for members now, and a hidden door that still
+  # opens by typing the URL is the same inconsistency in the other direction.
+  # So the screen goes with it: reading the list is not a feature on its own.
+  test "a member is refused the screen entirely, not just its controls" do
     stub_plugins([installed(name: "voodu-redis")])
     sign_in_as(email: users(:contractor).email)
 
     page
 
-    assert_response :success
-    assert_select "h3", text: "voodu-redis"
+    assert_response :redirect
+    assert_match(/admin/i, flash[:alert].to_s)
   end
 
-  test "a member is not offered the install form" do
+  test "and the sidebar does not offer them the door" do
     stub_plugins([installed(name: "voodu-redis")])
     sign_in_as(email: users(:contractor).email)
 
-    page
+    get server_root_path(org_id: "acmeorg1", server_key: servers(:alpha).key)
 
-    assert_select "input[name=source]", false
+    assert_response :success
+    assert_select "nav a[href*=?]", "/plugins", count: 0
   end
 
   test "a member cannot install even by posting directly" do

@@ -223,7 +223,10 @@ class ApplicationController < ActionController::Base
   # every org: the switcher would otherwise list every tenant's name, and the
   # markup carries their ids.
   def all_orgs
-    @all_orgs ||= Current.user ? Current.user.active_orgs.order(:name).to_a : []
+    # includes(:account) because the org switcher and the Manage Orgs panel now
+    # name the account each org belongs to — without it that is one query per
+    # org, on a list rendered in the topbar of every page.
+    @all_orgs ||= Current.user ? Current.user.active_orgs.includes(:account).order(:name).to_a : []
   end
 
   # current_server — the server the operator is currently focused on.
@@ -389,6 +392,24 @@ class ApplicationController < ActionController::Base
     @entitlements ||= Entitlements.for(current_account)
   end
 
+  # The account whose PLAN this person may see and change, which is a different
+  # question from current_account and has to stay one.
+  #
+  # current_account follows the org in the URL, because that is what governs
+  # the limits of what is on screen. A plan is not that: somebody invited into
+  # another company's org as an admin is `manage_account`-capable (they own
+  # their own account elsewhere), so reading the plan off the visited org
+  # showed them that company's plan on a screen titled "Your plan" — and the
+  # activation form beside it would have written to it.
+  #
+  # A plan belongs to whoever owns the account. On the hosted service that is
+  # exactly one per person, made on arrival by PersonalWorkspace.
+  def plan_account
+    return @plan_account if defined?(@plan_account)
+
+    @plan_account = Current.user&.owned_accounts&.order(:created_at)&.first
+  end
+
   # The account behind the org in the URL, or the one this person owns when
   # there is no org yet — onboarding asks about limits before an org exists.
   def current_account
@@ -422,5 +443,5 @@ class ApplicationController < ActionController::Base
     !clowk_enabled? && PerimeterCheck.exposed?(request.remote_ip)
   end
 
-  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?, :entitlements, :unlicensed_postgres?, :primary_adapter
+  helper_method :current_path, :all_servers, :recent_servers, :current_server, :current_org, :current_account, :plan_account, :all_orgs, :voodu_client, :dashboard_context, :current_user, :administrable_orgs, :manageable_org, :allowed_in?, :clowk_enabled?, :perimeter_warning?, :entitlements, :unlicensed_postgres?, :primary_adapter
 end

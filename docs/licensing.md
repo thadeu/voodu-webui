@@ -76,6 +76,32 @@ An **unverified** address never matches an invitation. An unproven address is
 an assertion, and matching on one would let anybody who can get a provider to
 echo an address walk into the org that address was invited to.
 
+## Arriving on the hosted service
+
+On `tier=unlimited` — and **only** there — everybody who is admitted receives a
+free account with one org, created on the spot. There is no onboarding form to
+fill in and nothing to ask for.
+
+This exists because being invited into somebody else's org used to be the end
+of the road. A membership answers "do you belong to an org?", and that was the
+question guarding onboarding — so a consultant invited into one customer's org
+could never have a workspace of their own. Nobody decided that; two different
+questions shared one answer.
+
+Creating the workspace on arrival settles it without a second question:
+
+- an invitation **adds** to what somebody already has;
+- somebody removed from the org they were invited to still has their own;
+- and an existing member with no workspace is given one on their next request,
+  so nothing has to be backfilled by hand.
+
+Self-hosted gets none of this, and the rule is the **tier**, not the count. OSS
+and Enterprise hold one account, and provisioning it automatically would spend
+it on whoever authenticated first — the opposite of what the cap is for. A
+fresh box with room to spare still provisions nothing, so the operator names
+their own account and org. `test/services/personal_workspace_test.rb` pins both
+halves, so the hosted behaviour cannot leak into a self-hosted release.
+
 ## Expiry
 
 Expiry is a slope, not a cliff.

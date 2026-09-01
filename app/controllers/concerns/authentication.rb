@@ -120,6 +120,11 @@ module Authentication
     return refuse_admission(claims) unless Admission.decide(claims).allowed?
 
     Current.user = User.provision_from_clowk!(claims)
+
+    # On the hosted service a workspace is not something to ask for — see
+    # PersonalWorkspace for why. One indexed EXISTS per request there, and no
+    # query at all on a self-hosted box, where the tier guard returns first.
+    PersonalWorkspace.ensure_for(Current.user)
   end
 
   # A wall with no explanation sends somebody to support. This says what

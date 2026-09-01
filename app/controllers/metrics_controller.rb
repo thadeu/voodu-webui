@@ -63,7 +63,8 @@ class MetricsController < ApplicationController
       # never the "no running replica" card and never a cross-org read. (Ignore
       # dashboard-level errors like the missing name — the synthetic dash has none.)
       if dashboard.errors[:panels].blank?
-        @preview_data = MetricDashboardData.new(current_org, dashboard, range: PREVIEW_RANGE, interval: PREVIEW_INTERVAL)
+        @preview_data = MetricDashboardData.new(current_org, dashboard, visible_servers: authorized_servers,
+          range: PREVIEW_RANGE, interval: PREVIEW_INTERVAL)
         chart = @preview_data.chart_at(0)
         stash_http_preview_panel(panel, chart)
       end
@@ -200,7 +201,7 @@ class MetricsController < ApplicationController
     end
 
     data = MetricDashboardData.new(
-      current_org, dashboard,
+      current_org, dashboard, visible_servers: authorized_servers,
       range: params[:range], interval: params[:interval], **custom_window
     )
     chart = data.chart_at(params[:panel].to_i)
@@ -312,7 +313,7 @@ class MetricsController < ApplicationController
     }
     dashboard = current_org.metric_dashboards.new(panels: [panel])
 
-    MetricDashboardData.new(current_org, dashboard,
+    MetricDashboardData.new(current_org, dashboard, visible_servers: authorized_servers,
       range: params[:range], interval: params[:interval], **custom_window).charts.first
   end
 
@@ -329,7 +330,7 @@ class MetricsController < ApplicationController
     }
     dashboard = current_org.metric_dashboards.new(panels: [panel])
 
-    MetricDashboardData.new(current_org, dashboard,
+    MetricDashboardData.new(current_org, dashboard, visible_servers: authorized_servers,
       range: params[:range], interval: params[:interval], **custom_window).charts.first
   end
 
@@ -366,10 +367,10 @@ class MetricsController < ApplicationController
     dashboards = explicit_dashboards
 
     if dashboards.size > 1
-      return MultiDashboardData.new(current_org, dashboards,
+      return MultiDashboardData.new(current_org, dashboards, visible_servers: authorized_servers,
         range: params[:range], interval: params[:interval], **custom_window)
     elsif dashboards.size == 1
-      return MetricDashboardData.new(current_org, dashboards.first,
+      return MetricDashboardData.new(current_org, dashboards.first, visible_servers: authorized_servers,
         range: params[:range], interval: params[:interval], **custom_window)
     end
 
@@ -383,8 +384,7 @@ class MetricsController < ApplicationController
     return nil if pinned.nil?
 
     MetricDashboardData.new(
-      current_org,
-      pinned,
+      current_org, pinned, visible_servers: authorized_servers,
       range: params[:range],
       interval: params[:interval],
       **custom_window

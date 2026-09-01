@@ -88,6 +88,20 @@ jobs:
           CLOWK_ENABLED=1 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
             bin/rails runner 'exit(Rails.application.config.x.clowk_enabled == true ? 0 : 1)'
 
+          echo "--- no CLOWK_SECRET_KEY: the HS256 path must be SHUT, not defaulted"
+          # Clowk::JwtVerifier sends every non-RS256 token down the HS256 path,
+          # and that path does not check the audience — so a value here is on
+          # its own enough to mint a token for any subject. It used to fall back
+          # to a literal in this repository whenever the var was unset, which is
+          # the arrangement .env.example calls normal. nil makes the verifier
+          # raise "missing Clowk secret_key" instead.
+          env -u CLOWK_SECRET_KEY CLOWK_ENABLED=1 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
+            bin/rails runner 'exit(Clowk.config.secret_key.nil? ? 0 : 1)'
+
+          echo "--- and an operator-supplied one is still honoured"
+          CLOWK_SECRET_KEY=sk_test_ci CLOWK_ENABLED=1 CLOWK_PUBLISHABLE_KEY=pk_test_ci \
+            bin/rails runner 'exit(Clowk.config.secret_key == "sk_test_ci" ? 0 : 1)'
+
           echo "--- SaaS misconfigured: flag on, no key, must REFUSE to boot"
           if env -u CLOWK_PUBLISHABLE_KEY CLOWK_ENABLED=1 \
                bin/rails runner 'puts "booted"' 2>/dev/null; then

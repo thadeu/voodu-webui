@@ -32,14 +32,28 @@ class OrgsController < ApplicationController
     # readable and only stops the next one. That asymmetry is deliberate: an
     # entitlement that could remove access would be a way to lock a customer
     # out of their own dashboard.
-    unless entitlements.room_for_another_org?
+    # Measured against the account the org will LAND in, which is not the one
+    # `entitlements` resolves. That helper follows the org in the URL, so an
+    # admin invited into another company had their new org counted against
+    # THAT company's plan while being written into their own: refused when the
+    # host was full even though they had room, and allowed past their own cap
+    # when the host had space. Two accounts, one decision.
+    unless Entitlements.for(plan_account).room_for_another_org?
       return render(
         turbo_stream: turbo_stream.replace("org-manager-panel", panel(error: org_limit_message)),
         status: :unprocessable_entity
       )
     end
 
-    @org = Org.new(org_params.merge(account: current_account))
+    # plan_account — the account this person OWNS, which is where their orgs
+    # go. Deliberately not ApplicationController#current_account, which follows
+    # the org in the URL: an admin invited into another company would otherwise
+    # create orgs inside THEIR account.
+    #
+    # This used to be a private `current_account` right here, shadowing the
+    # parent's method of the same name with a different meaning. Same
+    # behaviour, one name per idea.
+    @org = Org.new(org_params.merge(account: plan_account))
 
     # The creator gets an owner membership in the same transaction — membership
     # is the only source of access, so an org saved without one is an org
@@ -83,14 +97,8 @@ class OrgsController < ApplicationController
 
   private
 
-  # The account new orgs land in: the one this operator owns. Onboarding
-  # guarantees it exists before any org-creating screen is reachable.
-  def current_account
-    Current.user&.owned_accounts&.order(:created_at)&.first
-  end
-
   def org_limit_message
-    limit = entitlements.limit(:orgs)
+    limit = Entitlements.for(plan_account).limit(:orgs)
 
     "This installation is licensed for #{limit} #{"org".pluralize(limit)}. " \
       "An Enterprise licence lifts the limit."
@@ -121,7 +129,10 @@ class OrgsController < ApplicationController
       orgs: all_orgs,
       create_org: create_org,
       edit_org: edit_org,
-      error: error
+      error: error,
+      # The same account `create` puts the org in, so the note on the form and
+      # the row that appears afterwards cannot disagree.
+      destination_account: plan_account
     )
   end
 

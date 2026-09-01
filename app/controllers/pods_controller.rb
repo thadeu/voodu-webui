@@ -11,6 +11,16 @@
 #   POST /pods/:name/restart → triggers /api/pat/v1/pods/:name/restart,
 #                            redirects with toast
 class PodsController < ApplicationController
+  # Reading a pod is a member's business; stopping and recreating one is not.
+  # This action had NO authorization at all — every member with reach into the
+  # org could restart any container on any server they could see, interrupting
+  # in-flight traffic on somebody else's production. Hiding the button would
+  # not have touched that: the form posts to a path anybody can type.
+  #
+  # :manage_servers, the same capability the rest of "operate this server"
+  # sits behind.
+  authorize :manage_servers, only: :restart
+
   def index
     @data = OverviewData.new(
       voodu_client, current_server,

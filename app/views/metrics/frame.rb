@@ -106,6 +106,10 @@ class Views::Metrics::Frame < Views::Base
   # pencil survives the broadcast-tick frame swap.
   def edit_dashboard_link(dash)
     return unless dash
+    # Mirrors Index's guard as well as its markup. Gating only one of the two
+    # would hide the pencil until the first 30s tick swapped this frame in and
+    # handed it back.
+    return unless allowed?(:manage_dashboards)
 
     a(
       href: metric_dashboards_path(edit: dash.uuid),

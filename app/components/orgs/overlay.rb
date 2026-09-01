@@ -43,7 +43,11 @@ class Components::Orgs::Overlay < Components::Base
         end
 
         div(class: "overflow-auto min-h-0") do
-          render Components::Orgs::Panel.new(orgs: @orgs)
+          # Resolved here rather than threaded through all three call sites
+          # (topbar, servers#new, servers#edit) — it is the same answer for
+          # every one of them, and a kwarg one of them forgot would silently
+          # drop the note from that screen only.
+          render Components::Orgs::Panel.new(orgs: @orgs, destination_account: plan_account)
         end
       end
     end

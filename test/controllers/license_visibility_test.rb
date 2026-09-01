@@ -142,7 +142,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     # field name, and asserting on the name would have said "no form at all"
     # the moment that section existed.
     assert_select "textarea#license-token", false
-    assert_includes response.body, "hosted plan"
+    assert_includes response.body, "managed by whoever operates it"
   end
 
   test "the hosted plan refuses a write, even a direct one" do
@@ -154,15 +154,24 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_equal 0, Ops::License.count
   end
 
-  # The third tier, named. Somebody on the hosted service should see what they
-  # are actually running, not a word that belongs to a product they did not buy.
-  test "the hosted tier is named Unlimited" do
+  # REVERSED on 2026-09-01, deliberately. This used to assert that a hosted
+  # customer saw "Unlimited · voodu-hosted" — the installation's tier and our
+  # own customer id — on the grounds that people should see what they are
+  # running. In practice it sat directly above a Limits row reading "0 invites"
+  # that came from THEIR plan, so the card named two subjects and contradicted
+  # itself: unlimited, and nothing.
+  #
+  # The installation is not the tenant's, the same way the SSO screen and the
+  # topbar badge are not. What they get is their own plan, and a line saying
+  # who to ask about the rest.
+  test "the installation's tier and customer id are not shown to a tenant" do
     env_pinned(tier: "unlimited")
 
     settings
 
-    assert_includes response.body, "Unlimited · voodu-hosted"
-    assert_not_includes response.body, "Enterprise · voodu-hosted"
+    assert_not_includes response.body, "Unlimited · voodu-hosted"
+    assert_not_includes response.body, "voodu-hosted-dev"
+    assert_includes response.body, "Your plan"
   end
 
   test "a licence with no tier claim reads as Enterprise" do

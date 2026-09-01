@@ -14,13 +14,14 @@ class MultiDashboardData
   # M2: dashboards live at the org and each panel carries its server_id, so
   # each section takes the org (not one client/server) and self-resolves its
   # panels' servers.
-  def initialize(org, dashboards, range:, interval: nil, from: nil, until_: nil)
+  def initialize(org, dashboards, visible_servers:, range:, interval: nil, from: nil, until_: nil)
     @range = MetricsPageData::RANGES.key?(range) ? range : MetricsPageData::DEFAULT_RANGE
     @interval = MetricsPageData::INTERVALS.include?(interval) ? interval : MetricsPageData::DEFAULT_INTERVAL
     @from = from
     @until_ = until_
     @sections = Array(dashboards).map do |d|
-      MetricDashboardData.new(org, d, range: @range, interval: @interval, from: @from, until_: @until_)
+      MetricDashboardData.new(org, d, visible_servers: visible_servers,
+        range: @range, interval: @interval, from: @from, until_: @until_)
     end
   end
 

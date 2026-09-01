@@ -75,6 +75,10 @@ class Views::Servers::Index < Views::Base
   end
 
   def add_server_btn
+    # ServersController#require_server_management! refuses `new` unless they
+    # administer some org. Same question, asked before drawing the door.
+    return unless administrable_orgs.exists?
+
     a(
       href: new_server_path,
       class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover shrink-0"
@@ -94,10 +98,27 @@ class Views::Servers::Index < Views::Base
       div(class: "h-10 w-10 rounded-voodu-md bg-voodu-accent-dim border border-voodu-accent-line flex items-center justify-center text-voodu-accent-2") do
         render Icon::ServerStackOutline.new(class: "w-5 h-5")
       end
-      p(class: "text-voodu-text-2 text-[13px]") { "No servers registered yet." }
-      p(class: "text-voodu-muted text-[12px]") { "Add the first one to start monitoring." }
+      p(class: "text-voodu-text-2 text-[13px]") { empty_headline }
+      p(class: "text-voodu-muted text-[12px]") { empty_subline }
       div(class: "pt-1") { add_server_btn }
     end
+  end
+
+  # Two different facts wear the same empty page, and telling somebody to do
+  # what they are not allowed to do is worse than saying nothing.
+  #
+  # An admin here has an empty registry. A member here may simply not have been
+  # granted any of the servers that DO exist — "no servers registered yet" is
+  # then false as well as useless, and the button under it opens a form that
+  # refuses them.
+  def empty_headline
+    administrable_orgs.exists? ? "No servers registered yet." : "No servers shared with you."
+  end
+
+  def empty_subline
+    return "Add the first one to start monitoring." if administrable_orgs.exists?
+
+    "An admin of this org grants access per server."
   end
 
   # server_section — wraps both the desktop table and the mobile
@@ -307,11 +328,15 @@ class Views::Servers::Index < Views::Base
     end
   end
 
+  # Per row, and measured against THAT server's org rather than the one in the
+  # URL — this registry lists servers across every org the person reaches, so
+  # one answer for the whole page would be wrong on some of the rows.
+  # ServersController asks the same question the same way.
   def row_actions(server)
     div(class: "inline-flex items-center gap-1.5") do
       open_btn(server)
-      edit_btn(server)
-      remove_form(server)
+      edit_btn(server) if allowed_in?(server.org, :manage_servers)
+      remove_form(server) if allowed_in?(server.org, :delete_server)
     end
   end
 

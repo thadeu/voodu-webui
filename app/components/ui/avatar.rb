@@ -24,12 +24,19 @@ class Components::UI::Avatar < Components::Base
     if @url.present?
       div(
         style: "width: #{px}px; height: #{px}px; font-size: #{px * 0.4}px;",
-        class: tokens("relative", fallback_class, @attrs[:class])
+        class: tokens("relative overflow-hidden", fallback_class, @attrs[:class])
       ) do
         plain initial
         img(
-          src: @url,
-          alt: @name,
+          # Deliberately empty, and NOT the name. A broken or slow image URL
+          # made the browser paint the alt text instead — the whole display
+          # name, at the container's font size, spilling out of a 28px circle
+          # and over the topbar. The image is decorative here: the name it
+          # would describe is the next line of the menu it opens. Empty alt
+          # renders nothing, so the gradient initial underneath shows through,
+          # which is what the fallback was for. overflow-hidden above is the
+          # belt to that braces.
+          alt: "",
           class: "absolute inset-0 w-full h-full rounded-full object-cover",
           loading: "lazy"
         )

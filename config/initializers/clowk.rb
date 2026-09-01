@@ -102,19 +102,38 @@ Clowk.configure do |config|
   config.publishable_key = clowk_publishable_key.presence
 
   # Server-to-server calls to the Clowk API, and the legacy HS256 path.
-  # Verifying a current token does not need it: that runs against the published
-  # key set. The literal fallback is TEST ONLY — the suite signs in through
-  # ClowkDevToken, which mints HS256, and the verifier needs the same secret to
-  # check it. Without one, every integration test dies in JWT::DecodeError at
-  # sign_in_as and it reads as 700 unrelated failures. CI has no .env, so the
-  # fallback is what keeps the suite honest there.
-  config.secret_key = ENV.fetch("CLOWK_SECRET_KEY", nil).presence || "clowk-test-secret-not-for-production"
+  #
+  # NEVER INVENTED. Whatever sits here is, on its own, enough to mint a token
+  # for any subject and any address: Clowk::JwtVerifier routes a token to HS256
+  # whenever its `alg` is not RS256, and that path does not check the audience.
+  # A default here would therefore not be a weak fallback, it would be a
+  # credential — and one published in this repository, on an installation
+  # running the setup .env.example calls normal (RS256, no CLOWK_SECRET_KEY,
+  # because verifying against the public JWKS needs no secret at all).
+  #
+  # nil is the correct value when the operator supplied nothing: the verifier
+  # raises "missing Clowk secret_key" and the legacy path is shut.
+  #
+  # The consequence to know about, because it is not obvious: ClowkDevToken
+  # signs HS256, so `/dev/sign_in` needs a secret to exist. It does not get one
+  # from here. Set CLOWK_SECRET_KEY in .env to use it; the suite configures its
+  # own per-run secret in test_helper.rb, which is its harness rather than this
+  # application's configuration.
+  config.secret_key = ENV.fetch("CLOWK_SECRET_KEY", nil)
 
   # The instance's auth domain. Set it explicitly and the gem stops resolving it
   # through api.clowk.dev — one fewer network dependency on the path that
   # authenticates every request, and on the JWKS fetch behind it. Left nil, the
   # gem derives it from the publishable key on first use.
-  config.subdomain_url = ENV.fetch("CLOWK_SUBDOMAIN_URL", nil).presence
+  # Normalised, not passed through: a bare host here 500s the OAuth callback.
+  # AuthSettings.normalize_url carries the full reasoning and does this for the
+  # env and stored credentials both — spelled out again rather than called
+  # because app/ is not autoloadable this early, and the four lines are cheaper
+  # than moving the class or deferring the whole configure block.
+  subdomain = ENV.fetch("CLOWK_SUBDOMAIN_URL", nil).to_s.strip
+  subdomain = "https://#{subdomain}" if subdomain.present? && !subdomain.start_with?("http://", "https://")
+
+  config.subdomain_url = subdomain.presence
 
   # Names the installed helpers current_clowk_user / clowk_user_signed_in? /
   # clowk_user_sign_out!. Deliberately not :user — `current_user` must keep

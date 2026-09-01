@@ -37,10 +37,15 @@ class Permissions
     reveal_pat: :admin,
     manage_alerts: :admin,
     manage_dashboards: :admin,
-    invite_member: :admin,
     grant_server: :admin,
 
     delete_server: :owner,
+    # Contractual, not day-to-day, so it sits with the owner beside the rest
+    # of "people". It was :admin, which let an invited admin invite further
+    # admins — each one able to reveal every PAT in the org — without the owner
+    # who is paying for the seats being involved at any point. An admin can
+    # still run everything the org does; adding people to it is not that.
+    invite_member: :owner,
     manage_members: :owner,
     manage_org: :owner,
     manage_account: :owner

@@ -21,8 +21,9 @@ require "jwt"
 #   2. The raise below, in case someone widens that condition.
 class ClowkDevToken
   # Signs with whatever Clowk is configured to verify with. Outside production
-  # that is CLOWK_DEV_SECRET (config/initializers/clowk.rb) unless the operator
-  # supplied a real one.
+  # that is a key derived from secret_key_base (config/initializers/clowk.rb),
+  # unless the operator supplied a real CLOWK_SECRET_KEY. In production it is
+  # nil and this class raises before reaching the encode either way.
   DEFAULT_TTL = 12.hours
 
   def self.mint(sub:, email:, name: nil, email_verified: true, ttl: DEFAULT_TTL)

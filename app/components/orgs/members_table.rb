@@ -102,8 +102,13 @@ class Components::Orgs::MembersTable < Components::Base
   def remove_button(membership)
     return if membership.owner?
 
+    # Irreversible, one click from a hover, and it also ends their Clowk
+    # session — the row beside it is a toggle that undoes itself, so the two
+    # read as the same weight without this.
     form(action: org_member_path(org_id: @org.short_id, id: membership.id), method: "post",
-      class: "shrink-0") do
+      class: "shrink-0",
+      data: {turbo_confirm: "Remove #{membership.user.display_name} from #{@org.name}? " \
+                            "They lose access immediately."}) do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "_method", value: "delete")
 

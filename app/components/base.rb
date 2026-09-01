@@ -52,6 +52,18 @@ class Components::Base < Phlex::HTML
   # current_org / all_orgs — the server layer above servers, for the topbar
   # org switcher + breadcrumb (org › servers › <server>).
   register_value_helper :current_org
+
+  # The account behind the org in the URL, OR the one this person owns when
+  # there is none. The /ops/* routes are deliberately org-less, so anything
+  # there that reaches for `current_org&.account` gets nil and silently draws
+  # nothing — which is how the hosted plan card, and the only form that can
+  # upgrade an account, went missing from the one screen that exists to show it.
+  register_value_helper :current_account
+
+  # The account this person OWNS, for the plan card. Not current_account: an
+  # invited admin visiting another company's org would otherwise be shown that
+  # company's plan under the title "Your plan".
+  register_value_helper :plan_account
   register_value_helper :all_orgs
   # current_user — the signed-in operator (a local ::User mirroring the Clowk
   # subject), for anything that shows who you are or offers a way out.
@@ -62,6 +74,11 @@ class Components::Base < Phlex::HTML
   # Phlex component is neither.
   register_value_helper :clowk_sign_out_path
   # manageable_org — the org whose members this person may manage, or nil.
+  # Whether this person may register a server anywhere — the same question
+  # ServersController asks before letting `new` through, so the button and the
+  # endpoint cannot disagree.
+  register_value_helper :administrable_orgs
+
   register_value_helper :manageable_org
   # allowed?(:capability) — the same table the controllers enforce, for
   # deciding what to DRAW. Not a control: the endpoint refuses regardless.

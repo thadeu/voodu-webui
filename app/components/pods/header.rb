@@ -168,6 +168,11 @@ class Components::Pods::Header < Components::Base
   end
 
   def restart_btn
+    # PodsController authorizes this now, so the post is refused either way.
+    # The button going too is what stops a member from meeting a confirmation
+    # dialog that ends in a toast saying they may not.
+    return unless allowed?(:manage_servers)
+
     name = @data.name
 
     render(Components::UI::Confirmable.new(

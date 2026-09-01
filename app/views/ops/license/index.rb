@@ -78,6 +78,14 @@ class Views::Ops::License::Index < Views::Base
   # Renewal without a restart is the point — the alternative is editing an env
   # var and bouncing the dashboard someone is watching.
   def plan_card
+    # On the hosted service the box is not the customer's, so its licence is
+    # not shown to them at all — same rule that removed the SSO screen and the
+    # topbar badge. It was actively misleading here: the row read
+    # "Unlimited · voodu-hosted-dev", naming OUR entitlement and OUR customer
+    # id, directly above a Limits row reading "0 invites" that came from THEIR
+    # plan. Two subjects in one card, contradicting each other.
+    return account_plan_card if license.unlimited?
+
     render Components::UI::SectionCard.new(title: "Plan") do
       div do
         render(Components::UI::KvRow.new(key: "Plan")) { plan_value }
@@ -88,24 +96,22 @@ class Views::Ops::License::Index < Views::Base
 
       license_history if allowed_anywhere?(:manage_account)
 
-      if license.unlimited?
-        hosted_notice
-      elsif allowed_anywhere?(:manage_account)
-        activation_form
-      end
+      activation_form if allowed_anywhere?(:manage_account)
     end
-
-    # On the hosted service, the plan card sits BELOW the installation's. The
-    # order says which is which: what the box is, then what this customer
-    # bought. Only one of them is theirs to change.
-    account_plan_card if license.unlimited?
   end
 
   def account_plan_card
-    account = current_org&.account
+    # plan_account, NOT current_org&.account and not current_account either.
+    #
+    # This route takes no :org_id by design, so the org is nil here on every
+    # visit and the card returned early every time — taking plan_form with it,
+    # which is the only way to upgrade. And where an org WAS in scope, an
+    # invited admin would have been shown the plan of the company that invited
+    # them, under a heading saying it was theirs.
+    account = plan_account
     return if account.nil?
 
-    render Components::UI::SectionCard.new(title: "Your plan") do
+    render Components::UI::SectionCard.new(title: "Your plan · #{account.name}") do
       div do
         render(Components::UI::KvRow.new(key: "Plan")) do
           span(class: "font-voodu-mono text-[12px] text-voodu-text") { account.plan.capitalize }
@@ -114,7 +120,20 @@ class Views::Ops::License::Index < Views::Base
         plan_expiry_row(account)
       end
 
-      plan_form(account) if allowed_anywhere?(:manage_account)
+      plan_form(account) if account.owner_id == current_user&.id
+      hosted_footnote
+    end
+  end
+
+  # Says who to ask about everything NOT on this card. Without it the screen
+  # reads as though the plan above is all there is to a licence, and a customer
+  # wondering about the installation has nowhere to look.
+  def hosted_footnote
+    p(class: "m-0 p-3.5 border-t border-voodu-border text-[12px] text-voodu-muted leading-relaxed") do
+      plain "This is the plan on the account you own. Orgs you were invited into are "
+      plain "governed by their own owner's plan, not by this one — and this dashboard "
+      plain "runs as a hosted service, so the installation itself is managed by whoever "
+      plain "operates it."
     end
   end
 
@@ -136,7 +155,11 @@ class Views::Ops::License::Index < Views::Base
     end
   end
 
-  def plan_name = license.unlimited? ? "Unlimited" : "Enterprise"
+  # Only ever Enterprise now: plan_card returns early on the hosted tier, so
+  # this never renders for an unlimited licence. Kept as a named method rather
+  # than inlined because plan_value reads better with it, and spelled without
+  # the dead branch so nobody trusts a ternary that cannot take its other arm.
+  def plan_name = "Enterprise"
 
   # Only when there IS one — a free account has no licence and no date, and an
   # empty row would look like something failed to load.
@@ -242,18 +265,6 @@ class Views::Ops::License::Index < Views::Base
   # which plan they are on files a ticket to ask. A lapsed or unverifiable
   # licence has to be loud here — it is the only place that explains why a
   # capability they paid for stopped applying.
-  # Shown INSTEAD of the form, not beside it. A disabled textarea invites
-  # somebody to paste into it and wonder why nothing happened.
-  #
-  # Only on the hosted plan. A self-hosted operator always keeps the form, env
-  # licence or not: theirs expires, they buy another, and they paste it here.
-  def hosted_notice
-    p(class: "m-0 p-3.5 border-t border-voodu-border text-[12px] text-voodu-muted leading-relaxed") do
-      plain "This installation runs on a hosted plan — its licence is managed by whoever "
-      plain "operates it. Everything above is what you are entitled to."
-    end
-  end
-
   def plan_value
     case license.status
     when :none

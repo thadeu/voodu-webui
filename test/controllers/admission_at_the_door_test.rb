@@ -15,9 +15,14 @@ class AdmissionAtTheDoorTest < ActionDispatch::IntegrationTest
   )
 
   setup do
+    @installed = Rails.application.config.x.license
     Rails.application.config.x.license = ENTERPRISE
     Current.reset
   end
+
+  # The suite's default licence is what gets left behind otherwise, and the
+  # next test to read it as "how this box is licensed" measures this one.
+  teardown { Rails.application.config.x.license = @installed }
 
   # Only the cookie — NOT test_helper's sign_in_as, which calls
   # provision_from_clowk! itself and would create the very row under test.

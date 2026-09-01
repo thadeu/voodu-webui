@@ -25,6 +25,8 @@ class Ops::SsoController < ApplicationController
 
   authorize_anywhere :manage_account
 
+  before_action :refuse_on_hosted
+
   def index
     render Views::Ops::Sso::Index.new(current_path: request.path, servers: sidebar_servers)
   end
@@ -61,6 +63,19 @@ class Ops::SsoController < ApplicationController
   end
 
   private
+
+  # Not this customer's question. On the hosted service the installation is
+  # ours, and who proves identity is decided once, for every tenant at the same
+  # time — a screen offering to change it would be offering something it cannot
+  # do, and `destroy` would be a tenant turning sign-in off for everybody.
+  #
+  # Applied to every action rather than to `index`, because hiding a screen
+  # whose POST still answers is not hiding it.
+  def refuse_on_hosted
+    return unless Current.unlimited?
+
+    redirect_to root_path(org_id: nil, server_key: nil)
+  end
 
   def activate!(email)
     Ops::SsoConfig.create!(

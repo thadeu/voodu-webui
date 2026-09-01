@@ -15,7 +15,12 @@
 # read, so writes need `manage_servers`. Reading the list stays open to anyone
 # who can already see the server.
 class PluginsController < ApplicationController
-  authorize :manage_servers, only: [:create, :destroy]
+  # The whole screen, not only its writes. `index` was open to members, so
+  # hiding the nav item would have produced the opposite inconsistency to the
+  # one being fixed — a door not drawn but still openable by typing the URL.
+  # A read-only marketplace is not a feature anybody asked for: this screen
+  # exists to install, update and remove.
+  authorize :manage_servers
 
   # Matches the frame in Views::Plugins::Index, which polls so an install that
   # is still running resolves itself.

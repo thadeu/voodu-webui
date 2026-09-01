@@ -19,9 +19,19 @@
 class MetricDashboardsController < ApplicationController
   before_action :set_dashboard, only: [:edit, :update, :destroy, :pin, :unpin]
 
-  # Saved dashboards are org objects whose panels may name ANY server in the
-  # org. Admin+ keeps the per-server grant honest without having to filter
-  # every panel against the viewer — see Permissions#read_org_surfaces.
+  # The whole controller, including the list — this is the MANAGE surface, not
+  # the reading one. A member reads dashboards on /metrics: the picker there
+  # lists every one of them as a selectable row and stacks the chosen ones.
+  # Nothing on this screen is a thing they may do.
+  #
+  # The old comment justified admin-only differently — that a dashboard's panels
+  # may name ANY server in the org, so admin+ "keeps the per-server grant honest
+  # without having to filter every panel against the viewer". That reasoning was
+  # never load-bearing here: dashboards RENDER through MetricsController, which
+  # has no authorize at all, so a member could already open one from /metrics
+  # and read a panel pointed at a server nobody granted them. The filtering it
+  # hoped to avoid is now in MetricDashboardData (visible_servers), and it is
+  # what actually holds that line.
   authorize :manage_dashboards
 
   def index
