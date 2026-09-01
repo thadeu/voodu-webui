@@ -5,11 +5,19 @@ licence lifts the limits.
 
 | | Free | Enterprise |
 |---|---|---|
-| accounts | 1 | unlimited |
+| accounts | 1 | 1 |
 | orgs | 1 | unlimited |
 | invited members | none | unlimited |
 | searchable window | 3 days | 90 by default, set per licence |
 | control plane in Postgres | — | ✓ |
+
+Enterprise is **one account**, deliberately. It lifts the org limit so a team
+can run what they need on their own infrastructure; it is not a licence to
+operate a service of your own on top of Voodu. A licence can still name
+`accounts` explicitly when more is genuinely being sold.
+
+For the whole picture — the hosted tier, per-account plans, and who is admitted
+at sign-in — see [licensing.md](licensing.md).
 
 ## Activating
 

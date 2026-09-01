@@ -28,6 +28,8 @@ the definition.
 | `exp` | integer | **yes** | expiry, seconds since epoch |
 | `iat` | integer | no | issued at, seconds since epoch |
 | `ent` | object | no | entitlement overrides; `{}` or absent means the licensed defaults |
+| `tier` | string | no | `enterprise` (default) or `unlimited`. Names the PRODUCT, not an entitlement — an unrecognised value falls back to `enterprise` so a claim a newer build adds cannot turn an older one into an outage |
+| `plan` | string | no | `free` (default) or `pro`. Only meaningful on a plan licence, where `sub` is an account's short_id rather than a customer name |
 
 `exp` is required and a token without it is rejected — otherwise one leaked
 licence would be permanent.
@@ -37,7 +39,7 @@ default rather than silently granting:
 
 | key | type | licensed default |
 |---|---|---|
-| `accounts` | integer or `null` | `null` (no limit) |
+| `accounts` | integer or `null` | `1` — see licensing.md; the tier's cap, overridable here |
 | `orgs` | integer or `null` | `null` |
 | `member_invites` | integer or `null` | `null` |
 | `retention_days` | integer | `90` |
