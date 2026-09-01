@@ -111,7 +111,24 @@ module Authentication
 
     return unless clowk_user_signed_in?
 
-    Current.user = User.provision_from_clowk!(current_clowk_user.to_h)
+    claims = current_clowk_user.to_h
+
+    # Asked BEFORE provisioning, not after. Creating the row and then denying
+    # everything leaves an invisible user on the box for every identity the
+    # Clowk instance will authenticate — reaching nothing, appearing nowhere,
+    # and accumulating. See Admission for the four reasons to be let in.
+    return refuse_admission(claims) unless Admission.decide(claims).allowed?
+
+    Current.user = User.provision_from_clowk!(claims)
+  end
+
+  # A wall with no explanation sends somebody to support. This says what
+  # happened, which address to have invited, and offers the way out — signing
+  # in as a different identity is the whole fix when the address was wrong.
+  def refuse_admission(claims)
+    Rails.logger.info("[auth] refused admission: no membership, invitation or room")
+
+    render Views::Onboardings::InvitationNeeded.new(email: claims[:email]), status: :forbidden
   end
 
   def current_user

@@ -17,6 +17,8 @@ class OnboardingsController < ApplicationController
   before_action :redirect_if_settled
 
   def new
+    return render_invitation_needed unless entitlements.room_for_another_account?
+
     render Views::Onboardings::New.new(account_name: default_account_name, org_name: "")
   end
 
@@ -31,13 +33,10 @@ class OnboardingsController < ApplicationController
       ), status: :unprocessable_entity)
     end
 
-    unless entitlements.room_for_another_account?
-      return render(Views::Onboardings::New.new(
-        account_name: account_name, org_name: org_name,
-        error: "This installation is licensed for a single account. An Enterprise " \
-               "licence allows more — ask whoever runs it to invite you into theirs."
-      ), status: :unprocessable_entity)
-    end
+    # Kept as well as the check in `new`: a form is not a control. Somebody who
+    # opened this page before the last account was created — or who posts
+    # directly — must be refused here too.
+    return render_invitation_needed unless entitlements.room_for_another_account?
 
     org = Account.provision!(owner: Current.user, account_name: account_name, org_name: org_name)
 
@@ -49,6 +48,12 @@ class OnboardingsController < ApplicationController
   end
 
   private
+
+  # Shown instead of the setup form. See the view for why a form that cannot
+  # succeed is worse than a page that explains itself.
+  def render_invitation_needed
+    render Views::Onboardings::InvitationNeeded.new, status: :forbidden
+  end
 
   def redirect_if_settled
     return if Current.user.nil?
