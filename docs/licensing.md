@@ -155,7 +155,7 @@ to whoever operates the box, so that form is not offered to customers.
 ### Plan licences (hosted only)
 
 ```sh
-bundle exec rake 'license:issue_plan[<account short_id>,365,pro]'
+bundle exec rake 'license:pro[<account short_id>,365]'
 ```
 
 Bound to one account. Without that binding a pro licence would be a file that

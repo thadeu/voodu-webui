@@ -29,6 +29,9 @@
 #   Self-hosted free -> enterprise
 #   bundle exec rake 'license:issue[local-dev,30,tier=enterprise]'
 #
+#   Hosted account free -> pro (bound to that account by short_id)
+#   bundle exec rake 'license:pro[Pz9IUrm2,365]'
+#
 namespace :license do
   desc "Issue a signed licence: license:issue[customer,days,'k=v k=v']"
   task :issue, [:customer, :days, :overrides] => :environment do |_task, args|
@@ -71,21 +74,25 @@ namespace :license do
     puts token
   end
 
-  # Plan licences, for customers of the hosted service.
+  # Pro licences, for customers of the hosted service.
+  #
+  # Pro is the only plan worth signing. Free is what an account IS without a
+  # licence — Account#plan falls back to it whenever there is nothing entitled
+  # to read — so a token claiming `plan: "free"` produces a state
+  # indistinguishable from having none, and an argument that can only be filled
+  # in one useful way is an argument that gets filled in wrongly.
   #
   # Bound to ONE account by short_id. Without that binding a pro licence is a
   # file that circulates: one customer's, pasted into another customer's
   # account. Account#activate_plan! refuses a subject that is not the account
   # activating it, and this is what puts the subject there.
-  desc "Issue a plan licence for one hosted account: license:issue_plan[short_id,days,plan]"
-  task :issue_plan, [:account, :days, :plan, :overrides] => :environment do |_task, args|
+  desc "Issue a pro licence for one hosted account: license:pro[short_id,days]"
+  task :pro, [:account, :days, :overrides] => :environment do |_task, args|
     short_id = args[:account].to_s.strip
     days = args[:days].to_i
-    plan = args[:plan].to_s.strip.presence || LicenseToken::DEFAULT_PLAN
 
-    abort "account short_id is required — rake 'license:issue_plan[Pz9IUrm2,365,pro]'" if short_id.empty?
+    abort "account short_id is required — rake 'license:pro[Pz9IUrm2,365]'" if short_id.empty?
     abort "days must be a positive integer" unless days.positive?
-    abort "plan must be one of: #{LicenseToken::PLANS.join(", ")}" unless LicenseToken::PLANS.include?(plan)
 
     # Looked up, not just accepted. A typo in a short_id would otherwise
     # produce a signed licence for an account that does not exist, which the
@@ -101,11 +108,11 @@ namespace :license do
       "iat" => now.to_i,
       "exp" => (now + days.days).to_i,
       "tier" => "unlimited",
-      "plan" => plan,
+      "plan" => "pro",
       "ent" => LicenseIssuing.parse_overrides(args[:overrides])
     }, key, "RS256")
 
-    warn "issued #{plan} for #{account.name} (#{short_id}), expires " \
+    warn "issued pro for #{account.name} (#{short_id}), expires " \
          "#{Time.zone.at(now.to_i + days.days).to_date} (#{days} days)"
     warn "record the sale — nothing here keeps a ledger."
     puts token
