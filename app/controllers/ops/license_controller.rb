@@ -82,6 +82,9 @@ class Ops::LicenseController < ApplicationController
     case status
     when :ok
       {notice: "Plan activated — #{account.reload.plan.capitalize}."}
+    when :not_a_plan
+      {alert: "That licence is for an installation (#{detail}), not for a plan. " \
+              "Ask for a plan licence issued for account #{account.short_id}."}
     when :wrong_account
       {alert: "That licence was issued for account #{detail}, not for #{account.short_id}."}
     when :expired

@@ -39,6 +39,94 @@ class AccountPlanTest < ActiveSupport::TestCase
     }, KEY, "RS256")
   end
 
+  # An installation licence: signed by us, valid, and about the BOX. It names a
+  # tier and no plan, which is exactly the token somebody pastes into the plan
+  # form by mistake — the two forms are one screen apart.
+  def installation_token(tier: "enterprise", account: @account)
+    JWT.encode({
+      "sub" => account.short_id, "iat" => Time.current.to_i,
+      "exp" => 365.days.from_now.to_i, "tier" => tier, "ent" => {}
+    }, KEY, "RS256")
+  end
+
+  # ── A licence that names no plan is not a plan licence ─────────────────
+  #
+  # It used to be accepted. Everything about it verified — signature, expiry,
+  # subject — and LicenseToken#plan then fell back to "free" for the absent
+  # claim, so the row was written, the screen said "Plan activated — Free.",
+  # and the customer got nothing. The failure had no symptom to search for:
+  # a green toast and an unchanged plan.
+
+  test "an installation licence pasted into the plan form is refused" do
+    with_test_key do
+      status, detail = @account.activate_plan!(installation_token)
+
+      assert_equal :not_a_plan, status
+      assert_equal "enterprise", detail, "the tier is what tells them which licence they pasted"
+    end
+  end
+
+  test "a refused installation licence is not stored" do
+    with_test_key do
+      @account.activate_plan!(installation_token)
+
+      assert_nil @account.reload.plan_license_token
+      assert_equal "free", @account.plan
+    end
+  end
+
+  # The refusal comes BEFORE the expiry check on purpose: renewing an
+  # installation licence would not make it a plan licence, so "it expired" would
+  # send somebody to buy the wrong thing again.
+  test "an expired installation licence is refused for what it is, not for its date" do
+    with_test_key do
+      expired = JWT.encode({
+        "sub" => @account.short_id, "iat" => 400.days.ago.to_i,
+        "exp" => 35.days.ago.to_i, "tier" => "enterprise", "ent" => {}
+      }, KEY, "RS256")
+
+      assert_equal :not_a_plan, @account.activate_plan!(expired).first
+    end
+  end
+
+  # A plan claim the build does not recognise is refused rather than read as
+  # free — the opposite of how an unknown TIER is treated, and deliberately:
+  # falling back would quietly downgrade somebody who paid.
+  test "an unrecognised plan is refused rather than silently downgraded" do
+    with_test_key do
+      assert_equal :not_a_plan, @account.activate_plan!(plan_token(plan: "platinum")).first
+    end
+  end
+
+  # ── Whitespace anywhere in the token ───────────────────────────────────
+  #
+  # A token copied out of a wrapped terminal arrives with a newline in the
+  # MIDDLE, which `.strip` does not touch. ruby-jwt still verifies it today and
+  # warns that it will stop, so a licence stored that way works now and dies on
+  # a gem bump — the installation dropping to free with nobody having touched it.
+
+  test "a token pasted with a newline in the middle still activates" do
+    with_test_key do
+      token = plan_token
+      wrapped = token.insert(token.length / 2, "\n")
+
+      assert_equal :ok, @account.activate_plan!(wrapped).first
+      assert_equal "pro", @account.reload.plan
+    end
+  end
+
+  test "what gets stored is the token that verified, not the one that was typed" do
+    with_test_key do
+      token = plan_token
+      @account.activate_plan!(token.insert(token.length / 2, "\n  \t"))
+
+      stored = @account.reload.plan_license_token
+
+      assert_no_match(/\s/, stored, "stored whitespace verifies today and stops on a jwt bump")
+      assert_equal token.delete("\n \t"), stored
+    end
+  end
+
   test "an account with no licence is on the free plan" do
     assert_equal "free", @account.plan
     assert_not @account.pro?

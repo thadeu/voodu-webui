@@ -31,7 +31,7 @@ class Ops::License < ApplicationRecord
   # that does not verify is NOT stored: a row that never grants anything would
   # sit in Settings looking like a licence and behaving like nothing.
   def self.activate!(token, by: nil)
-    license = LicenseToken.resolve(token.to_s.strip)
+    license = LicenseToken.resolve(token)
     return license unless license.verified?
 
     create!(

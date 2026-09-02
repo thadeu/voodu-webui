@@ -112,8 +112,25 @@ class LicenseToken
     new(status: :none)
   end
 
-  def self.resolve(token = token_from_env, key: public_key, now: Time.current, source: :env)
-    return new(status: :none) if token.blank?
+  # Whitespace is stripped from ANYWHERE in the token, not just its ends.
+  #
+  # A JWT is base64url and dots — no whitespace character is ever meaningful, so
+  # removing all of it is lossless and cannot turn an invalid token into a valid
+  # one; the signature still has to hold. What it does fix is the paste: a token
+  # copied out of a wrapped terminal or a chat window arrives with a newline in
+  # the MIDDLE, which `.strip` leaves in place. ruby-jwt tolerates that today and
+  # says so on every read ("Invalid base64 input detected… graceful handling of
+  # invalid input will be dropped in the next major version"), so a licence
+  # stored that way verifies now and stops verifying on a gem bump — the
+  # installation silently drops to the free tier with nobody having touched it.
+  #
+  # Normalising HERE rather than at the two activation points also repairs rows
+  # already written: every read goes through resolve, so a stored token with a
+  # newline in it is cleaned on the way past, with no migration.
+  def self.resolve(raw = token_from_env, key: public_key, now: Time.current, source: :env)
+    token = raw.to_s.gsub(/\s/, "")
+
+    return new(status: :none) if token.empty?
     return new(status: :invalid, reason: "no public key", source: source) if key.nil?
 
     # verify_expiration is off so an expired licence still yields its claims —
@@ -226,6 +243,24 @@ class LicenseToken
 
     PLANS.include?(claimed) ? claimed : DEFAULT_PLAN
   end
+
+  # Whether this licence names a plan AT ALL — which an installation licence
+  # does not: it names a tier, and a tier describes the box.
+  #
+  # Distinct from `plan` because they answer different questions and one of them
+  # has to be able to say "no". `plan` is a reader for a licence already in
+  # force and falls back to free, which is right: an account with nothing is on
+  # the free plan. Asking that same reader whether a token IS a plan licence
+  # gets "free" for both a genuine free plan and a licence about something else
+  # entirely, and the activation then stores the second one as if it were the
+  # first.
+  #
+  # Note the asymmetry with `tier`, which falls back to enterprise for a value
+  # it does not recognise. Both fail toward what the customer paid for: an
+  # unrecognised tier still honours a box somebody bought, while an
+  # unrecognised plan would QUIETLY DOWNGRADE somebody who bought one, so it is
+  # refused loudly instead.
+  def plan_claimed? = PLANS.include?(claims["plan"].to_s)
 
   # Who this licence was sold to, as an account's short_id.
   #

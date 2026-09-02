@@ -50,14 +50,23 @@ class Account < ApplicationRecord
   # circulates: without it, one customer's pro licence pasted into another
   # customer's account would upgrade it. Refused before storing, so a rejected
   # token never sits in the column looking like a plan.
+  # The order of the refusals is the order of how much they help. "This is not a
+  # plan licence" comes before "it expired", because for an installation licence
+  # pasted into the plan form a renewal would not fix anything — and that is the
+  # paste that actually happens, the two forms being one screen apart.
+  #
+  # Stores candidate.token, not the argument: LicenseToken.resolve strips
+  # whitespace from anywhere in the token, and the column should hold what
+  # verified rather than what was typed.
   def activate_plan!(token)
-    candidate = LicenseToken.resolve(token.to_s.strip, source: :database)
+    candidate = LicenseToken.resolve(token, source: :database)
 
     return [:invalid, candidate.reason] unless candidate.verified?
+    return [:not_a_plan, candidate.tier] unless candidate.plan_claimed?
     return [:expired, nil] unless candidate.entitled?
     return [:wrong_account, candidate.subject_account] unless candidate.subject_account == short_id
 
-    update!(plan_license_token: token.to_s.strip, plan_activated_at: Time.current)
+    update!(plan_license_token: candidate.token, plan_activated_at: Time.current)
     @plan_license = candidate
 
     [:ok, candidate]
