@@ -158,6 +158,24 @@ class SsoConfigurationTest < ActionDispatch::IntegrationTest
     assert_match(/pk_live/i, flash[:alert])
   end
 
+  # ── Submitting it has to leave the page ────────────────────────────────
+  #
+  # Turning sign-in on ends at the Clowk instance: /ops/sso redirects to
+  # /clowk/sign_in, which redirects to another ORIGIN. Turbo cannot follow a
+  # cross-origin redirect — it does not raise and it does not warn, it drops the
+  # fetch. The form then sits there still filled, reading as a button that does
+  # nothing, and a later manual refresh works, which reads as flakiness.
+  #
+  # The string "false" is load-bearing: Phlex omits an attribute whose value is
+  # `false`, so `data: {turbo: false}` renders no attribute at all — which is
+  # how this was written the first time.
+  test "the activation form opts out of Turbo so the browser can follow the redirect" do
+    get ops_sso_path
+
+    assert_response :success
+    assert_select "form[action=?][data-turbo=?]", ops_sso_path, "false"
+  end
+
   # ── The way out ────────────────────────────────────────────────────────
 
   test "the environment wins, and the screen says so instead of lying" do

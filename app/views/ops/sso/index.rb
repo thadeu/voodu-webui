@@ -119,7 +119,16 @@ class Views::Ops::Sso::Index < Views::Base
     return if AuthSettings.env_decides?
     return auth_disable_form if settings.source == :database
 
-    form(action: ops_sso_path, method: "post",
+    # data-turbo="false", and the string matters: Phlex OMITS an attribute whose
+    # value is `false`, so `turbo: false` renders nothing at all.
+    #
+    # Submitting this hands the browser to another origin. /clowk/sign_in
+    # answers with a redirect to the Clowk instance, and Turbo cannot follow a
+    # cross-origin redirect — it does not raise and it does not warn, it drops
+    # the fetch. The page then sits there with the form still filled, looking
+    # like a button that does nothing, and a later refresh works, which reads as
+    # flakiness rather than as a missing opt-out. Let the browser navigate.
+    form(action: ops_sso_path, method: "post", data: {turbo: "false"},
       class: "flex flex-col gap-2 p-3.5 border-t border-voodu-border") do
       input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
       input(type: "hidden", name: "return_to", value: @current_path)
