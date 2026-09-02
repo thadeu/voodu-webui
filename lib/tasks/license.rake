@@ -1,23 +1,18 @@
 # frozen_string_literal: true
 
-# Issuing Enterprise licences.
+# Issuing licences from a terminal.
 #
 # There is no licensing service and there should not be one until the customer
 # count justifies operating it. A signed token needs a private key, a script and
 # a record of who bought — this is the script. Validation stays offline in the
-# product (see License), so nothing here ever has to be reachable.
+# product (see LicenseToken), so nothing here ever has to be reachable.
 #
-# THE PRIVATE KEY IS NEVER COMMITTED. It is looked for in this order:
-#
-#   VOODU_LICENSE_PRIVATE_KEY_PEM   the PEM itself
-#   VOODU_LICENSE_PRIVATE_KEY       a path
-#   config/license/private_key.pem  the default, gitignored by pattern
-#
-# The default sits beside the public half so it is easy to find and hard to
-# lose, which is the tradeoff being made: a key in a working tree is one
-# `git add -f` from disaster, so .gitignore covers the accident and
-# test/architecture/no_private_keys_test.rb covers the rest. A vault is still
-# the right home for it.
+# THE SIGNING LIVES IN LicenseToken::Signed, not here. These tasks only do what
+# is genuinely about a command line: unpack one free-form string argument into
+# claims, look up the account a plan is being sold to, print the result, and
+# turn an exception into `abort`. A payment webhook will call the same class and
+# must not inherit any of that — `abort` in a controller is a dead process, not
+# a 500. The key lookup and its error messages moved there too.
 #
 # Usage:
 #   bundle exec rake 'license:inspect[eyJhbGciOi…]'
@@ -36,39 +31,26 @@ namespace :license do
   desc "Issue a signed licence: license:issue[customer,days,'k=v k=v']"
   task :issue, [:customer, :days, :overrides] => :environment do |_task, args|
     customer = args[:customer].to_s.strip
-    days = args[:days].to_i
-
     abort "customer is required — rake 'license:issue[acme-corp,365]'" if customer.empty?
-    abort "days must be a positive integer" unless days.positive?
-
-    key = LicenseIssuing.private_key
-    now = Time.current
 
     # `tier` travels in the same free-form argument as the entitlement
-    # overrides, and is pulled out BEFORE they are parsed — parse_overrides
-    # rejects keys it does not know, and rightly so: a typo in an entitlement
-    # name should fail loudly rather than sign a licence granting nothing.
-    tier, override_string = LicenseIssuing.split_tier(args[:overrides])
-    overrides = LicenseIssuing.parse_overrides(override_string)
+    # overrides and is pulled out BEFORE they are parsed, because
+    # LicenseToken::Signed rejects entitlement keys it does not know — rightly,
+    # but that would make `tier=` read as a typo.
+    tier, override_string = LicenseArgs.split_tier(args[:overrides])
 
-    if tier.present? && !LicenseToken::TIERS.include?(tier)
-      abort "tier must be one of: #{LicenseToken::TIERS.join(", ")} (got #{tier.inspect})"
-    end
-    claims = {
-      "sub" => customer,
-      "iat" => now.to_i,
-      "exp" => (now + days.days).to_i,
-      "ent" => overrides
-    }
+    signed = LicenseToken::Signed.new(
+      subject: customer,
+      days: args[:days],
+      tier: tier,
+      entitlements: LicenseArgs.parse_overrides(override_string)
+    )
 
-    # Top level, not inside `ent`: it names the PRODUCT, not an entitlement.
-    claims["tier"] = tier if tier.present?
+    token = LicenseArgs.sign(signed)
 
-    token = JWT.encode(claims, key, "RS256")
-
-    warn "issued for #{customer}, tier #{claims["tier"] || "enterprise"}, expires " \
-         "#{Time.zone.at(claims["exp"]).to_date} (#{days} days), " \
-         "entitlements: #{claims["ent"].inspect}"
+    warn "issued for #{signed.subject}, tier #{signed.claims["tier"] || "enterprise"}, expires " \
+         "#{signed.expires_at.to_date} (#{signed.days} days), " \
+         "entitlements: #{signed.entitlements.inspect}"
     warn "record the sale — nothing here keeps a ledger."
     # stdout carries the token alone, so `rake … > acme.jwt` is usable.
     puts token
@@ -89,31 +71,26 @@ namespace :license do
   desc "Issue a pro licence for one hosted account: license:pro[short_id,days]"
   task :pro, [:account, :days, :overrides] => :environment do |_task, args|
     short_id = args[:account].to_s.strip
-    days = args[:days].to_i
-
     abort "account short_id is required — rake 'license:pro[Pz9IUrm2,365]'" if short_id.empty?
-    abort "days must be a positive integer" unless days.positive?
 
-    # Looked up, not just accepted. A typo in a short_id would otherwise
-    # produce a signed licence for an account that does not exist, which the
-    # customer discovers when they paste it and we discover never.
+    # Looked up, not just accepted. A typo in a short_id would otherwise produce
+    # a signed licence for an account that does not exist, which the customer
+    # discovers when they paste it and we discover never. The lookup is the
+    # terminal's job: a webhook already holds the account it is charging.
     account = Account.find_by(short_id: short_id)
     abort "no account with short_id #{short_id.inspect}" if account.nil?
 
-    key = LicenseIssuing.private_key
-    now = Time.current
+    signed = LicenseToken::Signed.new(
+      subject: short_id,
+      days: args[:days],
+      plan: "pro",
+      entitlements: LicenseArgs.parse_overrides(args[:overrides])
+    )
 
-    token = JWT.encode({
-      "sub" => short_id,
-      "iat" => now.to_i,
-      "exp" => (now + days.days).to_i,
-      "tier" => "unlimited",
-      "plan" => "pro",
-      "ent" => LicenseIssuing.parse_overrides(args[:overrides])
-    }, key, "RS256")
+    token = LicenseArgs.sign(signed)
 
     warn "issued pro for #{account.name} (#{short_id}), expires " \
-         "#{Time.zone.at(now.to_i + days.days).to_date} (#{days} days)"
+         "#{signed.expires_at.to_date} (#{signed.days} days)"
     warn "record the sale — nothing here keeps a ledger."
     puts token
   end
@@ -132,37 +109,21 @@ namespace :license do
   end
 end
 
-# Kept out of the task bodies so the parsing has somewhere to be read and
-# corrected. Not autoloaded: lib/tasks is excluded (config/application.rb).
-module LicenseIssuing
+# Argument handling for the tasks above — the shape of a command line, not of a
+# licence. Not autoloaded: lib/tasks is excluded (config/application.rb).
+module LicenseArgs
   NUMERIC = /\A-?\d+\z/
 
-  DEFAULT_PATH = Rails.root.join("config/license/private_key.pem")
-
-  def self.private_key
-    pem = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"].presence
-    path = ENV["VOODU_LICENSE_PRIVATE_KEY"].presence
-    path ||= DEFAULT_PATH.to_s if pem.nil? && DEFAULT_PATH.exist?
-
-    pem ||= File.read(path) if path
-
-    if pem.nil?
-      abort "no signing key: put it at #{DEFAULT_PATH}, or set " \
-            "VOODU_LICENSE_PRIVATE_KEY (path) or VOODU_LICENSE_PRIVATE_KEY_PEM"
-    end
-
-    OpenSSL::PKey::RSA.new(pem)
-  rescue Errno::ENOENT
-    abort "private key not found at #{path}"
-  rescue OpenSSL::PKey::PKeyError => e
-    abort "private key could not be read: #{e.message}"
+  # Turns LicenseToken::Signed's exceptions into the two things a terminal
+  # wants: a message and a non-zero exit. Each task checks its own required
+  # argument first, so what reaches here is a bad value rather than a missing
+  # one and the class's own wording is the clearest available.
+  def self.sign(signed)
+    signed.generate!
+  rescue ArgumentError, LicenseToken::Signed::MissingKey => e
+    abort e.message
   end
 
-  # "retention_days=180 orgs=5" → {"retention_days" => 180, "orgs" => 5}
-  #
-  # Only keys Entitlements knows are accepted: a typo that silently signs an
-  # entitlement nothing reads would look granted and behave free, and the
-  # customer would find out, not us.
   # Separates `tier=x` from the entitlement overrides sharing the same argument.
   # Returns [tier_or_nil, the_rest].
   def self.split_tier(raw)
@@ -172,14 +133,12 @@ module LicenseIssuing
     [tier&.split("=", 2)&.last, (parts - [tier]).join(" ")]
   end
 
+  # "retention_days=180 orgs=5" → {"retention_days" => 180, "orgs" => 5}
+  #
+  # Only splits and casts. Whether a key is one Entitlements knows is decided by
+  # LicenseToken::Signed, so a webhook passing a hash gets the same refusal.
   def self.parse_overrides(raw)
-    known = Entitlements::LICENSED.keys.map(&:to_s)
-
-    raw.to_s.split.to_h { |pair| pair.split("=", 2) }.filter_map { |key, value|
-      abort "unknown entitlement #{key.inspect}; known: #{known.join(", ")}" unless known.include?(key)
-
-      [key, cast(value)]
-    }.to_h
+    raw.to_s.split.to_h { |pair| pair.split("=", 2) }.transform_values { |v| cast(v) }
   end
 
   def self.cast(value)
