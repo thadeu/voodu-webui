@@ -23,7 +23,17 @@ class Components::UI::StatusPill < Components::Base
     # down). Treated as a RED alert like offline, not neutral: a missing
     # status IS a problem worth surfacing. Label stays "Unknown" to keep
     # it honest (not confirmed-down).
-    unknown: {label: "Unknown", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"}
+    unknown: {label: "Unknown", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"},
+
+    # Outcomes of an operator ACTION (the /activity trail), as opposed to the
+    # health of a thing. `succeeded` and `failed` could borrow online/error,
+    # but `partial` has no equivalent above — an apply of ten manifests that
+    # landed eight is neither, and amber is the only honest colour for it.
+    # Added here rather than in a second pill so every status in the product
+    # keeps one shape.
+    succeeded: {label: "Succeeded", color: "var(--voodu-green)", bg: "var(--voodu-green-dim)"},
+    failed: {label: "Failed", color: "var(--voodu-red)", bg: "var(--voodu-red-dim)"},
+    partial: {label: "Partial", color: "var(--voodu-amber)", bg: "var(--voodu-amber-dim)"}
   }.freeze
 
   def initialize(status:, label: nil)

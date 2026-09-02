@@ -133,6 +133,11 @@ Rails.application.routes.draw do
     # resumes `/metrics/dump?since=<that>` — backfilling any gap while
     # the WebUI/poller was offline instead of cold-starting at now-30s.
     get "poller/metrics_watermark", to: "poller#metrics_watermark", as: :poller_metrics_watermark
+
+    # Same, for the action trail. Separate endpoint rather than one with a
+    # `?type=` because the two warehouses answer independently — a poller
+    # restart resumes each stream from its own boundary.
+    get "poller/activity_watermark", to: "poller#activity_watermark", as: :poller_activity_watermark
     # Inbound notification from the Go binary that a digest folder
     # has been written. PollerDigestController persists the receipt
     # row + enqueues PollerDigestJob; idempotent on sync_hash.
@@ -288,6 +293,16 @@ Rails.application.routes.draw do
         post :unpin
       end
     end
+
+    # Activity — the operator-action trail for this server, read from the
+    # local warehouse the poller fills. Per-server and not org-level: an action
+    # happens to one box, and the row names that box's config keys and resource
+    # names.
+    #
+    # `index` is dual-mode like metrics and logs: a Turbo-Frame request
+    # re-renders only the table, so a filter chip and the live tick both swap
+    # rows without repainting the chrome.
+    get "/activity", to: "activity#index", as: :activity
 
     get "/alerts", to: "alerts#index", as: :alerts
 

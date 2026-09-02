@@ -78,6 +78,12 @@ export default class extends Controller {
     this.resetAlignment()
     document.removeEventListener("click", this.outsideClick)
     document.removeEventListener("keydown", this.escapeKey)
+
+    // Announced so a menu whose picks only mean something as a SET (the
+    // multi-select) has a moment to act on them. Every close path routes
+    // through here — the trigger, an outside click, Escape — so there is one
+    // signal rather than three.
+    this.dispatch("close")
   }
 
   // alignToViewport — if the menu (anchored `left-0` from CSS, so

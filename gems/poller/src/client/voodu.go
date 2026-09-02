@@ -176,6 +176,32 @@ func (c *VooduClient) FetchMetrics(ctx context.Context, since string) (io.ReadCl
 	return c.doGet(ctx, cr, endpoint, "application/x-ndjson")
 }
 
+// FetchActivity GETs `/api/pat/v1/activity/dump?since=<unix_seconds>` and
+// returns the NDJSON body for the caller to stream. The caller MUST Close it.
+//
+// `/activity/dump` and not `/activity`, for the same reason the metrics lane
+// takes `/metrics/dump`: `/activity` answers a bounded, filtered, newest-first
+// query for a screen, and the warehouse wants every line past a timestamp in
+// the order they happened.
+//
+// Requires `scope=read` on the PAT — the same scope the metrics and logs lanes
+// already use, so a server the poller can already tail needs no new token.
+func (c *VooduClient) FetchActivity(ctx context.Context, since string) (io.ReadCloser, error) {
+	q := url.Values{}
+	if since != "" {
+		q.Set("since", since)
+	}
+
+	cr := c.current()
+
+	endpoint := cr.Endpoint + "/api/pat/v1/activity/dump"
+	if encoded := q.Encode(); encoded != "" {
+		endpoint += "?" + encoded
+	}
+
+	return c.doGet(ctx, cr, endpoint, "application/x-ndjson")
+}
+
 // FetchPods GETs `/api/pat/v1/pods?detail=true&spec=true` and returns
 // the response body. The caller MUST Close() the returned ReadCloser.
 func (c *VooduClient) FetchPods(ctx context.Context) (io.ReadCloser, error) {

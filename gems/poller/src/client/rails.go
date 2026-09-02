@@ -115,7 +115,25 @@ type MetricsWatermarkResponse struct {
 // global-max `since` means the controller re-delivers only strictly-newer rows
 // — backfill with zero duplicates.
 func (c *RailsClient) FetchMetricsWatermark(serverID string) (int64, error) {
-	req, err := http.NewRequest("GET", c.BaseURL+"/internal/poller/metrics_watermark", nil)
+	return c.fetchWatermark("/internal/poller/metrics_watermark", serverID)
+}
+
+// FetchActivityWatermark GETs /internal/poller/activity_watermark — the same
+// contract over the operator-action trail.
+//
+// One difference in how the caller may use the answer: the activity ingest
+// upserts on the action's identity, so re-delivering a window it already holds
+// is a no-op rather than a duplicate row. The activity fetcher therefore
+// overlaps the boundary deliberately instead of asking for strictly-newer
+// rows, so a line sharing the newest timestamp is never skipped.
+func (c *RailsClient) FetchActivityWatermark(serverID string) (int64, error) {
+	return c.fetchWatermark("/internal/poller/activity_watermark", serverID)
+}
+
+// fetchWatermark is the shared body of the two above: GET the path with the
+// internal token, refuse an unknown version, return `since`.
+func (c *RailsClient) fetchWatermark(path, serverID string) (int64, error) {
+	req, err := http.NewRequest("GET", c.BaseURL+path, nil)
 	if err != nil {
 		return 0, fmt.Errorf("build request: %w", err)
 	}
@@ -145,7 +163,7 @@ func (c *RailsClient) FetchMetricsWatermark(serverID string) (int64, error) {
 	}
 
 	if env.Version != SupportedVersion {
-		return 0, fmt.Errorf("rails metrics_watermark version %d unsupported (need %d)", env.Version, SupportedVersion)
+		return 0, fmt.Errorf("rails %s version %d unsupported (need %d)", path, env.Version, SupportedVersion)
 	}
 
 	return env.Since, nil

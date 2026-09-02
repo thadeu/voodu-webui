@@ -27,7 +27,8 @@ class PollerDigest < ApplicationRecord
   self.primary_key = :sync_hash
 
   # ActiveRecord normally treats `type` as the STI discriminator
-  # column. We use it as a domain field (`metrics` | `state`), so
+  # column. We use it as a domain field (`metrics` | `state` | `activity`),
+  # so
   # disable the STI inheritance machinery.
   self.inheritance_column = :_type_disabled
 
@@ -37,7 +38,7 @@ class PollerDigest < ApplicationRecord
   # retry-burning exceptions.
   AlreadyProcessed = Class.new(StandardError)
 
-  TYPES = %w[metrics state].freeze
+  TYPES = %w[metrics state activity].freeze
   STATUSES = %w[queued processing processed failed].freeze
 
   # No `belongs_to :server` validation — keep the receipt intact even

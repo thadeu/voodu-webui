@@ -103,5 +103,32 @@ module Internal
 
       render json: {version: 1, since: MetricSample.last_ts_for(server)}
     end
+
+    # GET /internal/poller/activity_watermark?server_id=<id>
+    #
+    # Same contract as metrics_watermark, over the action trail: the newest
+    # action ts (unix seconds) this warehouse holds, so the poller resumes
+    # `/activity/dump?since=` there after a restart instead of cold-starting
+    # and losing whatever happened while it was down.
+    #
+    # Unlike metrics, re-delivery here is HARMLESS by construction: the ingest
+    # upserts on (server_id, activity_id, config_key), so the poller can and
+    # does overlap the boundary rather than risk dropping a line that shares
+    # the newest timestamp with one it already has.
+    #
+    # 0 on an empty warehouse — the poller reads that as "nothing to backfill"
+    # and keeps its short lookback rather than pulling the controller's full
+    # 30-day retention for a server it just learned about.
+    def activity_watermark
+      server_id = params[:server_id].presence
+      return render(json: {error: "server_id required"}, status: :bad_request) unless server_id
+
+      # Resolved to a row before use, for the reason spelled out above:
+      # ActivityAction.last_ts_for takes a Server, never an id.
+      server = Server.find_by(id: server_id)
+      return render(json: {error: "unknown server"}, status: :not_found) if server.nil?
+
+      render json: {version: 1, since: ActivityAction.last_ts_for(server)}
+    end
   end
 end

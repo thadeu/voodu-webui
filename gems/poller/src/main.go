@@ -18,6 +18,7 @@ import (
 	"github.com/voodu/poller/client"
 	"github.com/voodu/poller/observability"
 	"github.com/voodu/poller/poller"
+	activitystream "github.com/voodu/poller/streams/activity"
 	"github.com/voodu/poller/streams/digest"
 	metricsstream "github.com/voodu/poller/streams/metrics"
 	statestream "github.com/voodu/poller/streams/state"
@@ -35,13 +36,15 @@ type Config struct {
 
 	// Per-stream enable flags. Logs default ON (existing behaviour);
 	// metrics + state default OFF and must be opted in.
-	LogsEnabled    bool
-	MetricsEnabled bool
-	StateEnabled   bool
+	LogsEnabled     bool
+	MetricsEnabled  bool
+	StateEnabled    bool
+	ActivityEnabled bool
 
 	// Per-stream tick intervals (seconds, floor 5).
-	MetricsIntervalSeconds int
-	StateIntervalSeconds   int
+	MetricsIntervalSeconds  int
+	StateIntervalSeconds    int
+	ActivityIntervalSeconds int
 
 	// LogBackfillSeconds bounds how far back a per-pod log fetch reaches
 	// on resume (default 24h — covers any overnight poller downtime). A pod
@@ -98,6 +101,11 @@ func loadConfig() (*Config, error) {
 
 	metricsInterval := envIntSeconds("POLLER_METRICS_INTERVAL_SECONDS", 14, 5)
 	stateInterval := envIntSeconds("POLLER_STATE_INTERVAL_SECONDS", 15, 5)
+	// 30s — an operator acts on a box dozens of times a day, not thousands of
+	// times an hour, so polling at the metrics cadence would spend four
+	// requests a minute to learn nothing. Half a minute is well inside what
+	// "did my deploy land" tolerates.
+	activityInterval := envIntSeconds("POLLER_ACTIVITY_INTERVAL_SECONDS", 30, 5)
 	logBackfill := envIntSeconds("POLLER_LOG_BACKFILL_SECONDS", 24*60*60, 60)
 
 	// All three lanes default ON. The binary owns logs, state and
@@ -110,6 +118,7 @@ func loadConfig() (*Config, error) {
 	logsEnabled := envFlag("POLLER_LOGS", true)
 	metricsEnabled := envFlag("POLLER_METRICS", true)
 	stateEnabled := envFlag("POLLER_STATE", true)
+	activityEnabled := envFlag("POLLER_ACTIVITY", true)
 
 	// storage/poller/<type>/ sits as a sibling of storage/logs/, so the
 	// digest root is the storage dir's parent. Operators can override
@@ -120,19 +129,21 @@ func loadConfig() (*Config, error) {
 	}
 
 	return &Config{
-		RailsURL:               railsURL,
-		InternalToken:          token,
-		IntervalSeconds:        interval,
-		StorageDir:             abs,
-		ObservabilityAddr:      obsAddr,
-		Verbose:                verbose,
-		LogsEnabled:            logsEnabled,
-		MetricsEnabled:         metricsEnabled,
-		StateEnabled:           stateEnabled,
-		MetricsIntervalSeconds: metricsInterval,
-		StateIntervalSeconds:   stateInterval,
-		LogBackfillSeconds:     logBackfill,
-		DigestRoot:             digestRoot,
+		RailsURL:                railsURL,
+		InternalToken:           token,
+		IntervalSeconds:         interval,
+		StorageDir:              abs,
+		ObservabilityAddr:       obsAddr,
+		Verbose:                 verbose,
+		LogsEnabled:             logsEnabled,
+		MetricsEnabled:          metricsEnabled,
+		StateEnabled:            stateEnabled,
+		MetricsIntervalSeconds:  metricsInterval,
+		StateIntervalSeconds:    stateInterval,
+		ActivityEnabled:         activityEnabled,
+		ActivityIntervalSeconds: activityInterval,
+		LogBackfillSeconds:      logBackfill,
+		DigestRoot:              digestRoot,
 	}, nil
 }
 
@@ -271,6 +282,7 @@ func main() {
 	logBackfill := time.Duration(cfg.LogBackfillSeconds) * time.Second
 	metricsInterval := time.Duration(cfg.MetricsIntervalSeconds) * time.Second
 	stateInterval := time.Duration(cfg.StateIntervalSeconds) * time.Second
+	activityInterval := time.Duration(cfg.ActivityIntervalSeconds) * time.Second
 
 	spawn := func(stream, serverID string, run func(context.Context)) {
 		key := stream + "|" + serverID
@@ -341,6 +353,14 @@ func main() {
 				f.Verbose = cfg.Verbose
 				f.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))
 				spawn("state", isl.ID, f.Run)
+			}
+
+			if cfg.ActivityEnabled {
+				seen["activity|"+isl.ID] = true
+				f := activitystream.NewFetcher(isl, cfg.DigestRoot, activityInterval, railsClient, state)
+				f.Verbose = cfg.Verbose
+				f.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))
+				spawn("activity", isl.ID, f.Run)
 			}
 		}
 

@@ -25,6 +25,7 @@ class OrphanWarehousePurge
 
     {
       metric_samples: purge_metrics(live),
+      activity_actions: purge_activity(live),
       hep_messages: purge_hep(live),
       log_directories: purge_logs(live)
     }.reject { |_, count| count.zero? }
@@ -37,6 +38,16 @@ class OrphanWarehousePurge
     return 0 if orphans.empty?
 
     MetricSample.where(server_id: orphans).delete_all
+  end
+
+  # The action trail of a server nobody can reach any more. Same reasoning as
+  # the metrics above: the rows carry a bare server_id and nothing else, so
+  # once the Server row is gone there is no surface that could ever show them.
+  def purge_activity(live)
+    orphans = ActivityAction.distinct.pluck(:server_id) - live.to_a
+    return 0 if orphans.empty?
+
+    ActivityAction.where(server_id: orphans).delete_all
   end
 
   def purge_hep(live)

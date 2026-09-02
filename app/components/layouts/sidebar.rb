@@ -46,6 +46,10 @@ class Components::Layouts::Sidebar < Components::Base
     # keeps the item highlighted across the whole /logs/* family
     # (Analytics AND Follow), since the href no longer equals the prefix.
     {id: :logs, label: "Logs", icon: :DocumentTextOutline, path: :logs_analytics, active_prefix: :logs},
+    # After Logs, before Plugins: logs say what the box printed, activity says
+    # what somebody did to it, and the two are read together — a spike in one
+    # is explained by a row in the other.
+    {id: :activity, label: "Activity", icon: :ClockOutline, path: :activity},
     # Between Logs and Settings deliberately: plugins are what this server can
     # do, which sits closer to what you watch it doing than to how it is
     # configured.

@@ -125,60 +125,24 @@ class Views::AlertRules::Form < Views::Base
     end
   end
 
+  # The DS multiselect, from the design system rather than from here: this
+  # markup used to live in this file, and the second caller would have copied
+  # it — which is how two pickers in one product start behaving differently.
+  #
+  # `clear_sentinel` because this form UPDATES a record: a checkbox group with
+  # nothing checked omits the key entirely, which would leave the association
+  # unchanged instead of clearing it.
   def destinations_list
-    selected = @rule.alert_destination_ids & @destinations.map(&:id)
-
-    div(class: "relative", data: {controller: "dropdown ds-multiselect", ds_multiselect_empty_label_value: "Don't send", ds_multiselect_all_label_value: "All destinations"}) do
-      button(
-        type: "button", data: {action: "click->dropdown#toggle"},
-        class: tokens(input_classes, "flex items-center gap-2 text-[13px] cursor-pointer")
-      ) do
-        span(data: {ds_multiselect_target: "label"}, class: "flex-1 min-w-0 truncate text-left") { destinations_trigger_label(selected) }
-        render Icon::ChevronDownOutline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
-      end
-
-      div(hidden: true, data: {dropdown_target: "menu"}, class: target_menu_classes) do
-        # Empty sentinel so an all-unchecked submit CLEARS the association (a
-        # checkbox group with nothing checked otherwise omits the key entirely,
-        # leaving it unchanged on update).
-        input(type: "hidden", name: "alert_rule[alert_destination_ids][]", value: "")
-
-        button(
-          type: "button", data: {action: "ds-multiselect#toggleAll"},
-          class: "flex items-center justify-between gap-2 w-full px-3 py-2 border-b border-voodu-border-2 text-left text-[11.5px] text-voodu-text-2 hover:bg-voodu-surface-2 sticky top-0 bg-voodu-surface"
-        ) do
-          span(class: "uppercase tracking-[0.05em] text-voodu-muted-2") { "Destinations" }
-          span(data: {ds_multiselect_target: "selectAllLabel"}, class: "text-voodu-link") { "Select all" }
-        end
-
-        @destinations.each { |dest| destination_row(dest, selected.include?(dest.id)) }
-      end
-    end
-  end
-
-  # destinations_trigger_label — server-rendered so there's no flash before
-  # ds-multiselect#connect recomputes it: "Don't send" (none picked = the
-  # default, notifies nowhere), "All destinations" (every one picked), the
-  # single name, or "N selected".
-  def destinations_trigger_label(selected)
-    return "Don't send" if selected.empty?
-    return "All destinations" if selected.size == @destinations.size
-    return @destinations.find { |d| d.id == selected.first }&.name.to_s if selected.size == 1
-
-    "#{selected.size} selected"
-  end
-
-  def destination_row(dest, checked)
-    label(class: "flex items-center gap-2.5 w-full px-3 py-2 cursor-pointer hover:bg-voodu-surface-2 " \
-                 "text-[12.5px] text-voodu-text-2 border-b border-voodu-border-2 last:border-b-0") do
-      input(
-        type: "checkbox", name: "alert_rule[alert_destination_ids][]", value: dest.id, checked: checked,
-        data: {ds_multiselect_target: "option", label: dest.name, action: "change->ds-multiselect#sync"},
-        class: "w-3.5 h-3.5 accent-voodu-accent"
-      )
-      span(class: "truncate") { dest.name }
-      span(class: "text-[10px] uppercase tracking-[0.05em] text-voodu-muted-2 ml-auto shrink-0") { dest.kind }
-    end
+    render Components::UI::Multiselect.new(
+      name: "alert_rule[alert_destination_ids][]",
+      options: @destinations.map { |dest| {value: dest.id, label: dest.name, hint: dest.kind} },
+      selected: @rule.alert_destination_ids & @destinations.map(&:id),
+      empty_label: "Don't send",
+      all_label: "All destinations",
+      group_label: "Destinations",
+      clear_sentinel: true,
+      trigger_class: tokens(input_classes, "text-[13px]")
+    )
   end
 
   def metric_select
