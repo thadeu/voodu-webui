@@ -81,6 +81,14 @@ Rails.application.configure do
     ENV.delete(key)
   end
 
+  # The NDJSON log warehouse, kept away from the one a running `bin/dev` is
+  # filling. OrphanWarehousePurge removes every directory that is not a live
+  # server id, and no id in this database exists in the development one — so
+  # sharing a root means every suite run deletes the developer's logs, and the
+  # purge test asserts against whatever bin/dev happened to write. Under tmp/
+  # because it is disposable and already gitignored.
+  config.x.log_root = "tmp/test-logs"
+
   # Fixtures store PAT values as plaintext (e.g. "pat-alpha-secret")
   # so test files stay readable; this flag tells Rails to encrypt
   # them on fixture load using the test-only encryption keys

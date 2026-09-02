@@ -37,8 +37,26 @@ module LogTail
     RETENTION_DAYS = 2
 
     # Root directory absolute path. Created on demand by the writer.
+    #
+    # Overridable so the TEST environment can point somewhere of its own.
+    # Sharing one root with a running `bin/dev` is not a tidiness question:
+    # OrphanWarehousePurge deletes every directory whose name is not a live
+    # server id, and the ids in the test database never match the ids in the
+    # development one — so each suite run wipes the developer's logs, and the
+    # purge test's "nothing to remove" assertion goes red whenever bin/dev
+    # wrote something between two runs.
+    #
+    # Only test overrides it. Putting the environment into the path everywhere
+    # would rename the root under installations that already exist, orphaning
+    # their whole history — which this very sweeper would then delete.
+    #
+    # `config.x.<unset>` returns an empty OrderedOptions, which is neither nil
+    # NOR falsey, so a bare `||` would read "nobody set this" as "set to a
+    # hash". `presence` is what tells them apart: an empty hash is blank.
     def log_root
-      Rails.root.join(LOG_ROOT)
+      configured = Rails.application.config.x.log_root
+
+      Rails.root.join(configured.presence || LOG_ROOT)
     end
 
     # Per-server directory: storage/logs/<server_id>/

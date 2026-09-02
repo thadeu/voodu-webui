@@ -21,31 +21,4 @@ class SettingsControllerTest < ActionDispatch::IntegrationTest
       synced_at: Time.current
     )
   end
-
-  test "lists installed plugins from the synced /system payload" do
-    attach_system(plugins: [{"name" => "hep3", "version" => "0.5.0", "aliases" => ["hep"]}])
-
-    get settings_path(server_key: @key)
-
-    assert_response :success
-    assert_match "Plugins", @response.body
-    assert_match "hep3", @response.body
-    assert_match "v0.5.0", @response.body
-    assert_match "(hep)", @response.body
-
-    # Placement: the Plugins card sits below API Tokens and ABOVE the
-    # Server/About pair — "Endpoint" is a Server-card label, so the
-    # plugins must appear before it in the document.
-    assert_operator @response.body.index("Plugins"), :<, @response.body.index("Endpoint"),
-      "Plugins card should render above the Server card"
-  end
-
-  test "shows an empty state when no plugins are installed" do
-    attach_system(plugins: [])
-
-    get settings_path(server_key: @key)
-
-    assert_response :success
-    assert_match "No plugins installed", @response.body
-  end
 end

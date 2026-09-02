@@ -68,6 +68,18 @@ class OrphanWarehousePurgeTest < ActiveSupport::TestCase
     assert Dir.exist?(live_dir), "a live server keeps its logs"
   end
 
+  # The sweeper deletes by absence: any directory whose name is not a live
+  # server id goes. That rule is right, and it is why the suite must not share a
+  # root with a running bin/dev — no id in this database exists in that one, so
+  # every run here would delete the developer's logs and this file's
+  # "nothing to remove" assertion would depend on what bin/dev wrote a second
+  # ago. If this ever fails, the isolation was undone and the suite is eating
+  # somebody's data again.
+  test "the suite sweeps its own root, not the one bin/dev is filling" do
+    assert_not_equal Rails.root.join(LogTail::FilePath::LOG_ROOT).to_s,
+      LogTail::FilePath.log_root.to_s
+  end
+
   test "it reports what it removed, and says nothing when there is nothing" do
     assert_empty OrphanWarehousePurge.call
 
