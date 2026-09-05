@@ -7,7 +7,9 @@
 # gradient is the logo, this matches it). Falls back to the first
 # letter of the supplied name when no URL is given.
 class Components::UI::Avatar < Components::Base
-  SIZES = {sm: 28, md: 36, lg: 40, xl: 56}.freeze
+  # xs — for a table row, where 28px is a third of the row's height and reads
+  # as a portrait rather than a marker.
+  SIZES = {xs: 20, sm: 28, md: 36, lg: 40, xl: 56}.freeze
 
   def initialize(url: nil, name: "", size: :md, **attrs)
     @url = url

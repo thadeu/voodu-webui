@@ -41,6 +41,12 @@ class Server < ApplicationRecord
   # Server purges its row sets in the same transaction (also enforced
   # at the DB level via `foreign_key: { on_delete: :cascade }`).
   has_many :pods, dependent: :destroy
+
+  # Deployments outlive nothing here: destroying a server takes its deploy
+  # history with it, the same way it takes its alerts. The history is ABOUT
+  # this box, and a row pointing at a server that no longer exists is a row
+  # nothing can render.
+  has_many :deployments, dependent: :destroy
   has_one :system, dependent: :destroy
 
   # Alert rules + their firing episodes. server_id on both is the TARGET server

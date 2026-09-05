@@ -35,6 +35,29 @@ Rails.application.configure do
   # in dev).
   config.cache_store = :file_store, Rails.root.join("tmp/cache")
 
+  # Tunnel hosts, so a GitHub webhook can reach a laptop.
+  #
+  # Rails refuses a Host header it does not recognise — the guard against DNS
+  # rebinding, and it is right to have. But testing the deploy plane end to end
+  # means GitHub POSTing to this machine, which means a tunnel, which means a
+  # hostname nobody can predict: `resolve-men-heart-validation.trycloudflare.com`
+  # is generated per session.
+  #
+  # DEVELOPMENT ONLY, and the file it lives in is the enforcement. Production
+  # keeps the default (the configured host and nothing else); a wildcard there
+  # would turn the protection off for everyone to save a developer one line.
+  #
+  # Anchored patterns, not a bare `.trycloudflare.com` string: an unanchored
+  # match would also accept `trycloudflare.com.attacker.example`.
+  config.hosts << /\A[a-z0-9-]+\.trycloudflare\.com\z/
+  config.hosts << /\A[a-z0-9-]+\.ngrok(-free)?\.(app|io|dev)\z/
+
+  # An escape hatch for any other tunnel, one host at a time:
+  #   DEV_TUNNEL_HOST=abc.loca.lt bin/dev
+  ENV["DEV_TUNNEL_HOST"].to_s.split(",").map(&:strip).reject(&:empty?).each do |host|
+    config.hosts << host
+  end
+
   # Store uploaded files on the local file system (see config/storage.yml for options).
 
   # Don't care if the mailer can't send.

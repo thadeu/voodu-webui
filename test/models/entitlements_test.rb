@@ -33,6 +33,50 @@ class EntitlementsTest < ActiveSupport::TestCase
     end
   end
 
+  # The deploy plane is the one capability decided by what the BOX is rather
+  # than by what an account bought.
+  test "only the unlimited tier gets the deploy plane" do
+    unlimited = LicenseToken.new(status: :valid, claims: {"sub" => "voodu", "tier" => "unlimited"})
+    enterprise = LicenseToken.new(status: :valid, claims: {"sub" => "acme", "tier" => "enterprise"})
+
+    assert Entitlements.new(unlimited).deploy_plane?
+    assert_not Entitlements.new(enterprise).deploy_plane?,
+      "an Enterprise self-hosted box does not get the deploy plane yet"
+    assert_not Entitlements.new(LicenseToken.new(status: :none)).deploy_plane?
+  end
+
+  # THE trap this gate exists to avoid. Sign-in became configurable on
+  # self-hosted boxes, so a CLOWK_ENABLED check would admit exactly the
+  # installation it is meant to refuse.
+  test "enabling sign-in on a self-hosted box does not grant the deploy plane" do
+    enterprise = LicenseToken.new(status: :valid, claims: {"sub" => "acme", "tier" => "enterprise"})
+
+    with_env("CLOWK_ENABLED" => "1", "CLOWK_PUBLISHABLE_KEY" => "pk_live_x") do
+      assert_not Entitlements.new(enterprise).deploy_plane?
+    end
+  end
+
+  # A lapsed or forged licence claiming the tier must not grant it: tier reads
+  # "free" unless the licence is entitled, and this is the test that keeps that
+  # true if the definition ever moves.
+  test "a licence that is not in force cannot claim the deploy plane" do
+    %i[lapsed invalid none].each do |status|
+      token = LicenseToken.new(status: status, claims: {"sub" => "acme", "tier" => "unlimited"})
+
+      assert_not Entitlements.new(token).deploy_plane?, "#{status} must not grant the deploy plane"
+    end
+  end
+
+  def with_env(pairs)
+    original = pairs.transform_values { |_| nil }
+    pairs.each_key { |k| original[k] = ENV[k] }
+    pairs.each { |k, v| ENV[k] = v }
+
+    yield
+  ensure
+    original.each { |k, v| ENV[k] = v }
+  end
+
   test "a live licence lifts the limits" do
     e = Entitlements.new(licensed)
 

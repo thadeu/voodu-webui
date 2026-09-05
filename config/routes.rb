@@ -161,6 +161,18 @@ Rails.application.routes.draw do
     end
   end
 
+  # GitHub sends the operator back here after they authorize the App, and it
+  # knows nothing about our orgs — so this route cannot name one. The signed
+  # `state` carries the org, the server and the person, and is checked before
+  # anything is bound. See Integration::Github::State for why that matters.
+  get "integrations/github/callback", to: "integrations/github#callback",
+    as: :github_integration_callback
+
+  # GitHub's own POST. No session, no org, no CSRF token — the HMAC is the
+  # whole authorisation. See Integrations::GithubWebhooksController.
+  post "integrations/github/webhook", to: "integrations/github_webhooks#create",
+    as: :github_integration_webhook
+
   # The only screen a person with no org can act on — see OnboardingsController.
   resource :onboarding, only: [:new, :create]
 
@@ -332,6 +344,77 @@ Rails.application.routes.draw do
     get "/plugins", to: "plugins#index", as: :plugins
     post "/plugins", to: "plugins#create", as: :install_plugin
     delete "/plugins/:name", to: "plugins#destroy", as: :plugin, constraints: {name: %r{[^/]+}}
+
+    # Environment variables of one pod, edited in a drawer on the pod page.
+    #
+    # Nested under the pod because the pod IS the bucket: `runa-pg.0` resolves
+    # to scope `runa`, resource `pg`. Asking the operator to name that again on
+    # a screen of its own was what the removed /config page did.
+    #
+    # `new` and `edit` are GETs that render the drawer body; `reveal` is the
+    # separate request that puts a value on screen only once somebody asks.
+    get "/pods/:pod_name/env/new", to: "pod_env#new", as: :new_pod_env,
+      constraints: {pod_name: %r{[^/]+}}
+    get "/pods/:pod_name/env/edit", to: "pod_env#edit", as: :edit_pod_env,
+      constraints: {pod_name: %r{[^/]+}}
+    get "/pods/:pod_name/env/reveal", to: "pod_env#reveal", as: :reveal_pod_env,
+      constraints: {pod_name: %r{[^/]+}}
+    post "/pods/:pod_name/env", to: "pod_env#create", as: :pod_env,
+      constraints: {pod_name: %r{[^/]+}}
+    delete "/pods/:pod_name/env", to: "pod_env#destroy",
+      constraints: {pod_name: %r{[^/]+}}
+
+    # VooduCD — the repositories that deploy to THIS server.
+    #
+    # `?repo=owner/name` opens one card rather than a nested route: the
+    # repository name carries a slash, and a path segment holding one is a
+    # constraint every link has to remember. A query parameter also keeps the
+    # opened card bookmarkable, which a drawer would not.
+    #
+    # Read-only, and there is no create/update/destroy below on purpose. The
+    # integration is passive — the App has no `contents: write` — so the way to
+    # change a trigger is to commit to the repository, where the change is
+    # reviewable. See Views::Deploys::Index, which says so on the screen
+    # instead of leaving somebody hunting for a save button.
+    # ONE SCREEN, two tabs. The tab is a path segment because it swaps the
+    # whole content — it is a place, not a filter — while what is selected
+    # INSIDE a tab stays in the query.
+    #
+    # `/deployments` used to be its own screen with its own sidebar entry. It
+    # was two entries for one question: "did my push land" starts at a
+    # repository and ends at a deployment, and making that a navigation problem
+    # was the reason to fold them together.
+    get "/deploys", to: redirect { |p, _| "/#{p[:org_id]}/#{p[:server_key]}/deploys/repositories" }
+
+    get "/deploys/repositories", to: "deploys#repositories", as: :deploys_repositories
+    get "/deploys/deployments", to: "deploys#deployments", as: :deploys_deployments
+    get "/deploys/deployments/:id", to: "deploys#deployment", as: :deploys_deployment
+
+    # Every delivery that arrived, and what became of it. The tab an operator
+    # opens when the other two disagree with what they expected.
+    get "/deploys/webhooks", to: "deploys#webhooks", as: :deploys_webhooks
+    get "/deploys/webhooks/:id", to: "deploys#webhook", as: :deploys_webhook
+    post "/deploys/refresh", to: "deploys#refresh", as: :refresh_deploys
+
+    # Pointing a repository at this server, and taking it back. These are the
+    # only WRITES in VooduCD, and they write two places — the box's trigger and
+    # our listing. See DeploysController#connect_repo for why the order differs
+    # between the two directions.
+    post "/deploys/connect", to: "deploys#connect_repo", as: :connect_repo_deploys
+    delete "/deploys/connect", to: "deploys#disconnect_repo", as: :disconnect_repo_deploys
+
+    # A GET because it answers rather than changes: the box reads its own
+    # config and asks GitHub a question. It lands in a Turbo frame, so the
+    # operator keeps the card they were reading.
+    get "/deploys/preflight", to: "deploys#preflight", as: :preflight_deploys
+
+    # Connecting this server's deploys to a source provider.
+    #
+    # Server-scoped because "which server deploys from GitHub" is a per-server
+    # decision — the installation itself is per GitHub account, since GitHub
+    # allows one per App, but the choice of which box uses it is made while
+    # looking at that box.
+    get "/integrations/github/connect", to: "integrations/github#connect", as: :connect_github
 
     get "/settings", to: "settings#index", as: :settings
     # Settings actions stay under the same server scope so the

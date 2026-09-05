@@ -23,13 +23,16 @@ class Components::Pods::LabelsCard < Components::Base
   def view_template
     entries = sorted_labels
 
-    render Components::UI::SectionCard.new(title: "Labels · #{entries.size}") do
+    render Components::UI::SectionCard.new(title: "Labels · #{entries.size}", scroll: true) do
       if entries.empty?
         div(class: "px-3.5 py-6 text-center text-voodu-muted text-[12.5px]") { "no labels" }
       else
-        div(data: {controller: "kv-filter"}) do
+        div(data: {controller: "kv-filter"}, class: Components::UI::SectionCard::SCROLL_CHAIN) do
+          # Capped and scrolling, exactly like the Environment card beside it —
+          # see SectionCard::MAX_H for why the two must agree.
           filter_bar
-          rows(entries)
+
+          div(class: Components::UI::SectionCard::SCROLL_LIST) { rows(entries) }
         end
       end
     end

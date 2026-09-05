@@ -8,6 +8,23 @@
     <meta name="application-name" content="Voodu">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0a0d14" media="(prefers-color-scheme: dark)">
+
+    <%# Turbo 8 prefetches a link's href ON HOVER, before any click. Off, and
+        globally rather than link by link, because several GETs in this app are
+        not inert:
+
+          - revealing an environment value fetches a secret. Hovering the eye
+            would put it in the browser, which is the whole thing that design
+            exists to prevent.
+          - the deploy preflight calls the customer's box AND GitHub. Hovering
+            a list of repositories would run one per row and burn rate limit.
+
+        An opt-out list is a list somebody forgets to add to, and the failure is
+        silent — the page looks right while hovering does something. Prefetch
+        buys perceived latency on navigation; that is not worth "pointing at a
+        thing performs it". Re-enable per link with data-turbo-prefetch="true"
+        where the target is genuinely a plain read. %>
+    <meta name="turbo-prefetch" content="false">
     
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>

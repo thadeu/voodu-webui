@@ -16,6 +16,21 @@
 #   range_param/from_param/until_param — query param names
 #   extra_params — hidden fields carried on every submit (e.g. tab:)
 class Components::UI::TimeRangeFilter < Components::Base
+  # CONTROL_H — the height every control in a filter bar shares.
+  #
+  # Lives here because the range chips set the rhythm: they are the widest
+  # thing in the strip and the first thing the eye lines up against. A
+  # dropdown or a search box a few pixels shorter beside them does not read as
+  # a different control, it reads as a mistake.
+  #
+  # One constant rather than the literal repeated in each component — which is
+  # exactly how the three of them drifted apart in the first place.
+  # h-7 and not h-8: the preset chips below are `h-7`, and they are what the
+  # rest has to match. Read off the wrong element once already — the custom
+  # range editor inside this same file uses h-8, which is a different control
+  # in a different row.
+  CONTROL_H = "h-7"
+
   CHIP_ACTIVE = "border-voodu-accent-line bg-voodu-accent-dim text-voodu-accent-2"
   CHIP_INACTIVE = "border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
 
@@ -74,7 +89,7 @@ class Components::UI::TimeRangeFilter < Components::Base
         action: "click->time-range-filter#selectRange"
       },
       class: tokens(
-        "inline-flex items-center px-2.5 h-7 border text-[11.5px] font-medium transition-colors",
+        "inline-flex items-center px-2.5 #{CONTROL_H} border text-[11.5px] font-medium transition-colors",
         active ? CHIP_ACTIVE : CHIP_INACTIVE
       )
     ) { key.to_s }
@@ -90,7 +105,7 @@ class Components::UI::TimeRangeFilter < Components::Base
           action: "click->dropdown#toggle click->time-range-filter#openCustom"
         },
         class: tokens(
-          "inline-flex items-center gap-1.5 px-2.5 h-7 border text-[11.5px] font-medium transition-colors",
+          "inline-flex items-center gap-1.5 px-2.5 #{CONTROL_H} border text-[11.5px] font-medium transition-colors",
           (@active_range == "custom") ? CHIP_ACTIVE : CHIP_INACTIVE
         )
       ) do
@@ -112,6 +127,11 @@ class Components::UI::TimeRangeFilter < Components::Base
       span(class: "text-[10px] uppercase tracking-[0.06em] text-voodu-muted") { "Custom range" }
       labeled_datetime("From", @from_param)
       labeled_datetime("Until", @until_param)
+
+      # h-8 here and not CONTROL_H, deliberately: this button and the two
+      # inputs above live in the POPOVER, not in the strip. The strip's height
+      # is about lining up with the chips beside it; a panel has its own row
+      # and a taller control there is easier to hit.
       button(
         type: "button",
         data: {action: "click->time-range-filter#applyCustom click->dropdown#close"},

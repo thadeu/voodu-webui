@@ -34,6 +34,10 @@ module Voodu
 
     DEFAULT_TIMEOUT = 6 # seconds
 
+    # How the box receives a GitHub token it is not allowed to keep. Must match
+    # GitHubTokenHeader in internal/controller/handlers_deploy_manifests.go.
+    GITHUB_TOKEN_HEADER = "X-Voodu-GitHub-Token"
+
     def initialize(server, timeout: DEFAULT_TIMEOUT)
       @server = server
       @timeout = timeout
@@ -87,6 +91,150 @@ module Voodu
     # plus an uninstall hook, and the operator has just confirmed a destructive
     # action, so an immediate answer is what the confirmation was for.
     def remove_plugin(name) = delete("plugins/#{ERB::Util.url_encode(name)}")
+
+    # ── config buckets ────────────────────────────────────────────────────
+
+    # config_keys — WHICH variables exist, never their values.
+    #
+    # `values=false` is the whole point and it is a mode of the ENDPOINT, not
+    # of this client and not of a screen: the values never leave the box, so
+    # there is nothing for our server to log, nothing in the browser's network
+    # panel, and nothing in an error report. A client that fetched them and
+    # declined to return them would protect none of that.
+    #
+    # Returns [{"key" =>, "value_digest" =>}], already sorted by the box.
+    def config_keys(scope:, name: nil, merge: true)
+      params = {scope: scope, values: "false"}
+      params[:name] = name if name.present?
+      params[:merge] = "false" unless merge
+
+      payload = get("config", params)
+      Array(payload && payload["keys"])
+    end
+
+    # config_value — ONE value, because somebody asked to see it.
+    #
+    # One key per call, deliberately: revealing a whole bucket at once is a
+    # different action with a different blast radius, and making it cost one
+    # request per key is what keeps "show me DATABASE_URL" from quietly
+    # becoming "put every secret this app has on a screen".
+    def config_value(scope:, key:, name: nil, merge: true)
+      params = {scope: scope, key: key}
+      params[:name] = name if name.present?
+      params[:merge] = "false" unless merge
+
+      payload = get("config", params)
+      payload.is_a?(Hash) ? payload[key] : nil
+    end
+
+    # set_config — write variables into a bucket.
+    #
+    # `restart` defaults to true because that is what the box does and what the
+    # operator means: a variable nothing restarts to pick up is a variable that
+    # did not take effect, and discovering that later is worse than a restart
+    # they expected.
+    def set_config(scope:, vars:, name: nil, restart: true)
+      params = {scope: scope}
+      params[:name] = name if name.present?
+      params[:restart] = "false" unless restart
+
+      post("config?#{params.to_query}", vars)
+    end
+
+    def delete_config(scope:, keys:, name: nil, restart: true)
+      params = {scope: scope, keys: Array(keys).join(",")}
+      params[:name] = name if name.present?
+      params[:restart] = "false" unless restart
+
+      delete("config?#{params.to_query}")
+    end
+
+    # ── deploy plane ──────────────────────────────────────────────────────
+    #
+    # Every route below needs the `deploy` scope on the PAT, reads included.
+    # Trigger config names repositories, branches and the scopes a push may
+    # apply — the same admin-grade metadata that put PAT listing behind
+    # `actions` rather than `read`. There is no read-only corner of it.
+
+    # deploy_triggers — what this box has authorised to deploy.
+    def deploy_triggers
+      payload = get("deploy/triggers")
+      Array(payload && payload["triggers"])
+    end
+
+    # create_deploy_trigger — authorise a repository to deploy to this box.
+    #
+    # THE CONSOLE MAY WIDEN WHAT THIS BOX ACCEPTS, and that is a decision
+    # rather than an oversight. The alternative is every developer holding SSH
+    # to production so one of them can run `vd deploy trigger create`. The
+    # trade is written down in `recordTriggerChange` on the controller: the
+    # console can do this, and the owner sees every one of them in the trail.
+    #
+    # `allow_scopes` is required by the box and must be non-empty — a trigger
+    # that allows nothing can deploy nothing, so an empty list is a mistake
+    # rather than a policy.
+    def create_deploy_trigger(repo:, branch:, allow_scopes:, enabled: true)
+      post("deploy/triggers", {
+        repo: repo, branch: branch, allow_scopes: Array(allow_scopes), enabled: enabled
+      })
+    end
+
+    def update_deploy_trigger(id:, repo:, branch:, allow_scopes:, enabled: nil)
+      body = {repo: repo, branch: branch, allow_scopes: Array(allow_scopes)}
+      body[:enabled] = enabled unless enabled.nil?
+
+      put("deploy/triggers/#{CGI.escape(id)}", body)
+    end
+
+    def delete_deploy_trigger(id)
+      delete("deploy/triggers/#{CGI.escape(id)}")
+    end
+
+    # deploy_manifests — the `.voodu/**/*.yml` of a repository, as THE BOX read
+    # them, with its verdict on each one.
+    #
+    # The box has no GitHub credentials of its own by design, so the token
+    # travels in a header — minted here, one hour, one repository, read-only.
+    # That is also why this is a GET with a header rather than a POST: it
+    # changes nothing, and a body would suggest it did.
+    #
+    # `ref` is passed rather than omitted: the repository listing already told
+    # us the default branch, and leaving it out makes the box ask GitHub for
+    # something we are holding. The fallback is for curl, not for us.
+    def deploy_manifests(token:, repo: nil, trigger: nil, ref: nil)
+      params = {}
+      params[:repo] = repo if repo.present?
+      params[:trigger] = trigger if trigger.present?
+      params[:ref] = ref if ref.present?
+
+      get("deploy/manifests", params, headers: {GITHUB_TOKEN_HEADER => token})
+    end
+
+    # deploy_run — deploy one commit.
+    #
+    # SYNCHRONOUS, and the long timeout on the caller's side is why: the box
+    # downloads the repository, may build an image, and then applies. It
+    # answers with what it applied and what it skipped.
+    #
+    # `sha` and not a branch name: the box verifies the commit descends from
+    # the trigger's pinned branch before it reads anything from it. A branch
+    # name would be a moving target between the check and the read.
+    def deploy_run(trigger:, sha:, token:, ref: nil)
+      body = {sha: sha}
+      body[:ref] = ref if ref.present?
+
+      post("deploy/triggers/#{CGI.escape(trigger)}/run", body,
+        headers: {GITHUB_TOKEN_HEADER => token})
+    end
+
+    # deploy_preflight — the four questions, answered separately.
+    #
+    # Reaches the box? reaches GitHub? does the scope exist? is there a YAML?
+    # Each has a different fix, so each gets its own answer — "preflight
+    # failed" tells an operator none of them.
+    def deploy_preflight(trigger:, token:)
+      get("deploy/preflight", {trigger: trigger}, headers: {GITHUB_TOKEN_HEADER => token})
+    end
 
     # metrics — time-series chart data backed by the controller's
     # NDJSON store (see internal/metrics on the Go side).
@@ -394,15 +542,33 @@ module Voodu
       end
     end
 
-    def get(path, params = nil)
-      resp = conn.get("/api/pat/v1/#{path}", params)
+    def get(path, params = nil, headers: nil)
+      resp = conn.get("/api/pat/v1/#{path}", params) do |req|
+        headers&.each { |name, value| req.headers[name] = value }
+      end
+
       handle(resp)
     rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
       raise TransportError, e.message
     end
 
-    def post(path, body = nil)
+    def post(path, body = nil, headers: nil)
       resp = conn.post("/api/pat/v1/#{path}") do |req|
+        headers&.each { |name, value| req.headers[name] = value }
+
+        if body
+          req.headers["Content-Type"] = "application/json"
+          req.body = body.to_json
+        end
+      end
+
+      handle(resp)
+    rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
+      raise TransportError, e.message
+    end
+
+    def put(path, body = nil)
+      resp = conn.put("/api/pat/v1/#{path}") do |req|
         if body
           req.headers["Content-Type"] = "application/json"
           req.body = body.to_json

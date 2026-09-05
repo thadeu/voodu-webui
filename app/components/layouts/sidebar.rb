@@ -60,6 +60,13 @@ class Components::Layouts::Sidebar < Components::Base
     # is admin-only end to end.
     {id: :plugins, label: "Plugins", icon: :PuzzlePieceOutline, path: :plugins,
      capability: :manage_servers},
+    # `entitlement` and not only `capability`: an admin on a plan without the
+    # deploy plane holds manage_deploys and still cannot reach the screen, so
+    # the capability alone would draw a door that answers "not part of this
+    # plan". Both are asked here because the endpoint asks both.
+    {id: :deploys, label: "Deploys", icon: :RocketLaunchOutline, path: :deploys_repositories,
+     active_prefix: :deploys,
+     capability: :manage_deploys, entitlement: :deploy_plane?},
     {id: :settings, label: "Settings", icon: :Cog6ToothOutline, path: :settings,
      capability: :reveal_pat}
   ].freeze
@@ -544,6 +551,7 @@ class Components::Layouts::Sidebar < Components::Base
   # invite, so the door would open onto a table with a single permanent row.
   def nav_permitted?(item)
     return false if item[:clowk_only] && !clowk_enabled?
+    return false if item[:entitlement] && !entitlements.public_send(item[:entitlement])
     return true if item[:capability].nil?
 
     # A container-wide screen has no org to be asked about, so it asks the same
@@ -560,9 +568,44 @@ class Components::Layouts::Sidebar < Components::Base
     badge_count = nav_badge_count(item[:badge])
     href = nav_href(item)
 
+    # Wrapped so the collapsed tooltip has something to position against.
+    #
+    # `group/nav` and NOT a bare `group`: the aside already owns the unnamed
+    # one, and that is what every `group-data-[collapsed]:*` on this page reads.
+    # Reusing it here would make each item's hover look like the whole
+    # sidebar's, and the tooltip would appear on all of them at once.
+    div(class: "relative group/nav") do
+      nav_link(item, active, icon_klass, badge_count, href)
+      nav_tooltip(item[:label])
+    end
+  end
+
+  # nav_tooltip — the label, drawn, and ONLY while collapsed.
+  #
+  # The OS tooltip `title` gives waits about a second and renders in the
+  # desktop's style. A collapsed sidebar is nine identical-looking icons where
+  # the label is the only thing telling them apart, so a second per guess is
+  # the difference between a rail somebody uses and one they expand again.
+  #
+  # Drawn only when collapsed, because expanded the label is right there — a
+  # tooltip repeating visible text is noise that follows the cursor.
+  def nav_tooltip(label)
+    render Components::UI::Tooltip.new(
+      label: label, group: "nav",
+      visible_when: "hidden vmd:group-data-[collapsed]:block"
+    )
+  end
+
+  def nav_link(item, active, icon_klass, badge_count, href)
     a(
       href: href,
       title: item[:label],
+      # The accessible NAME, and it has to be here rather than left to the
+      # visible span: that span is `display: none` when collapsed, and a
+      # display-none node is out of the accessibility tree — so the name would
+      # vanish exactly when the icon is alone. The drawn tooltip is aria-hidden
+      # decoration; see Components::UI::Tooltip.
+      "aria-label": item[:label],
       "aria-current": (active ? "page" : nil),
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-10 text-[13px] border transition-colors",

@@ -43,6 +43,38 @@ class PodDetailData
   # "replica_id" echoed back. Header rendering must not blow up on
   # that; this layer absorbs the difference so views/components stay
   # nil-safe.
+  # config_keys — WHICH of this container's variables came from the voodu
+  # config bucket, as a Set of names.
+  #
+  # WHY THIS EXISTS. `pod["env"]` is what the container actually got, and it
+  # mixes two origins the payload does not distinguish: variables the image
+  # declares (PATH, LANG, GOSU_VERSION) and variables the operator set through
+  # voodu. They are edited by completely different acts — changing a config key
+  # versus CREATING one that overrides the image, permanently and across future
+  # images — so a screen that offers the same pencil for both is a screen that
+  # lies about what the button does.
+  #
+  # Names only. The read passes `values=false`, so no value crosses the wire to
+  # answer a question about provenance.
+  #
+  # Empty on any failure, and that is the safe direction: an unknown origin
+  # renders as "from the image", which offers the OVERRIDE action — the one
+  # that explains itself — rather than an edit that quietly assumes otherwise.
+  def config_keys
+    return @config_keys if defined?(@config_keys)
+
+    @config_keys = begin
+      return @config_keys = Set.new if @client.nil? || scope.blank? || resource_name.blank?
+
+      rows = @client.config_keys(scope: scope, name: resource_name, merge: false)
+
+      rows.filter_map { |row| row["key"].presence }.to_set
+    rescue Voodu::Client::Error => e
+      Rails.logger.warn("[pod] could not read the config bucket for #{scope}/#{resource_name}: #{e.class}")
+      Set.new
+    end
+  end
+
   def scope = pick("scope") || split_name[:scope]
   def resource_name = pick("resource_name") || split_name[:resource]
   def replica_id = pick("replica_id") || split_name[:replica]

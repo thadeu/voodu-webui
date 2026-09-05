@@ -119,6 +119,27 @@ class Entitlements
 
   def postgres? = table.fetch(:postgres) == true
 
+  # deploy_plane? — may this installation trigger deploys from a git push?
+  #
+  # `unlimited` only, for now: that tier IS the hosted service, and this is the
+  # one capability where the box's identity decides rather than what an account
+  # bought. OSS and Enterprise self-hosted do not get it yet.
+  #
+  # NOT read off the table, and not derived from CLOWK_ENABLED — which is the
+  # trap worth naming. Sign-in became configurable on self-hosted boxes, so an
+  # Enterprise customer who turns Clowk on would pass a `CLOWK_ENABLED` check
+  # and get the deploy plane: the gate would admit exactly whom it exists to
+  # refuse. The tier is what already answers "what is this box".
+  #
+  # WHEN THE FIRST ENTERPRISE BUYS IT, this becomes a licence entitlement —
+  # `LicenseToken::Signed` already accepts `entitlements:` and already refuses
+  # a key nothing reads, so the change is `table.fetch(:deploy_plane)` here
+  # plus a key in the plan hashes. Enabling a customer then means ISSUING A
+  # LICENCE rather than shipping a release. Deliberately not built yet: there
+  # is no such customer, and a flag with one possible value is a flag that gets
+  # its first real exercise in production.
+  def deploy_plane? = tier == "unlimited"
+
   # Whether the adapter actually in use is one this installation did not buy.
   # Takes the adapter name so the decision is a pure function — the alternative
   # buries it behind a live connection and makes it untestable anywhere the test

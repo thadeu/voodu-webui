@@ -123,8 +123,19 @@ class Views::Pods::Show < Views::Base
       render Components::Pods::Header.new(data: @data, drawer: true)
       spec_network_grid
       probes_section
-      render Components::Pods::EnvCard.new(pod: @data.raw)
+      # Read-only in the drawer, and provenance is not fetched: a drawer that
+      # opens another drawer is a stack nobody escapes with one Escape, and
+      # spending a round trip to label rows nobody can act on is waste. The
+      # full page is one click away in the drawer's own header.
+      # One column in the drawer whatever the viewport: the panel is ~34vw, so
+      # auto-fit would never find room for two anyway, and asking for it would
+      # only make the intent unclear to the next reader.
+      #
+      # Same ORDER as the full page, though. The drawer and the page are two
+      # views of one pod, and a reader who opens both should not have to
+      # re-find where things are.
       render Components::Pods::LabelsCard.new(pod: @data.raw)
+      render Components::Pods::EnvCard.new(pod: @data.raw)
     end
   end
 
@@ -132,12 +143,62 @@ class Views::Pods::Show < Views::Base
     div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
       stale_banner if @data.stale?
       render Components::Pods::Header.new(data: @data)
+      deployment_strip
       stat_cards
       spec_network_grid
       probes_section
-      render Components::Pods::EnvCard.new(pod: @data.raw)
-      render Components::Pods::LabelsCard.new(pod: @data.raw)
+      env_labels_grid
     end
+  end
+
+  # Labels beside Environment, both auto-fit like the spec/network pair above.
+  #
+  # LABELS FIRST, and the order is the point: it is the short card. Reading
+  # down the left column you finish it and move on, instead of scrolling two
+  # dozen variables past a card that ended six rows in. It also puts the pair
+  # in the order the page already runs — identity, then contents.
+  #
+  # STRETCH, not items-start, and that is what makes the two match. Both cards
+  # cap themselves at SectionCard::MAX_H and scroll inside, so the grid row is
+  # bounded no matter how many variables a container declares — and the row's
+  # stretch then brings the shorter card up to the taller one.
+  #
+  # `items-start` was here first, to stop a nine-row Labels card being dragged
+  # to the height of a twenty-four-row Environment one. The cap removes that
+  # objection: the row can no longer run away, so matching heights costs at
+  # most one card's shortfall and reads as a pair instead of two strangers.
+  #
+  # Below the breakpoint auto-fit collapses to one column and they stack, which
+  # is the only readable arrangement for a key/value list at 360px — and the
+  # same order still reads correctly there.
+  def env_labels_grid
+    div(
+      class: "grid gap-3 vmd:gap-4",
+      style: "grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));"
+    ) do
+      render Components::Pods::LabelsCard.new(pod: @data.raw)
+      env_card
+    end
+  end
+
+  # env_card — the container's environment, with the config half editable.
+  #
+  # `editable` is the capability, asked once here rather than inside the
+  # component: the drawer it opens writes production configuration, and a card
+  # drawing a pencil a member cannot use is a door we drew ourselves.
+  def env_card
+    render Components::Pods::EnvCard.new(
+      pod: @data.raw, pod_name: @data.name,
+      config_keys: @data.config_keys, editable: allowed?(:manage_servers)
+    )
+  end
+
+  # Which commit put this pod here, when one did. Renders nothing for a pod
+  # applied by hand — see Components::Pods::DeploymentStrip.
+  def deployment_strip
+    render Components::Pods::DeploymentStrip.new(
+      server: @current_server, scope: @data.scope, name: @data.resource_name
+    )
   end
 
   # stale_banner — mirrors the Overview + /pods banners. Surfaces

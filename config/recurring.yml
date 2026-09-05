@@ -40,6 +40,21 @@ common: &common
     # with no reader instance configured.
     schedule: every 15 seconds
 
+  deployment_sweep:
+    class: DeploymentSweepJob
+    # 5 min — the row it fixes is one a killed worker left saying `running`,
+    # which is rare. Faster would be polling for an event that almost never
+    # happens; slower and an operator sits watching a deploy nothing is
+    # carrying. Nothing here races a live deploy: STALE_AFTER is 20 minutes.
+    schedule: every 5 minutes
+
+  webhook_receipts_sweep:
+    class: WebhookReceiptsSweepJob
+    # Daily, not hourly: the rows it removes are ninety days old, so an extra
+    # day of them costs nothing and an hourly delete is a lock nobody asked
+    # for. Off-peak because it is the only job here that writes in bulk.
+    schedule: every day at 4am
+
   license_check:
     class: LicenseCheckJob
     schedule: every day at 9am

@@ -961,7 +961,18 @@ body.log-cols-resizing * {
   --voodu-shadow-pop:   0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--voodu-border);
   --voodu-shadow-sm:    0 2px 5px rgba(0, 0, 0, 0.55);
   --voodu-shadow-lg:    0 8px 24px rgba(0, 0, 0, 0.55);
-  --voodu-shadow-drawer: -12px 0 32px rgba(0, 0, 0, 0.55);
+  /* Drawer lift — cast LEFTWARD, onto the page the panel slid over.
+   *
+   * Deliberately restrained, and the constraint is what sets the numbers: this
+   * shadow lands on live content, not on empty chrome. At a 32px blur it
+   * reached ~44px into the page and visibly dimmed the row buttons it
+   * overlapped — the eye and copy icons of whatever list was underneath. A
+   * depth cue that makes the thing behind it harder to read has stopped being
+   * a cue and started being a veil.
+   *
+   * Half the blur, less alpha: still reads as a layer above, no longer
+   * competes with what it covers. */
+  --voodu-shadow-drawer: -6px 0 16px rgba(0, 0, 0, 0.12);
   /* Header lift — the (always-dark) topbar casts a soft shadow onto the
    * content below so it reads as a layer above, not glued to the page. */
   --voodu-shadow-header: 0 4px 12px rgba(0, 0, 0, 0.45);
@@ -1066,7 +1077,8 @@ html[data-theme="light"] {
   --voodu-shadow-pop:   0 10px 28px rgba(15, 23, 42, 0.12), 0 0 0 1px var(--voodu-border);
   --voodu-shadow-sm:    0 1px 3px rgba(15, 23, 42, 0.12);
   --voodu-shadow-lg:    0 10px 28px rgba(15, 23, 42, 0.14);
-  --voodu-shadow-drawer: -10px 0 30px rgba(15, 23, 42, 0.1);
+  /* Scaled with the dark one, for the same reason — see above. */
+  --voodu-shadow-drawer: -5px 0 14px rgba(15, 23, 42, 0.08);
   /* Slate lift for the dark topbar over the light content. A crisp 1-2px
    * layer reads as a defined edge; the softer spread gives depth. Needs
    * more punch than a dark-on-dark shadow to register on the light bg. */

@@ -51,3 +51,4 @@ tmp
 # lands in git anyway.
 /config/license/*private*
 *.private.pem
+*.private-key.pem

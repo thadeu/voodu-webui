@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_31_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_04_200100) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -103,6 +103,48 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_180000) do
     t.index ["server_id"], name: "index_alert_rules_on_server_id"
   end
 
+  create_table "deployments", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "delivery_id"
+    t.json "details", default: {}, null: false
+    t.text "error"
+    t.datetime "finished_at"
+    t.integer "integration_id"
+    t.string "org_id", null: false
+    t.string "ref"
+    t.string "remote_job_id"
+    t.string "repo", null: false
+    t.integer "server_id", null: false
+    t.string "sha"
+    t.datetime "started_at"
+    t.string "status", default: "queued", null: false
+    t.string "trigger_id"
+    t.datetime "updated_at", null: false
+    t.integer "webhook_receipt_id"
+    t.index ["created_at"], name: "index_deployments_failed", where: "status = 'failed'"
+    t.index ["integration_id"], name: "index_deployments_on_integration_id"
+    t.index ["org_id", "created_at"], name: "index_deployments_on_org_id_and_created_at"
+    t.index ["server_id", "created_at"], name: "index_deployments_on_server_id_and_created_at"
+    t.index ["server_id", "delivery_id"], name: "index_deployments_on_delivery", unique: true, where: "delivery_id IS NOT NULL"
+    t.index ["server_id", "repo", "created_at"], name: "index_deployments_on_serialization_key"
+    t.index ["server_id"], name: "index_deployments_on_server_id"
+    t.index ["started_at"], name: "index_deployments_running", where: "status = 'running'"
+    t.index ["webhook_receipt_id"], name: "index_deployments_on_webhook_receipt_id"
+  end
+
+  create_table "integrations", force: :cascade do |t|
+    t.json "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.string "name"
+    t.string "org_id", null: false
+    t.string "provider", null: false
+    t.string "status", default: "active", null: false
+    t.datetime "updated_at", null: false
+    t.index ["org_id", "provider", "external_id"], name: "index_integrations_on_org_id_and_provider_and_external_id", unique: true
+    t.index ["provider", "external_id"], name: "index_integrations_on_provider_and_external_id"
+  end
+
   create_table "metric_dashboards", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -114,6 +156,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_180000) do
     t.index ["org_id", "name"], name: "index_metric_dashboards_on_org_id_and_name", unique: true
     t.index ["org_id"], name: "index_metric_dashboards_one_pinned_per_org", unique: true, where: "pinned = true"
     t.index ["uuid"], name: "index_metric_dashboards_on_uuid", unique: true
+  end
+
+  create_table "ops_github_configs", force: :cascade do |t|
+    t.string "configured_by_id"
+    t.datetime "created_at", null: false
+    t.text "private_key_ciphertext"
+    t.string "provider", null: false
+    t.json "settings", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.text "webhook_secret_ciphertext"
+    t.index ["created_at"], name: "index_ops_github_configs_on_created_at"
   end
 
   create_table "ops_licenses", force: :cascade do |t|
@@ -251,6 +304,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_180000) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  create_table "webhook_receipts", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.json "details", default: {}, null: false
+    t.string "event", null: false
+    t.string "external_id"
+    t.string "org_id"
+    t.json "payload", default: {}, null: false
+    t.string "provider", null: false
+    t.datetime "received_at", null: false
+    t.string "reference"
+    t.string "status", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "external_id"], name: "index_webhook_receipts_on_delivery", unique: true, where: "external_id IS NOT NULL"
+    t.index ["provider", "status", "received_at"], name: "index_webhook_receipts_on_provider_and_status_and_received_at"
+    t.index ["received_at"], name: "index_webhook_receipts_on_received_at"
+    t.index ["reference", "received_at"], name: "index_webhook_receipts_on_reference_and_received_at"
+  end
+
   add_foreign_key "accounts", "users", column: "owner_id"
   add_foreign_key "alert_destinations", "orgs"
   add_foreign_key "alert_events", "alert_rules", on_delete: :cascade
@@ -260,6 +331,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_180000) do
   add_foreign_key "alert_rule_destinations", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_rules", "orgs"
   add_foreign_key "alert_rules", "servers", on_delete: :cascade
+  add_foreign_key "deployments", "integrations"
+  add_foreign_key "deployments", "orgs"
+  add_foreign_key "deployments", "servers"
   add_foreign_key "metric_dashboards", "orgs"
   add_foreign_key "ops_licenses", "users", column: "activated_by_id", on_delete: :nullify
   add_foreign_key "ops_sso_configs", "users", column: "configured_by_id", on_delete: :nullify

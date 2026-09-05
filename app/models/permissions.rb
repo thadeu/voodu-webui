@@ -34,6 +34,15 @@ class Permissions
     read_org_surfaces: :admin,
 
     manage_servers: :admin,
+
+    # Connecting a source provider and authorising a repository to deploy.
+    #
+    # Admin, beside manage_servers, and NOT owner: an admin already runs
+    # everything the org does — they can restart a pod, install a plugin, and
+    # reveal the PAT that is the whole controller. Deploying from a repository
+    # the org already authorised on GitHub is smaller than any of those, and
+    # putting it above them would be a line drawn where nobody could explain it.
+    manage_deploys: :admin,
     reveal_pat: :admin,
     manage_alerts: :admin,
     manage_dashboards: :admin,
