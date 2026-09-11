@@ -33,6 +33,8 @@ class Components::Deploys::DeploymentTable < Components::Base
       span(class: "w-16 shrink-0 text-right") { "Took" }
       span(class: "w-24 shrink-0") { "Status" }
       span(class: "w-24 shrink-0 text-right") { "When" }
+
+      div(class: "w-7 shrink-0")
     end
   end
 

@@ -224,12 +224,90 @@ class DeployRunJobTest < ActiveJob::TestCase
         headers: {"Content-Type" => "application/json"})
   end
 
-  def stub_run(applied:, skipped: [], job_id: "job-1")
+  def stub_run(applied:, skipped: [], held: [], job_id: "job-1")
     WebMock.stub_request(:post, %r{#{Regexp.escape(@server.endpoint)}/api/pat/v1/deploy/triggers})
       .to_return(status: 200, body: {
         status: "ok",
         data: {job_id: job_id, trigger: "t1", repo: REPO, commit: "abc1234",
-               applied: applied, skipped: skipped}
+               applied: applied, skipped: skipped, held: held}
       }.to_json, headers: {"Content-Type" => "application/json"})
+  end
+
+  # ── deploy: manual ─────────────────────────────────────────────────────
+
+  # The box applied nothing because every matching file said manual. That is
+  # neither skipped nor failed: it is a row waiting for a person.
+  test "a push every trigger file holds lands as held, with the files named" do
+    deployment = queued
+    stub_run(applied: [], held: ["API"])
+
+    DeployRunJob.perform_now(deployment.id)
+    deployment.reload
+
+    assert_equal "held", deployment.status
+    assert_equal ["API"], deployment.held
+    assert deployment.dispatchable?
+    assert_not_nil deployment.finished_at
+  end
+
+  test "a push that applied some files and held others succeeds and keeps the held list" do
+    deployment = queued
+    stub_run(applied: ["Web"], held: ["API"])
+
+    DeployRunJob.perform_now(deployment.id)
+    deployment.reload
+
+    assert_equal "succeeded", deployment.status
+    assert_equal ["API"], deployment.held
+    assert deployment.dispatchable?
+  end
+
+  # THE FEATURE: a person pressing play on push-1 while push-3 sits held has
+  # chosen push-1. "Last SHA wins" is for pushes, never for dispatches.
+  test "a dispatch is not superseded by a newer held push and tells the box it is a dispatch" do
+    older = queued(sha: "aaa1111")
+    stub_run(applied: [], held: ["API"])
+    DeployRunJob.perform_now(older.id)
+
+    queued(sha: "bbb2222")
+
+    older.reload.dispatch!(by: "dev@example.com")
+    stub_run(applied: ["API"])
+
+    DeployRunJob.perform_now(older.id)
+    older.reload
+
+    assert_equal "succeeded", older.status
+    assert_equal "dev@example.com", older.dispatched_by
+    assert_requested(:post, %r{/deploy/triggers/t1/run}, times: 1) { |req|
+      JSON.parse(req.body)["mode"] == "dispatch" && JSON.parse(req.body)["sha"] == "aaa1111"
+    }
+  end
+
+  # First play reuses the row; the next one is a re-run and gets its own row,
+  # so the first outcome is never overwritten.
+  test "a second dispatch creates a new row pointing at the first" do
+    deployment = queued
+    deployment.update!(status: "held", finished_at: Time.current, details: {"held" => ["API"]})
+
+    first = deployment.dispatch!(by: "a@example.com")
+    assert_equal deployment.id, first.id
+    first.update!(status: "succeeded", finished_at: Time.current)
+
+    second = deployment.reload.dispatch!(by: "b@example.com")
+
+    assert_not_equal deployment.id, second.id
+    assert_equal deployment.id, second.parent_id
+    assert_equal "queued", second.status
+    assert_equal ["API"], second.held
+    assert_equal "succeeded", deployment.reload.status
+    assert_nil second.delivery_id
+  end
+
+  test "a row in flight cannot be dispatched again" do
+    deployment = queued
+    deployment.update!(details: {"held" => ["API"]})
+
+    assert_not deployment.dispatchable?
   end
 end

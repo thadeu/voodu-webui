@@ -31,7 +31,11 @@ class DeployRunJob < ApplicationJob
 
     return if deployment.nil? || !deployment.queued?
 
-    newer = deployment.superseded_by
+    # A dispatch is never superseded. "Last SHA wins" exists so three pushes
+    # in a minute do not walk production through all three; a person pressing
+    # play on push-1 while push-3 sits held has chosen push-1, and that is the
+    # whole feature.
+    newer = deployment.dispatch? ? nil : deployment.superseded_by
 
     return deployment.skip!("superseded by #{newer.short_sha}") if newer
 
@@ -57,7 +61,8 @@ class DeployRunJob < ApplicationJob
     token = Integration::Github::Client.new.installation_token(integration.installation_id)
 
     result = Voodu::Client.new(deployment.server, timeout: TIMEOUT).deploy_run(
-      trigger: deployment.trigger_id, sha: deployment.sha, ref: deployment.ref, token: token
+      trigger: deployment.trigger_id, sha: deployment.sha, ref: deployment.ref, token: token,
+      mode: deployment.dispatch? ? "dispatch" : nil
     )
 
     finish(deployment, result)
@@ -75,9 +80,16 @@ class DeployRunJob < ApplicationJob
   # `applied` is NOT a failure: it means the push did not match any trigger
   # file's branch or watched paths, which is the normal outcome of pushing a
   # README change to a repository that watches `app/**`.
+  #
+  # An empty `applied` with a non-empty `held` is a third thing: every file
+  # that matched said `deploy: manual`. The row waits for a person, and the
+  # screen puts a play button on it.
   def finish(deployment, result)
     applied = Array(result["applied"])
     skipped = Array(result["skipped"])
+    held = Array(result["held"])
+
+    return deployment.hold!(held, remote_job_id: result["job_id"]) if applied.empty? && held.any?
 
     if applied.empty?
       return deployment.skip!(
@@ -87,7 +99,7 @@ class DeployRunJob < ApplicationJob
 
     deployment.succeed!(
       remote_job_id: result["job_id"], applied: applied, skipped: skipped.presence,
-      resources: Array(result["resources"])
+      resources: Array(result["resources"]), held: held
     )
   end
 

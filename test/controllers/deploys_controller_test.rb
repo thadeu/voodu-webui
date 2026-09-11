@@ -637,6 +637,48 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # ── the play button ────────────────────────────────────────────────────
+
+  test "dispatching a held deployment queues it again as a dispatch" do
+    deployment = held_deployment
+
+    assert_enqueued_with(job: DeployRunJob, args: [deployment.id]) do
+      post dispatch_deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+    end
+
+    assert_redirected_to deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+    deployment.reload
+    assert_equal "queued", deployment.status
+    assert deployment.dispatch?
+  end
+
+  test "a deployment with nothing held refuses to dispatch" do
+    deployment = held_deployment(held: [])
+
+    assert_no_enqueued_jobs(only: DeployRunJob) do
+      post dispatch_deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+    end
+
+    assert_redirected_to deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+  end
+
+  test "the deployments table shows a play button only on a held row" do
+    held_deployment
+
+    get deploys_deployments_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_select "form[action*='/dispatch']", 1
+  end
+
+  def held_deployment(held: ["API"])
+    Deployment.create!(
+      org: @org, server: @server, repo: REPO, ref: "refs/heads/main", sha: "abc1234abc1234",
+      trigger_id: "t1", status: "held", delivery_id: SecureRandom.uuid,
+      finished_at: Time.current, details: {"held" => held}
+    )
+  end
+
   private
 
   def with_memory_cache

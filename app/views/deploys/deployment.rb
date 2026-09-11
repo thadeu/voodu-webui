@@ -35,6 +35,7 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
       deployment_head
       failure_card if @deployment.status == "failed"
       skipped_card if @deployment.status == "skipped"
+      held_card if @deployment.dispatchable?
       facts_card
       resources_card
     end
@@ -133,6 +134,48 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
     end
   end
 
+  # The push arrived and a trigger file said `deploy: manual`. Amber, the same
+  # tone as "Not deploying here yet": something is waiting on a person, and
+  # nothing is wrong. The button is the only one on the screen that changes
+  # what runs, so it is confirmed and it names the commit.
+  def held_card
+    files = Array(@deployment.held).to_sentence
+    title = if @deployment.rerun?
+      "Deploy this commit again"
+    elsif @deployment.held?
+      "Waiting for you to deploy"
+    else
+      "Some of this push is still waiting"
+    end
+
+    render Components::UI::Callout.new(tone: :warning, title: title) do
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
+        span(class: "flex-1 min-w-0 text-[12.5px] text-voodu-text-2") do
+          plain "#{files} #{Array(@deployment.held).one? ? "is" : "are"} marked "
+          code(class: "font-voodu-mono text-[11.5px]") { "deploy: manual" }
+          plain ". Nothing applies until you press play — this commit, not the newest one."
+          plain " A re-run is recorded as a new deployment, so this one keeps its result." if @deployment.rerun?
+        end
+
+        dispatch_form
+      end
+    end
+  end
+
+  def dispatch_form
+    form(action: dispatch_deploys_deployment_path(id: @deployment.id), method: "post", class: "shrink-0") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+
+      render Components::UI::Button.new(
+        tag: :button, type: :submit, variant: :primary, size: :sm,
+        data: {turbo_confirm: Components::Deploys::DispatchPrompt.for(@deployment)}
+      ) do
+        render Icon::PlayOutline.new(class: "w-3.5 h-3.5")
+        span { "Deploy #{@deployment.short_sha}" }
+      end
+    end
+  end
+
   def facts_card
     render Components::UI::SectionCard.new(title: "Details") do
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-x-6") do
@@ -144,6 +187,10 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
         fact("Finished", timestamp(@deployment.finished_at))
         fact("Took", duration)
         fact("Trigger files", Array(@deployment.applied).join(", ").presence)
+        fact("Held", Array(@deployment.held).join(", ").presence)
+        fact("Re-run of", @deployment.parent&.short_sha && "deployment ##{@deployment.parent_id}")
+        fact("Dispatched by", @deployment.dispatched_by.presence)
+        fact("Dispatched", @deployment.dispatched_at.present? ? timestamp(Time.zone.parse(@deployment.dispatched_at)) : nil)
       end
     end
   end

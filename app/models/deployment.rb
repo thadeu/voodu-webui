@@ -16,7 +16,11 @@ class Deployment < ApplicationRecord
   # migration for why there is no foreign key constraint either.
   belongs_to :webhook_receipt, class_name: "Webhook::Receipt", optional: true
 
-  STATUSES = %w[queued running succeeded failed skipped].freeze
+  # `held` is a push that arrived, matched a trigger file saying
+  # `deploy: manual`, and is WAITING FOR A PERSON. Not queued — nothing will
+  # carry it on its own — and not skipped, because it very much can still
+  # deploy. It is the state the play button lives on.
+  STATUSES = %w[queued running succeeded failed skipped held].freeze
 
   # `applied` and `skipped_reason` are written by the queue; the rest by the
   # webhook. All in one blob because they are read together, by one screen,
@@ -24,6 +28,12 @@ class Deployment < ApplicationRecord
   # payload or the executor's answer grows a field.
   store_accessor :details, :commit_message, :commit_author, :pusher,
     :manifests, :resources, :applied, :skipped_reason,
+    # Which trigger files the box held back on the push, and the dispatch that
+    # released them. `mode` is what the NEXT run of this row sends the box:
+    # absent for a push, "dispatch" once somebody pressed play.
+    :held, :mode, :dispatched_at, :dispatched_by,
+    # A re-run is its own row, pointing at the one it re-runs. See dispatch!.
+    :parent_id,
     # Who caused the push, and where to see what it changed. See
     # Integration::Github::Push for why there is no email among them.
     :sender, :sender_avatar, :sender_url, :commit_url, :compare_url, :changed_files
@@ -54,6 +64,7 @@ class Deployment < ApplicationRecord
     where("repo LIKE :q OR sha LIKE :q OR error LIKE :q OR details LIKE :q", q: needle)
   }
   scope :pending, -> { where(status: %w[queued running]) }
+  scope :held, -> { where(status: "held") }
   scope :running, -> { where(status: "running") }
 
   # SERIALISATION KEY: one deploy in flight per server + repository.
@@ -130,16 +141,84 @@ class Deployment < ApplicationRecord
 
   def running? = status == "running"
 
+  def held? = status == "held"
+
+  def dispatch? = mode == "dispatch"
+
+  # dispatchable? — may somebody press play on this row.
+  #
+  # Anything the box held, once it is not in flight. That includes a `failed`
+  # dispatch — pressing play again IS the retry, and a manual deploy that can
+  # only be attempted once would send people back to pushing an empty commit.
+  def dispatchable?
+    Array(held).any? && !queued? && !running?
+  end
+
+  # rerun? — has play already been pressed on this row once.
+  #
+  # The next press is a RE-RUN, and it gets a new row (see dispatch!). The
+  # screen asks before doing that, because a person who expected the row to
+  # run again in place would otherwise find a second line they did not ask for.
+  def rerun? = dispatched_at.present?
+
+  # dispatch! — the play button. Returns the row that will run.
+  #
+  # ONE RULE, NO CHOICE ON THE BUTTON. The first play REUSES the held row, so
+  # the table reads "push-2 … held → running → succeeded" as one story and no
+  # dead `held` line is left behind. Every play after that creates a NEW row
+  # pointing back here, so a re-run never overwrites the outcome it is
+  # re-running. The person is told which of the two is about to happen and
+  # confirms it; they are never asked to pick.
+  #
+  # Back to `queued` so DeployRunJob's own guards apply — the concurrency key,
+  # the not-queued no-op — instead of a second entry point around them.
+  def dispatch!(by:)
+    stamp = {"mode" => "dispatch", "dispatched_at" => Time.current.iso8601, "dispatched_by" => by.to_s}
+
+    return rerun_row!(stamp) if rerun?
+
+    update!(status: "queued", error: nil, started_at: nil, finished_at: nil, details: details.merge(stamp))
+
+    self
+  end
+
+  # The re-run row carries the push's facts (sender, message, links) so it
+  # reads like the original in the table, minus the delivery id — the unique
+  # index on it is the webhook's dedupe, and a re-run is not a delivery.
+  def rerun_row!(stamp)
+    self.class.create!(
+      org: org, server: server, integration: integration, webhook_receipt_id: webhook_receipt_id,
+      repo: repo, trigger_id: trigger_id, ref: ref, sha: sha, status: "queued",
+      details: details.except("applied", "skipped", "skipped_reason", "resources", "dispatched_at", "dispatched_by")
+        .merge(stamp).merge("parent_id" => id)
+    )
+  end
+
+  def parent = parent_id.present? ? self.class.find_by(id: parent_id) : nil
+
   def start!
     update!(status: "running", started_at: Time.current, error: nil)
   end
 
-  def succeed!(remote_job_id: nil, applied: nil, skipped: nil, resources: nil)
+  def succeed!(remote_job_id: nil, applied: nil, skipped: nil, resources: nil, held: nil)
     update!(
       status: "succeeded", finished_at: Time.current, remote_job_id: remote_job_id,
       details: details.merge(
-        "applied" => applied, "skipped" => skipped, "resources" => resources.presence
+        "applied" => applied, "skipped" => skipped, "resources" => resources.presence,
+        "held" => held.presence
       ).compact
+    )
+  end
+
+  # hold! — the box applied nothing because every matching file said manual.
+  #
+  # Finished from the queue's point of view (the job is done with it) and open
+  # from the person's: `finished_at` is set so the row stops counting as in
+  # flight, and `held` is what puts the play button on it.
+  def hold!(files, remote_job_id: nil)
+    update!(
+      status: "held", finished_at: Time.current, remote_job_id: remote_job_id,
+      details: details.merge("held" => Array(files))
     )
   end
 
@@ -157,7 +236,7 @@ class Deployment < ApplicationRecord
       details: details.merge("skipped_reason" => reason.to_s))
   end
 
-  def finished? = %w[succeeded failed skipped].include?(status)
+  def finished? = %w[succeeded failed skipped held].include?(status)
 
   # The short SHA every screen shows. Seven characters is what GitHub prints,
   # and matching it means an operator can compare the two by eye.

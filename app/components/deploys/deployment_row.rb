@@ -11,23 +11,56 @@ class Components::Deploys::DeploymentRow < Components::Base
     @deployment = deployment
   end
 
+  # THE LINK AND THE BUTTON ARE SIBLINGS, not nested. The row used to be one
+  # `<a>`; a `<form>` inside an `<a>` is invalid HTML and browsers "fix" it by
+  # closing the anchor early, which spills every later cell out of the row.
+  # So the wrapper is a div, the anchor takes the cells, and the play button
+  # sits beside it in a slot that is ALWAYS drawn — an action column that
+  # appears on some rows and not others shifts the "When" column under it.
   def view_template
     deployment = @deployment
 
-    a(href: deploys_deployment_path(id: deployment.id),
-      class: "flex flex-col vmd:flex-row vmd:items-center gap-1 vmd:gap-3 px-3 py-2.5 " \
-             "no-underline border-b border-voodu-border last:border-b-0 hover:bg-voodu-hover") do
-      sender_cell(deployment)
-      sha_cell(deployment)
-      message_cell(deployment)
-      repo_cell(deployment)
-      took_cell(deployment)
-      status_cell(deployment)
-      when_cell(deployment)
+    div(class: "flex items-center gap-2 pr-2 border-b border-voodu-border last:border-b-0 hover:bg-voodu-hover") do
+      a(href: deploys_deployment_path(id: deployment.id),
+        class: "flex-1 min-w-0 flex flex-col vmd:flex-row vmd:items-center gap-1 vmd:gap-3 px-3 py-2.5 no-underline") do
+        sender_cell(deployment)
+        sha_cell(deployment)
+        message_cell(deployment)
+        repo_cell(deployment)
+        took_cell(deployment)
+        status_cell(deployment)
+        when_cell(deployment)
+      end
+
+      action_cell(deployment)
     end
   end
 
   private
+
+  # The play button, for a push a trigger file marked `deploy: manual` held.
+  #
+  # Confirmed, because this is the one click on the screen that changes what
+  # is running — and the confirm names the commit so a person with two held
+  # rows open knows which one they are about to ship.
+  def action_cell(deployment)
+    div(class: "w-7 shrink-0 flex items-center justify-center") do
+      next unless deployment.dispatchable?
+
+      form(action: dispatch_deploys_deployment_path(id: deployment.id), method: "post", class: "flex") do
+        input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+
+        render Components::UI::Button.new(
+          tag: :button, type: :submit, variant: :ghost, size: :sm, shape: :squared,
+          title: "Deploy #{deployment.short_sha} — #{Array(deployment.held).to_sentence}",
+          aria: {label: "Deploy #{deployment.short_sha}"},
+          data: {turbo_confirm: Components::Deploys::DispatchPrompt.for(deployment)}
+        ) do
+          render Icon::PlayOutline.new(class: "w-3.5 h-3.5")
+        end
+      end
+    end
+  end
 
   # Who pushed, before the SHA: in a list you scan for "one of mine" first and
   # read the commit second.

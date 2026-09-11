@@ -15,7 +15,7 @@
 class DeploymentsData
   PER_PAGE = 30
 
-  STATUSES = %w[queued running succeeded failed skipped].freeze
+  STATUSES = %w[held queued running succeeded failed skipped].freeze
 
   # RANGES — the presets the filter offers. Wider than Activity's because a
   # deployment history is not a firehose: a busy box writes a handful a day,

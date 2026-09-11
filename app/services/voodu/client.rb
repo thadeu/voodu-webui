@@ -219,9 +219,15 @@ module Voodu
     # `sha` and not a branch name: the box verifies the commit descends from
     # the trigger's pinned branch before it reads anything from it. A branch
     # name would be a moving target between the check and the read.
-    def deploy_run(trigger:, sha:, token:, ref: nil)
+    #
+    # `mode` is who is asking. "push" relays a commit that just landed and the
+    # box HOLDS every trigger file marked `deploy: manual`; "dispatch" is a
+    # person choosing this commit from the screen, and applies them. Left out
+    # for a push so the wire stays what it was before the field existed.
+    def deploy_run(trigger:, sha:, token:, ref: nil, mode: nil)
       body = {sha: sha}
       body[:ref] = ref if ref.present?
+      body[:mode] = mode if mode.present?
 
       post("deploy/triggers/#{CGI.escape(trigger)}/run", body,
         headers: {GITHUB_TOKEN_HEADER => token})

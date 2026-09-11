@@ -390,6 +390,11 @@ Rails.application.routes.draw do
     get "/deploys/deployments", to: "deploys#deployments", as: :deploys_deployments
     get "/deploys/deployments/:id", to: "deploys#deployment", as: :deploys_deployment
 
+    # The play button. A push a trigger file marked `deploy: manual` held back
+    # is released from here — this commit, chosen by a person, and not the
+    # newest one because it was newest.
+    post "/deploys/deployments/:id/dispatch", to: "deploys#dispatch_deployment", as: :dispatch_deploys_deployment
+
     # Every delivery that arrived, and what became of it. The tab an operator
     # opens when the other two disagree with what they expected.
     get "/deploys/webhooks", to: "deploys#webhooks", as: :deploys_webhooks

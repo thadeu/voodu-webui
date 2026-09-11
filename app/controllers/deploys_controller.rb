@@ -63,6 +63,36 @@ class DeploysController < ApplicationController
     render Views::Deploys::Deployment.new(**dashboard_context.merge(data: @data))
   end
 
+  # dispatch_deployment — the play button. Not `dispatch`: that is
+  # ActionController::Metal's own entry point, and defining it here
+  # replaces the method Rails calls to run every action.
+  #
+  # Releases a push the box held because its trigger file said
+  # `deploy: manual`. The row goes back through DeployRunJob as a dispatch, so
+  # the concurrency key and the ancestry check on the box both still apply —
+  # this is a person choosing a commit, not a person bypassing anything.
+  #
+  # Refused (not ignored) when the row is not holdable: a double click lands
+  # here twice, and the second must not re-queue a deploy already running.
+  def dispatch_deployment
+    deployment = current_server&.deployments&.find_by(id: params[:id])
+
+    if deployment.nil?
+      return redirect_to deploys_deployments_path, alert: "That deployment is not on this server."
+    end
+
+    unless deployment.dispatchable?
+      return redirect_to deploys_deployment_path(id: deployment.id),
+        alert: "This deployment has nothing waiting to be dispatched."
+    end
+
+    run = deployment.dispatch!(by: Current.user&.email.presence || Current.user&.id)
+    DeployRunJob.perform_later(run.id)
+
+    redirect_to deploys_deployment_path(id: run.id),
+      notice: "Deploying #{run.short_sha} — #{Array(run.held).to_sentence}."
+  end
+
   # preflight — the four questions, on demand.
   #
   # Its own action rather than part of `index` because it costs a round trip to

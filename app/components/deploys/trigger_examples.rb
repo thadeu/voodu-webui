@@ -91,6 +91,23 @@ class Components::Deploys::TriggerExamples < Components::Base
         )
 
         example(
+          title: "Push freely, deploy by hand",
+          hint: "Every push is recorded but nothing applies until you press play on the " \
+                "commit you want — push-1, test it, then push-2. Like workflow_dispatch, " \
+                "without a runner.",
+          yaml: <<~YAML
+            # #{@dir}/api.yml
+            name: API
+            on:
+              push:
+                branches: [#{@branch}]
+            deploy: manual
+            apply:
+              file: voodu.hcl
+          YAML
+        )
+
+        example(
           title: "Two files, two workloads",
           hint: "Every #{@dir}/**/*.yml is read. Split them when parts of the " \
                 "repository deploy on different pushes.",
