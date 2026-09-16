@@ -156,6 +156,20 @@ class LicenseSignedTest < ActiveSupport::TestCase
     previous.nil? ? ENV.delete("VOODU_LICENSE_PRIVATE_KEY_PEM") : ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = previous
   end
 
+  # A PEM that went through a shell or a config bucket arrives with `\n`
+  # escapes in place of its newlines. The same tolerance
+  # GithubSettings has, for the same reason.
+  test "the inline PEM accepts backslash-n in place of newlines" do
+    previous = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"]
+    ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = KEY.to_pem.gsub("\n", '\n')
+
+    licence = read_back(LicenseToken::Signed.new(subject: "acme", days: 30).generate!)
+
+    assert_equal :valid, licence.status
+  ensure
+    previous.nil? ? ENV.delete("VOODU_LICENSE_PRIVATE_KEY_PEM") : ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = previous
+  end
+
   # Nothing is signed until every argument has been checked — the point of
   # validating first rather than trusting the caller to have read the docs.
   test "it validates before it reaches for the key" do

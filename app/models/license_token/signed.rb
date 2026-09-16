@@ -134,9 +134,15 @@ class LicenseToken::Signed
     raise MissingKey, "private key could not be read: #{e.message}"
   end
 
+  # The inline PEM accepts `\n` escapes for the same reason
+  # GithubSettings.normalize_private_key does: an environment variable
+  # cannot hold a literal newline in most shells or in a config bucket, so
+  # the usual way to pass one is `awk 'NF {printf "%s\\n", $0}' key.pem`.
+  # OpenSSL reads the collapsed form as "Neither PUB key nor PRIV key",
+  # which names nothing the operator can act on.
   def pem
     inline = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"].presence
-    return inline if inline
+    return inline.gsub('\n', "\n") if inline
 
     path = ENV["VOODU_LICENSE_PRIVATE_KEY"].presence
     path ||= DEFAULT_KEY_PATH.to_s if DEFAULT_KEY_PATH.exist?

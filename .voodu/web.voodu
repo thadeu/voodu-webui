@@ -41,14 +41,6 @@ app "vdui" "web" {
       period = "15s"
       failure_threshold = 3
     }
-
-    readiness {
-      http_get {
-        path = "/up"
-        port = 3000
-      }
-      period = "10s"
-    }
   }
 
   resources {
