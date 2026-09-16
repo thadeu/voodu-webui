@@ -50,4 +50,11 @@ app "vdui" "web" {
       period = "10s"
     }
   }
+
+  resources {
+    limits {
+      cpu = "0.5"
+      memory = "768Mi"
+    }
+  }
 }

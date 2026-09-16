@@ -53,7 +53,7 @@ class Webhook::Receipt < ApplicationRecord
   scope :matching, ->(text) {
     needle = "%#{sanitize_sql_like(text.to_s.strip)}%"
 
-    where("reference LIKE :q OR event LIKE :q OR external_id LIKE :q OR details LIKE :q", q: needle)
+    where("reference LIKE :q OR event LIKE :q OR external_id LIKE :q OR CAST(details AS TEXT) LIKE :q", q: needle)
   }
 
   # record — the only writer, and it is the dedupe.

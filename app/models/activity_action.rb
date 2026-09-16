@@ -120,7 +120,7 @@ class ActivityAction < MetricsRecord
     term = sanitize_sql_like(text.to_s.strip)
     next all if term.empty?
 
-    where("payload LIKE ? ESCAPE '\\'", "%#{term}%")
+    where("CAST(payload AS TEXT) LIKE ? ESCAPE '\\'", "%#{term}%")
   }
 
   # with_status accepts the two READ-TIME states alongside the three the

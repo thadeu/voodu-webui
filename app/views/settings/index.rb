@@ -271,11 +271,12 @@ class Views::Settings::Index < Views::Base
   # space differently each time depending on content length.
   # Inspiration uses the same fixed-width strategy.
   #
-  # Layout: name (bold) · prefix•••suffix (mono) · scopes badge ·
+  # Layout: name (bold) · prefix•••suffix (mono) · scopes badges ·
   # last_used (relative) · Revoke.
+  #
   def pat_row(p)
-    div(class: "grid items-center gap-3 px-3.5 py-2.5 border-b border-voodu-border last:border-b-0",
-      style: "grid-template-columns: 180px 1fr 140px 100px auto;") do
+    div(class: "flex flex-col gap-2 vmd:grid vmd:items-center vmd:gap-3 px-3.5 py-2.5 border-b border-voodu-border last:border-b-0",
+      style: "grid-template-columns: 180px 170px minmax(0, 1fr) 90px auto;") do
       pat_name(p)
       pat_redacted(p)
       pat_scopes(p)
@@ -303,7 +304,7 @@ class Views::Settings::Index < Views::Base
 
   def pat_scopes(p)
     scopes = Array(p["scopes"])
-    div(class: "flex items-center gap-1") do
+    div(class: "flex flex-wrap items-center gap-1 min-w-0") do
       scopes.each { |s| scope_badge(s.to_s) }
     end
   end

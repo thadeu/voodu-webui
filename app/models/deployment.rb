@@ -61,7 +61,7 @@ class Deployment < ApplicationRecord
   scope :matching, ->(text) {
     needle = "%#{sanitize_sql_like(text.to_s.strip)}%"
 
-    where("repo LIKE :q OR sha LIKE :q OR error LIKE :q OR details LIKE :q", q: needle)
+    where("repo LIKE :q OR sha LIKE :q OR error LIKE :q OR CAST(details AS TEXT) LIKE :q", q: needle)
   }
   scope :pending, -> { where(status: %w[queued running]) }
   scope :held, -> { where(status: "held") }
@@ -291,7 +291,7 @@ class Deployment < ApplicationRecord
   # be a second place the truth lives, which is what the blob avoids.
   def self.for_pod(server:, scope:, name:, limit: 10)
     candidates = where(server_id: server.id, status: "succeeded")
-      .where("details LIKE ?", "%#{sanitize_sql_like(name.to_s)}%")
+      .where("CAST(details AS TEXT) LIKE ?", "%#{sanitize_sql_like(name.to_s)}%")
       .recent
       .limit(limit * 5)
 
