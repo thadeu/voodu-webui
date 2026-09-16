@@ -37,6 +37,40 @@ class DeploysDeploymentsTest < ActionDispatch::IntegrationTest
     assert_includes response.body, pod_path(org_id: ACME, server_key: @server.key, name: pod.container_name)
   end
 
+  # The log is what turns "failed" into a reason. Open on a failure, folded
+  # on a success, absent when the box sent none.
+  test "a failed deployment shows the box's output, unfolded" do
+    deployment = succeeded(resources: [])
+    deployment.update!(status: "failed", error: "release of runa/web failed: exit 1",
+      details: deployment.details.merge("log" => "-----> Release r1: command\nPG::UndefinedTable: relation \"widgets\"\n"))
+
+    get deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+
+    assert_response :success
+    assert_includes response.body, "PG::UndefinedTable"
+    assert_match(/<details[^>]*\sopen/, response.body)
+  end
+
+  test "a successful deployment folds its output away" do
+    deployment = succeeded(resources: [])
+    deployment.update!(details: deployment.details.merge("log" => "-----> building release\n"))
+
+    get deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+
+    assert_response :success
+    assert_includes response.body, "building release"
+    assert_no_match(/<details[^>]*\sopen/, response.body)
+  end
+
+  test "a deployment with no output has no log card" do
+    deployment = succeeded(resources: [])
+
+    get deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
+
+    assert_response :success
+    assert_not_includes response.body, "Build and release output"
+  end
+
   # A resource whose containers are gone is exactly what somebody opens this
   # page to find out. Saying nothing would read as a rendering bug.
   test "a resource with no running containers says so" do

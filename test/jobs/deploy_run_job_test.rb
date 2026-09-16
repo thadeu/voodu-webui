@@ -224,13 +224,58 @@ class DeployRunJobTest < ActiveJob::TestCase
         headers: {"Content-Type" => "application/json"})
   end
 
-  def stub_run(applied:, skipped: [], held: [], job_id: "job-1")
+  def stub_run(applied:, skipped: [], held: [], job_id: "job-1", log: nil)
     WebMock.stub_request(:post, %r{#{Regexp.escape(@server.endpoint)}/api/pat/v1/deploy/triggers})
       .to_return(status: 200, body: {
         status: "ok",
         data: {job_id: job_id, trigger: "t1", repo: REPO, commit: "abc1234",
-               applied: applied, skipped: skipped, held: held}
+               applied: applied, skipped: skipped, held: held, log: log}.compact
       }.to_json, headers: {"Content-Type" => "application/json"})
+  end
+
+  # ── the log ────────────────────────────────────────────────────────────
+  #
+  # `error` is one line. The reason a build broke is in the output above it,
+  # and a screen that shows "failed" without that output sends the operator
+  # to the box's journal for something the box already sent us.
+
+  test "a successful deploy keeps the box's build and release output" do
+    deployment = queued
+    stub_run(applied: ["web"], log: "-----> building release\n-----> Release r1: command\n")
+
+    DeployRunJob.perform_now(deployment.id)
+    deployment.reload
+
+    assert_equal "succeeded", deployment.status
+    assert_includes deployment.log, "Release r1: command"
+  end
+
+  test "a failed deploy keeps the output the box sent with its refusal" do
+    deployment = queued
+    WebMock.stub_request(:post, %r{#{Regexp.escape(@server.endpoint)}/api/pat/v1/deploy/triggers})
+      .to_return(status: 422, body: {
+        status: "error", error: "release of clowk/web failed: exit 1",
+        data: {log: "-----> Release r1: command\nrails aborted!\nPG::UndefinedTable\n"}
+      }.to_json, headers: {"Content-Type" => "application/json"})
+
+    DeployRunJob.perform_now(deployment.id)
+    deployment.reload
+
+    assert_equal "failed", deployment.status
+    assert_equal "release of clowk/web failed: exit 1", deployment.error
+    assert_includes deployment.log, "PG::UndefinedTable"
+  end
+
+  test "a box that sends no log stores none" do
+    deployment = queued
+    stub_run(applied: ["web"])
+
+    DeployRunJob.perform_now(deployment.id)
+    deployment.reload
+
+    assert_equal "succeeded", deployment.status
+    assert_not deployment.details.key?("log")
+    assert_equal "", deployment.log
   end
 
   # ── deploy: manual ─────────────────────────────────────────────────────

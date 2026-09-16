@@ -200,12 +200,12 @@ class Deployment < ApplicationRecord
     update!(status: "running", started_at: Time.current, error: nil)
   end
 
-  def succeed!(remote_job_id: nil, applied: nil, skipped: nil, resources: nil, held: nil)
+  def succeed!(remote_job_id: nil, applied: nil, skipped: nil, resources: nil, held: nil, log: nil)
     update!(
       status: "succeeded", finished_at: Time.current, remote_job_id: remote_job_id,
       details: details.merge(
         "applied" => applied, "skipped" => skipped, "resources" => resources.presence,
-        "held" => held.presence
+        "held" => held.presence, "log" => log.presence
       ).compact
     )
   end
@@ -215,15 +215,21 @@ class Deployment < ApplicationRecord
   # Finished from the queue's point of view (the job is done with it) and open
   # from the person's: `finished_at` is set so the row stops counting as in
   # flight, and `held` is what puts the play button on it.
-  def hold!(files, remote_job_id: nil)
+  def hold!(files, remote_job_id: nil, log: nil)
     update!(
       status: "held", finished_at: Time.current, remote_job_id: remote_job_id,
-      details: details.merge("held" => Array(files))
+      details: details.merge("held" => Array(files), "log" => log.presence).compact
     )
   end
 
-  def fail!(message)
-    update!(status: "failed", finished_at: Time.current, error: message.to_s.truncate(1000))
+  # `log` is what the box printed while building and releasing — kept on the
+  # failure path above all, because `error` holds one line and the reason a
+  # build broke is usually forty lines above that one.
+  def fail!(message, log: nil)
+    update!(
+      status: "failed", finished_at: Time.current, error: message.to_s.truncate(1000),
+      details: details.merge("log" => log.presence).compact
+    )
   end
 
   # skip! — finished without deploying, and that is not a failure.
@@ -231,10 +237,15 @@ class Deployment < ApplicationRecord
   # Two things land here: a push superseded by a newer one, and a push the box
   # read and decided nothing matched (wrong branch, no watched path). Neither
   # is an error, and colouring them red would train operators to ignore red.
-  def skip!(reason)
+  def skip!(reason, log: nil)
     update!(status: "skipped", finished_at: Time.current,
-      details: details.merge("skipped_reason" => reason.to_s))
+      details: details.merge("skipped_reason" => reason.to_s, "log" => log.presence).compact)
   end
+
+  # The build and release output the box sent back with its answer. Absent on
+  # rows from before the controller reported it, and on deploys that never
+  # reached the box.
+  def log = details["log"].to_s
 
   def finished? = %w[succeeded failed skipped held].include?(status)
 

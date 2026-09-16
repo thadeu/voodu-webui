@@ -25,7 +25,18 @@
 # retried by the caller if appropriate.
 module Voodu
   class Client
-    Error = Class.new(StandardError)
+    # `data` is the error envelope's `data` slice, when the controller sent one.
+    # A failed deploy run answers 422 with the reason in `error` AND the build
+    # or release output in `data.log`; without a way to carry that past the
+    # raise, the screen could say "failed" and never say why.
+    class Error < StandardError
+      attr_reader :data
+
+      def initialize(message = nil, data: nil)
+        super(message)
+        @data = data
+      end
+    end
     AuthError = Class.new(Error) # 401 / 403 — PAT bad or insufficient scope
     NotFoundError = Class.new(Error) # 404 — resource missing
     RateLimitError = Class.new(Error) # 429 — action burst exceeded
@@ -614,11 +625,11 @@ module Voodu
     def raise_for_status(resp)
       case resp.status
       when 200..299 then nil
-      when 401, 403 then raise AuthError, error_msg(resp, "auth")
-      when 404 then raise NotFoundError, error_msg(resp, "not found")
-      when 429 then raise RateLimitError, error_msg(resp, "rate limited")
-      when 500..599 then raise ServerError, error_msg(resp, "controller error")
-      else raise Error, error_msg(resp, "unexpected #{resp.status}")
+      when 401, 403 then raise AuthError.new(error_msg(resp, "auth"), data: error_data(resp))
+      when 404 then raise NotFoundError.new(error_msg(resp, "not found"), data: error_data(resp))
+      when 429 then raise RateLimitError.new(error_msg(resp, "rate limited"), data: error_data(resp))
+      when 500..599 then raise ServerError.new(error_msg(resp, "controller error"), data: error_data(resp))
+      else raise Error.new(error_msg(resp, "unexpected #{resp.status}"), data: error_data(resp))
       end
     end
 
@@ -626,6 +637,12 @@ module Voodu
       return resp.body["error"] if resp.body.is_a?(Hash) && resp.body["error"]
 
       "#{fallback} (HTTP #{resp.status})"
+    end
+
+    def error_data(resp)
+      return nil unless resp.body.is_a?(Hash) && resp.body["data"].is_a?(Hash)
+
+      resp.body["data"]
     end
   end
 end

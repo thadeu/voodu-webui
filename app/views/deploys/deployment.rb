@@ -38,6 +38,7 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
       held_card if @deployment.dispatchable?
       facts_card
       resources_card
+      log_card if @deployment.log.present?
     end
   end
 
@@ -215,6 +216,28 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
         no_resources
       else
         div(class: "flex flex-col") { resources.each { |resource| resource_row(resource) } }
+      end
+    end
+  end
+
+  # What the box printed while building and releasing. Collapsed on a deploy
+  # that worked — the resources above are what a reader wants then — and open
+  # on one that failed, where `error` is a single line and the cause sits in
+  # the forty lines above it. The `pre` scrolls both ways inside the card so
+  # a long `bundle install` line never widens the page.
+  def log_card
+    render Components::UI::SectionCard.new(title: "Log") do
+      details(open: @deployment.status == "failed", class: "group") do
+        summary(class: "flex items-center gap-2 px-3.5 py-2.5 cursor-pointer select-none " \
+                       "text-[12px] text-voodu-text-2 hover:bg-voodu-hover list-none") do
+          render Icon::ChevronRightOutline.new(class: "w-3 h-3 shrink-0 text-voodu-muted transition-transform group-open:rotate-90")
+          span { "Build and release output" }
+          span(class: "font-voodu-mono text-[11px] text-voodu-muted") { "#{@deployment.log.lines.size} lines" }
+        end
+
+        pre(class: "m-0 px-3.5 py-3 max-h-[480px] overflow-x-auto overflow-y-auto whitespace-pre " \
+                   "font-voodu-mono text-[11.5px] leading-relaxed text-voodu-text-2 bg-voodu-bg-2 " \
+                   "border-t border-voodu-border") { @deployment.log }
       end
     end
   end

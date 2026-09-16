@@ -71,7 +71,7 @@ class DeployRunJob < ApplicationJob
   rescue Voodu::Client::AuthError
     deployment.fail!("This server's token cannot deploy — it needs the deploy scope.")
   rescue Voodu::Client::Error => e
-    deployment.fail!(e.message)
+    deployment.fail!(e.message, log: e.data&.dig("log"))
   rescue Integration::Github::Client::Error, Integration::Github::AppJwt::MissingCredentials => e
     deployment.fail!("Could not mint a GitHub token: #{e.class}")
   end
@@ -88,18 +88,20 @@ class DeployRunJob < ApplicationJob
     applied = Array(result["applied"])
     skipped = Array(result["skipped"])
     held = Array(result["held"])
+    log = result["log"].presence
 
-    return deployment.hold!(held, remote_job_id: result["job_id"]) if applied.empty? && held.any?
+    return deployment.hold!(held, remote_job_id: result["job_id"], log: log) if applied.empty? && held.any?
 
     if applied.empty?
       return deployment.skip!(
-        skipped.any? ? "nothing matched this push (#{skipped.join(", ")})" : "nothing matched this push"
+        skipped.any? ? "nothing matched this push (#{skipped.join(", ")})" : "nothing matched this push",
+        log: log
       )
     end
 
     deployment.succeed!(
       remote_job_id: result["job_id"], applied: applied, skipped: skipped.presence,
-      resources: Array(result["resources"]), held: held
+      resources: Array(result["resources"]), held: held, log: log
     )
   end
 
