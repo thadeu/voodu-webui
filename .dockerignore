@@ -4,6 +4,11 @@
 /.git/
 /.gitignore
 
+.vscode
+.github
+.claude
+.scratch
+
 # Ignore bundler config.
 /.bundle
 
@@ -58,4 +63,10 @@
 
 # Ignore Docker-related files
 /.dockerignore
-/Dockerfile*
+
+# Keep the Dockerfile in the context: voodu builds it in build mode
+# (voodu.hcl build{}). Without it the server falls back to lang
+# auto-detection and ignores everything the Dockerfile sets up.
+!/Dockerfile
+
+test/

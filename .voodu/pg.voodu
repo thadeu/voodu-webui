@@ -1,0 +1,34 @@
+# So the normal path is to use the one that is there:
+#
+#   vd pg:create voodu_production
+#
+#   vd config vdui/web set \
+#     DATABASE_URL="postgresql://USER:PASS@pg.vdui.voodu:5432/voodu_production"
+#
+#   vd config vdui/pg set POSTGRES_PASSWORD="$(openssl rand -hex 32)"
+
+postgres "vdui" "pg" {
+  image = "postgres:18"
+  ports = ["5432"]
+
+  env = {
+    POSTGRES_DB = "voodu_production"
+    PGDATA = "/var/lib/postgresql/data/pgdata"
+  }
+
+  command = [
+    "postgres",
+    "-c", "shared_buffers=64MB",
+    "-c", "effective_cache_size=192MB",
+    "-c", "max_connections=30",
+    "-c", "work_mem=2MB",
+    "-c", "maintenance_work_mem=32MB",
+  ]
+
+  resources {
+    limits {
+      cpu    = "0.8"
+      memory = "256Mi"
+    }
+  }
+}

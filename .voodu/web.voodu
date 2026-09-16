@@ -1,0 +1,53 @@
+app "vdui" "web" {
+  build {
+    context = "."
+    dockerfile = "Dockerfile"
+  }
+
+  host = "${APP_HOST:-console.voodu.clowk.dev}"
+  replicas = 1
+  ports = ["3000"]
+  volumes = ["voodu-web-storage:/rails/storage"]
+
+  env = {
+    RAILS_ENV = "production"
+    SOLID_QUEUE_IN_PUMA = "1"
+    POLLER_INTERVAL_SECONDS = "15"
+    POLLER_LOG_BACKFILL_SECONDS = "86400"
+    WEB_CONCURRENCY   = "1"
+  }
+
+  env_from = ["vdui/shared"]
+
+  tls {
+    email = "ops@clowk.in"
+  }
+
+  probes {
+    startup {
+      http_get {
+        path = "/up"
+        port = 3000
+      }
+      period = "3s"
+      failure_threshold = 40
+    }
+
+    liveness {
+      http_get {
+        path = "/up"
+        port = 3000
+      }
+      period = "15s"
+      failure_threshold = 3
+    }
+
+    readiness {
+      http_get {
+        path = "/up"
+        port = 3000
+      }
+      period = "10s"
+    }
+  }
+}

@@ -212,7 +212,6 @@ class Views::Ops::License::Index < Views::Base
       plain "#{plan_count(e.limit(:orgs))} orgs · "
       plain "#{plan_count(e.limit(:member_invites))} invites · "
       plain "#{e.retention_days}d searchable"
-      plain " · Postgres" if e.postgres?
     end
   end
 
