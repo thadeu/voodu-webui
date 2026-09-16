@@ -58,7 +58,8 @@ class Components::UI::Tooltip < Components::Base
   HOVER = {
     "nav" => "group-hover/nav:opacity-100",
     "rail" => "group-hover/rail:opacity-100",
-    "sender" => "group-hover/sender:opacity-100"
+    "sender" => "group-hover/sender:opacity-100",
+    "private" => "group-hover/private:opacity-100"
   }.freeze
 
   # `group` names the hover group the PARENT declares. Named rather than bare

@@ -180,7 +180,7 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
     render Components::UI::SectionCard.new(title: "Details") do
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-x-6") do
         fact("Repository", @deployment.repo)
-        fact("Branch", @deployment.branch.presence)
+        fact(@deployment.tag? ? "Tag" : "Branch", @deployment.branch.presence)
         fact("Pushed by", @deployment.sender.presence || @deployment.pusher.presence)
         fact("Files changed", @deployment.changed_files&.to_s)
         fact("Started", timestamp(@deployment.started_at))

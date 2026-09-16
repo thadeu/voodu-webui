@@ -59,10 +59,19 @@ class Components::Deploys::RepoList < Components::Base
 
         span(class: "text-[12.5px] truncate") { repo.name }
 
-        render Icon::LockClosedOutline.new(class: "w-3 h-3 shrink-0 text-voodu-muted-2") if repo.private?
+        private_badge if repo.private?
       end
 
       span(class: "text-[10.5px] text-voodu-muted truncate pl-3") { repo.owner }
+    end
+  end
+
+  # A lock with no label is a lock somebody has to guess at; the tooltip
+  # names it on hover and the aria-label names it for everyone else.
+  def private_badge
+    span(class: "relative group/private inline-flex shrink-0", "aria-label": "Private repository") do
+      render Icon::LockClosedOutline.new(class: "w-3 h-3 text-voodu-muted-2")
+      render Components::UI::Tooltip.new(label: "Private repository", group: "private")
     end
   end
 

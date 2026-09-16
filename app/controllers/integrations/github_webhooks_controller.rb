@@ -98,11 +98,17 @@ module Integrations
         end
       end
 
-      # Tags are not a trigger today. Accepted and ignored rather than refused,
-      # because refusing makes GitHub retry a push nobody wants.
-      unless ref.start_with?("refs/heads/")
-        return accept(status: "skipped", reference: repo, reason: "not a branch") do
-          render json: {ok: true, skipped: "not a branch"}
+      # Branches and tags both deploy: the trigger file's `on.push` names
+      # either (`branches:` / `tags:`), and the box matches the full ref so a
+      # branch called `v1.0` never fires a tag pattern. The box still checks
+      # the commit descends from the trigger's branch, so a tag on a stray
+      # commit is refused there, with a reason, rather than skipped here
+      # without one. Anything else GitHub can push (notes, pull refs) is
+      # accepted and ignored — refusing makes GitHub retry a push nobody
+      # wants.
+      unless ref.start_with?("refs/heads/", "refs/tags/")
+        return accept(status: "skipped", reference: repo, reason: "not a branch or tag") do
+          render json: {ok: true, skipped: "not a branch or tag"}
         end
       end
 

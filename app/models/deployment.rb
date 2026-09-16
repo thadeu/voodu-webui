@@ -242,8 +242,12 @@ class Deployment < ApplicationRecord
   # and matching it means an operator can compare the two by eye.
   def short_sha = sha.to_s[0, 7]
 
-  # The branch, without the `refs/heads/` GitHub sends.
-  def branch = ref.to_s.delete_prefix("refs/heads/")
+  # The branch or tag name, without the `refs/heads/` or `refs/tags/` GitHub
+  # sends. Kept under the old name because every screen already asks for
+  # `branch`; `tag?` says which of the two it is when a screen needs to.
+  def branch = ref.to_s.delete_prefix("refs/heads/").delete_prefix("refs/tags/")
+
+  def tag? = ref.to_s.start_with?("refs/tags/")
 
   # Resource — one thing this deploy put on the box.
   #

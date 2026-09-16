@@ -174,9 +174,24 @@ class Integrations::GithubWebhooksControllerTest < ActionDispatch::IntegrationTe
     assert_response :success
   end
 
-  test "a tag push queues nothing" do
-    assert_no_difference -> { Deployment.count } do
+  # The trigger file decides whether a tag fires (`on.push.tags`), and that
+  # decision is the box's. The webhook only has to let the ref through.
+  test "a tag push queues a deployment carrying the tag ref" do
+    assert_difference -> { Deployment.count }, 1 do
       deliver(push_payload(ref: "refs/tags/v1.0.0"))
+    end
+
+    assert_response :success
+
+    deployment = Deployment.order(:id).last
+    assert_equal "refs/tags/v1.0.0", deployment.ref
+    assert_equal "v1.0.0", deployment.branch
+    assert deployment.tag?
+  end
+
+  test "a ref that is neither branch nor tag queues nothing" do
+    assert_no_difference -> { Deployment.count } do
+      deliver(push_payload(ref: "refs/notes/commits"))
     end
 
     assert_response :success
