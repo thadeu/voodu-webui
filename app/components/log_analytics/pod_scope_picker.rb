@@ -38,7 +38,7 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
 
   def single_label
     pod = @pods.find { |p| pod_name(p) == @selected.first }
-    pod ? pod_label(pod) : @selected.first
+    pod ? pod_qualified_label(pod) : @selected.first
   end
 
   # Full-width trigger — matches the query editor below it, so the closed
@@ -102,12 +102,17 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
 
   # Two columns from vmd: up (the wide menu has room); single column on a
   # narrow viewport so mono pod names don't get crushed.
+  #
+  # Sorted by scope, then name: a server hosting several scopes has the
+  # same resource name ("web") under more than one of them, and an
+  # arrival-ordered list interleaves them so the eye cannot tell which
+  # is which even with the scope printed underneath.
   def pod_list
     div(class: "flex-1 min-h-0 overflow-auto scrollbar-hidden grid grid-cols-1 vmd:grid-cols-2") do
       if @pods.empty?
         div(class: "vmd:col-span-2 px-3 py-4 text-center text-[11.5px] text-voodu-muted") { "No pods reporting." }
       else
-        @pods.each do |pod|
+        sorted_pods.each do |pod|
           name = pod_name(pod)
           next if name.blank?
 
@@ -117,8 +122,19 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
     end
   end
 
+  def sorted_pods
+    @pods.sort_by { |pod| [pod_scope(pod), pod_label(pod), pod_name(pod)] }
+  end
+
   # pod_row — a label wrapping a sr-only native checkbox (form value) and
   # the metrics-style checkbox box + check (toggled by the controller).
+  #
+  # Two lines: the resource name, then the scope smaller and muted
+  # beneath it. The name alone was ambiguous the moment two scopes on
+  # the same server both had a "web"; a single "scope/name" line would
+  # truncate the part that actually differs once names get long. The
+  # closed trigger still shows "scope/name" because there is one line
+  # to spend and the qualified form is the unambiguous one.
   def pod_row(pod, name)
     selected = @selected.include?(name)
     label(
@@ -130,11 +146,14 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
         value: name,
         checked: selected,
         class: "sr-only",
-        data: {log_analytics_target: "podCheckbox", label: pod_label(pod), action: "change->log-analytics#togglePod"}
+        data: {log_analytics_target: "podCheckbox", label: pod_qualified_label(pod), action: "change->log-analytics#togglePod"}
       )
       checkbox_box(selected)
       render Components::UI::StatusDot.new(status: (pod_status(pod).presence || "running").to_sym, size: 6)
-      span(class: "flex-1 min-w-0 font-voodu-mono truncate") { pod_label(pod) }
+      div(class: "flex-1 min-w-0 flex flex-col leading-tight") do
+        span(class: "font-voodu-mono truncate") { pod_label(pod) }
+        span(class: "font-voodu-mono text-[10.5px] text-voodu-muted truncate") { pod_scope(pod) }
+      end
     end
   end
 
@@ -177,5 +196,15 @@ class Components::LogAnalytics::PodScopePicker < Components::Base
 
   def pod_status(pod)
     (pod[:status] || pod["status"]).to_s
+  end
+
+  # Same "(default)" placeholder Views::Logs::PodsPicker#group_by_scope
+  # prints for an unscoped resource, so both pickers name it alike.
+  def pod_scope(pod)
+    (pod[:scope] || pod["scope"]).presence || "(default)"
+  end
+
+  def pod_qualified_label(pod)
+    "#{pod_scope(pod)}/#{pod_label(pod)}"
   end
 end
