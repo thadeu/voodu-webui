@@ -89,6 +89,50 @@ class Components::Hep3::CallFlowModal < Components::Base
         render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
         span(class: "hidden vmd:inline") { "Refresh" }
       end
+
+      options_menu
+    end
+  end
+
+  # options_menu — the kebab next to Refresh: view switches that are not
+  # worth a toolbar button each. Same look as the chart card's panel options,
+  # but on the `dropdown` controller, NOT `popover`: popover re-parents its
+  # menu into the modal's role="dialog" on open, which is OUTSIDE this
+  # `data-controller="call-flow"` element — the switch's action and target
+  # then resolve to nothing and the click changes only the checkbox. dropdown
+  # positions in place, so the switch stays in scope. State is the
+  # controller's (persisted in localStorage), so the switch reflects it on
+  # open — the `callShowIps` target is what the controller flips.
+  def options_menu
+    div(class: "relative", data: {controller: "dropdown"}) do
+      button(
+        type: "button",
+        data: {action: "click->dropdown#toggle"},
+        title: "View options", "aria-label": "View options", "aria-haspopup": "true",
+        class: "inline-flex items-center justify-center w-7 h-7 border border-voodu-border " \
+               "bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2 hover:text-voodu-text"
+      ) { render Icon::EllipsisVerticalOutline.new(class: "w-4 h-4") }
+
+      div(
+        hidden: true,
+        data: {dropdown_target: "menu"},
+        class: "absolute right-0 top-[calc(100%+4px)] z-40 min-w-[220px] " \
+               "bg-voodu-surface-2 border border-voodu-border shadow-xl overflow-hidden"
+      ) do
+        div(class: "px-3 py-2 border-b border-voodu-border text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted-2") { "View" }
+
+        label(class: "flex items-center justify-between gap-3 px-3 py-2.5 text-[12px] text-voodu-text-2 hover:bg-voodu-surface cursor-pointer select-none") do
+          span(class: "flex flex-col min-w-0") do
+            span { "Show IPs" }
+            span(class: "text-[10.5px] text-voodu-muted") { "src:port → dst:port under each arrow" }
+          end
+          input(
+            type: "checkbox", role: "switch", checked: true,
+            data: {call_flow_target: "callShowIps", action: "change->call-flow#call_show_ips"},
+            class: "w-3.5 h-3.5 accent-voodu-accent shrink-0"
+          )
+        end
+      end
     end
   end
 

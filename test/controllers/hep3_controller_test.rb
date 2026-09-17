@@ -73,6 +73,9 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
     assert_match 'data-call-flow-corr-value="call-1"', @response.body
     assert_match 'data-call-flow-scope-value="fsw"', @response.body
     assert_match "call-flow#refresh", @response.body, "the Refresh button re-fetches the call in place"
+    assert_match "call-flow#call_show_ips", @response.body, "the kebab menu carries the Show IPs switch"
+    assert_match 'data-call-show-ips="on"', @response.body, "IPs show by default; the controller restores a saved opt-out"
+    assert_match "call-flow-ips", @response.body, "every arrow carries its src:port → dst:port line"
     assert_match "call-flow#ladderEnter", @response.body, "the diagram arms ↑/↓ keyboard nav on hover"
   end
 

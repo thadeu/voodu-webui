@@ -36,6 +36,33 @@ class HepMessageTest < ActiveSupport::TestCase
       "both legs (distinct Call-IDs) must collapse under the shared x_cid"
   end
 
+  # Production shape (fsw, 2026-09-17): the INVITE carried the upstream SBC's
+  # X-CID, the 100/180/403/ACK of the SAME Call-ID carried none. Per-message
+  # corr_id split one dialog in two; the ladder must show all five whichever
+  # key opens it.
+  test "a dialog whose INVITE alone carries an x_cid is one call from either key" do
+    insert(call_id: "dlg@fsw", x_cid: "SBC+158109034@10.11.164.48", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "dlg@fsw", x_cid: "", method: "", code: 100, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "dlg@fsw", x_cid: "", method: "", code: 403, ts: "2026-06-30 10:00:03.000000")
+    insert(call_id: "dlg@fsw", x_cid: "", method: "ACK", ts: "2026-06-30 10:00:04.000000")
+    insert(call_id: "other@fsw", x_cid: "", method: "INVITE", ts: "2026-06-30 10:00:05.000000")
+
+    by_call_id = for_call("dlg@fsw").map(&:sip_method)
+    by_x_cid = for_call("SBC+158109034@10.11.164.48").map(&:sip_method)
+
+    assert_equal ["INVITE", "", "", "ACK"], by_call_id, "opened by Call-ID: the INVITE must be there"
+    assert_equal by_call_id, by_x_cid, "opened by X-CID: same five messages"
+  end
+
+  test "the correlation walk also joins a B2BUA whose legs only share the x_cid on some messages" do
+    insert(call_id: "A", x_cid: "shared", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "A", x_cid: "", method: "", code: 200, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "B", x_cid: "shared", method: "INVITE", ts: "2026-06-30 10:00:03.000000")
+    insert(call_id: "B", x_cid: "", method: "BYE", ts: "2026-06-30 10:00:04.000000")
+
+    assert_equal %w[A A B B], for_call("A").map(&:call_id)
+  end
+
   test "corr_id falls back to call_id when x_cid is blank" do
     insert(call_id: "solo@x", x_cid: "")
 

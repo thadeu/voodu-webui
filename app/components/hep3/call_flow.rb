@@ -53,7 +53,10 @@ class Components::Hep3::CallFlow < Components::Base
       class: "block w-full h-full",
       viewBox: "0 0 #{width} #{height}",
       preserveAspectRatio: "xMinYMin meet",
-      data: {call_flow_target: "svg", cf_width: width, cf_height: height},
+      # data-call-show-ips is the "Show IPs" switch; call_flow_controller
+      # restores it from localStorage on connect. The rule that hides the
+      # labels lives in theme.css next to the other call-flow chrome.
+      data: {call_flow_target: "svg", cf_width: width, cf_height: height, call_show_ips: "on"},
       xmlns: "http://www.w3.org/2000/svg"
     ) do |s|
       s.g(data: {call_flow_target: "canvas"}) do |canvas|
@@ -174,6 +177,7 @@ class Components::Hep3::CallFlow < Components::Base
     )
     arrowhead(g, x2, y, dir, color)
     arrow_label(g, m, (x1 + x2) / 2.0, y, color)
+    ips_label(g, m, (x1 + x2) / 2.0, y)
   end
 
   # render_self — src == dst (a message a node sends to itself, e.g. an
@@ -247,6 +251,22 @@ class Components::Hep3::CallFlow < Components::Base
     base = x - (dir * 7)
 
     g.path(d: "M #{base} #{y - 4} L #{x} #{y} L #{base} #{y + 4} Z", fill: color)
+  end
+
+  # ips_label — "src:port → dst:port" under the arrow, in the message's OWN
+  # direction (so it reads as the arrow does). On by default; the operator
+  # can switch it off in the toolbar menu (call_show_ips). It exists because
+  # the lifeline header names the hosts, but on a long call it has scrolled
+  # away, and the operator was scrolling back up to learn which box sent a
+  # 403. Grouped by class so one attribute on the SVG shows or hides every
+  # row at once.
+  def ips_label(g, m, cx, y)
+    g.text(
+      x: cx, y: y + 13, "text-anchor": "middle",
+      class: "call-flow-ips",
+      "font-size": "9", "font-family": MONO,
+      fill: "var(--voodu-muted)"
+    ) { "#{m[:src]}:#{m[:src_port]} → #{m[:dst]}:#{m[:dst_port]}" }
   end
 
   def arrow_label(g, m, cx, y, color)

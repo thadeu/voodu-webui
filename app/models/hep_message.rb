@@ -194,9 +194,44 @@ class HepMessage < HepRecord
   # (a 100 Trying that the poller inserted before its INVITE would render
   # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
   scope :for_call, ->(server:, scope:, name:, corr_id:) {
-    for_instance(server: server, scope: scope, name: name)
-      .where(corr_id: corr_id).order(:ts, :id)
+    instance = for_instance(server: server, scope: scope, name: name)
+    instance.where(call_id: HepMessage.call_ids_for(instance, corr_id)).order(:ts, :id)
   }
+
+  # call_ids_for — every SIP Call-ID that belongs to the call `key` names,
+  # walking the correlation graph both ways: a Call-ID reaches the x_cids
+  # seen on it, an x_cid reaches every Call-ID seen with it.
+  #
+  # Why a walk and not `corr_id = key`: the collector fills x_cid per
+  # MESSAGE, from the X-CID header of that message. In production the INVITE
+  # FreeSWITCH sends carries the upstream SBC's X-CID and the 100/180/403/ACK
+  # of the very same dialog carry none — so the INVITE's corr_id was the
+  # X-CID and the rest's was the Call-ID, and the ladder opened by either key
+  # showed half a call ("a 100 Trying with no INVITE"). Folding per message
+  # can't fix that; only the set of Call-IDs reachable from the key can.
+  #
+  # Two rounds cover a B2BUA (A-leg ⇄ x_cid ⇄ B-leg) plus one hop of header
+  # inconsistency on each leg; the loop stops early once the set is stable.
+  # Bounded: at most 4 small indexed queries per ladder open.
+  def self.call_ids_for(instance, key)
+    key = key.to_s
+    return [] if key.empty?
+
+    call_ids = instance.where(call_id: key).or(instance.where(x_cid: key)).distinct.pluck(:call_id)
+    return [] if call_ids.empty?
+
+    2.times do
+      x_cids = instance.where(call_id: call_ids).where.not(x_cid: [nil, ""]).distinct.pluck(:x_cid)
+      break if x_cids.empty?
+
+      grown = (call_ids + instance.where(x_cid: x_cids).distinct.pluck(:call_id)).uniq
+      break if grown.size == call_ids.size
+
+      call_ids = grown
+    end
+
+    call_ids
+  end
 
   # payload_json — parsed view of the raw NDJSON line, for single-row
   # reads (the full SIP record incl. raw_sip). Bulk reads should select

@@ -21,11 +21,12 @@ let panStash = null
 // Selection tint uses inline style.fill (a `fill` presentation attribute
 // won't parse the CSS var).
 export default class extends Controller {
-  static targets = ["arrow", "rawLabel", "rawMeta", "rawBody", "ladder", "rawPanel", "content", "reopen", "resizeHandle", "chevron", "mediaBody", "mediaChevron", "svg", "canvas"]
+  static targets = ["arrow", "rawLabel", "rawMeta", "rawBody", "ladder", "rawPanel", "content", "reopen", "resizeHandle", "chevron", "mediaBody", "mediaChevron", "svg", "canvas", "callShowIps"]
   static values = { messages: Array, focus: Number, scope: String, name: String, corr: String }
 
   STORE_W = "voodu:cf:rawwidth"
   STORE_COLLAPSED = "voodu:cf:collapsed"
+  STORE_CALL_SHOW_IPS = "voodu:cf:call_show_ips"
   MIN_W = 260
   MIN_K = 0.25
   MAX_K = 4
@@ -43,6 +44,7 @@ export default class extends Controller {
     window.addEventListener("resize", this.onResize)
 
     this.restorePanel()
+    this.restore_call_show_ips()
     this.selectIndex(this.currentIndex)
 
     // The modal is freshly injected — its layout may not be settled on the
@@ -327,6 +329,36 @@ export default class extends Controller {
 
   // toggleMedia — expand/collapse the "gap" media footer (RTP on off-lifeline
   // hosts). Overlays the diagram; the flow scrolls underneath.
+  // call_show_ips — the "Show IPs" switch in the toolbar menu. Naming: the
+  // `call_` prefix is the call-flow family, `show_ips` the action. One
+  // attribute on the <svg> (see theme.css) shows or hides every per-arrow
+  // "src:port → dst:port" line; nothing is re-rendered, and the arrows keep
+  // their rows, so the selection and the pan/zoom stay where they are.
+  call_show_ips(event) {
+    this.apply_call_show_ips(event.currentTarget.checked)
+    this.persist(this.STORE_CALL_SHOW_IPS, event.currentTarget.checked ? "1" : "0")
+  }
+
+  apply_call_show_ips(on) {
+    this.svgTargets.forEach((svg) => (svg.dataset.callShowIps = on ? "on" : "off"))
+
+    if (this.hasCallShowIpsTarget) this.callShowIpsTarget.checked = on
+  }
+
+  // Default ON: knowing which box sent a message is the point of the ladder;
+  // the switch exists for the operator who wants a denser view.
+  restore_call_show_ips() {
+    let on = true
+
+    try {
+      on = localStorage.getItem(this.STORE_CALL_SHOW_IPS) !== "0"
+    } catch (_e) {
+      // storage disabled — default on.
+    }
+
+    this.apply_call_show_ips(on)
+  }
+
   toggleMedia() {
     if (!this.hasMediaBodyTarget) return
 
