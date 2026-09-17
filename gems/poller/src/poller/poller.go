@@ -112,9 +112,12 @@ func (p *ServerPoller) ringFor(pod string) *DedupRing {
 }
 
 // Run blocks until ctx is cancelled. Takes the per-server writer lock
-// on startup and holds it for the lifetime of the goroutine; if the
-// lock is already held (e.g. legacy Ruby tail job mid-rollout), Run
-// logs and returns immediately — main.go can retry next refresh tick.
+// on startup and holds it for the lifetime of the goroutine. If the lock
+// is held by another poller (the previous pod, mid-rollout), Run WAITS
+// for it, retrying every few seconds, instead of giving up: it used to
+// return on the first miss, and since main.go never respawned an exited
+// stream, one busy lock at boot meant no logs for that server until the
+// pod was restarted by hand.
 //
 // Per-tick behaviour:
 //   - read watermark for each known pod
@@ -122,12 +125,13 @@ func (p *ServerPoller) ringFor(pod string) *DedupRing {
 //   - parse + dedup + write
 //   - bump watermarks
 func (p *ServerPoller) Run(ctx context.Context) {
-	lockPath, unlock, err := p.acquireServerLock()
-	if err != nil {
-		log.Printf("[poller] %s: lock failed (%v) — skipping this run", p.Server.ID, err)
+	lockPath, unlock, err := p.acquireServerLockWait(ctx)
 
+	if err != nil {
+		// Only ctx cancellation ends the wait; a stop mid-wait is not an error.
 		return
 	}
+
 	defer unlock()
 	defer os.Remove(lockPath) // best-effort cleanup so stale flocks do not linger across restarts
 
@@ -142,6 +146,38 @@ func (p *ServerPoller) Run(ctx context.Context) {
 			return
 		case <-t.C:
 			p.tick(ctx)
+		}
+	}
+}
+
+// lockRetry is how often a stream re-tries a busy writer lock. The old
+// pod releases it the moment its poller exits, so seconds is plenty.
+const lockRetry = 3 * time.Second
+
+// acquireServerLockWait is acquireServerLock with patience: on a busy lock
+// it logs once and keeps trying on lockRetry until it wins or ctx ends.
+func (p *ServerPoller) acquireServerLockWait(ctx context.Context) (string, func(), error) {
+	waiting := false
+
+	for {
+		lockPath, unlock, err := p.acquireServerLock()
+		if err == nil {
+			if waiting {
+				log.Printf("[poller] %s: writer lock acquired", p.Server.ID)
+			}
+
+			return lockPath, unlock, nil
+		}
+
+		if !waiting {
+			waiting = true
+			log.Printf("[poller] %s: writer lock busy (%v) — waiting for the other poller to release it", p.Server.ID, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", nil, ctx.Err()
+		case <-time.After(lockRetry):
 		}
 	}
 }

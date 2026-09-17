@@ -12,8 +12,10 @@ ingress, `vd logs` — instead of a `docker run` you have to remember.
 // voodu-webui — the operator dashboard, deployed by the controller it watches.
 //
 // Single replica on purpose. The Go poller runs inside this process
-// and the storage volume is single-writer SQLite: a second
-// replica would spawn a second poller and both would write the same files.
+// and the storage volume is single-writer SQLite. The poller holds an
+// exclusive lock on the volume (.poller.lock), so during a blue/green
+// rollout the new pod's poller waits for the old one to exit instead of
+// writing the same files; a second REPLICA would just wait forever.
 // This is a control plane for a handful of servers, not a tier that scales.
 
 deployment "ops" "voodu-webui" {

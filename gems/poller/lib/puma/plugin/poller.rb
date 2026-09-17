@@ -7,8 +7,8 @@ require "poller"
 #
 # Wires the compiled Go binary into Puma's process lifecycle:
 #
-#   - on_booted   → spawn the binary, log its PID
-#   - on_stopped  → SIGTERM the binary, wait for it to drain
+#   - on_booted   → start a Poller::Supervisor around the binary
+#   - on_stopped  → stop it (TERM the child, wait for it to drain)
 #
 # Always on. The poller is the only thing that fills the warehouse, so a
 # Puma without it is a dashboard with nothing in it — and the Railtie has
@@ -41,19 +41,26 @@ Puma::Plugin.create do
         )
       end
 
-      @pid = spawn(env, binary, out: $stdout, err: $stderr)
+      # Supervised, not fire-and-forget: a dead or stuck poller is respawned
+      # and every exit is logged (see Poller::Supervisor). The health probe
+      # hits the binary's own /healthz on its observability port.
+      obs = ENV.fetch("POLLER_OBSERVABILITY_ADDR", ":9999")
+      host, port = obs.split(":", 2)
+      healthz = "http://#{host.presence || "127.0.0.1"}:#{port}/healthz"
 
-      launcher.log_writer.log("[poller] spawned PID #{@pid} → #{rails_url}")
+      @supervisor = Poller::Supervisor.new(
+        command: binary, env: env, healthz_url: healthz,
+        logger: ->(msg) { launcher.log_writer.log(msg) }
+      ).start
+
+      launcher.log_writer.log("[poller] supervising → #{rails_url} (healthz #{healthz})")
     end
 
     launcher.events.on_stopped do
-      next unless @pid
+      next unless @supervisor
 
-      Process.kill("TERM", @pid)
-      Process.wait(@pid)
-      launcher.log_writer.log("[poller] drained PID #{@pid}")
-    rescue Errno::ESRCH, Errno::ECHILD
-      # already gone — nothing to drain
+      @supervisor.stop
+      launcher.log_writer.log("[poller] drained")
     end
   end
 end

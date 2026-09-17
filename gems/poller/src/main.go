@@ -251,6 +251,26 @@ func main() {
 		log.Fatalf("[poller] mkdir storage: %v", err)
 	}
 
+	// One writer per volume, enforced here rather than trusted to the
+	// rollout: during a blue/green apply the previous pod's poller is still
+	// running, and this one must wait for it to exit before touching the
+	// same files. See poller.VolumeLock.
+	lockCtx, lockCancel := signalContext()
+
+	volumeLock, err := poller.AcquireVolumeLock(lockCtx, cfg.StorageDir, func(path string) {
+		log.Printf("[poller] storage volume is locked by another poller (%s) — waiting for it to exit", path)
+	})
+
+	lockCancel()
+
+	if err != nil {
+		log.Fatalf("[poller] volume lock: %v", err)
+	}
+
+	defer volumeLock.Release()
+
+	log.Printf("[poller] storage volume locked (%s)", filepath.Join(cfg.StorageDir, poller.LockFileName))
+
 	state := observability.NewState()
 	go func() {
 		if err := state.Listen(cfg.ObservabilityAddr); err != nil {
@@ -276,6 +296,7 @@ func main() {
 		done   chan struct{}
 	}
 	running := map[string]runningStream{}
+	var runningMu sync.Mutex
 	var wg sync.WaitGroup
 
 	logsInterval := time.Duration(cfg.IntervalSeconds) * time.Second
@@ -290,6 +311,9 @@ func main() {
 		// PAT changed keeps its goroutine (and its log/metric cursors) and
 		// reads the new values through credRegistry. Adding credentials to
 		// this key would restart the stream on every rotation instead.
+		runningMu.Lock()
+		defer runningMu.Unlock()
+
 		if _, ok := running[key]; ok {
 			return
 		}
@@ -303,6 +327,15 @@ func main() {
 			defer close(done)
 			run(ictx)
 			log.Printf("[poller] %s %s: goroutine exited", stream, serverID)
+
+			// Forget the stream so the next refresh respawns it. Left in the
+			// map, an exited stream looked "running" forever and the server
+			// silently stopped being polled until the pod was restarted.
+			runningMu.Lock()
+			if cur, ok := running[key]; ok && cur.done == done {
+				delete(running, key)
+			}
+			runningMu.Unlock()
 		}()
 
 		running[key] = runningStream{cancel: icancel, done: done}
@@ -364,6 +397,7 @@ func main() {
 			}
 		}
 
+		runningMu.Lock()
 		for key, r := range running {
 			if seen[key] {
 				continue
@@ -373,6 +407,7 @@ func main() {
 			r.cancel()
 			delete(running, key)
 		}
+		runningMu.Unlock()
 	}
 
 	// Cleanup goroutine: daily 03:00 UTC, purge ndjson older than 2 days.
@@ -520,4 +555,25 @@ func cleanupOlderThan(root string, cutoff time.Time) error {
 
 		return nil
 	})
+}
+
+// signalContext is a context cancelled by SIGTERM/SIGINT, for phases that
+// run before the main loop's own signal handling is wired (the volume
+// lock wait): a pod told to stop while still waiting for the lock must
+// exit, not hold the rollout.
+func signalContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
+
+	go func() {
+		select {
+		case <-ch:
+			cancel()
+		case <-ctx.Done():
+		}
+		signal.Stop(ch)
+	}()
+
+	return ctx, cancel
 }

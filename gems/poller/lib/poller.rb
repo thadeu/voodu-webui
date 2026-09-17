@@ -17,6 +17,7 @@ require "poller/version"
 # discover it via its standard `plugin :poller` convention.
 module Poller
   autoload :Runner, "poller/runner"
+  autoload :Supervisor, "poller/supervisor"
   autoload :Railtie, "poller/railtie"
 
   GEM_ROOT = File.expand_path("..", __dir__)
