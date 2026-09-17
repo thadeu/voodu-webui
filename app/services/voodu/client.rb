@@ -235,10 +235,14 @@ module Voodu
     # box HOLDS every trigger file marked `deploy: manual`; "dispatch" is a
     # person choosing this commit from the screen, and applies them. Left out
     # for a push so the wire stays what it was before the field existed.
-    def deploy_run(trigger:, sha:, token:, ref: nil, mode: nil)
+    # `changed` is the push's file list, or nil when the webhook could not say;
+    # the box honours `on.push.paths` with it and fires everything without it.
+    # Left out of the body when nil — the box reads absent as unknown.
+    def deploy_run(trigger:, sha:, token:, ref: nil, mode: nil, changed: nil)
       body = {sha: sha}
       body[:ref] = ref if ref.present?
       body[:mode] = mode if mode.present?
+      body[:changed] = Array(changed) unless changed.nil?
 
       post("deploy/triggers/#{CGI.escape(trigger)}/run", body,
         headers: {GITHUB_TOKEN_HEADER => token})

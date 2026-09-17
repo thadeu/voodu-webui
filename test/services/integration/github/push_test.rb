@@ -79,6 +79,28 @@ class Integration::Github::PushTest < ActiveSupport::TestCase
   # An empty payload must yield NO KEYS, not keys holding nil: `details` is
   # read by screens asking `.present?`, and a nil under an expected key reads
   # as "we looked and found nothing" rather than "we never had it".
+  test "changed paths are the union across every commit, sorted and unique" do
+    payload = {
+      "commits" => [
+        {"added" => ["apps/pwa/a.ts"], "modified" => ["README.md"], "removed" => []},
+        {"added" => [], "modified" => ["apps/pwa/a.ts", "apps/api/b.rb"], "removed" => ["old.txt"]}
+      ]
+    }
+
+    assert_equal %w[README.md apps/api/b.rb apps/pwa/a.ts old.txt], facts(payload)["changed_paths"]
+  end
+
+  test "a push with no commits cannot say what changed" do
+    assert_nil facts({"commits" => []})["changed_paths"]
+    assert_nil facts({"head_commit" => {"added" => ["x"]}})["changed_paths"]
+  end
+
+  test "a push GitHub truncated cannot say what changed either" do
+    commits = Array.new(Integration::Github::Push::PAYLOAD_COMMIT_CAP) { {"added" => ["f"]} }
+
+    assert_nil facts({"commits" => commits})["changed_paths"]
+  end
+
   test "an empty payload yields no keys at all" do
     assert_empty Integration::Github::Push.new({}).facts
   end

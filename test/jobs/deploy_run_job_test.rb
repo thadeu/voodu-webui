@@ -46,6 +46,31 @@ class DeployRunJobTest < ActiveJob::TestCase
     assert_not_nil deployment.finished_at
   end
 
+  # The push's file list rides along so the box can honour `on.push.paths`;
+  # when the webhook could not say, the field is left out and the box fires
+  # everything that matches the ref.
+  test "the changed paths reach the box, and are left out when unknown" do
+    deployment = queued
+    deployment.update!(details: deployment.details.merge("changed_paths" => ["apps/pwa/a.ts", "README.md"]))
+    stub_run(applied: ["web"])
+
+    DeployRunJob.perform_now(deployment.id)
+
+    assert_requested(:post, %r{/api/pat/v1/deploy/triggers}) do |req|
+      JSON.parse(req.body)["changed"] == ["apps/pwa/a.ts", "README.md"]
+    end
+
+    WebMock.reset_executed_requests!
+    other = queued
+    stub_run(applied: ["web"])
+
+    DeployRunJob.perform_now(other.id)
+
+    assert_requested(:post, %r{/api/pat/v1/deploy/triggers}) do |req|
+      !JSON.parse(req.body).key?("changed")
+    end
+  end
+
   # An empty `applied` is NOT a failure. Pushing a README change to a
   # repository that watches `app/**` is the normal case, and coloring it red
   # trains operators to ignore red.

@@ -62,7 +62,8 @@ class DeployRunJob < ApplicationJob
 
     result = Voodu::Client.new(deployment.server, timeout: TIMEOUT).deploy_run(
       trigger: deployment.trigger_id, sha: deployment.sha, ref: deployment.ref, token: token,
-      mode: deployment.dispatch? ? "dispatch" : nil
+      mode: deployment.dispatch? ? "dispatch" : nil,
+      changed: deployment.details["changed_paths"]
     )
 
     finish(deployment, result)

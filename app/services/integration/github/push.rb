@@ -36,6 +36,7 @@ class Integration::Github::Push
       "commit_url" => commit_url,
       "compare_url" => compare_url,
       "changed_files" => changed_files,
+      "changed_paths" => changed_paths,
       "committed_at" => committed_at
     }.compact
   end
@@ -71,6 +72,30 @@ class Integration::Github::Push
     total = %w[added removed modified].sum { |k| Array(head[k]).size }
 
     total.positive? ? total : nil
+  end
+
+  # The files the whole push touched, across every commit in it, for the
+  # box to hold against a trigger file's `on.push.paths`. Nil means "we
+  # cannot say", and the box then fires every file that matches the ref —
+  # the right default, because a deploy that did not happen is the worse
+  # mistake. That happens when the payload carries no commits (a tag push,
+  # an empty force-push) or when GitHub cut the list: the `commits` array
+  # stops at PAYLOAD_COMMIT_CAP and says nothing about what it dropped.
+  PAYLOAD_COMMIT_CAP = 2_048
+
+  def changed_paths
+    commits = @payload["commits"]
+
+    return nil unless commits.is_a?(Array) && commits.any?
+    return nil if commits.size >= PAYLOAD_COMMIT_CAP
+
+    paths = commits.flat_map do |commit|
+      next [] unless commit.is_a?(Hash)
+
+      %w[added removed modified].flat_map { |k| Array(commit[k]) }
+    end
+
+    paths.map(&:to_s).reject(&:empty?).uniq.sort
   end
 
   def committed_at = dig("head_commit", "timestamp")
