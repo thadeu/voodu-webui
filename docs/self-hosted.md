@@ -81,6 +81,10 @@ perimeter: Basic Auth in particular is a shared password, not identity.
 docker compose pull && docker compose up -d
 ```
 
+A `.env` file is optional. With none, the compose file boots plain HTTP on
+port 80 with no certificate and no sign-in — the same shape as the bare
+`docker run` above. Copy `.env.example` to `.env` only to turn something on.
+
 Migrations run on boot (`db:prepare` in the entrypoint) and are idempotent.
 Keep the volume and nothing else is needed.
 

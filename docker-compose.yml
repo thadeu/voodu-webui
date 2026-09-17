@@ -19,8 +19,10 @@ services:
       # Domain Thruster provisions a Let's Encrypt certificate for. Needs an
       # A record pointing here plus host ports 80 + 443 open. Certificates
       # persist under /rails/storage/thruster (the volume below), so restarts
-      # don't re-request them. Empty (TLS_DOMAIN= in .env) = plain HTTP.
-      TLS_DOMAIN: ${TLS_DOMAIN-acme.dev}
+      # don't re-request them. Empty OR unset = plain HTTP. `:-` on purpose:
+      # the older `${TLS_DOMAIN-acme.dev}` made a missing .env request a
+      # certificate for a domain nobody owns and redirect 80 to a dead 443.
+      TLS_DOMAIN: ${TLS_DOMAIN:-}
       # Point at the Let's Encrypt staging directory while testing DNS or
       # firewall rules, so failures don't burn the production rate limit.
       ACME_DIRECTORY: ${ACME_DIRECTORY:-https://acme-v02.api.letsencrypt.org/directory}

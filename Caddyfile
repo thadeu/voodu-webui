@@ -14,7 +14,9 @@
 #
 # /up stays open on purpose: the container HEALTHCHECK and any external
 # uptime monitor need it without credentials, and it exposes no data.
-{$TLS_DOMAIN:acme.dev} {
+# SITE_ADDRESS is computed by the compose entrypoint: the domain when
+# TLS_DOMAIN is set, ":80" (plain HTTP) when it is empty or unset.
+{$SITE_ADDRESS} {
 	@protected not path /up
 	basic_auth @protected {
 		# BASIC_AUTH_HASH is the bcrypt hash of BASIC_AUTH_PASSWORD, computed
