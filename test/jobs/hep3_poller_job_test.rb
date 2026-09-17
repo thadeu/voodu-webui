@@ -90,4 +90,31 @@ class Hep3PollerJobTest < ActiveSupport::TestCase
 
     assert_equal 0, message_count
   end
+
+  # The wire hands the body over as BINARY (Faraday's default tag). A From
+  # display name with an accent puts a \xC3 byte in it, and SQLite refused
+  # to convert that from ASCII-8BIT on insert — every tick re-pulled the same
+  # page and failed, and the table stayed empty (143 failures in prod).
+  test "a BINARY-tagged body with UTF-8 bytes inserts and reads back as text" do
+    accented = {ts: "2026-06-30 10:00:00.000000", call_id: "j", x_cid: "", method: "INVITE",
+                response_code: 0, from_user: "João", raw_sip: "INVITE sip:x"}.to_json
+    fake = FakeHepReader.new([accented.b])
+
+    run_poll(fake)
+
+    assert_equal 1, message_count
+    stored = HepMessage.for_instance(server: @server, scope: @scope, name: @name).first
+    assert_equal "João", stored.payload_json["from_user"]
+    assert_equal Encoding::UTF_8, stored.payload.encoding
+  end
+
+  test "invalid bytes are replaced, never a stalled cursor" do
+    broken = sip_line(call_id: "k").b.sub("INVITE sip:x", "INVITE sip:\xE9")
+    fake = FakeHepReader.new([broken])
+
+    run_poll(fake)
+
+    assert_equal 1, message_count
+    assert_equal "1", HepCursor.cursor_for(@server, @scope, @name)
+  end
 end

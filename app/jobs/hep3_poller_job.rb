@@ -36,8 +36,18 @@ class Hep3PollerJob < ApplicationJob
   # PAT (auth) or a mistyped reader instance (404 from the PAT proxy).
   # The orchestrator re-enqueues every tick anyway, so discard instead
   # of burning Solid Queue retries.
-  discard_on Voodu::Client::AuthError
-  discard_on Voodu::Client::NotFoundError
+  # Discarded, but never silently: a poller that is dropped every 15s with
+  # no trace reads as "no data" on the dashboard, and the operator has no way
+  # to tell a reader in `pg` mode (no /export → 404) from a PAT without the
+  # read scope. One warn line per tick is what turns that into a diagnosis.
+  discard_on Voodu::Client::AuthError, Voodu::Client::NotFoundError do |job, error|
+    server_id, scope, name = job.arguments
+
+    Rails.logger.warn(
+      "hep3-poll discarded server=#{server_id} reader=#{scope}/#{name} " \
+      "#{error.class.name.demodulize}: #{error.message}"
+    )
+  end
 
   def perform(server_id, scope, name)
     server = Server.find_by(id: server_id)
@@ -95,7 +105,13 @@ class Hep3PollerJob < ApplicationJob
   # the server. Tolerant: a malformed or ts-less line is skipped so one
   # bad line never poisons the page.
   def parse_lines(body, server_id, scope, name)
-    body.to_s.each_line.filter_map do |raw|
+    # Belt and braces with Voodu::Client#hep_export: a body that reaches
+    # here as BINARY (a test double, another transport) is re-tagged so the
+    # payload column never receives bytes SQLite cannot convert.
+    text = body.to_s.dup.force_encoding(Encoding::UTF_8)
+    text = text.scrub("\uFFFD") unless text.valid_encoding?
+
+    text.each_line.filter_map do |raw|
       line = raw.chomp
       next if line.empty?
 

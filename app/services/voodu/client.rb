@@ -513,12 +513,24 @@ module Voodu
       resp = conn.get("/api/pat/v1/#{path}", params)
       raise_for_status(resp)
 
-      [resp.body.to_s, resp.headers["X-Hep-Cursor"].to_s]
+      # Faraday hands the body back tagged ASCII-8BIT (raw bytes). The reader
+      # writes UTF-8 NDJSON, and a From display name with an accent ("João")
+      # carries a \xC3 byte that SQLite refuses to convert from BINARY on
+      # insert. Re-tag here, at the wire, so every consumer sees text.
+      [utf8_text(resp.body), resp.headers["X-Hep-Cursor"].to_s]
     rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
       raise TransportError, e.message
     end
 
     private
+
+    # utf8_text — a response body as UTF-8 text. Bytes that are not valid
+    # UTF-8 (a capture agent that leaked Latin-1) are replaced, never raised
+    # on: one bad byte must not stall a whole export page.
+    def utf8_text(body)
+      text = body.to_s.dup.force_encoding(Encoding::UTF_8)
+      text.valid_encoding? ? text : text.scrub("\uFFFD")
+    end
 
     # parse_dump_line — minimal validation of a single NDJSON line.
     # Returns the bulk_insert-ready Hash, or nil to skip the line
