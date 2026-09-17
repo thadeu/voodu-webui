@@ -69,6 +69,7 @@ class Components::Orgs::MembersTable < Components::Base
       div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 vmd:gap-4 px-3.5 py-3") do
         identity(user)
         role_and_status(membership)
+        role_toggle(membership)
         remove_button(membership)
       end
 
@@ -94,6 +95,32 @@ class Components::Orgs::MembersTable < Components::Base
       span(class: "text-[11px] #{membership.active? ? "text-voodu-green" : "text-voodu-amber"}") do
         membership.status
       end
+    end
+  end
+
+  # Member ↔ admin, in place. The endpoint existed (Org::MembersController
+  # #update) with nothing on the screen calling it, so changing somebody's
+  # role meant removing them and inviting again — which also ended their
+  # session and dropped every server grant. Owner is not offered: it is the
+  # account principal, set at signup, and the controller refuses it too.
+  #
+  # No confirm: unlike Remove beside it, this undoes itself with one more
+  # click, and the label says which way it goes.
+  def role_toggle(membership)
+    return if membership.owner?
+
+    next_role = membership.admin? ? "member" : "admin"
+
+    form(action: org_member_path(org_id: @org.short_id, id: membership.id), method: "post", class: "shrink-0") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+      input(type: "hidden", name: "_method", value: "patch")
+      input(type: "hidden", name: "role", value: next_role)
+
+      button(
+        type: "submit",
+        class: "text-[11.5px] text-voodu-link hover:underline",
+        title: (next_role == "admin") ? "Admins reach every server in this org" : "Members reach only the servers you grant them"
+      ) { "Make #{next_role}" }
     end
   end
 

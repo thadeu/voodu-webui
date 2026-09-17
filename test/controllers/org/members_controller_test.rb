@@ -123,6 +123,39 @@ class Org
       assert_match(/already/, flash[:alert].to_s)
     end
 
+    # The toggle on the row is the only way the screen offers to change a
+    # role; without it the endpoint was reachable by nobody.
+    test "the members list offers to make a member admin, and an admin member" do
+      get org_members_path(org_id: ACME)
+
+      assert_response :success
+      assert_select "form[action=?] input[name='role'][value='admin']",
+        org_member_path(org_id: ACME, id: org_memberships(:contractor_in_acme).id)
+      assert_select "button", text: "Make admin"
+
+      org_memberships(:contractor_in_acme).update!(role: :admin)
+      get org_members_path(org_id: ACME)
+
+      assert_select "button", text: "Make member"
+    end
+
+    test "the owner's row offers no role toggle" do
+      get org_members_path(org_id: ACME)
+
+      assert_select "form[action=?] input[name='role']",
+        org_member_path(org_id: ACME, id: org_memberships(:owner_in_acme).id), count: 0
+    end
+
+    test "a member becomes admin and back through the row's toggle" do
+      membership = org_memberships(:contractor_in_acme)
+
+      patch org_member_path(org_id: ACME, id: membership.id), params: {role: "admin"}
+      assert membership.reload.admin?
+
+      patch org_member_path(org_id: ACME, id: membership.id), params: {role: "member"}
+      assert membership.reload.member?
+    end
+
     test "a role change cannot promote to owner either" do
       patch org_member_path(org_id: ACME, id: org_memberships(:contractor_in_acme).id),
         params: {role: "owner"}
