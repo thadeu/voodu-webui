@@ -801,6 +801,7 @@ class Views::MetricDashboards::Form < Views::Base
     "dst_port" => "destination port",
     "call_id" => "SIP Call-ID",
     "corr_id" => "correlated call (x_cid ?? call_id)",
+    "call_key" => "the call this message belongs to (resolved across legs)",
     "x_cid" => "correlation header",
     "user_agent" => "SIP User-Agent",
     "cseq" => "CSeq header",

@@ -75,6 +75,18 @@ see [tls.md](tls.md) for the three conditions and the failure modes — and
 `docker-compose.auth.yml` adds a Caddy Basic Auth overlay. Neither replaces the
 perimeter: Basic Auth in particular is a shared password, not identity.
 
+## One-off commands
+
+Neither `vd exec` nor `docker exec` runs the image entrypoint, but the app
+loads the secrets the entrypoint persisted to the volume on its own, so a
+console, a runner or a rake task works as is:
+
+```sh
+vd exec ops/voodu-webui -- bin/rails console
+vd exec ops/voodu-webui -- bin/rails hep3:backfill_call_keys
+# or, on the box: docker exec -it voodu-webui bin/rails console
+```
+
 ## Upgrading
 
 ```sh

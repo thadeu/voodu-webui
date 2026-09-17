@@ -46,17 +46,21 @@ class DataTable::Hep3SourceTest < ActiveSupport::TestCase
     assert_equal [603, 486], codes, "newest-first, only 4xx/5xx"
   end
 
-  test "calls view groups messages by corr_id with a message count" do
+  # The group key is call_key: the FIRST Call-ID seen for the call (not the
+  # x_cid — see HepCallKeys). It is exposed as both "call_key" and "corr_id"
+  # so the row action / saved dashboards keep working.
+  test "calls view groups messages by call_key with a message count" do
     insert(call_id: "legA", x_cid: "shared", meth: "INVITE", ts: "2026-06-30 10:00:01.000000")
     insert(call_id: "legB", x_cid: "shared", meth: "ACK", ts: "2026-06-30 10:00:02.000000")
     insert(call_id: "solo", x_cid: "", meth: "OPTIONS", ts: "2026-06-30 10:00:03.000000")
 
     rows = @src.rows(view: "calls")
-    by_corr = rows.to_h { |r| [r["corr_id"], r] }
+    by_key = rows.to_h { |r| [r["call_key"], r] }
 
-    assert_equal 2, by_corr["shared"]["messages"], "both legs collapse under the shared x_cid"
-    assert_equal 1, by_corr["solo"]["messages"]
-    assert by_corr["shared"]["id"].present?, "calls expose a numeric cursor id (MAX ts_epoch)"
+    assert_equal 2, by_key["legA"]["messages"], "both legs collapse under one key (joined by the shared x_cid)"
+    assert_equal 1, by_key["solo"]["messages"]
+    assert_equal "legA", by_key["legA"]["corr_id"], "corr_id mirrors the key for the row action"
+    assert by_key["legA"]["id"].present?, "calls expose a numeric cursor id (MAX ts_epoch)"
   end
 
   test "fields differ between messages and calls views" do

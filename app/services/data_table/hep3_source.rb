@@ -6,7 +6,7 @@
 # in the panel's second dropdown:
 #
 #   messages — one row per SIP message (the raw tail).      [live-append]
-#   calls    — one row per call (grouped by corr_id):       [refresh]
+#   calls    — one row per call (grouped by call_key):      [refresh]
 #              parties, message count, time span, result hint.
 #   errors   — messages with a 4xx/5xx response only.       [live-append]
 #
@@ -54,13 +54,13 @@ module DataTable
     # the call-flow drawer, not a cell).
     MESSAGE_FIELDS = %w[
       ts method cseq response_code from_user to_user ruri
-      src_ip src_port dst_ip dst_port call_id corr_id x_cid user_agent node_id
+      src_ip src_port dst_ip dst_port call_id corr_id call_key x_cid user_agent node_id
     ].freeze
 
     MESSAGE_DEFAULTS = %w[ts cseq response_code from_user to_user src_ip dst_ip call_id].freeze
 
     # Call rows are the aggregate summary.
-    CALL_FIELDS = %w[started_at last_ts from_user to_user methods messages last_code corr_id].freeze
+    CALL_FIELDS = %w[started_at last_ts from_user to_user methods messages last_code corr_id call_key].freeze
     CALL_DEFAULTS = %w[started_at from_user to_user last_code corr_id].freeze
 
     ERROR_THRESHOLD = 400
@@ -123,7 +123,7 @@ module DataTable
 
     # count_series — per-bucket COUNT for a chart panel (Area/Radial/Linear on
     # a HEP3 source): how many rows of `view` (matching `filter_query`) land in
-    # each bucket of [ts_from, ts_to). Calls count one-per-corr_id; errors count
+    # each bucket of [ts_from, ts_to). Calls count one-per-call_key; errors count
     # only 4xx/5xx. Returns [[bucket_epoch, count], …] for the sparkline.
     def count_series(ts_from:, ts_to:, bucket:, view: DEFAULT_VIEW, filter_query: nil)
       where_sql, where_binds = compile_filter(filter_query)
@@ -139,7 +139,7 @@ module DataTable
     # grouped_snapshot — a group-by aggregation SNAPSHOT for Table/Bar/Number:
     # [{group:, value:}, …], one row per distinct value of the plan's `group_by`,
     # sorted + capped per the plan (`sort`/`limit`). The `view` sets the base
-    # semantics (like count_series): calls ⇒ count distinct CALLS (corr_id),
+    # semantics (like count_series): calls ⇒ count distinct CALLS (call_key),
     # errors ⇒ only 4xx/5xx rows, messages ⇒ raw rows. `plan` is a
     # DataTable::QueryPlan::Plan. Returns [] when the plan isn't a valid
     # group-by (no group field, or a field outside the allowlist).
@@ -225,7 +225,7 @@ module DataTable
 
     # agg_sql — the aggregate SQL for the plan's metric, resolved against the view:
     #   count(distinct <field>) → COUNT(DISTINCT <expr>)        (explicit, any view)
-    #   count() on the Calls view → COUNT(DISTINCT corr_id)     (the view counts CALLS)
+    #   count() on the Calls view → COUNT(DISTINCT call_key)    (the view counts CALLS)
     #   count() otherwise         → COUNT(*)                    (rows / messages)
     # nil when an explicit distinct field isn't in the allowlist.
     def agg_sql(plan, view)
@@ -235,7 +235,7 @@ module DataTable
         return "COUNT(DISTINCT #{de})"
       end
 
-      calls?(view) ? "COUNT(DISTINCT corr_id)" : "COUNT(*)"
+      calls?(view) ? "COUNT(DISTINCT call_key)" : "COUNT(*)"
     end
 
     # sort_expr — the ORDER BY expression when the plan sorts by a FIELD; nil when
@@ -259,7 +259,7 @@ module DataTable
     def message_row(message)
       message.payload_json
         .except("raw_sip")
-        .merge("id" => message.id, "corr_id" => message.corr_id)
+        .merge("id" => message.id, "corr_id" => message.corr_id, "call_key" => message.call_key)
     end
 
     def call_rows(where_sql:, where_binds:, limit:, before_id:, ts_from: nil, ts_to: nil)
@@ -272,13 +272,17 @@ module DataTable
 
     # call_row — maps a CALLS_SELECT tuple to a flat hash. "id" is the
     # group's MAX(ts_epoch) so the table's numeric before_id cursor pages
-    # older calls uniformly with the message views.
+    # older calls uniformly with the message views. The group key is the
+    # call_key; it is ALSO exposed as "corr_id" so the row action, the column
+    # picker and saved dashboards keep working unchanged (for_call accepts
+    # either key).
     def call_row(tuple)
-      corr_id, last_epoch, started_at, last_ts, messages, last_code, from_user, to_user, methods = tuple
+      call_key, last_epoch, started_at, last_ts, messages, last_code, from_user, to_user, methods = tuple
 
       {
         "id" => last_epoch,
-        "corr_id" => corr_id,
+        "corr_id" => call_key,
+        "call_key" => call_key,
         "started_at" => started_at,
         "last_ts" => last_ts,
         "messages" => messages,

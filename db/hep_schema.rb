@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_30_120100) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_150000) do
   create_table "hep_cursors", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "cursor", default: "", null: false
@@ -23,6 +23,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_30_120100) do
 
   create_table "hep_messages", force: :cascade do |t|
     t.virtual "call_id", type: :string, as: "json_extract(payload, '$.call_id')", stored: false
+    t.string "call_key"
     t.virtual "corr_id", type: :string, as: "COALESCE(NULLIF(json_extract(payload, '$.x_cid'), ''), json_extract(payload, '$.call_id'))", stored: false
     t.string "name", null: false
     t.text "payload", null: false
@@ -34,7 +35,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_30_120100) do
     t.virtual "ts_epoch", type: :integer, as: "CAST(strftime('%s', json_extract(payload, '$.ts')) AS INTEGER)", stored: true
     t.virtual "x_cid", type: :string, as: "json_extract(payload, '$.x_cid')", stored: false
     t.index ["server_id", "call_id"], name: "idx_hep_messages_call_id"
+    t.index ["server_id", "scope", "name", "call_id"], name: "idx_hep_messages_instance_call_id"
+    t.index ["server_id", "scope", "name", "call_key", "ts_epoch"], name: "idx_hep_messages_call_key"
     t.index ["server_id", "scope", "name", "corr_id", "ts_epoch"], name: "idx_hep_messages_call"
     t.index ["server_id", "scope", "name", "ts_epoch"], name: "idx_hep_messages_recent"
+    t.index ["server_id", "scope", "name", "x_cid"], name: "idx_hep_messages_instance_x_cid"
   end
 end

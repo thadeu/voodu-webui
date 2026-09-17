@@ -120,4 +120,61 @@ class HepMessageTest < ActiveSupport::TestCase
     assert_equal 1, HepCursor.where(server_id: server_id, scope: SCOPE, name: NAME).count,
       "advance upserts the single watermark row, never appends"
   end
+
+  # ── call_key: the call's identity, resolved at ingest ──────────────────
+
+  def calls_count
+    HepMessage.for_instance(server: server, scope: SCOPE, name: NAME).distinct.count(:call_key)
+  end
+
+  test "the production dialog counts as ONE call: INVITE with x_cid, the rest without" do
+    insert(call_id: "dlg", x_cid: "", method: "", code: 100, ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "dlg", x_cid: "SBC+1", method: "INVITE", ts: "2026-06-30 10:00:00.900000")
+    insert(call_id: "dlg", x_cid: "", method: "", code: 403, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "dlg", x_cid: "", method: "ACK", ts: "2026-06-30 10:00:03.000000")
+
+    assert_equal 1, calls_count
+    assert_equal ["dlg"], HepMessage.distinct.pluck(:call_key)
+  end
+
+  test "gateway failover: a new Call-ID carrying the same x_cid joins the call" do
+    insert(call_id: "try1", x_cid: "SBC+1", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "try1", x_cid: "", method: "", code: 403, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "try2", x_cid: "SBC+1", method: "INVITE", ts: "2026-06-30 10:00:03.000000")
+    insert(call_id: "try2", x_cid: "", method: "", code: 200, ts: "2026-06-30 10:00:04.000000")
+    insert(call_id: "other", x_cid: "", method: "INVITE", ts: "2026-06-30 10:00:05.000000")
+
+    assert_equal 2, calls_count
+    assert_equal 4, for_call("try2").count, "opened from the second attempt: the whole call"
+    assert_equal 4, for_call("SBC+1").count, "opened by the X-CID: the whole call"
+  end
+
+  test "union: a leg tailed before the INVITE that links it is folded into one key" do
+    # B-leg responses land first (their own key), then the A-leg INVITE that
+    # carries the X-CID, then the B-leg INVITE that ALSO carries it — at that
+    # point the table holds two keys for one call and must merge them.
+    insert(call_id: "B", x_cid: "", method: "", code: 180, ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "A", x_cid: "shared", method: "INVITE", ts: "2026-06-30 10:00:00.500000")
+    insert(call_id: "B", x_cid: "shared", method: "INVITE", ts: "2026-06-30 10:00:00.900000")
+
+    assert_equal 1, calls_count
+    assert_equal 3, for_call("B").count
+    assert_equal 3, for_call("A").count
+  end
+
+  test "backfill_call_keys! rewrites split keys the migration seeded from corr_id" do
+    insert(call_id: "dlg", x_cid: "SBC+9", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "dlg", x_cid: "", method: "", code: 100, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "leg2", x_cid: "SBC+9", method: "INVITE", ts: "2026-06-30 10:00:03.000000")
+
+    # Simulate the pre-column state: every row keyed by its own corr_id.
+    HepMessage.update_all("call_key = corr_id")
+    assert_equal 2, calls_count, "seeded from corr_id the dialog is split"
+
+    rewritten = HepMessage.backfill_call_keys!
+
+    assert_equal 1, calls_count
+    assert_operator rewritten, :>=, 1
+    assert_equal 0, HepMessage.backfill_call_keys!, "idempotent: a second pass rewrites nothing"
+  end
 end

@@ -30,6 +30,7 @@ class HepMessage < HepRecord
     "call_id" => "call_id",
     "x_cid" => "x_cid",
     "corr_id" => "corr_id",
+    "call_key" => "call_key",
     "method" => "sip_method",
     "response_code" => "response_code"
   }.freeze
@@ -45,6 +46,21 @@ class HepMessage < HepRecord
     return FILTER_COLUMNS[field] if FILTER_COLUMNS.key?(field)
 
     "json_extract(payload, '$.#{field}')" if JSON_FILTER_FIELDS.include?(field)
+  end
+
+  # bulk_insert — the poller's write path, with the call resolved on the way
+  # in: every row gets its `call_key` from HepCallKeys against the rows this
+  # reader instance already holds (see that class for why ingest, not query).
+  # Rows are grouped per instance because the key space is per instance.
+  def self.bulk_insert(rows)
+    return 0 if rows.blank?
+
+    rows.group_by { |r| [r[:server_id], r[:scope], r[:name]] }.each do |(server_id, scope, name), group|
+      HepCallKeys.new(where(server_id: server_id, scope: scope, name: name)).assign(group)
+    end
+
+    insert_all(rows)
+    rows.size
   end
 
   # for_instance — narrow to one reader (scope, name) of a server.
@@ -76,14 +92,14 @@ class HepMessage < HepRecord
     rel.order(id: :desc).limit(limit)
   end
 
-  # calls_page — one row per call (grouped by corr_id), most-recently-
+  # calls_page — one row per call (grouped by call_key), most-recently-
   # active first. Backs the "Calls" view: each row summarizes a call
   # (parties, message count, time span, a result-code hint). `before_epoch`
   # pages older calls (the cursor is the group's MAX(ts_epoch), which the
   # source also exposes as the row "id"). Returns an Array of column
   # arrays (see CALLS_SELECT order) — the source maps them to hashes.
   CALLS_SELECT = [
-    "corr_id",
+    "call_key",
     "MAX(ts_epoch)",
     "MIN(ts)",
     "MAX(ts)",
@@ -101,7 +117,7 @@ class HepMessage < HepRecord
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
     rel = rel.where("ts_epoch <= ?", ts_to) if ts_to
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
-    rel = rel.group(:corr_id).order(Arel.sql("MAX(ts_epoch) DESC")).limit(limit)
+    rel = rel.group(:call_key).order(Arel.sql("MAX(ts_epoch) DESC")).limit(limit)
     rel = rel.having("MAX(ts_epoch) < ?", before_epoch) if before_epoch
 
     rel.pluck(*CALLS_SELECT.map { |expr| Arel.sql(expr) })
@@ -110,7 +126,7 @@ class HepMessage < HepRecord
   # count_series — per-bucket COUNT for a chart panel: how many rows (matching
   # the same view + filter as the table) fall in each `bucket`-second window of
   # [ts_from, ts_to). Returns [[bucket_epoch, count], …] ascending, ready to
-  # feed a sparkline. `distinct_corr` counts calls (one per corr_id) instead of
+  # feed a sparkline. `distinct_corr` counts calls (one per call_key) instead of
   # messages; `min_code` narrows to errors (4xx/5xx).
   def self.count_series(server:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [], distinct_corr: false, min_code: nil)
     ensure_regexp! if where_sql.present?
@@ -122,7 +138,7 @@ class HepMessage < HepRecord
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
 
     bucket_sql = "(ts_epoch / #{b}) * #{b}"
-    count_sql = distinct_corr ? "COUNT(DISTINCT corr_id)" : "COUNT(*)"
+    count_sql = distinct_corr ? "COUNT(DISTINCT call_key)" : "COUNT(*)"
 
     rel.group(Arel.sql(bucket_sql)).order(Arel.sql(bucket_sql))
       .pluck(Arel.sql(bucket_sql), Arel.sql(count_sql))
@@ -195,42 +211,46 @@ class HepMessage < HepRecord
   # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
   scope :for_call, ->(server:, scope:, name:, corr_id:) {
     instance = for_instance(server: server, scope: scope, name: name)
-    instance.where(call_id: HepMessage.call_ids_for(instance, corr_id)).order(:ts, :id)
+    instance.where(call_key: HepMessage.call_key_for(instance, corr_id)).order(:ts, :id)
   }
 
-  # call_ids_for — every SIP Call-ID that belongs to the call `key` names,
-  # walking the correlation graph both ways: a Call-ID reaches the x_cids
-  # seen on it, an x_cid reaches every Call-ID seen with it.
-  #
-  # Why a walk and not `corr_id = key`: the collector fills x_cid per
-  # MESSAGE, from the X-CID header of that message. In production the INVITE
-  # FreeSWITCH sends carries the upstream SBC's X-CID and the 100/180/403/ACK
-  # of the very same dialog carry none — so the INVITE's corr_id was the
-  # X-CID and the rest's was the Call-ID, and the ladder opened by either key
-  # showed half a call ("a 100 Trying with no INVITE"). Folding per message
-  # can't fix that; only the set of Call-IDs reachable from the key can.
-  #
-  # Two rounds cover a B2BUA (A-leg ⇄ x_cid ⇄ B-leg) plus one hop of header
-  # inconsistency on each leg; the loop stops early once the set is stable.
-  # Bounded: at most 4 small indexed queries per ladder open.
-  def self.call_ids_for(instance, key)
+  # call_key_for — the stored key of the call that `key` names, whatever the
+  # caller holds: a call_key (Calls view row), a Call-ID (a FreeSWITCH log
+  # line), or an X-CID (a DataTable cell). Resolution happened at ingest
+  # (HepCallKeys), so this is one indexed lookup. Unknown → the key itself,
+  # which matches nothing and renders the empty state.
+  def self.call_key_for(instance, key)
     key = key.to_s
-    return [] if key.empty?
+    return key if key.empty?
 
-    call_ids = instance.where(call_id: key).or(instance.where(x_cid: key)).distinct.pluck(:call_id)
-    return [] if call_ids.empty?
+    instance.where(call_key: key).or(instance.where(call_id: key)).or(instance.where(x_cid: key))
+      .where.not(call_key: nil).pick(:call_key) || key
+  end
 
-    2.times do
-      x_cids = instance.where(call_id: call_ids).where.not(x_cid: [nil, ""]).distinct.pluck(:x_cid)
-      break if x_cids.empty?
+  # backfill_call_keys! — the one-off transitive pass for rows written before
+  # call_key existed (the migration seeds them with corr_id, which splits a
+  # call the way HepCallKeys explains). Walks each reader instance in ts
+  # order with EMPTY maps, so stored keys never leak back in, and rewrites
+  # only the rows whose key changes. Returns the number rewritten.
+  def self.backfill_call_keys!(batch: 2_000)
+    rewritten = 0
 
-      grown = (call_ids + instance.where(x_cid: x_cids).distinct.pluck(:call_id)).uniq
-      break if grown.size == call_ids.size
+    distinct.pluck(:server_id, :scope, :name).each do |server_id, scope, name|
+      instance = where(server_id: server_id, scope: scope, name: name)
+      resolver = HepCallKeys.new(instance, seed: false)
+      pending = Hash.new { |h, k| h[k] = [] }
 
-      call_ids = grown
+      instance.order(:ts, :id).select(:id, :call_id, :x_cid, :call_key).find_each(batch_size: batch) do |row|
+        key = resolver.key_for(row.call_id, row.x_cid)
+        pending[key] << row.id if key != row.call_key.to_s && !key.empty?
+      end
+
+      pending.each do |key, ids|
+        ids.each_slice(batch) { |slice| rewritten += instance.where(id: slice).update_all(call_key: key) }
+      end
     end
 
-    call_ids
+    rewritten
   end
 
   # payload_json — parsed view of the raw NDJSON line, for single-row
