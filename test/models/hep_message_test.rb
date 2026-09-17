@@ -177,4 +177,49 @@ class HepMessageTest < ActiveSupport::TestCase
     assert_operator rewritten, :>=, 1
     assert_equal 0, HepMessage.backfill_call_keys!, "idempotent: a second pass rewrites nothing"
   end
+
+  test "backfill_call_keys! rewrites a leg keyed BEFORE the union that links it" do
+    # Leg A first (keyed A), leg B responses next (keyed B), and only then the
+    # B-leg INVITE that carries A's x_cid — the union comes after both legs
+    # were keyed. One pass would leave leg A on the loser key.
+    insert(call_id: "A", x_cid: "link", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "A", x_cid: "", method: "", code: 200, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "B", x_cid: "", method: "", code: 180, ts: "2026-06-30 10:00:03.000000")
+    insert(call_id: "B", x_cid: "link", method: "INVITE", ts: "2026-06-30 10:00:02.500000")
+
+    HepMessage.update_all("call_key = corr_id")
+    assert_equal 3, calls_count, "seeded from corr_id: A, B and the x_cid"
+
+    HepMessage.backfill_call_keys!
+
+    assert_equal 1, calls_count
+    assert_equal 4, for_call("A").count
+    assert_equal 4, for_call("B").count
+  end
+
+  test "for_call shows every message sharing a Call-ID even when call_key is inconsistent" do
+    insert(call_id: "dlg", x_cid: "", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "dlg", x_cid: "", method: "", code: 200, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "dlg", x_cid: "", method: "ACK", ts: "2026-06-30 10:00:03.000000")
+
+    # Damage the keys on purpose: whatever split them, the ladder must not care.
+    HepMessage.where(sip_method: "INVITE").update_all(call_key: "stray")
+
+    assert_equal 3, for_call("dlg").count, "opened by Call-ID"
+    assert_equal 3, for_call("stray").count, "opened by the stray key still reaches the whole dialog"
+  end
+
+  # FSW-ESL sends `X-CID: unknown` on every outbound INVITE (prod, 2026-09-17).
+  # The collector stores it verbatim; the console must not treat it as a link.
+  test "a sentinel x_cid (unknown) never joins unrelated calls" do
+    insert(call_id: "out1", x_cid: "unknown", method: "INVITE", ts: "2026-06-30 10:00:01.000000")
+    insert(call_id: "out1", x_cid: "", method: "", code: 200, ts: "2026-06-30 10:00:02.000000")
+    insert(call_id: "out2", x_cid: "unknown", method: "INVITE", ts: "2026-06-30 10:00:03.000000")
+    insert(call_id: "out2", x_cid: "", method: "", code: 486, ts: "2026-06-30 10:00:04.000000")
+
+    assert_equal 2, calls_count, "two outbound calls stay two"
+    assert_equal 2, for_call("out1").count
+    assert_equal 2, for_call("out2").count
+    assert_equal 0, for_call("unknown").count, "opening by the sentinel shows nothing, not everything"
+  end
 end

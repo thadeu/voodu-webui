@@ -211,36 +211,72 @@ class HepMessage < HepRecord
   # first). `ts` is fixed-width ISO text, so lexicographic == chronological.
   scope :for_call, ->(server:, scope:, name:, corr_id:) {
     instance = for_instance(server: server, scope: scope, name: name)
-    instance.where(call_key: HepMessage.call_key_for(instance, corr_id)).order(:ts, :id)
+    instance.where(call_id: HepMessage.call_ids_for(instance, corr_id)).order(:ts, :id)
   }
 
-  # call_key_for — the stored key of the call that `key` names, whatever the
-  # caller holds: a call_key (Calls view row), a Call-ID (a FreeSWITCH log
-  # line), or an X-CID (a DataTable cell). Resolution happened at ingest
-  # (HepCallKeys), so this is one indexed lookup. Unknown → the key itself,
-  # which matches nothing and renders the empty state.
-  def self.call_key_for(instance, key)
+  # call_ids_for — every SIP Call-ID of the call that `key` names, whatever
+  # the caller holds: a call_key (Calls view row), a Call-ID (a FreeSWITCH
+  # log line) or an X-CID (a DataTable cell).
+  #
+  # The ladder must show EVERY message that shares a Call-ID with the call —
+  # that is what an operator means by "the call" — so this does not trust
+  # call_key alone. Start from the rows the key reaches (by call_key, by
+  # call_id or by x_cid), then walk the correlation graph both ways: a Call-ID
+  # reaches the x_cids seen on it, an x_cid reaches every Call-ID seen with
+  # it. Two rounds cover a B2BUA plus one hop of header inconsistency per leg;
+  # the loop stops early once the set is stable. Bounded: at most 5 small
+  # indexed queries per ladder open. call_key stays the key for COUNTING calls
+  # (the Calls view); this is the key for SHOWING one.
+  def self.call_ids_for(instance, key)
     key = key.to_s
-    return key if key.empty?
+    return [] if key.empty?
 
-    instance.where(call_key: key).or(instance.where(call_id: key)).or(instance.where(x_cid: key))
-      .where.not(call_key: nil).pick(:call_key) || key
+    # A sentinel X-CID ("unknown") is never a key and never a hop — see
+    # HepCallKeys::SENTINELS. Opening by one would be "every outbound call".
+    return [] if HepCallKeys.sentinel?(key)
+
+    call_ids = instance.where(call_key: key).or(instance.where(call_id: key)).or(instance.where(x_cid: key))
+      .distinct.pluck(:call_id).reject(&:blank?)
+    return [] if call_ids.empty?
+
+    2.times do
+      x_cids = instance.where(call_id: call_ids).where.not(x_cid: [nil, ""]).distinct.pluck(:x_cid)
+        .reject { |x| HepCallKeys.sentinel?(x) }
+      break if x_cids.empty?
+
+      grown = (call_ids + instance.where(x_cid: x_cids).distinct.pluck(:call_id)).uniq
+      break if grown.size == call_ids.size
+
+      call_ids = grown
+    end
+
+    call_ids
   end
 
   # backfill_call_keys! — the one-off transitive pass for rows written before
   # call_key existed (the migration seeds them with corr_id, which splits a
-  # call the way HepCallKeys explains). Walks each reader instance in ts
-  # order with EMPTY maps, so stored keys never leak back in, and rewrites
-  # only the rows whose key changes. Returns the number rewritten.
+  # call the way HepCallKeys explains). Walks each reader instance in arrival
+  # order with EMPTY maps, so stored keys never leak back in.
+  #
+  # Two passes per instance, and the second is not optional: a union found
+  # late in the walk (the INVITE that links leg A to leg B arrives after
+  # both legs were already keyed) only moves the maps, so the rows keyed
+  # BEFORE the union still carry the loser. Pass 1 learns every union; pass
+  # 2 re-resolves each row against the settled maps and rewrites what
+  # differs. Returns the number of rows rewritten.
   def self.backfill_call_keys!(batch: 2_000)
     rewritten = 0
 
     distinct.pluck(:server_id, :scope, :name).each do |server_id, scope, name|
       instance = where(server_id: server_id, scope: scope, name: name)
       resolver = HepCallKeys.new(instance, seed: false)
+      rows = instance.order(:id).select(:id, :call_id, :x_cid, :call_key)
+
+      rows.find_each(batch_size: batch) { |row| resolver.key_for(row.call_id, row.x_cid) }
+
       pending = Hash.new { |h, k| h[k] = [] }
 
-      instance.order(:ts, :id).select(:id, :call_id, :x_cid, :call_key).find_each(batch_size: batch) do |row|
+      rows.find_each(batch_size: batch) do |row|
         key = resolver.key_for(row.call_id, row.x_cid)
         pending[key] << row.id if key != row.call_key.to_s && !key.empty?
       end

@@ -26,6 +26,17 @@
 # with empty maps, so stored (possibly split) keys never leak back in, and
 # it collects merges instead of writing them — the caller rewrites the rows.
 class HepCallKeys
+  # X-CID values that are not identifiers. A FreeSWITCH dialplan that exports
+  # `sip_h_X-CID` from a variable that was never set sends the literal
+  # "unknown" on EVERY outbound INVITE — and the collector stores it as an
+  # x_cid like any other. Honouring it would fold every outbound call into
+  # one. Treated as "no X-CID" here and in HepMessage.call_ids_for.
+  SENTINELS = %w[unknown undefined null nil none - 0].freeze
+
+  def self.sentinel?(x_cid)
+    SENTINELS.include?(x_cid.to_s.strip.downcase)
+  end
+
   def initialize(instance, seed: true)
     @instance = instance
     @seed = seed
@@ -53,16 +64,21 @@ class HepCallKeys
   # key_for — the resolved key of one (call_id, x_cid) pair, in memory only.
   # The backfill uses it to rewrite rows without touching the DB per row.
   def key_for(call_id, x_cid)
-    resolve(call_id.to_s, x_cid.to_s)
+    resolve(call_id.to_s, self.class.sentinel?(x_cid) ? "" : x_cid.to_s)
   end
 
   private
 
   def ids_of(row)
-    return [row[:call_id].to_s, row[:x_cid].to_s] if row.key?(:call_id)
+    call_id, x_cid =
+      if row.key?(:call_id)
+        [row[:call_id].to_s, row[:x_cid].to_s]
+      else
+        payload = JSON.parse(row[:payload].to_s)
+        [payload["call_id"].to_s, payload["x_cid"].to_s]
+      end
 
-    payload = JSON.parse(row[:payload].to_s)
-    [payload["call_id"].to_s, payload["x_cid"].to_s]
+    [call_id, self.class.sentinel?(x_cid) ? "" : x_cid]
   rescue JSON::ParserError
     ["", ""]
   end
@@ -75,6 +91,8 @@ class HepCallKeys
       @instance.where(call_id: call_ids).where.not(call_key: nil)
         .distinct.pluck(:call_id, :call_key).each { |cid, key| @by_call[cid] ||= key }
     end
+
+    x_cids.reject! { |x| self.class.sentinel?(x) }
 
     if x_cids.any?
       @instance.where(x_cid: x_cids).where.not(call_key: nil)
