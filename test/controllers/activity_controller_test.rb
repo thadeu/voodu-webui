@@ -42,6 +42,20 @@ class ActivityControllerTest < ActionDispatch::IntegrationTest
     )
   end
 
+  # Refresh is a link into the frame, carrying the filters the operator has
+  # set: a page reload would drop the expanded rows, and a bare /activity
+  # would drop the window.
+  test "the filter bar offers a refresh that reloads the frame with the current filters" do
+    get activity_path(server_key: @key, act: "apply", range: "24h")
+
+    assert_response :success
+    assert_select "a[data-turbo-frame='#{ActivityController::FRAME}'][aria-label='Refresh the activity list']" do |links|
+      href = links.first["href"]
+      assert_includes href, "act=apply"
+      assert_includes href, "range=24h"
+    end
+  end
+
   test "index renders an action with its outcome" do
     record(id: "a1", action: "apply", origin: "cli", scope: "runa", name: "checkoutsvc",
       status: "succeeded", elapsed_ms: 1200)

@@ -88,3 +88,118 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
     FileUtils.rm_rf(dir) if Dir.exist?(dir)
   end
 end
+
+# The seek is an optimisation with a correctness contract: whatever offset
+# the binary search picks, the [from, until] filter must still see every
+# line inside the window. These pin the boundaries the search can get wrong:
+# a window deep inside a large file, a short out-of-order overlap at a write
+# boundary, lines the probe cannot read, and a file that starts mid-window.
+class LogTail::ReaderSeekTest < ActiveSupport::TestCase
+  fixtures :orgs, :servers
+
+  setup do
+    @server = servers(:alpha)
+    @pod = "seek-web.0001"
+    @day = Time.utc(2026, 6, 29, 0, 0, 0)
+    clear_server_logs
+  end
+
+  teardown { clear_server_logs }
+
+  test "a window deep inside a file well past the slack yields exactly its lines" do
+    n = 40_000
+    write_lines(n) { |i| @day + i }
+
+    from = @day + 30_000
+    until_ = @day + 30_099
+
+    got = read(from, until_)
+
+    assert_equal 100, got.size
+    assert_equal from.iso8601(3), got.first["ts"]
+    assert_equal until_.iso8601(3), got.last["ts"]
+  end
+
+  test "a line appended slightly out of order inside the slack is still found" do
+    n = 40_000
+    write_lines(n) { |i| @day + i }
+
+    # A re-tail overlap: one older line lands after newer ones, near the end.
+    late = @day + 39_000
+    seed(@pod, late, msg: "late arrival")
+
+    got = read(late, late)
+
+    assert_equal 2, got.size, "the in-order line and the late duplicate both sit inside the window"
+    assert_includes got.map { |h| h["msg"] }, "late arrival"
+  end
+
+  test "lines without a readable timestamp do not derail the search" do
+    write_lines(20_000) { |i| @day + i }
+
+    path = LogTail::FilePath.daily_file(@server, @pod, @day.to_date)
+    File.open(path, "a") { |f| f.write(%({"pod":"#{@pod}","msg":"sentinel: file cap reached"}\n)) }
+
+    from = @day + 19_990
+    got = read(from, @day + 19_999)
+
+    assert_equal 10, got.size
+  end
+
+  test "a window that starts before the file reads it from the top" do
+    write_lines(20_000) { |i| @day + 3_600 + i }
+
+    got = read(@day, @day + 3_600 + 4)
+
+    assert_equal 5, got.size
+    assert_equal (@day + 3_600).iso8601(3), got.first["ts"]
+  end
+
+  test "the scan stops at the first line past the window" do
+    write_lines(20_000) { |i| @day + i }
+
+    calls = 0
+    LogTail::Reader.each_line(
+      server: @server, pods: [@pod], from: @day + 100, until_: @day + 104,
+      content_search: nil, regex: false, limit: 1_000_000
+    ) { |_pod, _hash| calls += 1 }
+
+    assert_equal 5, calls
+  end
+
+  private
+
+  def read(from, until_)
+    out = []
+    LogTail::Reader.each_line(
+      server: @server, pods: [@pod], from: from, until_: until_,
+      content_search: nil, regex: false, limit: 1_000_000
+    ) { |_pod, hash| out << hash }
+
+    out
+  end
+
+  def write_lines(count)
+    path = LogTail::FilePath.daily_file(@server, @pod, @day.to_date)
+    LogTail::FilePath.ensure_dir(File.dirname(path))
+
+    File.open(path, "w") do |f|
+      count.times do |i|
+        time = yield(i)
+        row = {ts: time.iso8601(3), pod: @pod, stream: "stdout", level: nil, msg: "line #{i} padding to make the file wide enough for a real seek", raw: "line #{i}", parsed: false}
+        f.write("#{JSON.generate(row)}\n")
+      end
+    end
+  end
+
+  def seed(pod, time, msg:)
+    path = LogTail::FilePath.daily_file(@server, pod, time.to_date)
+    row = {ts: time.iso8601(3), pod: pod, stream: "stdout", level: nil, msg: msg, raw: msg, parsed: false}
+    File.open(path, "a") { |f| f.write("#{JSON.generate(row)}\n") }
+  end
+
+  def clear_server_logs
+    dir = LogTail::FilePath.server_dir(@server)
+    FileUtils.rm_rf(dir) if Dir.exist?(dir)
+  end
+end

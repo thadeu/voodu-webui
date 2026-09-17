@@ -217,11 +217,12 @@ class ServersController < ApplicationController
     refuse(capability)
   end
 
-  # `new` has no org yet — the form is where you pick one — so the question is
-  # whether they administer ANY org. Every other action names one.
+  # `new` opens under the org in the URL, and that is the org it is asked
+  # about. It used to ask whether they administer ANY org, which on the
+  # hosted tier every person does (they own a workspace), so a member of
+  # this org reached a form whose dropdown offered only their own — a door
+  # into the wrong room. Every other action names its org explicitly.
   def permitted_for?(capability)
-    return administrable_orgs.exists? if action_name == "new"
-
     Permissions.allow?(role_in(target_org), capability)
   end
 

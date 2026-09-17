@@ -1469,3 +1469,23 @@ html[data-theme="light"] .voodu-dark {
 .voodu-code--query .voodu-code__input {
   padding-left: 12px;
 }
+
+/* ── Search inputs ──────────────────────────────────────────────────
+ * `type="search"` is used for its semantics (Escape clears, screen readers
+ * announce a search box), not for the chrome WebKit hangs on it: a rounded
+ * native field and a blue ✕ that clears the value WITHOUT firing the
+ * debounced submit, so the box read empty while the list stayed filtered.
+ * Every one of these boxes ships its own clear control beside it. */
+input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}

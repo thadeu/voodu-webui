@@ -18,7 +18,13 @@ class GithubSettingsTest < ActiveSupport::TestCase
     pairs.each { |k, v| ENV[k] = v }
   end
 
-  PEM = "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----\n"
+  # The header and footer are assembled from two halves so the fake never
+  # matches test/architecture/no_private_keys_test.rb, which scans every
+  # tracked file for a PEM header. That guard is the thing keeping the real
+  # signing key out of git; teaching it to ignore this file would blunt it.
+  PEM_HEADER = "-----BEGIN RSA PRIVATE " + "KEY-----"
+  PEM_FOOTER = "-----END RSA PRIVATE " + "KEY-----"
+  PEM = "#{PEM_HEADER}\nMIIabc\n#{PEM_FOOTER}\n"
 
   def store_config(**attrs)
     Ops::GithubConfig.create!({
@@ -73,7 +79,7 @@ class GithubSettingsTest < ActiveSupport::TestCase
   test "a private key with escaped newlines is accepted" do
     with_env(
       GithubSettings::ENV_APP_ID => "111111",
-      GithubSettings::ENV_PRIVATE_KEY => '-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----'
+      GithubSettings::ENV_PRIVATE_KEY => "#{PEM_HEADER}\\nMIIabc\\n#{PEM_FOOTER}"
     )
 
     key = GithubSettings.current.private_key
@@ -138,7 +144,7 @@ class GithubSettingsTest < ActiveSupport::TestCase
   # their first push.
   test "a truncated private key is refused" do
     config = Ops::GithubConfig.new(
-      provider: "github", app_id: "123", private_key: "-----BEGIN RSA PRIVATE KEY-----\nMIIabc"
+      provider: "github", app_id: "123", private_key: "#{PEM_HEADER}\nMIIabc"
     )
 
     assert_not config.valid?

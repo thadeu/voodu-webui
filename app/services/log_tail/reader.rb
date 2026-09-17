@@ -8,15 +8,38 @@
 # LogSurroundingData, LogsAnalyticsController#export) over the local
 # NDJSON warehouse.
 #
-# Implementation: sequential scan of the relevant per-day files,
-# stop-early when `until_` falls inside a file's range. With our
-# 250MB/file cap a full-period scan is bounded — 2 days × 250MB
-# per pod × N pods worth of read I/O. Sub-5s for typical exports.
+# Implementation: per-day files, each read from the WINDOW START, not from
+# byte zero. A file is append-only and chronological (the writer appends
+# lines in the order the container emitted them), so the first line inside
+# [from, until] is found by binary search over byte offsets — a handful of
+# reads of one line each — and the scan starts there. Before that, a 30
+# minute window at the end of a 250 MB day meant reading and JSON-parsing
+# the whole day for every pod, and the analytics page opened in seconds
+# with "all pods" selected. The scan also stops at the first line past
+# `until_`, and lines are date-checked on the raw text before they are
+# parsed, so only lines inside the window pay the parse.
 #
-# No SQL, no index — the file-per-day partitioning IS the index.
+# The seek backs off SEEK_SLACK_BYTES before the found line: a re-tail can
+# append a short overlap slightly out of order, and starting a little early
+# costs a few parsed-and-dropped lines while starting late would lose them.
+# The exact [from, until] filter still runs on every line, so the seek can
+# only ever cost time, never correctness.
+#
+# No SQL, no index — the file-per-day partitioning plus the seek IS the
+# index.
 module LogTail
   class Reader
     DEFAULT_MATCH_LIMIT = 50_000  # cap matched lines (operator-set)
+
+    # How far before the first in-window line the scan starts. Bounds the
+    # damage from a short out-of-order overlap at a write boundary.
+    SEEK_SLACK_BYTES = 256 * 1024
+
+    # A line's timestamp, read off the raw JSON text without parsing it. The
+    # writer emits `"ts":"…"` verbatim (JSON.generate of the parser's hash),
+    # so the literal match is exact for our own files; anything else falls
+    # back to the full parse.
+    TS_PATTERN = /"ts":"([^"]*)"/
 
     # each_line — yields each matched parsed-hash + the pod name.
     # @param server    [Server]
@@ -77,13 +100,35 @@ module LogTail
         )
 
         files.each do |path|
-          File.foreach(path) do |raw|
+          # Bytes read past the window's end. The file is chronological, so
+          # the first line past `until_` means the rest is too — except for
+          # the same short out-of-order overlap the seek's slack allows for
+          # at the start. Reading one slack past the boundary keeps a late
+          # line from being cut off, and still ends a 250 MB file a few
+          # hundred KB after the window instead of at its last byte.
+          overshoot = 0
+
+          each_raw_line_from(path, from_iso) do |raw|
             return yielded if yielded >= @limit
+
+            # Filter by time first, on the raw text, so a line outside the
+            # window is skipped without paying for its parse.
+            quick_ts = raw[TS_PATTERN, 1]
+
+            if quick_ts
+              next if quick_ts < from_iso
+
+              if quick_ts > until_iso
+                overshoot += raw.bytesize
+                break if overshoot > SEEK_SLACK_BYTES
+
+                next
+              end
+            end
 
             hash = parse_line(raw)
             next if hash.nil?
 
-            # Filter by time first (cheapest discriminant)
             ts = hash[:ts] || hash["ts"]
             next if ts.nil?
             next if ts < from_iso
@@ -123,6 +168,84 @@ module LogTail
     end
 
     private
+
+    # each_raw_line_from — every line of `path` from the first one that can
+    # be inside the window, found by window_start_offset.
+    def each_raw_line_from(path, from_iso)
+      File.open(path, "r") do |f|
+        start = window_start_offset(f, from_iso)
+        f.seek(start)
+        f.each_line { |raw| yield raw }
+      end
+    end
+
+    # window_start_offset — the byte offset to start reading from: a little
+    # before the first line whose ts is >= from_iso, or 0 when the file is
+    # small, unparseable at the probes, or starts inside the window.
+    #
+    # Binary search over byte offsets. Each probe seeks to the middle, skips
+    # to the next line boundary and reads that line's ts off the raw text.
+    # A probe that lands on a line with no readable ts (a sentinel, a
+    # truncated last line) is treated as "before the window" so the search
+    # keeps moving right and the exact filter in each_line settles it.
+    def window_start_offset(f, from_iso)
+      size = f.size
+      return 0 if size <= SEEK_SLACK_BYTES
+
+      lo = 0
+      hi = size
+
+      while lo < hi
+        mid = (lo + hi) / 2
+        offset, ts = probe_line(f, mid)
+
+        # No full line after mid: everything past here is the file's tail,
+        # which the linear scan from lo will cover.
+        if offset.nil?
+          hi = mid
+          next
+        end
+
+        # An in-window line at or after mid bounds the answer at mid, not at
+        # the line's own offset: the line mid landed inside (skipped by the
+        # probe) starts before mid and may itself be the first in-window
+        # line. Bounding at `offset` also stalls when lo already sits inside
+        # that skipped line — the probe keeps finding the same boundary.
+        if ts && ts >= from_iso
+          hi = mid
+        else
+          lo = offset + 1
+        end
+      end
+
+      [hi - SEEK_SLACK_BYTES, 0].max.then { |start| line_start_at(f, start) }
+    end
+
+    # probe_line — [offset of the first full line at or after `pos`, its ts].
+    # Offset is nil when no line boundary exists after `pos`.
+    def probe_line(f, pos)
+      f.seek(pos)
+
+      if pos.positive?
+        return [nil, nil] if f.gets.nil?
+      end
+
+      offset = f.pos
+      raw = f.gets
+      return [nil, nil] if raw.nil?
+
+      [offset, raw[TS_PATTERN, 1]]
+    end
+
+    # line_start_at — `pos` moved forward to the next line boundary, so the
+    # scan never starts mid-line (0 is always a boundary).
+    def line_start_at(f, pos)
+      return 0 if pos <= 0
+
+      f.seek(pos)
+      f.gets
+      f.pos
+    end
 
     def parse_line(raw)
       JSON.parse(raw)

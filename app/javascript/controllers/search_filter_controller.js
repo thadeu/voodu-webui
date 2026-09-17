@@ -5,7 +5,12 @@ import { Controller } from "@hotwired/stimulus"
 // TWO PROBLEMS, and the second is the one that makes this a controller rather
 // than a data-action.
 //
-// 1. Debounce. One request per keystroke is a request per keystroke.
+// 1. Debounce. One request per keystroke is a request per keystroke. 600ms,
+//    not the 300-ish a typeahead uses: this box re-queries a table and
+//    rewrites the URL, and at 350ms a normal typing rhythm fired between
+//    words, so the list flickered through partial filters and the URL bar
+//    churned while the operator was still deciding what to type. Enter
+//    still applies at once.
 //
 // 2. Focus. Submitting reloads the frame, and the frame REPLACES its contents —
 //    including this input. The operator types "run", the results land, and the
@@ -19,7 +24,7 @@ import { Controller } from "@hotwired/stimulus"
 let refocusAfterRender = false
 
 export default class extends Controller {
-  static values = { delay: { type: Number, default: 350 } }
+  static values = { delay: { type: Number, default: 600 } }
 
   connect() {
     if (!refocusAfterRender) return

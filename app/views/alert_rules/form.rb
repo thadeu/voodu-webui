@@ -236,7 +236,7 @@ class Views::AlertRules::Form < Views::Base
              "data-[disabled=true]:opacity-40 data-[disabled=true]:pointer-events-none"
     ) do
       span(class: "w-3.5 shrink-0 text-voodu-accent-2", data: {alert_rule_form_target: "optionCheck"}) { active ? "✓" : "" }
-      span(class: "truncate") { row[:label] }
+      span(class: "flex-1 min-w-0 truncate", title: row[:label]) { row[:label] }
     end
   end
 
@@ -266,8 +266,13 @@ class Views::AlertRules::Form < Views::Base
     rows.find { |r| r[:value] == current_target_value }&.dig(:label) || "Select a target"
   end
 
+  # The menu is exactly as wide as the select above it. It used to size to
+  # its content (`w-max`), and a long pod name such as
+  # `apps · contagorda/sweep-idempotency-keys` pushed it past the modal's
+  # edge, which then scrolled sideways. Rows truncate instead and carry the
+  # full label in `title`.
   def target_menu_classes
-    "absolute left-0 top-[calc(100%+4px)] z-30 min-w-full w-max max-w-[320px] max-h-[300px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+    "absolute left-0 right-0 top-[calc(100%+4px)] z-30 max-h-[300px] overflow-y-auto overflow-x-hidden scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
   end
 
   # dropdown_filter + dropdown_empty live in Views::Base (shared with the

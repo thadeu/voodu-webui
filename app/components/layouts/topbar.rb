@@ -162,6 +162,11 @@ class Components::Layouts::Topbar < Components::Base
     )
   end
 
+  # The org the menu is drawn beside: the server's, or the one in the URL.
+  def menu_org
+    @current_server&.org || current_org
+  end
+
   def account_dropdown
     div(class: "absolute right-0 top-9 z-50 w-56 flex flex-col " \
                "border border-voodu-border bg-voodu-surface shadow-lg") do
@@ -171,7 +176,11 @@ class Components::Layouts::Topbar < Components::Base
         role_chip
       end
 
-      if allowed_anywhere?(:manage_account)
+      # Same rule as the sidebar's Installation group (Sidebar#nav_permitted?):
+      # with an org on the screen, its owner; with none, anybody who owns one.
+      # An admin invited into another org owns a workspace elsewhere, and a
+      # "License — free" row beside that org's name read as that org's plan.
+      if menu_org ? allowed_in?(menu_org, :manage_account) : allowed_anywhere?(:manage_account)
         # org_id: nil explicitly — these routes take no org segment, so the
         # helper would otherwise append the current one as ?org_id=…, which is
         # noise in the URL bar and in every log line.

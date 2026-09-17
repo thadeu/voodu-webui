@@ -74,10 +74,14 @@ class Views::Servers::Index < Views::Base
     end
   end
 
+  # Asked about THIS org, not about any org. On the hosted tier everybody
+  # owns a workspace of their own, so "do they administer some org" is yes
+  # for a member browsing an org that granted them nothing — and the button
+  # then sat under "No servers shared with you", reading as "add one here"
+  # while the form could only register into their own workspace. The door
+  # belongs to the org on the screen; their workspace has its own.
   def add_server_btn
-    # ServersController#require_server_management! refuses `new` unless they
-    # administer some org. Same question, asked before drawing the door.
-    return unless administrable_orgs.exists?
+    return unless may_add_here?
 
     a(
       href: new_server_path,
@@ -112,13 +116,17 @@ class Views::Servers::Index < Views::Base
   # then false as well as useless, and the button under it opens a form that
   # refuses them.
   def empty_headline
-    administrable_orgs.exists? ? "No servers registered yet." : "No servers shared with you."
+    may_add_here? ? "No servers registered yet." : "No servers shared with you in #{current_org&.name}."
   end
 
   def empty_subline
-    return "Add the first one to start monitoring." if administrable_orgs.exists?
+    return "Add the first one to start monitoring." if may_add_here?
 
-    "An admin of this org grants access per server."
+    "Members see only the servers an admin of #{current_org&.name} grants them. Ask one to share a server with you."
+  end
+
+  def may_add_here?
+    current_org.present? && allowed_in?(current_org, :manage_servers)
   end
 
   # server_section — wraps both the desktop table and the mobile

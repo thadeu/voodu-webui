@@ -125,7 +125,7 @@ class Components::UI::Multiselect < Components::Base
         class: "w-3.5 h-3.5 accent-voodu-accent"
       )
 
-      span(class: "truncate") { option[:label] }
+      span(class: "flex-1 min-w-0 truncate", title: option[:label]) { option[:label] }
 
       if option[:hint].present?
         span(class: "text-[10px] uppercase tracking-[0.05em] text-voodu-muted-2 ml-auto shrink-0") do

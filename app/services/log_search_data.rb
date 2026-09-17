@@ -53,7 +53,7 @@ class LogSearchData
     "24h" => 24.hours
   }.freeze
 
-  DEFAULT_RANGE = "30m"
+  DEFAULT_RANGE = "5m"
 
   # Hard floor on `from` — never scan past what cleanup keeps, and never past
   # what the licence allows this installation to look back. Resolved per call

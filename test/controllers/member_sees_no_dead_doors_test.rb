@@ -281,3 +281,94 @@ class MemberSeesNoDeadDoorsTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "Create dashboard"
   end
 end
+
+# ── A member who owns a workspace of their own ─────────────────────
+#
+# On the hosted tier everybody is owner of a workspace, so "do they
+# administer some org" is yes for every member. The door has to be about the
+# org on the screen, or a member of Acme is offered "Add server" under "No
+# servers shared with you" and lands in a form that registers into their own
+# workspace instead.
+class MemberWithOwnWorkspaceTest < ActionDispatch::IntegrationTest
+  setup do
+    contractor = users(:contractor)
+    own = Org.create!(name: "Contractor's workspace", account: accounts(:acme_co))
+    Org::Membership.create!(user: contractor, org: own, role: :owner, status: :active)
+
+    sign_in_as(email: contractor.email)
+  end
+
+  test "is still not offered Add server in an org that granted them nothing" do
+    Server.where(org: orgs(:acme)).find_each(&:destroy)
+
+    get servers_path(org_id: "acmeorg1")
+
+    assert_response :success
+    assert_select "a[href*=?]", "/servers/new", count: 0
+    assert_includes response.body, "No servers shared with you in Acme"
+    assert_includes response.body, "Ask one to share a server with you"
+    assert_not_includes response.body, "Add the first one"
+  end
+
+  test "is refused the registration form under that org" do
+    get new_server_path(org_id: "acmeorg1")
+
+    assert_response :redirect
+    assert_equal "/servers", URI(response.location).path
+  end
+
+  test "is offered Add server inside their own workspace" do
+    own = Org.find_by!(name: "Contractor's workspace")
+
+    get servers_path(org_id: own.short_id)
+
+    assert_response :success
+    assert_select "a[href*=?]", "/servers/new", minimum: 1
+    assert_includes response.body, "Add the first one"
+  end
+end
+
+# ── License belongs to the org's owner ─────────────────────────────
+#
+# The screen is org-less and always shows the visitor's OWN account, so an
+# invited admin was never shown another org's licence — but the sidebar
+# offered the door while they browsed the org that invited them, which reads
+# as that org's licence. Inside an org, only its owner is offered it.
+class LicenseDoorTest < ActionDispatch::IntegrationTest
+  setup do
+    @previous = Rails.application.config.x.license
+    Rails.application.config.x.license = LicenseToken.new(
+      status: :valid, claims: {"sub" => "voodu-hosted", "tier" => "unlimited", "exp" => 30.days.from_now.to_i}
+    )
+
+    outsider = users(:outsider)
+    Org::Membership.create!(user: outsider, org: orgs(:acme), role: :admin, status: :active)
+
+    sign_in_as(email: outsider.email)
+  end
+
+  teardown { Rails.application.config.x.license = @previous }
+
+  test "an invited admin is not offered License inside the org that invited them" do
+    get servers_path(org_id: "acmeorg1")
+
+    assert_response :success
+    assert_select "a[href='/ops/license']", count: 0
+  end
+
+  test "the same person is offered it inside their own org" do
+    get servers_path(org_id: "globex22")
+
+    assert_response :success
+    assert_select "a[href='/ops/license']", minimum: 1
+  end
+
+  test "the org's owner is offered it" do
+    sign_out
+    sign_in_as(email: users(:owner).email)
+
+    get servers_path(org_id: "acmeorg1")
+
+    assert_select "a[href='/ops/license']", minimum: 1
+  end
+end

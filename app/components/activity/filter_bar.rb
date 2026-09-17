@@ -33,10 +33,29 @@ class Components::Activity::FilterBar < Components::Base
       range_picker
       dropdown_form
       scope_chip if @data.selected_scope
+      refresh_button
     end
   end
 
   private
+
+  # The list refreshes itself as the poller inserts, but not on demand: after
+  # a `vd apply` an operator wants to see the row NOW, and the only way was a
+  # full page reload, which also reset every expanded row. A link into the
+  # frame refetches the table with the filters and window it already has,
+  # and the frame's controller restores the open rows on the way back.
+  def refresh_button
+    a(
+      href: activity_path(request.query_parameters),
+      data: {turbo_frame: @frame},
+      title: "Refresh",
+      "aria-label": "Refresh the activity list",
+      class: "inline-flex items-center justify-center w-7 #{Components::UI::TimeRangeFilter::CONTROL_H} shrink-0 border " \
+             "border-voodu-border bg-voodu-surface text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2 transition-colors"
+    ) do
+      render Icon::ArrowPathOutline.new(class: "w-3.5 h-3.5")
+    end
+  end
 
   # The same picker Metrics and Alerts use, custom window included. Not a
   # variant of it: a third time picker with its own idea of what "7d" means is

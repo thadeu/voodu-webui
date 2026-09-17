@@ -120,7 +120,16 @@ class Components::Layouts::Sidebar < Components::Base
         # sidebar (rather than against some unintended ancestor).
         # `vmd:inset-auto` clears the mobile `inset-y-0 left-0`
         # offsets that don't apply once we're no longer fixed.
-        "vmd:relative vmd:inset-auto vmd:translate-x-0 vmd:max-w-none vmd:z-auto vmd:shadow-none",
+        #
+        # `vmd:translate-none`, NOT `translate-x-0`: Tailwind 4 writes the
+        # `translate` property, and any value but `none` — zero included —
+        # makes this aside a stacking context. The nav tooltips are
+        # `absolute z-50` inside it, so their z-index only ranked them
+        # against each other, and the main content painted later in the
+        # DOM covered them past the sidebar's edge (the logs page's sticky
+        # column header is the one that showed it). `none` leaves the aside
+        # in the page's context and the tooltips rank where they say.
+        "vmd:relative vmd:inset-auto vmd:translate-none vmd:max-w-none vmd:z-auto vmd:shadow-none",
         "vmd:w-[232px] vmd:data-[collapsed]:w-[56px]",
         "vmd:transition-[width] vmd:duration-200 vmd:ease-out",
         # `group` so descendants can read [data-collapsed] via
@@ -511,10 +520,19 @@ class Components::Layouts::Sidebar < Components::Base
   # org at all. The picker offered this "+" to members, and the page it opened
   # refused them — this control and the registry's own button are the two doors
   # to the same form, and only one of them was gated.
+  #
+  # With an org in the nav, the question is about THAT org: a member of it who
+  # owns a workspace elsewhere is not offered a "+" here, because the form it
+  # opens cannot register into the org they are looking at. Without one (the
+  # /ops/* screens) it falls back to an org they may manage.
   def add_server_href
     return @add_server_href if defined?(@add_server_href)
 
-    org_id = (nav_org_id || manageable_org&.short_id if administrable_orgs.exists?)
+    org_id = if nav_org
+      nav_org_id if allowed_in?(nav_org, :manage_servers)
+    elsif administrable_orgs.exists?
+      manageable_org&.short_id
+    end
 
     @add_server_href = org_id && new_server_path(org_id: org_id, server_key: nil)
   end
@@ -554,10 +572,19 @@ class Components::Layouts::Sidebar < Components::Base
     return false if item[:entitlement] && !entitlements.public_send(item[:entitlement])
     return true if item[:capability].nil?
 
-    # A container-wide screen has no org to be asked about, so it asks the same
-    # org-less question its endpoint enforces. Measured against nav_server.org
-    # it hid License and SSO exactly where there is no server to lend an org.
-    return allowed_anywhere?(item[:capability]) if item[:global]
+    # A container-wide screen has no org of its own, but the sidebar is drawn
+    # beside one whenever the URL names it — and that is the org the question
+    # is about. On the hosted tier an admin invited into somebody else's org
+    # owns a workspace elsewhere, so "may they manage an account anywhere" is
+    # yes, and License appeared while they browsed the org that invited them:
+    # a door labelled as that org's licence, opening onto their own. Inside an
+    # org, only its owner sees it. With no org in the URL (/ops/*, the
+    # org-less registry) it falls back to the org-less question the endpoint
+    # itself enforces, or the licence screen could not be reached from itself.
+    if item[:global]
+      return allowed_in?(nav_org, item[:capability]) if nav_org
+      return allowed_anywhere?(item[:capability])
+    end
 
     allowed_in?(nav_org, item[:capability])
   end
