@@ -10,11 +10,38 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     @key = @server.key
   end
 
-  test "new renders the modal form" do
+  test "new renders the form page" do
     get new_alert_rule_path(server_key: @key)
 
     assert_response :success
     assert_includes response.body, "New alert rule"
+    assert_includes response.body, %(name="alert_rule[duration_minutes]")
+    refute_includes response.body, 'data-controller="modal"'
+  end
+
+  test "create rejects a window outside 1..1440 minutes and re-renders" do
+    assert_no_difference("AlertRule.count") do
+      post alert_rules_path(server_key: @key), params: {
+        alert_rule: {
+          name: "too long", metric_kind: "cpu", target: "host|#{@server.id}",
+          comparator: "gte", threshold: "90", duration_minutes: "1441"
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, "must be less than or equal to 1440"
+  end
+
+  test "create accepts any whole minute, not only the old presets" do
+    post alert_rules_path(server_key: @key), params: {
+      alert_rule: {
+        name: "3 min", metric_kind: "cpu", target: "host|#{@server.id}",
+        comparator: "gte", threshold: "90", duration_minutes: "3"
+      }
+    }
+
+    assert_equal 180, AlertRule.order(:id).last.duration_seconds
   end
 
   test "create decodes a pod target (with its server) and redirects" do
@@ -22,7 +49,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
       post alert_rules_path(server_key: @key), params: {
         alert_rule: {
           name: "web reqs", metric_kind: "req_s", target: "pod|#{@server.id}|clowk|web",
-          comparator: "gte", threshold: "50", duration_seconds: "120"
+          comparator: "gte", threshold: "50", duration_minutes: "2"
         }
       }
     end
@@ -41,7 +68,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     post alert_rules_path(server_key: @key), params: {
       alert_rule: {
         name: "host cpu", metric_kind: "cpu", target: "host|#{@server.id}",
-        comparator: "gte", threshold: "90", duration_seconds: "300"
+        comparator: "gte", threshold: "90", duration_minutes: "5"
       }
     }
 
@@ -56,7 +83,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     post alert_rules_path(server_key: @key), params: {
       alert_rule: {
         name: "bad", metric_kind: "disk", target: "pod|a|b",
-        comparator: "gte", threshold: "85", duration_seconds: "300"
+        comparator: "gte", threshold: "85", duration_minutes: "5"
       }
     }
 
@@ -70,7 +97,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     patch alert_rule_path(server_key: @key, id: rule.id), params: {
       alert_rule: {
         name: rule.name, metric_kind: "cpu", target: "host",
-        comparator: "gte", threshold: "95", duration_seconds: "600"
+        comparator: "gte", threshold: "95", duration_minutes: "10"
       }
     }
 
@@ -91,7 +118,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     patch alert_rule_path(server_key: @key, id: rule.id), params: {
       alert_rule: {
         name: rule.name, metric_kind: "memory", target: "host",
-        comparator: "gte", threshold: "90", duration_seconds: "300"
+        comparator: "gte", threshold: "90", duration_minutes: "5"
       }
     }
 
@@ -111,7 +138,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     patch alert_rule_path(server_key: @key, id: rule.id), params: {
       alert_rule: {
         name: "Renamed", metric_kind: "cpu", target: "host",
-        comparator: "gte", threshold: "90", duration_seconds: "300"
+        comparator: "gte", threshold: "90", duration_minutes: "5"
       }
     }
 
@@ -192,7 +219,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
       return_to: origin,
       alert_rule: {
         name: rule.name, metric_kind: "cpu", target: "host",
-        comparator: "gte", threshold: "95", duration_seconds: "300"
+        comparator: "gte", threshold: "95", duration_minutes: "5"
       }
     }
 
@@ -206,7 +233,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
       return_to: origin,
       alert_rule: {
         name: "reqs", metric_kind: "req_s", target: "pod|#{@server.id}|clowk|web",
-        comparator: "gte", threshold: "50", duration_seconds: "120"
+        comparator: "gte", threshold: "50", duration_minutes: "2"
       }
     }
 

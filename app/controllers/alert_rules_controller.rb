@@ -7,7 +7,8 @@
 # Form POSTs are full-page (data-turbo:false, same as Servers /
 # MetricDashboards): success redirects to /alerts; a validation
 # error re-renders the form with inline errors and the entered
-# values intact.
+# values intact. The window arrives as `duration_minutes` (what the
+# operator types); AlertRule#duration_minutes= converts to seconds.
 #
 # The form submits the target as ONE encoded select value —
 # `"host"` or `"pod|<scope>|<name>"` — because host-vs-pod is a
@@ -123,7 +124,7 @@ class AlertRulesController < ApplicationController
   def rule_attributes
     permitted = params.require(:alert_rule)
       .permit(:name, :metric_kind, :target, :comparator,
-        :threshold, :duration_seconds, alert_destination_ids: [])
+        :threshold, :duration_minutes, alert_destination_ids: [])
     attrs = permitted.to_h
     target = attrs.delete("target").to_s
 

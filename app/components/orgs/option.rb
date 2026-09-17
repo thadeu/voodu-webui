@@ -26,7 +26,12 @@ class Components::Orgs::Option < Components::Base
         class: "flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2 text-left text-voodu-text"
       ) do
         render Icon::BuildingOffice2Outline.new(class: "w-3.5 h-3.5 shrink-0 text-voodu-muted")
-        span(class: "truncate") { @org.name }
+        div(class: "flex-1 min-w-0 flex flex-col") do
+          span(class: "truncate") { @org.name }
+          if @org.description.present?
+            span(class: "truncate text-[11px] text-voodu-muted", title: @org.description) { @org.description }
+          end
+        end
       end
 
       button(

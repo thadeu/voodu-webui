@@ -31,9 +31,13 @@ class AlertRule < ApplicationRecord
   TARGET_KINDS = %w[host pod].freeze
   COMPARATORS = %w[gte lte].freeze
 
-  # Form-selectable sustained-for windows. Floor of 60s = 4 warehouse
-  # buckets — enough samples that one noisy 15s tick can't fire alone.
-  DURATIONS = [60, 120, 300, 600, 900, 1800].freeze
+  # Sustained-for window, in whole minutes. Floor of 1 minute = 4 warehouse
+  # buckets — enough samples that one noisy 15s tick can't fire alone. Cap of
+  # 24h so a typo (90000) can't turn one evaluation into a day-long warehouse
+  # scan. The form speaks minutes (`duration_minutes`); the column, the
+  # evaluator and the API speak seconds.
+  MIN_DURATION_MINUTES = 1
+  MAX_DURATION_MINUTES = 1440
 
   # Percent-typed kinds share the 0–100 threshold bound; req_s is an
   # open-ended rate.
@@ -44,7 +48,19 @@ class AlertRule < ApplicationRecord
   validates :metric_kind, inclusion: {in: METRIC_KINDS}
   validates :target_kind, inclusion: {in: TARGET_KINDS}
   validates :comparator, inclusion: {in: COMPARATORS}
-  validates :duration_seconds, inclusion: {in: DURATIONS}
+  validates :duration_seconds, numericality: {
+    only_integer: true,
+    greater_than_or_equal_to: MIN_DURATION_MINUTES * 60,
+    less_than_or_equal_to: MAX_DURATION_MINUTES * 60
+  }
+  # The form assigns minutes; validate what the operator typed, in the unit
+  # they typed it, so "2.5" or "0" is refused with a message about minutes
+  # rather than a seconds message they never saw.
+  validates :duration_minutes, numericality: {
+    only_integer: true,
+    greater_than_or_equal_to: MIN_DURATION_MINUTES,
+    less_than_or_equal_to: MAX_DURATION_MINUTES
+  }, if: -> { defined?(@duration_minutes) }
   validates :threshold, numericality: {greater_than: 0}
   validates :threshold, numericality: {less_than_or_equal_to: 100},
     if: -> { PERCENT_KINDS.include?(metric_kind) }
@@ -149,9 +165,31 @@ class AlertRule < ApplicationRecord
     (comparator == "gte") ? "≥" : "≤"
   end
 
+  # duration_minutes — the form-facing unit. Reads back what was assigned (so
+  # a rejected "2.5" re-renders as typed), else the column converted.
+  def duration_minutes
+    return @duration_minutes if defined?(@duration_minutes)
+    return nil if duration_seconds.nil?
+
+    duration_seconds / 60
+  end
+
+  def duration_minutes=(value)
+    @duration_minutes = value.is_a?(String) ? value.strip : value
+    self.duration_seconds = begin
+      Integer(@duration_minutes.to_s, 10) * 60
+    rescue ArgumentError
+      nil
+    end
+  end
+
+  # "5m" / "2h" / "90m" — whole hours collapse, anything else stays in minutes.
   def duration_label
-    secs = duration_seconds
-    (secs >= 60) ? "#{secs / 60}m" : "#{secs}s"
+    secs = duration_seconds.to_i
+    return "#{secs}s" if secs < 60
+
+    mins = secs / 60
+    (mins >= 60 && mins % 60 == 0) ? "#{mins / 60}h" : "#{mins}m"
   end
 
   # "92.3" — the bare rounded number (1 decimal, trailing .0 trimmed),

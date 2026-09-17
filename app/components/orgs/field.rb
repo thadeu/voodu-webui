@@ -72,7 +72,8 @@ class Components::Orgs::Field < Components::Base
       hidden: true,
       data: {dropdown_target: "menu"},
       class: "absolute left-0 top-[calc(100%+4px)] z-30 min-w-full w-max max-w-[280px] max-h-[280px] " \
-             "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
+             "overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl " \
+             "divide-y divide-voodu-border-2"
     ) do
       # Empty-state row: shown only while there are no org rows. org_select
       # hides it the moment one is appended (create) and shows it again if the

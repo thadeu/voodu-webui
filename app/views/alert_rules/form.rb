@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
-# Views::AlertRules::Form — the New/Edit alert rule modal, rendered
-# over the dashboard chrome (same shell as Views::Servers::New).
+# Views::AlertRules::Form — the New/Edit alert rule PAGE (same shell as
+# Views::Servers::Edit: page head, one SectionCard, actions inside the
+# form). It was a modal once; a modal cannot host the org-wide target
+# menu and the destinations picker without clipping, and every other
+# New/Edit surface in the product is a page.
 #
 # The target is ONE select — "Host (entire server)" plus the
 # workloads from the state-sync snapshot grouped by scope — encoded
@@ -34,9 +37,12 @@ class Views::AlertRules::Form < Views::Base
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, servers: @servers, current_server: @current_server,
-      breadcrumb: overview_crumbs({label: "Alerts"})
+      breadcrumb: overview_crumbs({label: "Alerts", href: alerts_path(tab: "rules")}, {label: title})
     ) do
-      render(modal) { form_body }
+      div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+        page_head
+        div(class: "max-w-3xl") { form_card }
+      end
     end
   end
 
@@ -46,14 +52,20 @@ class Views::AlertRules::Form < Views::Base
     @rule.persisted?
   end
 
-  def modal
-    Components::UI::Modal.new(
-      title: persisted? ? "Edit alert rule" : "New alert rule",
-      subtitle: "Fires when the metric holds past the threshold for the whole window",
-      icon: :BellOutline,
-      size: :md,
-      close_to: @return_to
-    ).with_footer { footer_actions }
+  def title
+    persisted? ? "Edit alert rule" : "New alert rule"
+  end
+
+  # page_head, not `header` — that is a Phlex HTML tag method.
+  def page_head
+    div(class: "flex flex-col gap-1") do
+      h1(class: "text-[17px] font-semibold text-voodu-text") { title }
+      p(class: "text-[12.5px] text-voodu-muted") { "Fires when the metric holds past the threshold for the whole window" }
+    end
+  end
+
+  def form_card
+    render Components::UI::SectionCard.new(title: @rule.name.presence || "Rule") { form_body }
   end
 
   def form_body
@@ -62,48 +74,51 @@ class Views::AlertRules::Form < Views::Base
       method: "post",
       data: {turbo: false, controller: "alert-rule-form"},
       id: "alert-rule-form",
-      class: "flex flex-col gap-4 px-5 py-4"
+      class: "flex flex-col"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
-      input(type: "hidden", name: "_method", value: "patch") if persisted?
-      input(type: "hidden", name: "return_to", value: @return_to)
-
-      field(label: "Name", error: @rule.errors[:name].first) do
-        text_input(name: "alert_rule[name]", value: @rule.name, placeholder: "Host CPU ≥ 90%")
-      end
-
-      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-        field(label: "Metric", error: @rule.errors[:metric_kind].first) do
-          metric_select
-        end
-
-        field(label: "Target", error: target_error) do
-          target_select
-        end
-      end
-
-      div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
-        field(
-          label: "Condition",
-          hint: "Direction + threshold the metric is compared against.",
-          error: @rule.errors[:threshold].first
-        ) do
-          condition_inputs
-        end
-
-        field(
-          label: "Sustained for",
-          hint: "Every sample in this window must breach before it fires.",
-          error: @rule.errors[:duration_seconds].first
-        ) do
-          duration_select
-        end
-      end
-
-      destinations_field
-
-      input(type: "submit", class: "hidden", "aria-hidden": "true")
+      div(class: "flex flex-col gap-4 p-3.5") { form_fields }
+      form_actions
     end
+  end
+
+  def form_fields
+    input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+    input(type: "hidden", name: "_method", value: "patch") if persisted?
+    input(type: "hidden", name: "return_to", value: @return_to)
+
+    field(label: "Name", error: @rule.errors[:name].first) do
+      text_input(name: "alert_rule[name]", value: @rule.name, placeholder: "Host CPU ≥ 90%")
+    end
+
+    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+      field(label: "Metric", error: @rule.errors[:metric_kind].first) do
+        metric_select
+      end
+
+      field(label: "Target", error: target_error) do
+        target_select
+      end
+    end
+
+    div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-3") do
+      field(
+        label: "Condition",
+        hint: "Direction + threshold the metric is compared against.",
+        error: @rule.errors[:threshold].first
+      ) do
+        condition_inputs
+      end
+
+      field(
+        label: "Sustained for",
+        hint: "Every sample in this window must breach before it fires. Whole minutes, 1 to 1440.",
+        error: @rule.errors[:duration_minutes].first || @rule.errors[:duration_seconds].first
+      ) do
+        duration_input
+      end
+    end
+
+    destinations_field
   end
 
   # Which destinations this rule notifies. Empty selection = DON'T SEND (the
@@ -268,7 +283,7 @@ class Views::AlertRules::Form < Views::Base
 
   # The menu is exactly as wide as the select above it. It used to size to
   # its content (`w-max`), and a long pod name such as
-  # `apps · contagorda/sweep-idempotency-keys` pushed it past the modal's
+  # `apps · contagorda/sweep-idempotency-keys` pushed it past the card's
   # edge, which then scrolled sideways. Rows truncate instead and carry the
   # full label in `title`.
   def target_menu_classes
@@ -325,16 +340,20 @@ class Views::AlertRules::Form < Views::Base
     (@rule.threshold % 1 == 0) ? @rule.threshold.to_i : @rule.threshold
   end
 
-  def duration_select
-    ds_select(
-      name: "alert_rule[duration_seconds]",
-      selected: @rule.duration_seconds,
-      options: AlertRule::DURATIONS.map { |secs| [secs, duration_option_label(secs)] }
-    )
-  end
-
-  def duration_option_label(secs)
-    (secs >= 60) ? "#{secs / 60} minute#{"s" if secs >= 120}" : "#{secs} seconds"
+  # A free number in minutes, not a fixed list: the old six presets could
+  # not express "3 minutes" or "45 minutes", and there is no principled reason
+  # an operator's window must be one of ours. Bounds are enforced by the model
+  # (MIN/MAX_DURATION_MINUTES) and mirrored here so the browser refuses early.
+  def duration_input
+    div(class: "relative") do
+      input(
+        type: "number", name: "alert_rule[duration_minutes]", value: @rule.duration_minutes,
+        step: "1", min: AlertRule::MIN_DURATION_MINUTES, max: AlertRule::MAX_DURATION_MINUTES,
+        inputmode: "numeric", placeholder: "5",
+        class: tokens(input_classes, "pr-14 font-voodu-mono text-[12.5px]")
+      )
+      span(class: "absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-voodu-muted pointer-events-none") { "min" }
+    end
   end
 
   # ds_select — delegates to the extracted Components::UI::Select. The markup
@@ -346,23 +365,7 @@ class Views::AlertRules::Form < Views::Base
     )
   end
 
-  def ds_option(value, text, active)
-    button(
-      type: "button",
-      data: {
-        action: "click->ds-select#pick click->dropdown#close",
-        dropdown_target: "option", ds_select_target: "option",
-        value: value, label: text, active: active.to_s
-      },
-      class: "group flex items-center gap-2 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] " \
-             "text-voodu-text hover:bg-voodu-hover data-[active=true]:text-voodu-accent-2"
-    ) do
-      span(class: "w-3.5 shrink-0 text-voodu-accent-2 opacity-0 group-data-[active=true]:opacity-100") { "✓" }
-      span(class: "truncate") { text }
-    end
-  end
-
-  # field + input_classes live in Views::Base (shared by every modal form).
+  # field + input_classes live in Views::Base (shared by every New/Edit form).
 
   def text_input(name:, value: nil, placeholder: nil)
     input(
@@ -372,25 +375,26 @@ class Views::AlertRules::Form < Views::Base
     )
   end
 
-  def footer_actions
-    span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") do
-      plain "Evaluated every 30s against the local warehouse."
-    end
+  # Inside the form, so Enter submits without a hidden submit input and the
+  # button needs no `form:` attribute (the modal footer lived outside it).
+  def form_actions
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 p-3.5 border-t border-voodu-border") do
+      button(
+        type: "submit",
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover"
+      ) do
+        render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
+        span { persisted? ? "Save changes" : "Create rule" }
+      end
 
-    div(class: "flex-1")
+      a(
+        href: @return_to,
+        class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+      ) { "Cancel" }
 
-    a(
-      href: @return_to,
-      class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) { "Cancel" }
-
-    button(
-      type: "submit",
-      form: "alert-rule-form",
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover"
-    ) do
-      render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
-      span { persisted? ? "Save changes" : "Create rule" }
+      span(class: "text-[11.5px] text-voodu-muted vmd:ml-auto") do
+        plain "Evaluated every 30s against the local warehouse."
+      end
     end
   end
 end

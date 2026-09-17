@@ -228,4 +228,36 @@ class AlertRuleTest < ActiveSupport::TestCase
 
     assert_equal "≥ 85% for 5m", rule.condition_label
   end
+
+  test "duration_minutes converts to seconds and is bounded to 1..1440" do
+    rule = AlertRule.new(duration_minutes: "3")
+    assert_equal 180, rule.duration_seconds
+    assert_equal "3", rule.duration_minutes
+
+    rule.valid?
+    assert_empty rule.errors[:duration_minutes]
+
+    %w[0 2.5 1441 abc].each do |bad|
+      rule = AlertRule.new(duration_minutes: bad)
+      rule.valid?
+      assert_not_empty rule.errors[:duration_minutes], "#{bad.inspect} should be refused"
+    end
+  end
+
+  test "duration_seconds written directly must be a whole minute count in range" do
+    rule = AlertRule.new(duration_seconds: 30)
+    rule.valid?
+    assert_not_empty rule.errors[:duration_seconds]
+
+    rule = AlertRule.new(duration_seconds: 300)
+    rule.valid?
+    assert_empty rule.errors[:duration_seconds]
+    assert_equal 5, rule.duration_minutes
+  end
+
+  test "duration_label collapses whole hours" do
+    assert_equal "5m", AlertRule.new(duration_seconds: 300).duration_label
+    assert_equal "90m", AlertRule.new(duration_seconds: 5400).duration_label
+    assert_equal "2h", AlertRule.new(duration_seconds: 7200).duration_label
+  end
 end

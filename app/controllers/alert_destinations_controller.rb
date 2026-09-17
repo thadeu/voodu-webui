@@ -2,8 +2,10 @@
 
 # AlertDestinationsController — CRUD for shared notification targets,
 # plus a synchronous `test` probe. Server-scoped; same full-page
-# modal-form pattern as AlertRulesController (data-turbo:false POST,
-# redirect on success / 422 re-render on validation error).
+# form pattern as AlertRulesController (data-turbo:false POST,
+# redirect on success / 422 re-render on validation error), with
+# `return_to` threaded through so Cancel/Save land on the tab the
+# operator left.
 #
 # Secrets (endpoint URL, secret) are encrypted. On edit, a blank
 # field KEEPS the stored value — same convention as the server PAT in
@@ -27,7 +29,7 @@ class AlertDestinationsController < ApplicationController
     @destination = current_org.alert_destinations.new(destination_attributes)
 
     if @destination.save
-      redirect_to alerts_path(tab: "destinations"), notice: "Destination #{@destination.name} created."
+      redirect_to return_to_path(destinations_tab_path), notice: "Destination #{@destination.name} created."
     else
       render_form(status: :unprocessable_entity)
     end
@@ -39,7 +41,7 @@ class AlertDestinationsController < ApplicationController
 
   def update
     if @destination.update(destination_attributes)
-      redirect_to alerts_path(tab: "destinations"), notice: "Destination #{@destination.name} updated."
+      redirect_to return_to_path(destinations_tab_path), notice: "Destination #{@destination.name} updated."
     else
       render_form(status: :unprocessable_entity)
     end
@@ -74,9 +76,16 @@ class AlertDestinationsController < ApplicationController
   end
 
   def render_form(status: nil)
-    view = Views::AlertDestinations::Form.new(**dashboard_context, destination: @destination)
+    view = Views::AlertDestinations::Form.new(
+      **dashboard_context, destination: @destination,
+      return_to: return_to_path(destinations_tab_path)
+    )
 
     status ? render(view, status: status) : render(view)
+  end
+
+  def destinations_tab_path
+    alerts_path(tab: "destinations")
   end
 
   def destination_attributes

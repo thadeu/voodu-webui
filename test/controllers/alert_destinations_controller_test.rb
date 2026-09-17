@@ -12,12 +12,13 @@ class AlertDestinationsControllerTest < ActionDispatch::IntegrationTest
     @key = @server.key
   end
 
-  test "new renders the modal form" do
+  test "new renders the form page" do
     get new_alert_destination_path(server_key: @key)
 
     assert_response :success
     assert_includes response.body, "New destination"
     assert_includes response.body, "destination-form"
+    refute_includes response.body, 'data-controller="modal"'
   end
 
   test "create persists an encrypted webhook destination" do

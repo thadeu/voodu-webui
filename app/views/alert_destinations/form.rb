@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-# Views::AlertDestinations::Form — New/Edit destination modal. One
+# Views::AlertDestinations::Form — New/Edit destination PAGE (same shell
+# as Views::AlertRules::Form / Views::Servers::Edit). It was a modal; the
+# body editor wants height and the help popover had to portal out of the
+# dialog to stay visible — on a page both just fit. One
 # generic kind (webhook): a URL + optional auth header + optional JSON
 # body template with {{tokens}}. The body-template popover ships
 # starter templates for Slack / Telegram / PagerDuty / Zapier so any
@@ -12,7 +15,7 @@
 class Views::AlertDestinations::Form < Views::Base
   # Token list shown under the body field.
   # Body-template reference shown in the help popover (the ? next to
-  # the field), so the modal itself stays uncluttered.
+  # the field), so the form itself stays uncluttered.
   TOKEN_DOCS = [
     ["{{rule}}", "rule name"],
     ["{{state}}", "firing / resolved"],
@@ -47,19 +50,25 @@ class Views::AlertDestinations::Form < Views::Base
     '"summary": "{{rule | truncate: 60}}"'
   ].freeze
 
-  def initialize(current_path:, destination:, servers: [], current_server: nil)
+  def initialize(current_path:, destination:, servers: [], current_server: nil, return_to: nil)
     @current_path = current_path
     @servers = servers
     @current_server = current_server
     @destination = destination
+    # return_to — where Cancel and the post-save redirect land (validated by
+    # the controller). Defaults to the Destinations tab the operator came from.
+    @return_to = return_to || alerts_path(tab: "destinations")
   end
 
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, servers: @servers, current_server: @current_server,
-      breadcrumb: overview_crumbs({label: "Alerts"})
+      breadcrumb: overview_crumbs({label: "Alerts", href: alerts_path(tab: "destinations")}, {label: title})
     ) do
-      render(modal) { form_body }
+      div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
+        page_head
+        div(class: "max-w-5xl") { form_card }
+      end
     end
   end
 
@@ -69,14 +78,20 @@ class Views::AlertDestinations::Form < Views::Base
     @destination.persisted?
   end
 
-  def modal
-    Components::UI::Modal.new(
-      title: persisted? ? "Edit destination" : "New destination",
-      subtitle: "POST a request to this target when an alert fires or resolves",
-      icon: :PaperAirplaneOutline,
-      size: :lg,
-      close_to: alerts_path(tab: "destinations")
-    ).with_footer { footer_actions }
+  def title
+    persisted? ? "Edit destination" : "New destination"
+  end
+
+  # page_head, not `header` — that is a Phlex HTML tag method.
+  def page_head
+    div(class: "flex flex-col gap-1") do
+      h1(class: "text-[17px] font-semibold text-voodu-text") { title }
+      p(class: "text-[12.5px] text-voodu-muted") { "POST a request to this target when an alert fires or resolves" }
+    end
+  end
+
+  def form_card
+    render Components::UI::SectionCard.new(title: @destination.name.presence || "Destination") { form_body }
   end
 
   # Two columns at vmd+: the connection + delivery settings on the left,
@@ -88,26 +103,31 @@ class Views::AlertDestinations::Form < Views::Base
       method: "post",
       data: {turbo: false},
       id: "destination-form",
-      class: "px-5 py-4"
+      class: "flex flex-col"
     ) do
-      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
-      input(type: "hidden", name: "_method", value: "patch") if persisted?
-      input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
+      div(class: "p-3.5") do
+        input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+        input(type: "hidden", name: "_method", value: "patch") if persisted?
+        input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
+        input(type: "hidden", name: "return_to", value: @return_to)
 
-      div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
-        div(class: "flex flex-col gap-4 vmd:w-[320px] vmd:shrink-0") do
-          field(label: "Name", error: @destination.errors[:name].first) do
-            text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
+        div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
+          div(class: "flex flex-col gap-4 vmd:w-[320px] vmd:shrink-0") do
+            field(label: "Name", error: @destination.errors[:name].first) do
+              text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
+            end
+            url_field
+            auth_header_field
+            triggers_field
           end
-          url_field
-          auth_header_field
-          triggers_field
-        end
 
-        div(class: "flex flex-col vmd:flex-1 min-w-0") do
-          body_template_field
+          div(class: "flex flex-col vmd:flex-1 min-w-0") do
+            body_template_field
+          end
         end
       end
+
+      form_actions
     end
   end
 
@@ -216,10 +236,9 @@ class Views::AlertDestinations::Form < Views::Base
     end
   end
 
-  # Tokens + filters reference. A popover (not a drawer) because the
-  # form is a centered modal — a side drawer would cover the very editor
-  # it documents; this is peek-and-dismiss, in-flow with the Templates
-  # popover beside it.
+  # Tokens + filters reference. A popover (not a drawer): a side drawer
+  # would cover the very editor it documents; this is peek-and-dismiss,
+  # in-flow with the Templates popover beside it.
   def help_popover
     div(class: "relative", data: {controller: "popover"}) do
       button(
@@ -231,9 +250,9 @@ class Views::AlertDestinations::Form < Views::Base
         render Icon::QuestionMarkCircleOutline.new(class: "w-4 h-4")
       end
 
-      # The popover controller portals this menu to the modal dialog and
-      # positions it (the body's overflow-auto would otherwise clip it).
-      # Position/max-height are set in JS; only the look stays here.
+      # The popover controller portals this menu to <body> (no dialog on a
+      # page) and positions it. Position/max-height are set in JS; only the
+      # look stays here.
       div(
         hidden: true,
         data: {popover_target: "menu"},
@@ -351,23 +370,24 @@ class Views::AlertDestinations::Form < Views::Base
     )
   end
 
-  def footer_actions
-    span(class: "text-[11.5px] text-voodu-muted hidden vmd:inline") { "Delivered asynchronously, with retries." }
+  # Inside the form (the modal footer lived outside it, hence the old
+  # `form:` attribute). Enter in any field submits.
+  def form_actions
+    div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 p-3.5 border-t border-voodu-border") do
+      button(
+        type: "submit",
+        class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover"
+      ) do
+        render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
+        span { persisted? ? "Save changes" : "Create destination" }
+      end
 
-    div(class: "flex-1")
+      a(
+        href: @return_to,
+        class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+      ) { "Cancel" }
 
-    a(
-      href: alerts_path(tab: "destinations"),
-      class: "inline-flex items-center justify-center px-3 h-9 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
-    ) { "Cancel" }
-
-    button(
-      type: "submit",
-      form: "destination-form",
-      class: "inline-flex items-center gap-1.5 px-3 h-9 border border-voodu-accent-line bg-voodu-btn-accent text-voodu-on-accent text-[12.5px] font-medium hover:bg-voodu-btn-accent-hover"
-    ) do
-      render Icon::CheckOutline.new(class: "w-3.5 h-3.5")
-      span { persisted? ? "Save changes" : "Create destination" }
+      span(class: "text-[11.5px] text-voodu-muted vmd:ml-auto") { "Delivered asynchronously, with retries." }
     end
   end
 
