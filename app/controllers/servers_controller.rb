@@ -71,29 +71,38 @@ class ServersController < ApplicationController
     end
 
     # Round 2: preflight — probe the endpoint with the supplied PAT.
-    # We do this BEFORE persisting so a typo'd token doesn't leave
-    # a dead Server record in the sidebar. The operator gets the
-    # real connection error class (auth vs network) inline in the
-    # modal, matching the design beta's "Testing → Connection
-    # failed" state.
-    if (probe_error = ServerHealth.probe!(@server))
+    # A rejected token blocks the save: a typo'd PAT would leave a dead
+    # row in the sidebar with nothing the operator can do on the box.
+    # A host that does not ANSWER is different — the usual cause is a
+    # firewall that has not opened the agent port to this dashboard
+    # yet, and that is fixed on the box, after the server exists here.
+    # So a network failure saves and lands on the overview with the
+    # firewall hint (port + our public IP) instead of a dead end.
+    failure = ServerHealth.preflight(@server)
+
+    if failure && !failure.network?
       render Views::Servers::New.new(
         current_path: current_path, servers: all_servers,
         server: @server,
         orgs: sorted_orgs,
-        connection_error: probe_error
+        connection_error: failure.message
       ), status: :unprocessable_entity
       return
     end
 
     if @server.save
       # Warm the cache with the preflight result — the just-rendered
-      # sidebar status pill is "online" without spending another HTTP
+      # sidebar status pill is right without spending another HTTP
       # call on the next page render.
-      ServerHealth.warm(@server, online: true)
+      ServerHealth.warm(@server, online: failure.nil?)
 
-      redirect_to server_root_path(org_id: @server.org.short_id, server_key: @server.key),
-        notice: "Server #{@server.name} registered."
+      if failure
+        redirect_to server_root_path(org_id: @server.org.short_id, server_key: @server.key),
+          alert: "Server #{@server.name} saved, but unreachable. #{ServerHealth.firewall_hint(@server)}"
+      else
+        redirect_to server_root_path(org_id: @server.org.short_id, server_key: @server.key),
+          notice: "Server #{@server.name} registered."
+      end
     else
       render Views::Servers::New.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs),
         status: :unprocessable_entity
@@ -125,22 +134,31 @@ class ServersController < ApplicationController
       return
     end
 
-    # Preflight again — endpoint or PAT may have changed and we don't
-    # want a "successful save" that points at an unreachable host.
-    if (probe_error = ServerHealth.probe!(@server))
+    # Preflight again — endpoint or PAT may have changed. Same split as
+    # create: a rejected token blocks, an unanswered host saves with the
+    # firewall hint.
+    failure = ServerHealth.preflight(@server)
+
+    if failure && !failure.network?
       render Views::Servers::Edit.new(
         current_path: current_path, servers: all_servers,
         server: @server,
         orgs: sorted_orgs,
         return_to: safe_return_to,
-        connection_error: probe_error
+        connection_error: failure.message
       ), status: :unprocessable_entity
       return
     end
 
     if @server.save
-      ServerHealth.warm(@server, online: true)
-      redirect_to (safe_return_to || servers_path), notice: "Server #{@server.name} updated."
+      ServerHealth.warm(@server, online: failure.nil?)
+
+      if failure
+        redirect_to (safe_return_to || servers_path),
+          alert: "Server #{@server.name} saved, but unreachable. #{ServerHealth.firewall_hint(@server)}"
+      else
+        redirect_to (safe_return_to || servers_path), notice: "Server #{@server.name} updated."
+      end
     else
       render Views::Servers::Edit.new(current_path: current_path, servers: all_servers, server: @server, orgs: sorted_orgs, return_to: safe_return_to),
         status: :unprocessable_entity

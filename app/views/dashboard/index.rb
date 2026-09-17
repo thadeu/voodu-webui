@@ -71,6 +71,7 @@ class Views::Dashboard::Index < Views::Base
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         stale_banner if @data&.stale?
+        unreached_banner if @data&.never_reached?
         error_banner if @data&.error
         page_header
         stat_cards
@@ -96,6 +97,16 @@ class Views::Dashboard::Index < Views::Base
       span { "Controller offline — showing last-known state from " }
       span(class: "font-voodu-mono opacity-80") { age }
       span { ". Pod statuses are uncertain until the agent comes back." }
+    end
+  end
+
+  # unreached_banner — the server exists here but its agent has never
+  # answered. Distinct from stale (there IS no last-known state) and from
+  # error (nothing is broken on our side): the fix is a firewall rule on the
+  # box, and the callout spells out the port and the address to allow.
+  def unreached_banner
+    render Components::UI::Callout.new(tone: :warning, title: "Agent not reachable yet") do
+      span(class: "text-[12.5px] text-voodu-text-2 break-words") { ServerHealth.firewall_hint(@current_server) }
     end
   end
 

@@ -39,6 +39,15 @@ class OverviewData
     @stale == true
   end
 
+  # never_reached? — offline AND no snapshot ever landed: the server was
+  # saved but this dashboard has not spoken to its agent once. Almost always
+  # the agent port is closed to us. The overview shows the firewall hint
+  # (port + our public IP) until the first sync, so the operator who added
+  # the box behind a firewall is not left staring at an empty page.
+  def never_reached?
+    @never_reached == true
+  end
+
   def initialize(client, server)
     @client = client
     @server = server
@@ -194,6 +203,7 @@ class OverviewData
     # :offline (see `stale?` doc above + `prepare_pod` below). We trust
     # ServerHealth as the single source of truth for agent health.
     @stale = @server.status != :online && state.synced_at.present?
+    @never_reached = @server.status != :online && state.synced_at.nil?
   end
 
   # ── Stat cards ──────────────────────────────────────────────────

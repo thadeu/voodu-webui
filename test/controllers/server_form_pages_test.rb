@@ -123,4 +123,41 @@ class ServerFormPagesTest < ActionDispatch::IntegrationTest
       }
     end
   end
+
+  # A closed port is fixed on the box, after the server exists here. So an
+  # unanswered host SAVES and the operator leaves with the firewall hint;
+  # a rejected token does not save — nothing on the box would fix that row.
+  test "a host that does not answer is saved and the flash carries the firewall hint" do
+    stub_request(:get, %r{box\.example:8687}).to_timeout
+
+    assert_difference -> { Server.count }, 1 do
+      post servers_path(org_id: ORG), params: {
+        server: {
+          name: "walled-box", endpoint: "http://box.example:8687",
+          pat_ciphertext: "pat_#{"a" * 28}", org_id: orgs(:acme).id
+        }
+      }
+    end
+
+    server = Server.order(:id).last
+    assert_redirected_to server_root_path(org_id: ORG, server_key: server.key)
+    assert_includes flash[:alert], "saved, but unreachable"
+    assert_includes flash[:alert], "Allow inbound TCP 8687"
+  end
+
+  test "a rejected token still blocks the save" do
+    stub_request(:get, %r{box\.example:8687}).to_return(status: 401, body: "{}")
+
+    assert_no_difference -> { Server.count } do
+      post servers_path(org_id: ORG), params: {
+        server: {
+          name: "bad-pat", endpoint: "http://box.example:8687",
+          pat_ciphertext: "pat_#{"a" * 28}", org_id: orgs(:acme).id
+        }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_includes response.body, "401 Unauthorized"
+  end
 end

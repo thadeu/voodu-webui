@@ -118,12 +118,48 @@ class ServerHealth
   # The server doesn't need to be persisted; we synthesize a
   # Voodu::Client directly.
   def self.probe!(server)
+    preflight(server)&.message
+  end
+
+  # Failure — what preflight hands back. `kind` is the decision the caller
+  # makes: :network (the host did not answer — save anyway, the fix is on the
+  # box's firewall), :auth (the PAT is wrong — nothing to save), :other.
+  Failure = Struct.new(:message, :kind) do
+    def network? = kind == :network
+  end
+
+  # preflight — probe! with the error CLASS kept. A refused connection and a
+  # rejected token both read as "connection failed" to the operator, but they
+  # are different decisions for the registration form: a blocked port is fixed
+  # on the box after the server exists here; a bad PAT means the row would be
+  # a lie.
+  def self.preflight(server)
     Voodu::Client.new(server).system
     nil
+  rescue Voodu::Client::AuthError => e
+    Failure.new(humanize_error(e), :auth)
+  rescue Voodu::Client::TransportError => e
+    Failure.new(humanize_error(e), :network)
   rescue Voodu::Client::Error => e
-    humanize_error(e)
+    Failure.new(humanize_error(e), :other)
   rescue => e
-    "#{e.class.name.demodulize}: #{e.message}"
+    Failure.new("#{e.class.name.demodulize}: #{e.message}", :other)
+  end
+
+  # firewall_hint — the sentence the operator needs when the host did not
+  # answer: which port, opened to which address. Rendered by the registration
+  # flash and by the overview while the server has never been reached.
+  def self.firewall_hint(server)
+    uri = URI.parse(server.endpoint.to_s)
+    port = uri.port || 8687
+    host = uri.host || server.endpoint
+    from = EgressIp.current
+
+    source = from ? "from #{from} (this dashboard's public IP)" : "from this dashboard's public IP"
+
+    "The agent at #{host}:#{port} did not answer. Allow inbound TCP #{port} #{source} on the server's firewall, then refresh."
+  rescue URI::InvalidURIError
+    "The agent did not answer. Allow the agent port from this dashboard's public IP on the server's firewall, then refresh."
   end
 
   # humanize_error — Voodu::Client::Error's :message carries the
