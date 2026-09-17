@@ -35,9 +35,9 @@ common: &common
   hep3_sync:
     class: Hep3SyncOrchestratorJob
     # 15s — matches the collector's write cadence. Each tick drains the
-    # /export NDJSON tail of every configured voodu-hep3 reader into the
-    # `hep` read model. No-op for servers without the plugin installed or
-    # with no reader instance configured.
+    # /export NDJSON tail of every voodu-hep3 reader RUNNING on a server with
+    # the plugin installed (plus any a Table panel names) into the `hep`
+    # read model. No-op for servers without the plugin or without a reader.
     schedule: every 15 seconds
 
   deployment_sweep:

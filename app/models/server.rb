@@ -100,6 +100,23 @@ class Server < ApplicationRecord
     system&.plugin_installed?(name) || false
   end
 
+  # hep3_readers — the voodu-hep3 reader instances running on this server, as
+  # [{scope:, name:}], detected by image the way the dashboard builder does.
+  # Reads the local pod snapshot: no HTTP, so the orchestrator can ask every
+  # 15s. What runs on the box is the source of truth for what to drain — a
+  # dashboard panel is where an operator LOOKS at SIP data, not the reason it
+  # should be collected.
+  HEP3_READER_IMAGE = "voodu-hep3-api"
+
+  def hep3_readers
+    pods.filter_map do |pod|
+      next unless pod.image.start_with?(HEP3_READER_IMAGE)
+      next if pod.scope.blank? || pod.resource_name.blank?
+
+      {scope: pod.scope, name: pod.resource_name}
+    end.uniq
+  end
+
   # pods_count — total pod count for the sidebar's row sub-text.
   #
   # A SQL COUNT over the local snapshot, which the state-sync job keeps

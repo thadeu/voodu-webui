@@ -2,11 +2,10 @@
 
 require "test_helper"
 
-# Hep3SyncOrchestratorJob fans out one poller per (server, reader),
-# DEMAND-DRIVEN: the readers come from the Table panels on the server's
-# dashboards (MetricDashboard.table_readers_for), gated on the plugin
-# being installed. These pin that gate + the demand wiring — adding a
-# hep3 Table panel is what turns the poller on for that reader.
+# Hep3SyncOrchestratorJob fans out one poller per (server, reader). The
+# readers are the voodu-hep3-api pods RUNNING on the server (Server#hep3_readers)
+# plus any a hep3 Table panel names (MetricDashboard.table_readers_for), gated
+# on the plugin being installed. These pin the gate, the union and the dedup.
 class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
   fixtures :orgs, :servers
 
@@ -26,6 +25,48 @@ class Hep3SyncOrchestratorJobTest < ActiveJob::TestCase
       "server_id" => server.id, "scope" => scope, "name" => name, "view" => "messages",
       "label" => "SIP", "color" => "var(--voodu-accent)"
     }
+  end
+
+  def run_reader(server, scope:, name:)
+    Pod.create!(
+      server: server, container_name: "#{scope}-#{name}.1", kind: "deployment",
+      scope: scope, resource_name: name, synced_at: Time.current,
+      payload: {"name" => "#{scope}-#{name}.1", "scope" => scope, "resource_name" => name,
+                "image" => "voodu-hep3-api:local"}.to_json
+    )
+  end
+
+  # The prod gap: plugin installed, reader running, NO dashboard yet. The
+  # reader must still be drained — the Logs bridge depends on it.
+  test "enqueues a poller for a running reader with no table panel at all" do
+    alpha = servers(:alpha)
+    install_hep3(alpha)
+    run_reader(alpha, scope: "fsw", name: "hep3-api")
+
+    assert_enqueued_with(job: Hep3PollerJob, args: [alpha.id, "fsw", "hep3-api"]) do
+      Hep3SyncOrchestratorJob.perform_now
+    end
+
+    assert_enqueued_jobs 1, only: Hep3PollerJob
+  end
+
+  test "a running reader that also has a panel is enqueued once" do
+    alpha = servers(:alpha)
+    install_hep3(alpha)
+    run_reader(alpha, scope: "fsw", name: "hep3-api")
+    alpha.org.metric_dashboards.create!(name: "sip", panels: [table_panel(server: alpha, scope: "fsw", name: "hep3-api")])
+
+    assert_enqueued_jobs 1, only: Hep3PollerJob do
+      Hep3SyncOrchestratorJob.perform_now
+    end
+  end
+
+  test "a running reader on a server WITHOUT the plugin is not drained" do
+    run_reader(servers(:alpha), scope: "fsw", name: "hep3-api")
+
+    assert_no_enqueued_jobs only: Hep3PollerJob do
+      Hep3SyncOrchestratorJob.perform_now
+    end
   end
 
   test "enqueues a poller per hep3 table reader, only with the plugin installed" do

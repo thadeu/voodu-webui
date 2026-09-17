@@ -19,7 +19,15 @@ class Hep3SyncOrchestratorJob < ApplicationJob
     Server.find_each do |server|
       next unless server.plugin_installed?("hep3")
 
-      MetricDashboard.table_readers_for(server, source: "hep3").each do |reader|
+      # Every reader RUNNING on the box (the pod snapshot), plus any a Table
+      # panel still names (a reader that left the snapshot but has a panel
+      # keeps draining, so a restart never leaves a gap). It used to be the
+      # panels alone, and a server with the plugin installed and no dashboard
+      # collected nothing — the Logs → call-flow bridge answered "Call not
+      # found" for every call while the reader sat there with the data.
+      readers = server.hep3_readers + MetricDashboard.table_readers_for(server, source: "hep3")
+
+      readers.uniq.each do |reader|
         Hep3PollerJob.perform_later(server.id, reader[:scope], reader[:name])
       end
     end
