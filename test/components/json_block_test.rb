@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# A JSON payload, coloured, rendered FROM THE PARSED VALUE.
+# A JSON payload, colored, rendered FROM THE PARSED VALUE.
 #
 # The YAML highlighter beside it tokenises text with regexes and has to. JSON
 # does not: we already hold the Hash. Most of this file is the difference that
@@ -41,9 +41,9 @@ class JsonBlockTest < ActiveSupport::TestCase
     assert_includes html, span_for("purple", "null")
   end
 
-  # `"1357"` and `1357` look identical in grey and mean different things to
-  # whatever reads them next — that is the whole reason to colour a payload.
-  test "a numeric string is not coloured as a number" do
+  # `"1357"` and `1357` look identical in gray and mean different things to
+  # whatever reads them next — that is the whole reason to color a payload.
+  test "a numeric string is not colored as a number" do
     html = render({"id" => 1357, "node_id" => "1357"})
 
     assert_includes html, span_for("amber", "1357")
@@ -53,7 +53,7 @@ class JsonBlockTest < ActiveSupport::TestCase
   # THE REASON THIS WALKS THE VALUE. A commit message is arbitrary text, and a
   # regex over the printed form has to decide whether each brace is punctuation
   # or content.
-  test "a string full of punctuation does not confuse the colouring" do
+  test "a string full of punctuation does not confuse the coloring" do
     message = %({"not": "json"} and a \\"quote\\" and a newline)
     html = render({"message" => message})
 

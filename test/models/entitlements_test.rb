@@ -2,16 +2,16 @@
 
 require "test_helper"
 
-# The free tier is the DEFAULT, and every path that is not a live licence must
-# land on it — no licence, a lapsed one, a forged one. That is what makes the
-# licence safe to add: the app already knows how to be the free tier, so every
+# The free tier is the DEFAULT, and every path that is not a live license must
+# land on it — no license, a lapsed one, a forged one. That is what makes the
+# license safe to add: the app already knows how to be the free tier, so every
 # failure mode is a place it can be rather than an error it hits.
 class EntitlementsTest < ActiveSupport::TestCase
   def licensed(ent = {}, status: :valid)
     LicenseToken.new(status: status, claims: {"sub" => "acme", "ent" => ent})
   end
 
-  test "no licence is the free tier" do
+  test "no license is the free tier" do
     e = Entitlements.new(LicenseToken.new(status: :none))
 
     assert e.free?
@@ -21,9 +21,9 @@ class EntitlementsTest < ActiveSupport::TestCase
     assert_not e.postgres?
   end
 
-  # Each of these is a way a licence can fail. None may grant anything, and all
-  # must land on exactly the same table as having no licence at all.
-  test "lapsed and unverifiable licences read as the free tier" do
+  # Each of these is a way a license can fail. None may grant anything, and all
+  # must land on exactly the same table as having no license at all.
+  test "lapsed and unverifiable licenses read as the free tier" do
     %i[lapsed invalid].each do |status|
       e = Entitlements.new(licensed({"orgs" => 99, "postgres" => true}, status: status))
 
@@ -56,10 +56,10 @@ class EntitlementsTest < ActiveSupport::TestCase
     end
   end
 
-  # A lapsed or forged licence claiming the tier must not grant it: tier reads
-  # "free" unless the licence is entitled, and this is the test that keeps that
+  # A lapsed or forged license claiming the tier must not grant it: tier reads
+  # "free" unless the license is entitled, and this is the test that keeps that
   # true if the definition ever moves.
-  test "a licence that is not in force cannot claim the deploy plane" do
+  test "a license that is not in force cannot claim the deploy plane" do
     %i[lapsed invalid none].each do |status|
       token = LicenseToken.new(status: status, claims: {"sub" => "acme", "tier" => "unlimited"})
 
@@ -77,7 +77,7 @@ class EntitlementsTest < ActiveSupport::TestCase
     original.each { |k, v| ENV[k] = v }
   end
 
-  test "a live licence lifts the limits" do
+  test "a live license lifts the limits" do
     e = Entitlements.new(licensed)
 
     assert_not e.free?
@@ -96,12 +96,12 @@ class EntitlementsTest < ActiveSupport::TestCase
     assert_equal 5, e.limit(:orgs)
     assert_equal 180, e.retention_days
     # The licensed default for accounts is ONE now, not unlimited: Enterprise
-    # upgrades a single account to unlimited orgs, and is not a licence to run
+    # upgrades a single account to unlimited orgs, and is not a license to run
     # a service of your own on top of Voodu.
     assert_equal 1, e.limit(:accounts), "untouched entitlements keep the licensed default"
   end
 
-  # The cap is a default, so a licence can still sell more deliberately.
+  # The cap is a default, so a license can still sell more deliberately.
   test "an explicit accounts grant lifts the tier's cap" do
     e = Entitlements.new(licensed({"accounts" => nil}))
 

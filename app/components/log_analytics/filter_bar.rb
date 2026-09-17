@@ -5,14 +5,14 @@
 # query swaps just the table AND pushes a bookmarkable URL
 # (/logs/analytics?range=1h&q=…). The log-analytics Stimulus controller
 # wires the preset chips, the custom-range toggle, the local→UTC date
-# normalisation on submit, and the filter drawer open/close.
+# normalization on submit, and the filter drawer open/close.
 #
 # Layout: only the time-range presets stay inline. The QUERY editor (the
 # LogQuery DSL, syntax-highlighted) + the pod scope + Run live in a
 # right-side slide-in drawer, opened by the funnel icon in the results
 # toolbar (Components::LogAnalytics::Results#header_actions). The drawer
 # panel is rendered HERE, inside the <form>, so the editor (name=q) and
-# the pod checkboxes serialise with it — but OUTSIDE the results frame, so
+# the pod checkboxes serialize with it — but OUTSIDE the results frame, so
 # it survives the frame swap on every Run.
 class Components::LogAnalytics::FilterBar < Components::Base
   # Pre-paint class sets for the preset chips. Both listed here (not
@@ -217,7 +217,7 @@ class Components::LogAnalytics::FilterBar < Components::Base
   end
 
   # query_section — the shared LogQuery editor (syntax highlight + field
-  # validation + cheatsheet). name=q so it serialises with this GET form; it's
+  # validation + cheatsheet). name=q so it serializes with this GET form; it's
   # the analytics surface, so Cmd+Enter runs the query (submits default true).
   def query_section
     render Components::UI::QueryEditor.new(

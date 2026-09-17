@@ -127,7 +127,7 @@ class Views::Deploys::Webhook < Views::Deploys::Shell
 
     render Components::UI::SectionCard.new(title: "Payload as received") do
       # Rendered from the parsed value, so a commit message full of braces and
-      # quotes cannot confuse the colouring. The copy hands back the
+      # quotes cannot confuse the coloring. The copy hands back the
       # pretty-printed JSON, which is exactly what is on screen.
       render Components::UI::JsonBlock.new(
         value: body, label: "Copy the payload", max_height: "max-h-[420px]"

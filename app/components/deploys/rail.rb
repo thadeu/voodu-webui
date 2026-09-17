@@ -3,7 +3,7 @@
 # The tab rail: the two halves of VooduCD, on one screen.
 #
 # ICON ONLY, with a tooltip, and that is a size decision rather than a
-# minimalist one. With two items a labelled rail spends ~150px of every
+# minimalist one. With two items a labeled rail spends ~150px of every
 # viewport to say two words the icons already say — and the content beside it
 # is a three-column repository browser and a six-column table, both of which
 # want that width more than the rail does.

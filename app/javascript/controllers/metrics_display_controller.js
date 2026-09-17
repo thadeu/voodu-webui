@@ -223,10 +223,10 @@ export default class extends Controller {
   }
 
   // startResize — pointer-down on a card edge handle. SPLIT-PANE model: the
-  // handle moves the BOUNDARY between this card and its same-row neighbour on
+  // handle moves the BOUNDARY between this card and its same-row neighbor on
   // that side. The pair's total span is held constant, so this card grows by
-  // exactly what the neighbour gives up (and vice versa) — nothing else on the
-  // page reflows. No same-row neighbour on that side → no-op (a card at the
+  // exactly what the neighbor gives up (and vice versa) — nothing else on the
+  // page reflows. No same-row neighbor on that side → no-op (a card at the
   // row edge has nothing to trade with). No-op on mobile (single column).
   startResize(event) {
     if (!this.mediaQuery.matches || !this.hasGridTarget) return
@@ -236,9 +236,9 @@ export default class extends Controller {
 
     if (!card) return
 
-    // Move the boundary with the same-row neighbour on this edge: their
+    // Move the boundary with the same-row neighbor on this edge: their
     // combined span is held constant, so only the boundary slides — nothing
-    // else reflows. No neighbour on that side (row edge) → no-op; the last
+    // else reflows. No neighbor on that side (row edge) → no-op; the last
     // card of a row is the flex filler (fillRows), so its outer edge has
     // nothing to trade with.
     const neighbor = this.rowNeighbor(card, handle.dataset.resizeEdge)
@@ -351,7 +351,7 @@ export default class extends Controller {
     }
   }
 
-  // readConfig — normalised view. First-run derives the hidden set
+  // readConfig — normalized view. First-run derives the hidden set
   // from data-default-visible="false" cards so picker-only HTTP
   // metrics (p90, p99, 3xx, 4xx) start hidden — only the canonical
   // 4 are shown until the operator enables more via the Settings

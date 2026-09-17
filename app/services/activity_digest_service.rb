@@ -139,7 +139,7 @@ class ActivityDigestService
 
   # parse_line — tolerant, like the metrics ingest: a malformed or incomplete
   # line is dropped rather than poisoning the batch. The controller has already
-  # filtered, so this is defence in depth.
+  # filtered, so this is defense in depth.
   #
   # `id`, `ts`, `event` and `action` are the four fields a row cannot be built
   # without. A line missing any of them is not a partial action we could show —

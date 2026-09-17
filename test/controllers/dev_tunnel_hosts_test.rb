@@ -35,7 +35,7 @@ class DevTunnelHostsTest < ActiveSupport::TestCase
     assert_not_includes PROD, "config.hosts <<"
   end
 
-  # The behaviour those patterns are meant to have, checked directly. Written
+  # The behavior those patterns are meant to have, checked directly. Written
   # out here rather than read from the config so the test states the intent
   # instead of echoing the implementation.
   test "the shape allows a generated tunnel and refuses a suffix attack" do

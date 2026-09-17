@@ -49,7 +49,7 @@ class Views::Dashboard::Index < Views::Base
   #
   # `data-state-frame` is the opt-in marker the JS action looks
   # for — sibling pages (Logs, Settings) that don't want this
-  # behaviour simply don't set it.
+  # behavior simply don't set it.
   def overview_body
     # `target="_top"` is critical here: without it Turbo would treat
     # any link inside this frame (every pod row, every action button)

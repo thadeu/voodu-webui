@@ -99,7 +99,7 @@ class MetricsWarehouse
   # Per-metric bucket aggregation function. Default is AVG (smooths
   # the line, shows "typical" value); MAX preserves brief spikes.
   #
-  # Why per-metric: spike behaviour is metric-dependent.
+  # Why per-metric: spike behavior is metric-dependent.
   #
   #   - cpu_percent: spike-sensitive. A 5s burst to 100% across a
   #     5min bucket gets diluted by AVG to ~3% — operator can't see

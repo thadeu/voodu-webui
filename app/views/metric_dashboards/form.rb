@@ -136,7 +136,7 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
         dashboard_builder_preview_url_value: metrics_preview_panel_path,
         # default_server — the server a fresh (host) panel binds to before the
-        # operator picks a source. current_server, so single-server behaviour is
+        # operator picks a source. current_server, so single-server behavior is
         # unchanged; a picked source overrides it with its own server_id.
         dashboard_builder_default_server_value: @server&.id.to_s,
         # servers — { server_id => name } for every org server, so re-editing a
@@ -990,7 +990,7 @@ class Views::MetricDashboards::Form < Views::Base
   # custom_color_swatch — a "+" trigger that opens the DS color picker
   # (Components::UI::ColorPicker) in a popover. The picker dispatches a
   # `color-picker:change` event the dashboard-builder applies; `name`
-  # ("log"/"metric") tells it which panel kind to colour.
+  # ("log"/"metric") tells it which panel kind to color.
   def custom_color_swatch(name:)
     swatch_action = {"log" => "selectLogColor", "table" => "selectTableColor"}.fetch(name, "selectMetricColor")
 

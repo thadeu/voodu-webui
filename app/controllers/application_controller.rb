@@ -384,7 +384,7 @@ class ApplicationController < ActionController::Base
   # The entitlements governing THIS request.
   #
   # On the hosted service that means the current org's account and the plan it
-  # bought; anywhere else it means the licence on the box, and the account is
+  # bought; anywhere else it means the license on the box, and the account is
   # ignored. Entitlements.for makes that choice — see it for why a request with
   # no account in hand resolves to the hosted free table rather than to the
   # installation's unlimited one.
@@ -424,7 +424,7 @@ class ApplicationController < ActionController::Base
   # Asked of the live connection rather than of DATABASE_URL, because the
   # adapter actually in use is the fact; the env var is only how it got there.
   # Which database holds the control plane, for Settings to state plainly. The
-  # licence grants the OPTION of Postgres; the operator takes it by setting
+  # license grants the OPTION of Postgres; the operator takes it by setting
   # DATABASE_URL, so "what am I actually on" is a real question.
   def primary_adapter
     ActiveRecord::Base.connection_db_config.adapter.to_s

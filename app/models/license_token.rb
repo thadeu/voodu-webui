@@ -2,7 +2,7 @@
 
 # LicenseToken — what this deployment bought, read from a signed token.
 #
-# Named for the token rather than the licence because Ops::License is the stored
+# Named for the token rather than the license because Ops::License is the stored
 # activation. Inside the Ops namespace a bare `License` resolves to that model,
 # so a verifier called `License` would be reachable only as `::License` — the
 # kind of shadowing that is invisible until something quietly resolves to the
@@ -10,14 +10,14 @@
 #
 # Verified OFFLINE. The public key ships in the image (config/license/
 # public_key.pem) and the private half never touches this repository, so a
-# licence is checked with no network call at all. That is not an optimisation:
+# license is checked with no network call at all. That is not an optimization:
 # the deployments that buy one are the closed-network ones, and an install that
 # has to reach us to start working puts our uptime inside their incident
 # budget — the same objection that keeps Clowk optional in the self-hosted
 # shape.
 #
 # NOTHING HERE RAISES. Absent, malformed and expired are ordinary states with
-# defined answers, because the alternative is a licence that can take a
+# defined answers, because the alternative is a license that can take a
 # customer's dashboard down — and a monitoring tool that fails closed at 3am is
 # worse than one that quietly drops to the free tier. Every failure resolves to
 # a License instance whose #status says why, so the settings screen can explain
@@ -49,7 +49,7 @@ class LicenseToken
   def self.public_key
     @public_key ||= OpenSSL::PKey::RSA.new(PUBLIC_KEY_PATH.read)
   rescue Errno::ENOENT, OpenSSL::PKey::PKeyError => e
-    # A missing or corrupt key means nobody can present a licence — which is
+    # A missing or corrupt key means nobody can present a license — which is
     # the free tier, not an outage.
     Rails.logger.error("[license] cannot read the public key: #{e.class}")
     nil
@@ -70,7 +70,7 @@ class LicenseToken
     ""
   end
 
-  # current — the licence in force, resolved fresh.
+  # current — the license in force, resolved fresh.
   #
   # Two places can hold one: VOODU_LICENSE in the environment, and an activation
   # saved in the database from Settings. NEWEST ISSUED WINS, from either side,
@@ -106,9 +106,9 @@ class LicenseToken
 
     resolve(key.token, source: :database)
   rescue ActiveRecord::ActiveRecordError => e
-    # A licence must never be the reason a page 500s — not even when the table
+    # A license must never be the reason a page 500s — not even when the table
     # is missing because a migration has not run yet.
-    Rails.logger.error("[license] could not read the stored licence: #{e.class}")
+    Rails.logger.error("[license] could not read the stored license: #{e.class}")
     new(status: :none)
   end
 
@@ -120,11 +120,11 @@ class LicenseToken
   # copied out of a wrapped terminal or a chat window arrives with a newline in
   # the MIDDLE, which `.strip` leaves in place. ruby-jwt tolerates that today and
   # says so on every read ("Invalid base64 input detected… graceful handling of
-  # invalid input will be dropped in the next major version"), so a licence
+  # invalid input will be dropped in the next major version"), so a license
   # stored that way verifies now and stops verifying on a gem bump — the
   # installation silently drops to the free tier with nobody having touched it.
   #
-  # Normalising HERE rather than at the two activation points also repairs rows
+  # Normalizing HERE rather than at the two activation points also repairs rows
   # already written: every read goes through resolve, so a stored token with a
   # newline in it is cleaned on the way past, with no migration.
   def self.resolve(raw = token_from_env, key: public_key, now: Time.current, source: :env)
@@ -133,8 +133,8 @@ class LicenseToken
     return new(status: :none) if token.empty?
     return new(status: :invalid, reason: "no public key", source: source) if key.nil?
 
-    # verify_expiration is off so an expired licence still yields its claims —
-    # the settings screen has to be able to say WHOSE licence expired and when,
+    # verify_expiration is off so an expired license still yields its claims —
+    # the settings screen has to be able to say WHOSE license expired and when,
     # and grace needs the date to measure against.
     claims, = JWT.decode(token, key, true, algorithm: "RS256", verify_expiration: false)
 
@@ -145,7 +145,7 @@ class LicenseToken
     new(status: :invalid, reason: e.class.name.demodulize, source: source)
   end
 
-  # :signed marks "the signature held" and nothing about time. Where the licence
+  # :signed marks "the signature held" and nothing about time. Where the license
   # sits in its lifetime is decided in #status, on every read.
   def initialize(status:, claims: {}, reason: nil, token: nil, source: :none)
     @verified = status
@@ -157,11 +157,11 @@ class LicenseToken
 
   attr_reader :token
 
-  # Where this licence came from: :env, :database or :none. Reported so the
+  # Where this license came from: :env, :database or :none. Reported so the
   # screen can say it; it does NOT decide precedence.
   #
   # Precedence is by issue date — see .current. An operator whose env-supplied
-  # licence expires buys a newer one and pastes it into the form, and the newer
+  # license expires buys a newer one and pastes it into the form, and the newer
   # one wins. Making the environment win outright would have made that flow
   # impossible: the form would be gone at exactly the moment it was needed.
   attr_reader :source
@@ -172,7 +172,7 @@ class LicenseToken
   #
   # This used to be computed once and frozen into the object, which meant a
   # container running past its expiry date kept reporting :valid forever — the
-  # licence never actually expired in a long-lived process, only in one that
+  # license never actually expired in a long-lived process, only in one that
   # happened to restart. Asking the clock at the moment of the question is the
   # whole fix, and it needs no scheduled job to prop it up.
   def status
@@ -187,14 +187,14 @@ class LicenseToken
     :lapsed
   end
 
-  # Whether this licence currently grants anything. Grace counts — that is the
+  # Whether this license currently grants anything. Grace counts — that is the
   # point of grace.
   def entitled? = ENTITLED.include?(status)
 
   def present? = status != :none
 
-  # Whether the signature held, regardless of where the licence sits in time.
-  # An expired licence still verified — that is what lets Settings show whose
+  # Whether the signature held, regardless of where the license sits in time.
+  # An expired license still verified — that is what lets Settings show whose
   # it was and when it lapsed, instead of a shrug.
   def verified? = @verified == :signed
 
@@ -205,18 +205,18 @@ class LicenseToken
 
   def customer = claims["sub"].presence
 
-  # Which product this licence is. Three exist:
+  # Which product this license is. Three exist:
   #
-  #   free        no licence at all — the self-hosted default
-  #   enterprise  a licence somebody bought for their own installation
-  #   unlimited   the hosted service's own licence, on the box we run
+  #   free        no license at all — the self-hosted default
+  #   enterprise  a license somebody bought for their own installation
+  #   unlimited   the hosted service's own license, on the box we run
   #
   # A claim rather than something inferred from the entitlements: "unlimited"
-  # and "a very generous enterprise licence" would otherwise be the same thing
+  # and "a very generous enterprise license" would otherwise be the same thing
   # to read, and the screen has to name what somebody is running.
   #
-  # Unknown values fall back to enterprise. A licence signed by us with a tier
-  # this build has not heard of is still a licence, and refusing to honour it
+  # Unknown values fall back to enterprise. A license signed by us with a tier
+  # this build has not heard of is still a license, and refusing to honor it
   # would turn a forward-compatible claim into an outage.
   TIERS = %w[enterprise unlimited].freeze
 
@@ -230,10 +230,10 @@ class LicenseToken
   def unlimited? = tier == "unlimited"
 
   # Which plan a HOSTED customer bought. Meaningless on a self-hosted
-  # installation, where the licence on the box already says what they have.
+  # installation, where the license on the box already says what they have.
   #
   # Free is the default and the answer for anyone who never bought anything, so
-  # an absent claim is not an error — most accounts will never carry a licence
+  # an absent claim is not an error — most accounts will never carry a license
   # at all and resolve to free without one.
   PLANS = %w[free pro].freeze
   DEFAULT_PLAN = "free"
@@ -244,28 +244,28 @@ class LicenseToken
     PLANS.include?(claimed) ? claimed : DEFAULT_PLAN
   end
 
-  # Whether this licence names a plan AT ALL — which an installation licence
+  # Whether this license names a plan AT ALL — which an installation license
   # does not: it names a tier, and a tier describes the box.
   #
   # Distinct from `plan` because they answer different questions and one of them
-  # has to be able to say "no". `plan` is a reader for a licence already in
+  # has to be able to say "no". `plan` is a reader for a license already in
   # force and falls back to free, which is right: an account with nothing is on
-  # the free plan. Asking that same reader whether a token IS a plan licence
-  # gets "free" for both a genuine free plan and a licence about something else
+  # the free plan. Asking that same reader whether a token IS a plan license
+  # gets "free" for both a genuine free plan and a license about something else
   # entirely, and the activation then stores the second one as if it were the
   # first.
   #
   # Note the asymmetry with `tier`, which falls back to enterprise for a value
-  # it does not recognise. Both fail toward what the customer paid for: an
-  # unrecognised tier still honours a box somebody bought, while an
+  # it does not recognize. Both fail toward what the customer paid for: an
+  # unrecognised tier still honors a box somebody bought, while an
   # unrecognised plan would QUIETLY DOWNGRADE somebody who bought one, so it is
   # refused loudly instead.
   def plan_claimed? = PLANS.include?(claims["plan"].to_s)
 
-  # Who this licence was sold to, as an account's short_id.
+  # Who this license was sold to, as an account's short_id.
   #
-  # A plan licence that named nobody would be a file that circulates by email:
-  # one customer's pro licence pasted into another customer's account. The
+  # A plan license that named nobody would be a file that circulates by email:
+  # one customer's pro license pasted into another customer's account. The
   # activation refuses a subject that is not the account activating it, and
   # this is the field it checks.
   def subject_account = claims["sub"].to_s.presence
@@ -294,11 +294,11 @@ class LicenseToken
   # One line for the settings screen and the boot log.
   def summary
     case status
-    when :none then "no licence — free tier"
+    when :none then "no license — free tier"
     when :valid then "licensed to #{customer}, expires #{expires_at.to_date}"
     when :grace then "licensed to #{customer}, EXPIRED #{expires_at.to_date} — in grace"
-    when :lapsed then "licence for #{customer} lapsed #{expires_at.to_date}"
-    when :invalid then "licence could not be verified (#{reason})"
+    when :lapsed then "license for #{customer} lapsed #{expires_at.to_date}"
+    when :invalid then "license could not be verified (#{reason})"
     end
   end
 end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Components::UI::ColorPicker — a DS colour picker (spectrum canvas + hue rail
+# Components::UI::ColorPicker — a DS color picker (spectrum canvas + hue rail
 # + hex input), ported from Stella's color-picker.tsx. Driven by the
 # `color-picker` Stimulus controller; on change it dispatches a bubbling
 # `color-picker:change` { color, name } event a host controller can apply.

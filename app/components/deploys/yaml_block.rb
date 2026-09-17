@@ -4,19 +4,19 @@
 #
 # ## Why a hand-rolled tokeniser and not a highlighting gem
 #
-# The YAML shown here is not arbitrary: it is `spec.to_yaml`, re-serialised by
+# The YAML shown here is not arbitrary: it is `spec.to_yaml`, re-serialized by
 # US from a struct the box already parsed and validated. The grammar that can
 # reach this component is keys, nested maps, lists of scalars, and comments —
-# and that is small enough to colour honestly in fifty lines.
+# and that is small enough to color honestly in fifty lines.
 #
 # A gem would highlight anchors, multi-line blocks and tags this input cannot
 # contain, in exchange for a dependency on every page of the app. It is the
 # right call the day we render a customer's file verbatim; today it would be
 # paying for a grammar we do not accept.
 #
-# LINE-BASED AND FAIL-SOFT. Anything the tokeniser does not recognise is
+# LINE-BASED AND FAIL-SOFT. Anything the tokeniser does not recognize is
 # rendered as plain text, never dropped and never escaped twice. A highlighter
-# that hides a line it cannot parse is worse than one that does not colour it:
+# that hides a line it cannot parse is worse than one that does not color it:
 # the operator is reading this to find out why their deploy did not fire.
 class Components::Deploys::YamlBlock < Components::Base
   # `#` inside a quoted string is not a comment. Matched here rather than
@@ -89,7 +89,7 @@ class Components::Deploys::YamlBlock < Components::Base
   end
 
   # Numbers and booleans read differently from strings, which is the whole
-  # reason to colour a config file: `branches: [main]` and `enabled: true` are
+  # reason to color a config file: `branches: [main]` and `enabled: true` are
   # different kinds of thing and should not look identical.
   def scalar(text)
     return if text.empty?
@@ -107,8 +107,8 @@ class Components::Deploys::YamlBlock < Components::Base
     end
   end
 
-  # Keeps the original leading whitespace outside the coloured span, so
-  # indentation never picks up a colour and copy still reproduces it exactly.
+  # Keeps the original leading whitespace outside the colored span, so
+  # indentation never picks up a color and copy still reproduces it exactly.
   def colored(text, klass)
     lead = text[/\A\s*/]
 

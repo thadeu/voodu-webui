@@ -167,13 +167,13 @@ module Voodu
     # apply — the same admin-grade metadata that put PAT listing behind
     # `actions` rather than `read`. There is no read-only corner of it.
 
-    # deploy_triggers — what this box has authorised to deploy.
+    # deploy_triggers — what this box has authorized to deploy.
     def deploy_triggers
       payload = get("deploy/triggers")
       Array(payload && payload["triggers"])
     end
 
-    # create_deploy_trigger — authorise a repository to deploy to this box.
+    # create_deploy_trigger — authorize a repository to deploy to this box.
     #
     # THE CONSOLE MAY WIDEN WHAT THIS BOX ACCEPTS, and that is a decision
     # rather than an oversight. The alternative is every developer holding SSH
@@ -445,7 +445,7 @@ module Voodu
     # chunks. A line that lacks `ts` or `source` is silently skipped
     # — the controller already filters by ts, so this would only
     # happen on a malformed line which both sides tolerate (matches
-    # reader.go / dump.go behaviour).
+    # reader.go / dump.go behavior).
     #
     # `since` is unix seconds (integer). 0 (or `since.to_i.zero?`)
     # tells the controller to dump the full retention window —

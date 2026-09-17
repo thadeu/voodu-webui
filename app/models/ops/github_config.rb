@@ -2,7 +2,7 @@
 
 # Ops::GithubConfig — the GitHub App this installation deploys through.
 #
-# ONE APP FOR THE WHOLE PRODUCT, not one per customer. A customer authorises
+# ONE APP FOR THE WHOLE PRODUCT, not one per customer. A customer authorizes
 # our App on their repositories and we get an `installation_id`; they never see
 # these credentials and never type one. The screen a customer uses is the repo
 # list, which has no credential field at all.

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module LogTail
-  # Ansi — the single Ruby definition of "strip terminal colour escapes".
-  # A TTY app (FreeSWITCH's SIP trace, a colourised logger) prints SGR/CSI
+  # Ansi — the single Ruby definition of "strip terminal color escapes".
+  # A TTY app (FreeSWITCH's SIP trace, a colorised logger) prints SGR/CSI
   # escapes to stdout; the invisible ESC renders to nothing in a browser and
   # leaves `[m`/`[32m` litter inline. We scrub on BOTH sides of the warehouse:
   # on WRITE (LogTail::Parser) so newly-stored lines are clean, and on READ
@@ -13,7 +13,7 @@ module LogTail
     module_function
 
     # CSI escape: ESC `[`, optional params, optional intermediates, a final
-    # byte. Covers the SGR colour codes (`\e[m`, `\e[32m`, `\e[1;36m`) plus the
+    # byte. Covers the SGR color codes (`\e[m`, `\e[32m`, `\e[1;36m`) plus the
     # cursor/erase sequences a console app might emit.
     PATTERN = /\e\[[0-9;?]*[ -\/]*[@-~]/
 

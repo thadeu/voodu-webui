@@ -70,7 +70,7 @@ Rails.application.configure do
   # names. CI has no .env and stays green, which is the worst version of this:
   # it reads as "the suite is flaky locally" and the suite stops being trusted.
   #
-  # The licence pair is here for the same reason: LicenseToken.token_from_env
+  # The license pair is here for the same reason: LicenseToken.token_from_env
   # reads VOODU_LICENSE, and license_test has a case named "when the env var is
   # empty" whose whole premise is that nobody set one.
   #

@@ -4,7 +4,7 @@ require "csv"
 
 # LogTail::LineFormatter — turns a parsed warehouse line (the
 # { ts:, pod:, stream:, level:, msg:, raw:, parsed: } hash) into one
-# serialised output line for a given format. The single serialiser
+# serialized output line for a given format. The single serializer
 # behind the /logs/analytics export (LogsAnalyticsController#export).
 #
 # Line-oriented formats only (ndjson / txt / csv) — each #line returns a
@@ -59,7 +59,7 @@ module LogTail
       CSV.generate_line([r[:ts], r[:pod], r[:stream], r[:level], r[:msg]])
     end
 
-    # row_hash — normalise string/symbol keys into a symbol-keyed hash so
+    # row_hash — normalize string/symbol keys into a symbol-keyed hash so
     # the formatters read uniformly regardless of source (Reader yields
     # string keys; in-memory shapers use symbols).
     def row_hash(hash)

@@ -3,12 +3,12 @@
 # Components::LogAnalytics::PodScopePicker — multi-select pod scope for
 # the analytics filter bar. Mirrors the metrics dashboard multiselect
 # (Views::Metrics::Index#multiselect_row): a left checkbox box +
-# data-role check, a surface-2 menu, and a centred accent footer — so it
+# data-role check, a surface-2 menu, and a centered accent footer — so it
 # reads as the SAME design-system control, not a new pattern.
 #
 # Difference from metrics: that one navigates to ?pid=…; this lives in
 # the filter <form>, so each row wraps a sr-only native checkbox named
-# `pods[]` (the form serialises the selection — LogSearchData reads an
+# `pods[]` (the form serializes the selection — LogSearchData reads an
 # array). The box/check visuals are JS-driven (log-analytics
 # #refreshPodScope) exactly like metric-multiselect#refresh.
 #

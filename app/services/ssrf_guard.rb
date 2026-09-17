@@ -34,7 +34,7 @@ class SsrfGuard
   # Whether to permit non-routable (loopback / private / link-local) hosts.
   # voodu-webui is a self-hosted dashboard, so in dev/test we allow them (the
   # operator legitimately points it at a local API). In production we block by
-  # default as defence-in-depth — an operator running entirely on a private
+  # default as defense-in-depth — an operator running entirely on a private
   # network opts back in with VOODU_ALLOW_PRIVATE_WEBHOOKS=1.
   #
   # The env var keeps its original name: it predates this extraction and is

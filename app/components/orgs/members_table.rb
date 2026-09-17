@@ -176,7 +176,7 @@ class Components::Orgs::MembersTable < Components::Base
 
   # A pending invitation is an unfinished task: someone has to send that link
   # before the person can get in. So it reads as one — an amber strip with the
-  # action as a labelled button, not a 22px icon glued to a sentence, which is
+  # action as a labeled button, not a 22px icon glued to a sentence, which is
   # what the first version was and nobody spotted it.
   #
   # The URL itself stays out: the token is a signed id, three lines of base64
@@ -205,7 +205,7 @@ class Components::Orgs::MembersTable < Components::Base
     span(class: "text-[11px] text-voodu-muted-2") { "Invited by #{inviter.display_name}" }
   end
 
-  # A labelled Button rather than Components::UI::CopyButton: the clipboard
+  # A labeled Button rather than Components::UI::CopyButton: the clipboard
   # controller only needs the idle/done targets, and this is the primary action
   # on the row — it has to look like one.
   def copy_invite_button(url)

@@ -19,7 +19,7 @@ import (
 // It MUST be computed identically at write time (tick) and at seed time
 // (seedRing), so a line the controller re-emits after a poller restart
 // hashes to the same value as the copy already on disk. `ts` is
-// normalised to UTC so RFC3339Nano formatting is stable regardless of
+// normalized to UTC so RFC3339Nano formatting is stable regardless of
 // the source offset token ("Z" vs "+00:00") — both the freshly parsed
 // timestamp and the one round-tripped through the NDJSON file land on
 // the same string.

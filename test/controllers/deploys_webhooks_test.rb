@@ -17,6 +17,10 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
 
     @org = orgs(:acme)
     @server = servers(:alpha)
+
+    # The list is fenced per server: an `accepted` delivery shows where its
+    # repository deploys. The suite's default repository deploys here.
+    listed_here!("acme/api")
   end
 
   teardown { Rails.application.config.x.license = @licensed }
@@ -93,6 +97,44 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
 
   # ── scoping ────────────────────────────────────────────────────────────
 
+  # The installation is one per account; the tab is one server's. A push that
+  # deployed to another box, or that matched nothing for a repository this box
+  # never listed, is not this server's webhook history.
+  test "a delivery that produced work elsewhere is not listed on this server" do
+    receipt = receipt_for("accepted", reference: "acme/elsewhere")
+    deployment(receipt: receipt, sha: "ccc333ccc333", server: servers(:beta), repo: "acme/elsewhere")
+
+    get deploys_webhooks_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_not_includes response.body, deploys_webhook_path(org_id: ACME, server_key: @server.key, id: receipt.id)
+
+    get deploys_webhooks_path(org_id: ACME, server_key: servers(:beta).key)
+
+    assert_includes response.body, deploys_webhook_path(org_id: ACME, server_key: servers(:beta).key, id: receipt.id)
+  end
+
+  test "a nothing-to-do delivery shows only where its repository is listed" do
+    receipt = receipt_for("skipped", reference: "acme/other")
+    listed_here!("acme/other", server: servers(:beta))
+
+    get deploys_webhooks_path(org_id: ACME, server_key: @server.key)
+
+    assert_not_includes response.body, deploys_webhook_path(org_id: ACME, server_key: @server.key, id: receipt.id)
+
+    get deploys_webhooks_path(org_id: ACME, server_key: servers(:beta).key)
+
+    assert_includes response.body, deploys_webhook_path(org_id: ACME, server_key: servers(:beta).key, id: receipt.id)
+  end
+
+  test "trouble outcomes stay visible on every server" do
+    receipt = receipt_for("no_target", reference: "acme/orphan")
+
+    get deploys_webhooks_path(org_id: ACME, server_key: @server.key)
+
+    assert_includes response.body, deploys_webhook_path(org_id: ACME, server_key: @server.key, id: receipt.id)
+  end
+
   # A delivery that resolved an org is fenced to it. One that did NOT — a
   # refused signature, a repository nobody listed — belongs to the
   # installation, and hiding it would hide exactly what somebody came to find.
@@ -131,6 +173,7 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
   end
 
   test "the search matches the delivery id" do
+    listed_here!("acme/one", "acme/two")
     hit = receipt_for("accepted", reference: "acme/one", external_id: "abc-123-find-me")
     receipt_for("accepted", reference: "acme/two", external_id: "zzz-999")
 
@@ -142,7 +185,7 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
 
   # ── the sender ─────────────────────────────────────────────────────────
 
-  # In a list of deploys the person is the fastest thing to recognise and the
+  # In a list of deploys the person is the fastest thing to recognize and the
   # least useful to read — you scan for "one of mine", and a face answers that
   # where a login costs a word of column width per row.
   test "the list shows who pushed, with the login on hover" do
@@ -372,6 +415,18 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
     response.body[/Provider.*/m].to_s
   end
 
+  # listed_here! — point repositories at the server under test, so an
+  # `accepted` delivery for them belongs on this server's tab (the list is
+  # fenced per server; see WebhookReceiptsData#scope_for_org).
+  def listed_here!(*repos, server: @server)
+    integration = Integration::Record.active.find_by(org: @org, provider: "github") ||
+      Integration::Record.create!(org: @org, name: "GitHub", provider: "github", external_id: "inst-test", status: "active")
+
+    repos.each do |repo|
+      integration.add_repo!(repo: repo, server_id: server.id, trigger_id: "t-#{repo.tr("/", "-")}-#{server.id}")
+    end
+  end
+
   def receipt_for(status, reference: "acme/api", org_id: :default, external_id: nil)
     Webhook::Receipt.create!(
       provider: "github", event: "push", status: status,
@@ -382,9 +437,9 @@ class DeploysWebhooksTest < ActionDispatch::IntegrationTest
     )
   end
 
-  def deployment(receipt:, sha:, server:)
+  def deployment(receipt:, sha:, server:, repo: "acme/api")
     Deployment.create!(
-      org: @org, server: server, repo: "acme/api", sha: sha, status: "succeeded",
+      org: @org, server: server, repo: repo, sha: sha, status: "succeeded",
       webhook_receipt_id: receipt.id, details: {"commit_message" => "Ship it"}
     )
   end

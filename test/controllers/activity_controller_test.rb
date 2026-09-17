@@ -444,7 +444,7 @@ class ActivityControllerTest < ActionDispatch::IntegrationTest
   # The same picker Metrics and Alerts use, custom window included. A third
   # time picker with its own idea of what "7d" means is how two screens start
   # disagreeing about the same question.
-  test "a custom range window is honoured" do
+  test "a custom range window is honored" do
     # Both records sit inside the window a dropped from/until would fall back
     # to (the last day). Only the bounds actually arriving can separate them —
     # the earlier version of this test used a record from six days back, so it
@@ -529,7 +529,7 @@ class ActivityControllerTest < ActionDispatch::IntegrationTest
   end
 
   # Right after the last dropdown, where the controls it clears are, and icon
-  # only — a third labelled control would push the strip past the table's own
+  # only — a third labeled control would push the strip past the table's own
   # left edge on a laptop.
   test "clear filters is an icon button beside the dropdowns, and only when there is something to clear" do
     get activity_path(server_key: @key)

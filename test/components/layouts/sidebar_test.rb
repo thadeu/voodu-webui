@@ -37,7 +37,7 @@ class Components::Layouts::SidebarTest < ActiveSupport::TestCase
     ).render_in(@view)
   end
 
-  test "the licence item is current on its own page even when a server is in view" do
+  test "the license item is current on its own page even when a server is in view" do
     html = render_sidebar(current_path: "/ops/license")
 
     assert_match(%r{href="/ops/license"[^>]*aria-current="page"}, html)

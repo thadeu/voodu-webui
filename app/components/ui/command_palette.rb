@@ -12,7 +12,7 @@
 # on first open and caches it in sessionStorage for 30s. This:
 #
 #   - Keeps the dashboard layout HTML small (no per-page JSON blob).
-#   - Avoids re-serialising the global command set on every
+#   - Avoids re-serializing the global command set on every
 #     ApplicationController render — only paid on first ⌘K.
 #   - Removes the "JSON sitting in the DOM" surface the operator
 #     flagged as a security smell. Commands now travel via XHR

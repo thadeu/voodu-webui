@@ -5,7 +5,7 @@ import { Controller } from "@hotwired/stimulus"
 // Native <details> does neither: once opened it stays open until the summary
 // is clicked again, so an account menu left open sits over the page while you
 // work. Twenty lines here beats a popover library, and the element keeps its
-// native keyboard and screen-reader behaviour.
+// native keyboard and screen-reader behavior.
 export default class extends Controller {
   connect() {
     this.onDocumentClick = this.onDocumentClick.bind(this)

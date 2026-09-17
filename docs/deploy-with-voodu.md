@@ -42,14 +42,14 @@ deployment "ops" "voodu-webui" {
     // CLOWK_ENABLED         = "1"
     // CLOWK_PUBLISHABLE_KEY = "pk_live_…"
 
-    // Enterprise licence. Or paste it at /ops/license once running.
+    // Enterprise license. Or paste it at /ops/license once running.
     // VOODU_LICENSE = "eyJhbGciOiJSUzI1NiJ9…"
 
     // Control plane in Postgres. Without it, all six databases are SQLite
     // in the volume above.
     // DATABASE_URL = "postgres://voodu:…@10.0.0.5:5432/voodu"
 
-    // Days of telemetry kept on disk. The licence caps how far back you can
+    // Days of telemetry kept on disk. The license caps how far back you can
     // search; this decides what there is to search. See docs/database.md.
     VOODU_RETENTION_DAYS = "30"
   }

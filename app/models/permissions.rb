@@ -15,7 +15,7 @@
 #
 # Enforced in controllers (Authorization#require_permission!) and read by views
 # to decide what to render. Both matter: a button that disappears while the
-# endpoint still honours the request is not authorization.
+# endpoint still honors the request is not authorization.
 class Permissions
   ORDER = {member: 0, admin: 1, owner: 2}.freeze
 
@@ -35,12 +35,12 @@ class Permissions
 
     manage_servers: :admin,
 
-    # Connecting a source provider and authorising a repository to deploy.
+    # Connecting a source provider and authorizing a repository to deploy.
     #
     # Admin, beside manage_servers, and NOT owner: an admin already runs
     # everything the org does — they can restart a pod, install a plugin, and
     # reveal the PAT that is the whole controller. Deploying from a repository
-    # the org already authorised on GitHub is smaller than any of those, and
+    # the org already authorized on GitHub is smaller than any of those, and
     # putting it above them would be a line drawn where nobody could explain it.
     manage_deploys: :admin,
     reveal_pat: :admin,

@@ -56,7 +56,7 @@ module LogTail
 
     # On opening a (pod, date) file we seed the dedupe window from the
     # TAIL of what's already on disk, so a fresh Writer (every job run /
-    # restart / cache-lost resume) still recognises lines it persisted
+    # restart / cache-lost resume) still recognizes lines it persisted
     # in a previous run and never re-appends them. Without this seed the
     # window only protected within a single run, so the tail job's
     # cold-start backfill (tail=N, no `since`) re-wrote the overlap on

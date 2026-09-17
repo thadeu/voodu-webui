@@ -32,13 +32,13 @@ class Current < ActiveSupport::CurrentAttributes
   #
   # Memoised per request, because resolving verifies an RSA signature and reads
   # the database, and this is now cheap enough to call in a view. Rails clears
-  # Current at the end of every request and every job, so a licence activated
+  # Current at the end of every request and every job, so a license activated
   # mid-session is picked up on the next one rather than cached until deploy.
   # Held in a real attribute, not in `attributes[...]`.
   #
   # CurrentAttributes#attributes returns a COPY, so `attributes[:license] ||= …`
   # writes to a hash that is thrown away — the memoisation looked right and
-  # resolved the licence on every single call, RSA verification and database
+  # resolved the license on every single call, RSA verification and database
   # read included. Only a declared attribute has a writer that reaches the
   # store.
   def self.license

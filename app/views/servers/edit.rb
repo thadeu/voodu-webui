@@ -71,7 +71,7 @@ class Views::Servers::Edit < Views::Base
       div(class: "flex flex-col gap-4 p-3.5") do
         input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
         input(type: "hidden", name: "_method", value: "patch")
-        # return_to rides along so the post-save redirect honours
+        # return_to rides along so the post-save redirect honors
         # the page the operator came from (Settings vs /servers).
         input(type: "hidden", name: "return_to", value: @return_to) if @return_to.present?
 

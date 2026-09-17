@@ -60,7 +60,7 @@ class Org
       limit = entitlements.limit(:member_invites)
 
       if limit.to_i.zero?
-        "This installation is licensed for a single operator. An Enterprise licence " \
+        "This installation is licensed for a single operator. An Enterprise license " \
           "adds people."
       else
         "This installation is licensed for #{limit} invited #{"member".pluralize(limit)}."

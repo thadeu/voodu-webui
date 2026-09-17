@@ -16,7 +16,7 @@ class Integration::Repo
   attr_reader :repo, :server_id, :trigger_id
 
   def initialize(repo:, server_id:, trigger_id:)
-    # Normalised here rather than at the call sites: GitHub compares owner and
+    # Normalized here rather than at the call sites: GitHub compares owner and
     # repository names case-insensitively, and a push that failed to match
     # because somebody typed `Acme/Web` would be debugged as "the webhook is
     # broken".

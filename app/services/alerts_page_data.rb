@@ -102,7 +102,7 @@ class AlertsPageData
   end
 
   # servers — the org's servers, for the rule form's server-picker (host target
-  # per server) + labelling which server each rule watches.
+  # per server) + labeling which server each rule watches.
   def servers
     @servers ||= org.servers.order(:name).to_a
   end

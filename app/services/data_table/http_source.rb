@@ -115,7 +115,7 @@ module DataTable
 
     # rows — fire the outbound request, map the JSON into rows. Ignores the
     # paging/live cursors (before_id/since_id): the response is the whole set,
-    # replaced on every load. Honours `limit` as a safety cap.
+    # replaced on every load. Honors `limit` as a safety cap.
     def rows(view: DEFAULT_VIEW, filter_query: nil, limit: 100, before_id: nil, since_id: nil, ts_from: nil, ts_to: nil)
       result = fetch(ts_from: ts_from, ts_to: ts_to)
       raise FetchError, result.error unless result.ok?

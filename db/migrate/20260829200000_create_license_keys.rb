@@ -12,7 +12,7 @@ class CreateLicenseKeys < ActiveRecord::Migration[8.1]
     create_table :license_keys do |t|
       t.text :token, null: false
       t.string :subject, null: false
-      # From the token's own iat/exp, denormalised so Settings and the daily
+      # From the token's own iat/exp, denormalized so Settings and the daily
       # check can read them without verifying a signature first.
       t.datetime :issued_at, null: false
       t.datetime :expires_at, null: false

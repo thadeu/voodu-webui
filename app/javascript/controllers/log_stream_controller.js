@@ -81,7 +81,7 @@ const SINCE_MARGIN_MS    = 3_000  // resume a few seconds before last-seen line
 //      beta. Stays mock until the PAT plane exposes a multi-pod
 //      aggregation endpoint.
 //
-// Toolbar behaviour (filter / level / follow / wrap / pause / clear)
+// Toolbar behavior (filter / level / follow / wrap / pause / clear)
 // is identical in both modes — the row append function is the seam.
 export default class extends Controller {
   static values = {
@@ -135,7 +135,7 @@ export default class extends Controller {
     // wrapped fragments. Toggle Wrap on for stack-trace inspection.
     // Markup in page.rb#wrap_btn renders the INACTIVE chrome at boot
     // to match; the listTarget.classList line below keeps the CSS
-    // behaviour aligned with the boolean.
+    // behavior aligned with the boolean.
     this.wrap          = false
     this.query         = ""
     this.activeLevels  = new Set(["HTTP", "INFO", "WARN", "ERROR"])
@@ -1229,8 +1229,8 @@ const IPV4_RE       = /\b(\d{1,3}(?:\.\d{1,3}){3})\b/
 // the right pod color + the body stays readable.
 const POD_PREFIX_RE = /^\[([^\]]+)\] (.*)$/
 
-// ANSI_RE / stripAnsi — drop the SGR/CSI colour escapes a TTY app (FreeSWITCH's
-// SIP trace, a colourised logger) prints to its console: ESC `[`, params,
+// ANSI_RE / stripAnsi — drop the SGR/CSI color escapes a TTY app (FreeSWITCH's
+// SIP trace, a colorised logger) prints to its console: ESC `[`, params,
 // intermediates, a final byte. The invisible ESC renders to nothing in the
 // browser and leaves the litter (`[m`, `[32m`) inline. The warehouse ingestion
 // path already scrubs these server-side (LogTail::Parser); this covers the LIVE

@@ -12,7 +12,7 @@
 #   `manage_deploys` — may THIS person configure it. Admin, beside
 #   manage_servers: an admin can already restart a pod, install a plugin and
 #   reveal the PAT that is the whole controller, so deploying from a repository
-#   the org already authorised on GitHub is smaller than any of those.
+#   the org already authorized on GitHub is smaller than any of those.
 #
 # The whole screen and not only its writes, for the reason PluginsController
 # gives: a read-only version of this page is not a feature anybody asked for.
@@ -139,17 +139,17 @@ class DeploysController < ApplicationController
 
     # Checked BEFORE the box call. Without it the trigger would be created on
     # the server and then `add_repo!` would raise on nil — leaving an
-    # authorisation nothing points at and a 500 where a sentence belongs.
+    # authorization nothing points at and a 500 where a sentence belongs.
     return refuse("Connect GitHub before pointing a repository here.") if integration.nil?
 
     # Checked BEFORE the box call. Without it the trigger would be created on
     # the server and then `add_repo!` would raise on nil — leaving an
-    # authorisation nothing points at and a 500 where a sentence belongs.
+    # authorization nothing points at and a 500 where a sentence belongs.
     return refuse("A branch is required — it is what a deploy's commit must descend from.") if branch.blank?
 
     # Refused here as well as by the box, because the message matters: the box
     # says "allow_scopes is required", and the person is looking at a field
-    # labelled Scopes.
+    # labeled Scopes.
     if scopes.empty?
       return refuse("Name at least one scope. A trigger that allows nothing can deploy nothing.")
     end
@@ -176,7 +176,7 @@ class DeploysController < ApplicationController
   # first, because that is what stops the next push from queueing anything. If
   # the box call then fails, what remains is an inert trigger nothing points
   # at — and the operator is told, rather than left with a screen that says the
-  # repository is disconnected while the box still holds the authorisation.
+  # repository is disconnected while the box still holds the authorization.
   def disconnect_repo
     repo = params[:repo].to_s.strip
     entry = integration&.repos_for_server(current_server)&.find { |e| e.matches?(repo) }
@@ -210,7 +210,7 @@ class DeploysController < ApplicationController
   # server to be filed under. Those are exactly the rows somebody comes here to
   # find, so filing the tab by server would hide them.
   def webhooks
-    @data = WebhookReceiptsData.new(org: current_org, params: params)
+    @data = WebhookReceiptsData.new(org: current_org, server: current_server, params: params)
 
     if request.headers["Turbo-Frame"] == WEBHOOKS_FRAME
       render Views::Deploys::WebhooksFrame.new(data: @data), layout: false
@@ -220,7 +220,7 @@ class DeploysController < ApplicationController
   end
 
   def webhook
-    @data = WebhookReceiptsData.new(org: current_org, id: params[:id])
+    @data = WebhookReceiptsData.new(org: current_org, server: current_server, id: params[:id])
 
     if @data.receipt.nil?
       return redirect_to deploys_webhooks_path, alert: "That delivery is not on this installation."
@@ -266,7 +266,7 @@ class DeploysController < ApplicationController
       return "This server's token cannot create triggers — it needs the deploy scope."
     end
 
-    return "That repository already deploys here on that branch." if message.include?("already authorises")
+    return "That repository already deploys here on that branch." if message.include?("already authorizes")
 
     "The server refused it: #{message}"
   end

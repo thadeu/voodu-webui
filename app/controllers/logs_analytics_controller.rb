@@ -69,7 +69,7 @@ class LogsAnalyticsController < ApplicationController
   # by the Copy actions via fetch). Synchronous: the query is bounded, so
   # no async job / status surface — unlike the live-tail export drawer
   # which handles unbounded dumps. Reuses LogSearchData to resolve the
-  # window/filters, then LogTail::Reader + LineFormatter to serialise.
+  # window/filters, then LogTail::Reader + LineFormatter to serialize.
   EXPORT_LINE_CAP = 50_000
 
   EXPORT_TYPES = {
@@ -107,7 +107,7 @@ class LogsAnalyticsController < ApplicationController
     body
   end
 
-  # format_rows — serialise an already-materialised array of rows (the
+  # format_rows — serialize an already-materialised array of rows (the
   # surrounding window) into the requested format. Same formatter as the
   # streaming export, so output matches.
   def format_rows(rows, fmt)

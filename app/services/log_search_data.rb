@@ -56,15 +56,15 @@ class LogSearchData
   DEFAULT_RANGE = "5m"
 
   # Hard floor on `from` — never scan past what cleanup keeps, and never past
-  # what the licence allows this installation to look back. Resolved per call
-  # rather than frozen in a constant: a licence can lapse or be renewed while
+  # what the license allows this installation to look back. Resolved per call
+  # rather than frozen in a constant: a license can lapse or be renewed while
   # the process is up, and the window has to follow it.
   def self.retention = Retention.serve_window
 
   attr_reader :server
 
   # @param server [Server]
-  # @param params [Hash] the operator's filter choices. Recognised keys
+  # @param params [Hash] the operator's filter choices. Recognized keys
   #   (symbol or string): :range, :from, :until, :q, :regex, :pods.
   def initialize(server:, params: {})
     @server = server

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Every licence this installation has run under.
+# Every license this installation has run under.
 #
 # The rows were always being written — one per activation, with the subject, its
 # dates and who pasted it — and nothing displayed them. What they answer is the
@@ -75,7 +75,7 @@ class Components::Licenses::HistoryTable < Components::Base
     plain key.expired? ? "expired #{key.expires_at.to_date}" : "until #{key.expires_at.to_date}"
   end
 
-  # Only the licence actually in force is worth colouring; a superseded row is
+  # Only the license actually in force is worth coloring; a superseded row is
   # history, and expired is what history looks like.
   def tone(key, current)
     return "text-voodu-muted" unless current
@@ -87,6 +87,6 @@ class Components::Licenses::HistoryTable < Components::Base
     div(
       hidden: true, data: {kv_filter_target: "empty"},
       class: "px-3.5 py-4 text-[12.5px] text-voodu-muted text-center"
-    ) { "No licences match." }
+    ) { "No licenses match." }
   end
 end

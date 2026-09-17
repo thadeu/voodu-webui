@@ -42,7 +42,7 @@ class Views::Ops::License::Index < Views::Base
 
   # Nothing to sell to someone who already bought. An installation inside its
   # grace period is still entitled, and being advertised at while holding a
-  # licence that merely needs renewing would read as the product not knowing
+  # license that merely needs renewing would read as the product not knowing
   # what it had sold — the expiry on the left already says what to do.
   def upgrade_cta
     return if license.entitled?
@@ -60,7 +60,7 @@ class Views::Ops::License::Index < Views::Base
       ],
       primary: {label: "See Enterprise", href: "https://voodu.clowk.in/license/enterprise"},
       secondary: {label: "Email us", href: "mailto:hello@clowk.in?subject=Voodu%20Enterprise"},
-      footnote: "Paste the licence into the form on the left — it takes effect immediately, no restart."
+      footnote: "Paste the license into the form on the left — it takes effect immediately, no restart."
     )
   end
 
@@ -74,11 +74,11 @@ class Views::Ops::License::Index < Views::Base
   # ── Plan ───────────────────────────────────────────────────────────
 
   # Its own card rather than a row in About, because it is the only place an
-  # operator can act on their licence: see what they have, and paste a new one.
+  # operator can act on their license: see what they have, and paste a new one.
   # Renewal without a restart is the point — the alternative is editing an env
   # var and bouncing the dashboard someone is watching.
   def plan_card
-    # On the hosted service the box is not the customer's, so its licence is
+    # On the hosted service the box is not the customer's, so its license is
     # not shown to them at all — same rule that removed the SSO screen and the
     # topbar badge. It was actively misleading here: the row read
     # "Unlimited · voodu-hosted-dev", naming OUR entitlement and OUR customer
@@ -126,7 +126,7 @@ class Views::Ops::License::Index < Views::Base
   end
 
   # Says who to ask about everything NOT on this card. Without it the screen
-  # reads as though the plan above is all there is to a licence, and a customer
+  # reads as though the plan above is all there is to a license, and a customer
   # wondering about the installation has nowhere to look.
   def hosted_footnote
     p(class: "m-0 p-3.5 border-t border-voodu-border text-[12px] text-voodu-muted leading-relaxed") do
@@ -137,7 +137,7 @@ class Views::Ops::License::Index < Views::Base
     end
   end
 
-  # Every licence this installation has run under.
+  # Every license this installation has run under.
   #
   # The rows were always being written — one per activation — and nothing showed
   # them. What they answer is the question support actually gets asked: when did
@@ -156,12 +156,12 @@ class Views::Ops::License::Index < Views::Base
   end
 
   # Only ever Enterprise now: plan_card returns early on the hosted tier, so
-  # this never renders for an unlimited licence. Kept as a named method rather
+  # this never renders for an unlimited license. Kept as a named method rather
   # than inlined because plan_value reads better with it, and spelled without
   # the dead branch so nobody trusts a ternary that cannot take its other arm.
   def plan_name = "Enterprise"
 
-  # Only when there IS one — a free account has no licence and no date, and an
+  # Only when there IS one — a free account has no license and no date, and an
   # empty row would look like something failed to load.
   def plan_expiry_row(account)
     expires = account.plan_license.expires_at
@@ -172,7 +172,7 @@ class Views::Ops::License::Index < Views::Base
     end
   end
 
-  # The customer's own licence, which is a different token from the box's and
+  # The customer's own license, which is a different token from the box's and
   # goes in a different place. Same shape as the installation form so nobody
   # has to learn two, and the copy says whose it is.
   def plan_form(account)
@@ -183,7 +183,7 @@ class Views::Ops::License::Index < Views::Base
       input(type: "hidden", name: "return_to", value: @current_path)
 
       label(class: "text-[12px] text-voodu-muted", for: "plan-token") do
-        plain account.pro? ? "Replace your plan licence" : "Activate a plan licence"
+        plain account.pro? ? "Replace your plan license" : "Activate a plan license"
       end
 
       textarea(
@@ -199,7 +199,7 @@ class Views::Ops::License::Index < Views::Base
           "Activate"
         end
         span(class: "text-[11.5px] text-voodu-muted") do
-          plain "Issued for this account (#{account.short_id}) — a licence for another will be refused."
+          plain "Issued for this account (#{account.short_id}) — a license for another will be refused."
         end
       end
     end
@@ -217,7 +217,7 @@ class Views::Ops::License::Index < Views::Base
 
   def plan_count(value) = value.nil? ? "∞" : value.to_s
 
-  # The licence grants the OPTION of Postgres; DATABASE_URL is how an operator
+  # The license grants the OPTION of Postgres; DATABASE_URL is how an operator
   # takes it. Both facts belong here, because "am I on Postgres" and "may I be"
   # are different questions and only one of them is about the plan.
   def database_value
@@ -236,7 +236,7 @@ class Views::Ops::License::Index < Views::Base
       input(type: "hidden", name: "return_to", value: @current_path)
 
       label(class: "text-[12px] text-voodu-muted", for: "license-token") do
-        plain license.present? ? "Replace the licence" : "Activate a licence"
+        plain license.present? ? "Replace the license" : "Activate a license"
       end
 
       textarea(
@@ -262,7 +262,7 @@ class Views::Ops::License::Index < Views::Base
 
   # Shown even on the free tier, and deliberately: an operator who cannot see
   # which plan they are on files a ticket to ask. A lapsed or unverifiable
-  # licence has to be loud here — it is the only place that explains why a
+  # license has to be loud here — it is the only place that explains why a
   # capability they paid for stopped applying.
   def plan_value
     case license.status
@@ -273,9 +273,9 @@ class Views::Ops::License::Index < Views::Base
     when :grace
       span(class: "text-voodu-amber") { "#{plan_name} · #{license.customer} — expired, in grace" }
     when :lapsed
-      span(class: "text-voodu-red") { "Free — licence for #{license.customer} lapsed" }
+      span(class: "text-voodu-red") { "Free — license for #{license.customer} lapsed" }
     when :invalid
-      span(class: "text-voodu-red") { "Free — licence could not be verified" }
+      span(class: "text-voodu-red") { "Free — license could not be verified" }
     end
   end
 

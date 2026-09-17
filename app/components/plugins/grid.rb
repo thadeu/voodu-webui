@@ -15,7 +15,7 @@ class Components::Plugins::Grid < Components::Base
     return no_server if @data.nil?
     return unsupported if @data.unsupported?
     return unreachable unless @data.reachable?
-    # `listing`, not `plugins`: with a catalogue, "nothing installed" is no
+    # `listing`, not `plugins`: with a catalog, "nothing installed" is no
     # longer the end of the story — there are cards to show. Checking the
     # installed list here short-circuited straight past every one of them.
     return empty_state if @data.listing.empty?
@@ -146,7 +146,7 @@ class Components::Plugins::Grid < Components::Base
     end
   end
 
-  # Only reachable when the catalogue is empty too, which today means the
+  # Only reachable when the catalog is empty too, which today means the
   # server answered and every known plugin is already on it.
   def empty_state
     notice("Nothing to show — this server already has every plugin we know about.")

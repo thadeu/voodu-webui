@@ -84,7 +84,7 @@ class InvitedAdminBoundariesTest < ActionDispatch::IntegrationTest
 
   # ── The plan is the account they own ──────────────────────────────
 
-  test "the licence screen names the account whose plan it is showing" do
+  test "the license screen names the account whose plan it is showing" do
     get "/ops/license"
 
     assert_response :success
@@ -112,13 +112,13 @@ class InvitedAdminBoundariesTest < ActionDispatch::IntegrationTest
   end
 
   # And the form is the owner's alone: rendering it for a visitor would offer
-  # to write a plan licence onto an account that is not theirs.
+  # to write a plan license onto an account that is not theirs.
   test "no activation form is offered for an account they do not own" do
     get "/ops/license?org_id=#{orgs(:acme).short_id}"
 
     assert_select "textarea#plan-token", 1
 
-    # The form states which account a licence must be issued for, and that
+    # The form states which account a license must be issued for, and that
     # sentence is the one place the write target is named to the operator.
     assert_includes response.body, "Issued for this account (#{@own.short_id})"
     assert_not_includes response.body, "Issued for this account (#{orgs(:acme).account.short_id})"

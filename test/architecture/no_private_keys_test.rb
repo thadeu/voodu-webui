@@ -6,10 +6,10 @@ require "test_helper"
 #
 # .gitignore stops the accident; this stops the rest. A pattern can be edited, a
 # file renamed out from under it, and `git add -f` ignores it entirely — and the
-# consequence is not a leaked config value: whoever holds the licence signing
-# key issues their own licences, forever, including after the leak is noticed.
+# consequence is not a leaked config value: whoever holds the license signing
+# key issues their own licenses, forever, including after the leak is noticed.
 # Rotating means shipping a new public key in a new image, which invalidates
-# every licence already sold.
+# every license already sold.
 #
 # The test keypair under test/fixtures is deliberately exempt and deliberately
 # named: it exists so the suite can mint tokens, it signs nothing real, and its
@@ -36,7 +36,7 @@ class NoPrivateKeysTest < ActiveSupport::TestCase
 
   # The signing key belongs beside the public one so it is easy to find and hard
   # to lose; the pattern is what keeps it out of git.
-  test "the licence key directory ignores anything named private" do
+  test "the license key directory ignores anything named private" do
     ignored = system("git check-ignore -q config/license/private_key.pem")
 
     assert ignored, "config/license/private_key.pem is not gitignored"
@@ -45,7 +45,7 @@ class NoPrivateKeysTest < ActiveSupport::TestCase
   # The image is PUBLISHED. The Dockerfile does `COPY . .`, so anything the
   # build context can see ends up in a registry anyone can pull — and a copy of
   # the signing key there hands every customer the ability to mint their own
-  # licences, against a public half shipping in the same image, so rotating
+  # licenses, against a public half shipping in the same image, so rotating
   # would invalidate everything already sold.
   #
   # Verified by removing the line and rebuilding: the key appears in the context.

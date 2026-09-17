@@ -94,8 +94,10 @@ class HostedUiDetailsTest < ActionDispatch::IntegrationTest
     # By action, not by "the form with a confirm on it" — the org manager is
     # rendered on this page too and its Delete-org form also carries one, which
     # is what the first version of this test matched.
+    # The role toggle beside Remove posts to the SAME action (as a PATCH), so
+    # pick the form by its method, not by position.
     member = org_member_path(org_id: orgs(:acme).short_id, id: org_memberships(:contractor_in_acme).id)
-    form = css_select("form[action='#{member}']").first
+    form = css_select("form[action='#{member}']").find { |f| f.css("input[name='_method'][value='delete']").any? }
 
     assert form, "the remove form should exist"
     assert form["data-turbo-confirm"], "and should ask before removing"

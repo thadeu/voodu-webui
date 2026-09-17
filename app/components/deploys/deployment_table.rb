@@ -3,7 +3,7 @@
 # The deployment history as a table.
 #
 # Columns chosen by what an operator scans FOR: the SHA identifies, the message
-# is what they recognise ("the redis fix"), and the status is the answer. The
+# is what they recognize ("the redis fix"), and the status is the answer. The
 # rest is context and hides below the breakpoint.
 class Components::Deploys::DeploymentTable < Components::Base
   def initialize(data:)

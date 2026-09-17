@@ -53,7 +53,7 @@ class Views::Activity::Index < Views::Base
     end
   end
 
-  # Re-serialised from query_parameters rather than request.original_url so a
+  # Re-serialized from query_parameters rather than request.original_url so a
   # non-default dev port does not turn the reload into a cross-origin fetch.
   def current_request_url
     qs = request.query_parameters.to_query

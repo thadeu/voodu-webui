@@ -77,7 +77,7 @@ class HepMessage < HepRecord
   end
 
   # calls_page — one row per call (grouped by corr_id), most-recently-
-  # active first. Backs the "Calls" view: each row summarises a call
+  # active first. Backs the "Calls" view: each row summarizes a call
   # (parties, message count, time span, a result-code hint). `before_epoch`
   # pages older calls (the cursor is the group's MAX(ts_epoch), which the
   # source also exposes as the row "id"). Returns an Array of column

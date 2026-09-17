@@ -255,9 +255,9 @@ class Components::Metrics::NumberCard < Components::Base
 
   # sparkline — the count's trend as a FULL area chart (axes + time X + value Y),
   # the SAME area+gradient style the metric charts (CPU/Memory) use, so a count
-  # tile reads as "big number on top + a chart that matches its neighbours". The
+  # tile reads as "big number on top + a chart that matches its neighbors". The
   # headline number (flex-1, centered) absorbs the slack, so the tile matches a
-  # neighbouring chart card's height with no gap.
+  # neighboring chart card's height with no gap.
   #
   # Height is 150 (vs the metric chart's 200): the big number + the "sum"
   # sub-line eat the top of the tile, so a shorter chart keeps the count card's

@@ -66,7 +66,7 @@ workers worker_count if worker_count > 0
 # preload_app! requires that the app be re-loadable AFTER fork;
 # Rails handles this fine in prod (eager_load!). In dev (which
 # stays single-process), preload_app! defeats Rails' autoload-on-
-# request behaviour anyway — Phlex view edits would stop being
+# request behavior anyway — Phlex view edits would stop being
 # picked up. So we ONLY preload when actually forking ≥2 workers.
 preload_app! if worker_count > 1
 

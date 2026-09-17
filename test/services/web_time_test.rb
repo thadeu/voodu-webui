@@ -3,7 +3,7 @@
 require "test_helper"
 
 # WebTime.zone_name resolution: the current org's timezone when set to a zone
-# ActiveSupport recognises, else UTC. Corrupt data degrades to UTC, it never
+# ActiveSupport recognizes, else UTC. Corrupt data degrades to UTC, it never
 # crashes a render. Timezone is a per-org preference — there is no global
 # fallback (org-less pages simply render in UTC).
 class WebTimeTest < ActiveSupport::TestCase

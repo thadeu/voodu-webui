@@ -5,7 +5,7 @@ require "test_helper"
 # Pins LogTail::Parser — the ingestion step that turns one raw stream line
 # into the persisted { ts, pod, stream, level, msg, raw, parsed } hash. The
 # scenarios that matter: the "[pod] " fan-out prefix is peeled, JSON lines
-# get their fields lifted, and — the reason this file exists — ANSI colour
+# get their fields lifted, and — the reason this file exists — ANSI color
 # escapes a TTY app (FreeSWITCH's SIP trace) prints are scrubbed at ingestion
 # so the warehouse never stores `[32m`/`[m` litter.
 class LogTail::ParserTest < ActiveSupport::TestCase
@@ -16,7 +16,7 @@ class LogTail::ParserTest < ActiveSupport::TestCase
 
     assert_equal "newcall-api.e41c", row[:pod]
     assert_equal "plain text line", row[:msg]
-    # `raw` keeps the whole line (prefix included) — pre-existing behaviour;
+    # `raw` keeps the whole line (prefix included) — pre-existing behavior;
     # only `msg`/`body` are prefix-stripped.
     assert_equal "[newcall-api.e41c] plain text line", row[:raw]
     refute row[:parsed]
@@ -39,18 +39,18 @@ class LogTail::ParserTest < ActiveSupport::TestCase
   end
 
   # The bug this file was created for: FreeSWITCH prints its SIP trace with
-  # SGR colour escapes (`\e[m`, `\e[32m`). The invisible ESC renders to
+  # SGR color escapes (`\e[m`, `\e[32m`). The invisible ESC renders to
   # nothing in a browser, leaving the CSI tail as visible litter. Scrub it at
   # ingestion so `raw` AND `msg` are clean — everything downstream (render,
   # DSL search, export, the Logs→HEP3 Call-ID extraction) reads clean text.
-  test "strips ANSI colour escapes from raw and msg (plain FreeSWITCH line)" do
+  test "strips ANSI color escapes from raw and msg (plain FreeSWITCH line)" do
     line = "#{ESC}[m#{ESC}[mrecv 326 bytes from udp/[54.20.49.188]:5060 at 23:59:12:"
     row = LogTail::Parser.parse(line, pod_hint: "fsw-freeswitch.0")
 
     assert_equal "recv 326 bytes from udp/[54.20.49.188]:5060 at 23:59:12:", row[:raw]
     assert_equal "recv 326 bytes from udp/[54.20.49.188]:5060 at 23:59:12:", row[:msg]
     refute_includes row[:raw], ESC, "no ESC byte survives to the warehouse"
-    refute_match(/\[\d*m/, row[:raw], "no bare CSI colour litter survives")
+    refute_match(/\[\d*m/, row[:raw], "no bare CSI color litter survives")
   end
 
   test "strips ANSI even with the [pod] prefix and multi-code sequences" do

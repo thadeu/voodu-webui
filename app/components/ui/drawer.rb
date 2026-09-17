@@ -132,7 +132,7 @@ class Components::UI::Drawer < Components::Base
   private
 
   # render_trigger — anchor (NOT button) so cmd-click / middle-click
-  # still gets browser-native "open in new tab" behaviour. The
+  # still gets browser-native "open in new tab" behavior. The
   # Stimulus action only fires on plain left-click.
   #
   # custom_trigger: render the block AS-IS (no wrapping anchor) — the

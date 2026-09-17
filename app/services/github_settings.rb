@@ -16,7 +16,7 @@
 # Otherwise the stored row decides, so an operator can rotate an App or
 # configure one for the first time without a redeploy.
 #
-# ONE APP FOR THE WHOLE INSTALLATION. A customer authorises it on their
+# ONE APP FOR THE WHOLE INSTALLATION. A customer authorizes it on their
 # repositories and we hold an installation_id; they never see these values.
 # The eventual Enterprise sale is what makes the stored path matter — a
 # customer bringing their own App configures it here rather than in our env.

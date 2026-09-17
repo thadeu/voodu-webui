@@ -41,7 +41,7 @@ class Components::Pods::EnvCard < Components::Base
 
   # config_keys is nil when NOT ASKED — a third state, distinct from "asked and
   # it is not a config key". The drawer variant of the pod page does not spend
-  # a round trip on provenance, and labelling every row "image" there would be
+  # a round trip on provenance, and labeling every row "image" there would be
   # stating something never checked. No badge is drawn when it is nil.
   def initialize(pod:, pod_name: nil, config_keys: nil, editable: false)
     @pod = pod

@@ -25,7 +25,7 @@ class Views::Ops::Sso::Index < Views::Base
 
   private
 
-  # Same shape as the licence screen: what this installation runs on now, beside
+  # Same shape as the license screen: what this installation runs on now, beside
   # what it could run on. One column below 1280px — the settings are what someone
   # came for, so they stay first in the source and therefore first on a phone.
   def columns

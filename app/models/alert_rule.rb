@@ -234,7 +234,7 @@ class AlertRule < ApplicationRecord
   end
 
   # destinations_in_org — every notified destination MUST belong to this rule's
-  # org. Defence in depth behind AlertRulesController#org_destination_ids: this
+  # org. Defense in depth behind AlertRulesController#org_destination_ids: this
   # catches the create path and any other caller, but it CANNOT be the only
   # guard, because assigning `alert_destination_ids` on a persisted rule writes
   # the join rows before validation runs. `alert_rule_destinations` has no

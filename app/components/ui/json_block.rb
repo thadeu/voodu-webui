@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Components::UI::JsonBlock — a JSON document, coloured, with a copy button.
+# Components::UI::JsonBlock — a JSON document, colored, with a copy button.
 #
 # ## Rendered from the PARSED VALUE, never from text
 #
@@ -82,8 +82,8 @@ class Components::UI::JsonBlock < Components::Base
     punct("]")
   end
 
-  # Colours by TYPE, which is the whole reason to highlight a payload: `"1357"`
-  # and `1357` look identical in grey and mean different things to whatever
+  # Colors by TYPE, which is the whole reason to highlight a payload: `"1357"`
+  # and `1357` look identical in gray and mean different things to whatever
   # reads them next.
   def scalar(value)
     case value

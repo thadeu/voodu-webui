@@ -7,7 +7,7 @@
 #
 # `skipped` is deliberately NOT red. A push that matched no trigger file — a
 # README change on a repository that watches `app/**` — is the normal outcome,
-# and colouring it like a failure trains operators to ignore failures.
+# and coloring it like a failure trains operators to ignore failures.
 class Components::Deployments::StatusBadge < Components::Base
   VARIANTS = {
     "queued" => :neutral,

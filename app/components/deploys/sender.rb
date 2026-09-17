@@ -3,7 +3,7 @@
 # Who caused a push: the avatar, with the login on hover.
 #
 # AVATAR AND NOT A NAME IN TEXT. In a list of deploys the person is the fastest
-# thing to recognise and the least useful to read — you scan for "one of mine"
+# thing to recognize and the least useful to read — you scan for "one of mine"
 # or "not one of mine", and a face answers that in a glance where a login
 # costs a word of column width per row.
 #

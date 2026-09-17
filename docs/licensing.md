@@ -3,7 +3,7 @@
 Two questions, two answers, and keeping them apart is what lets one model serve
 a laptop, a customer's own datacentre and a hosted service.
 
-- **The tier says what the BOX is.** It comes from the installation's licence,
+- **The tier says what the BOX is.** It comes from the installation's license,
   and it decides how many accounts fit and whether the control plane may be
   Postgres.
 - **The plan says what an ACCOUNT bought.** It decides orgs, invited people and
@@ -18,21 +18,21 @@ hundred share the installation.
 
 | installation | tier | plan | accounts | orgs | invites | searchable | Postgres |
 |---|---|---|---|---|---|---|---|
-| **OSS** (no licence) | `free` | free | 1 | 1 | 0 | 3 days | — |
+| **OSS** (no license) | `free` | free | 1 | 1 | 0 | 3 days | — |
 | **Enterprise** | `enterprise` | pro | 1 | ∞ | ∞ | 90 days | ✓ |
 | **Hosted** · free | `unlimited` | free | ∞ | 1 | 0 | 3 days | ✓ |
 | **Hosted** · pro | `unlimited` | pro | ∞ | ∞ | ∞ | 90 days | ✓ |
 
 Where each plan comes from:
 
-- **OSS** — no licence at all, so the free plan.
-- **Enterprise** — the licence on the box IS that account's pro plan. Buying
+- **OSS** — no license at all, so the free plan.
+- **Enterprise** — the license on the box IS that account's pro plan. Buying
   Enterprise means "run it on my own infrastructure, without the org limit"; it
-  is one account, not a licence to operate a service of your own on top of
-  Voodu. The cap is a default, so a licence carrying `ent.accounts` explicitly
+  is one account, not a license to operate a service of your own on top of
+  Voodu. The cap is a default, so a license carrying `ent.accounts` explicitly
   can still sell more.
-- **Hosted** — every account carries its own plan licence, bound to that
-  account. See [Plan licences](#plan-licences-hosted-only).
+- **Hosted** — every account carries its own plan license, bound to that
+  account. See [Plan licenses](#plan-licenses-hosted-only).
 
 Counting is always per account. `accounts` is the exception and cannot be
 otherwise: "how many accounts exist on this box" has no per-account version.
@@ -100,7 +100,7 @@ and Enterprise hold one account, and provisioning it automatically would spend
 it on whoever authenticated first — the opposite of what the cap is for. A
 fresh box with room to spare still provisions nothing, so the operator names
 their own account and org. `test/services/personal_workspace_test.rb` pins both
-halves, so the hosted behaviour cannot leak into a self-hosted release.
+halves, so the hosted behavior cannot leak into a self-hosted release.
 
 ## Expiry
 
@@ -114,7 +114,7 @@ Expiry is a slope, not a cliff.
 
 Nothing is deleted and nothing is disconnected. The orgs and servers already
 registered stay, and stay usable; what stops is creating more. A Postgres
-control plane keeps being read — losing a licence must never be a data-loss
+control plane keeps being read — losing a license must never be a data-loss
 event — and the screen says the entitlement has gone. Telemetry stays on the
 volume under the operator's own retention setting; only the window the
 interface will SEARCH shrinks, so renewing brings it back.
@@ -122,7 +122,7 @@ interface will SEARCH shrinks, so renewing brings it back.
 Grace applies to a hosted customer's plan the same way: a renewal that lands
 late does not take somebody's orgs away overnight.
 
-## Issuing licences
+## Issuing licenses
 
 The private key never leaves the machine that issues. `config/license/` holds
 the public half, which ships in the image and is what verifies; the private
@@ -131,7 +131,7 @@ half is gitignored by pattern, excluded from the image, and
 committed. The rake task being in the repository is harmless — signing needs
 the key, not the code.
 
-### Installation licences
+### Installation licenses
 
 ```sh
 # Enterprise, one year
@@ -140,28 +140,28 @@ bundle exec rake 'license:issue[acme-corp,365]' > acme-corp.jwt
 # with specific entitlements
 bundle exec rake 'license:issue[acme-corp,365,retention_days=180 orgs=5]'
 
-# the hosted service's own licence
+# the hosted service's own license
 bundle exec rake 'license:issue[voodu-hosted,365,tier=unlimited]' > hosted.jwt
 ```
 
 The customer pastes it into **License**, or the operator supplies it as
 `VOODU_LICENSE` / `VOODU_LICENSE_FILE`. Precedence is by issue date: the newer
-licence wins wherever it came from, which is what makes renewal work when the
+license wins wherever it came from, which is what makes renewal work when the
 original came from the environment.
 
-The hosted tier is the one exception — there the installation's licence belongs
+The hosted tier is the one exception — there the installation's license belongs
 to whoever operates the box, so that form is not offered to customers.
 
-### Plan licences (hosted only)
+### Plan licenses (hosted only)
 
 ```sh
 bundle exec rake 'license:pro[<account short_id>,365]'
 ```
 
-Bound to one account. Without that binding a pro licence would be a file that
+Bound to one account. Without that binding a pro license would be a file that
 circulates by email — one customer's, pasted into another customer's account.
 The short_id is looked up rather than merely accepted, so a typo fails at issue
-time instead of when the customer pastes it. Activation refuses a licence whose
+time instead of when the customer pastes it. Activation refuses a license whose
 subject is not the account activating it, and so does every subsequent read: a
 row written straight to the database grants nothing either.
 
@@ -175,11 +175,11 @@ Reports status, tier, customer, expiry and the effective entitlements — the
 same resolution the application performs, so what it prints is what the app
 will do.
 
-## One licence, one server
+## One license, one server
 
 There is no technical enforcement of this, and there cannot be: an offline
-licence does not know where it runs, and any identifier the box could generate
-travels with a copy of the box. What the licence can do is record the term, so
+license does not know where it runs, and any identifier the box could generate
+travels with a copy of the box. What the license can do is record the term, so
 misuse is a verifiable breach of contract rather than a technical bypass.
 
 Stating that plainly is deliberate. A control that is described as technical

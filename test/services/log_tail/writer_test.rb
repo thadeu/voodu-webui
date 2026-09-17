@@ -3,7 +3,7 @@
 require "test_helper"
 
 # Pins the LogTail::Writer dedupe — in particular that a FRESH Writer
-# (new job run / restart / watermark-lost resume) recognises lines
+# (new job run / restart / watermark-lost resume) recognizes lines
 # already on disk and never re-appends them. This is the durable
 # guarantee behind the duplicate-lines fix: regardless of why the tail
 # job re-fetches an overlapping batch, byte-identical lines hit the

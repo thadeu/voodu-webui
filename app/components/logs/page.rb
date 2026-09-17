@@ -314,7 +314,7 @@ class Components::Logs::Page < Components::Base
     tone = LEVEL_DEFAULT_TONE[level]
 
     # Default state = active (all levels visible). Pre-paint with the
-    # tone colours so the markup matches what the JS will toggle.
+    # tone colors so the markup matches what the JS will toggle.
     button(
       type: "button",
       role: "tab",
@@ -443,7 +443,7 @@ class Components::Logs::Page < Components::Base
   def viewport
     div(class: "flex-1 min-h-[280px] bg-voodu-bg-2 border border-voodu-border flex flex-col overflow-hidden relative group") do
       # pb-1.5 (not py-1.5) — top padding on a scrolling container
-      # gets honoured by `position: sticky; top: 0` as a 6px gap
+      # gets honored by `position: sticky; top: 0` as a 6px gap
       # above the column header on initial load (sticky anchors to
       # the padding edge of the scrollport). Dropping padding-top
       # while keeping padding-bottom: header sits flush against the

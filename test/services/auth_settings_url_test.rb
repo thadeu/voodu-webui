@@ -40,7 +40,7 @@ class AuthSettingsUrlTest < ActiveSupport::TestCase
 
   # Both sources reach the gem through the same door, so a value pasted into
   # the SSO form cannot be a trap that the same value in the environment is not.
-  test "the environment is normalised on the way in" do
+  test "the environment is normalized on the way in" do
     ENV["CLOWK_SUBDOMAIN_URL"] = "lima--creek.clowk.dev"
     ENV["CLOWK_ENABLED"] = "1"
 
@@ -53,7 +53,7 @@ class AuthSettingsUrlTest < ActiveSupport::TestCase
   # The stored path is closed at the other end: the model refuses a bare host
   # outright, so the form cannot save the trap in the first place. Pinned here
   # beside the env case so it is visible that the two doors are shut by
-  # different means — validation there, normalisation here — and that removing
+  # different means — validation there, normalization here — and that removing
   # either one leaves a door open.
   test "the SSO form refuses a bare host instead of storing one" do
     config = Ops::SsoConfig.new(

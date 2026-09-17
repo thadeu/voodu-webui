@@ -3,7 +3,7 @@
 require "test_helper"
 
 # A block that says what KIND of thing it is — without turning the page into a
-# colour circus.
+# color circus.
 #
 # The restraint IS the design: the tone rides on a left rule and an icon, and
 # the background stays the ordinary surface. Two fully tinted cards on one

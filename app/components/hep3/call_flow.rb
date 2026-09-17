@@ -2,7 +2,7 @@
 
 # Components::Hep3::CallFlow — the SIP call-flow LADDER (sequence diagram)
 # for one call. Vertical lifelines (the parties, by IP) and one horizontal
-# arrow per message in ts order, coloured by class (request / 1xx / 2xx /
+# arrow per message in ts order, colored by class (request / 1xx / 2xx /
 # 3xx / 4xx-5xx). A left ts gutter times each step.
 #
 # Fed by Hep3::CallFlowData. Server-rendered as a COMPLETE SVG so the flow
@@ -31,7 +31,7 @@ class Components::Hep3::CallFlow < Components::Base
   TOP = 6
   BOTTOM = 20
 
-  # Arrow colour by class (sngrep convention, operator-tuned): a request is
+  # Arrow color by class (sngrep convention, operator-tuned): a request is
   # NEUTRAL (blue — neither ok nor error), EXCEPT BYE (call teardown) which is
   # flagged red; responses read by code — 1xx/2xx (100–299) green, 3xx amber,
   # 4xx+ red.
@@ -206,7 +206,7 @@ class Components::Hep3::CallFlow < Components::Base
 
   # render_media_row — a derived RTP stream as an extra ladder row: a DASHED
   # cyan line between the two media lifelines (both heads for sendrecv, one for
-  # send/recvonly), labelled "RTP <codec>". Distinct dash + colour so it never
+  # send/recvonly), labeled "RTP <codec>". Distinct dash + color so it never
   # reads as a real SIP message.
   def render_media_row(s, stream, row_index)
     y = row_y(row_index)

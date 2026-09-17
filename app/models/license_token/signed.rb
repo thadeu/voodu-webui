@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# LicenseToken::Signed — mints a licence. The only place that holds the private
+# LicenseToken::Signed — mints a license. The only place that holds the private
 # key and the only place that decides what a valid claim set looks like.
 #
 # Extracted from lib/tasks/license.rake, where two nearly identical task bodies
@@ -57,7 +57,7 @@ class LicenseToken::Signed
   # generate! — the signed token, as a String.
   #
   # Validates first and raises rather than signing something the product will
-  # later read as nothing. A licence that verifies and grants no more than
+  # later read as nothing. A license that verifies and grants no more than
   # having none is the worst outcome here: the customer paid, the screen says
   # it activated, and nobody finds out until they ask why nothing changed.
   def generate!
@@ -90,7 +90,7 @@ class LicenseToken::Signed
 
   # A plan only means something on the hosted service — Entitlements#plan reads
   # the account's plan when the tier is `unlimited` and ignores it otherwise. So
-  # a plan licence carries that tier by construction rather than by the caller
+  # a plan license carries that tier by construction rather than by the caller
   # remembering to pass it, which is the kind of thing a caller remembers until
   # the day it does not.
   def effective_tier = plan ? "unlimited" : tier
@@ -108,7 +108,7 @@ class LicenseToken::Signed
     end
 
     if plan && tier && tier != "unlimited"
-      raise ArgumentError, "a plan licence is hosted-only and carries tier unlimited (got #{tier.inspect})"
+      raise ArgumentError, "a plan license is hosted-only and carries tier unlimited (got #{tier.inspect})"
     end
 
     validate_entitlements!

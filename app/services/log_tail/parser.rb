@@ -33,7 +33,7 @@ module LogTail
     # per-pod open failures) stays verbatim in the body.
     PREFIX_RE = /\A\[([^\]]+)\]\s(.*)\z/
 
-    # strip_ansi — drop ANSI colour escapes at INGESTION so the warehouse (and
+    # strip_ansi — drop ANSI color escapes at INGESTION so the warehouse (and
     # DSL search, which matches the STORED text) is clean going forward. See
     # LogTail::Ansi for the shared definition; LogTail::Reader strips the same
     # on READ so lines captured before this fix still come back clean.
@@ -52,7 +52,7 @@ module LogTail
     def parse(raw_line, pod_hint: nil)
       # Strip ANSI up-front: `raw` (= stripped) and `body` (→ `msg` for plain
       # text) come out clean, and the JSON detection sees a `{`-leading line
-      # even when the app prefixes a colour reset. The controller's `[pod] `
+      # even when the app prefixes a color reset. The controller's `[pod] `
       # prefix carries no escapes, so split_prefix is unaffected.
       stripped = strip_ansi(raw_line.to_s.chomp)
 
@@ -122,7 +122,7 @@ module LogTail
         seconds = (raw > 1e12) ? raw / 1000.0 : raw.to_f
         Time.zone.at(seconds).iso8601(3)
       else
-        # Round-trip through Time.zone.parse to normalise format.
+        # Round-trip through Time.zone.parse to normalize format.
         Time.zone.parse(raw.to_s)&.iso8601(3)
       end
     rescue ArgumentError, TypeError

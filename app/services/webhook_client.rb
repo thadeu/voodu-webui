@@ -80,7 +80,7 @@ class WebhookClient
   def guard_ssrf!
     # Through our own predicate, not SsrfGuard's default: this class is the
     # seam callers and tests already reach for when they need to force the
-    # strict behaviour (see test/services/webhook_client_test.rb#block_private).
+    # strict behavior (see test/services/webhook_client_test.rb#block_private).
     result = SsrfGuard.check(@url, allow_private: self.class.allow_private_hosts?)
     return if result.ok?
     raise TransportError, result.message if result.unresolvable?

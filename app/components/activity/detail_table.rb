@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Components::Activity::DetailTable — the labelled key/value table inside an
+# Components::Activity::DetailTable — the labeled key/value table inside an
 # expanded activity row.
 #
 # WHY A TABLE AND NOT THE CHIP ROW IT REPLACES. A wrapping row of

@@ -551,7 +551,7 @@ class Components::Metrics::Chart < Components::Base
   # the measured container width.
   #
   # Returning normalized segments (instead of raw points) means
-  # the chart honours its gap policy across resize too: a 3-hour
+  # the chart honors its gap policy across resize too: a 3-hour
   # outage stays as two disconnected servers of data in the wide
   # post-resize chart, never auto-bridged.
   def normalized_segments
@@ -589,7 +589,7 @@ class Components::Metrics::Chart < Components::Base
   # y_axis_max — single source of truth for the chart's Y ceiling.
   # Both the gridline renderer (render_y_axis) and the point
   # projection (projected_points) must agree, or the dots float
-  # above the top gridline. Centralised here.
+  # above the top gridline. Centralized here.
   #
   # No multiplicative padding — `nice_ceil` already rounds UP to
   # the next clean number (5, 7.5, 10, 25, 50, 75, 100, …), which
@@ -705,7 +705,7 @@ class Components::Metrics::Chart < Components::Base
   # keeps labels short in the 38-pixel left gutter; below 1000 we
   # defer to MetricFormat.number so sub-1 values keep enough
   # precision to read as more than "0.0" (otherwise a chart with
-  # peaks at 0.05 had every gridline labelled "0.0", masking the
+  # peaks at 0.05 had every gridline labeled "0.0", masking the
   # actual scale).
   def format_axis_number(v)
     abs = v.abs

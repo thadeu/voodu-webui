@@ -125,7 +125,7 @@ class CommandSet
         title: pod_title(p),
         subtitle: "#{p["scope"]} · #{p["image"]} · @#{@server.name}",
         match: "#{pod_match_corpus(p)} #{@server.name}",
-        status: normalised_status(p),
+        status: normalized_status(p),
         href: loc(:pod, @server, name: p["name"])
       }
     end
@@ -261,7 +261,7 @@ class CommandSet
       .compact.join(" ")
   end
 
-  def normalised_status(p)
+  def normalized_status(p)
     (p["running"] == true) ? "running" : "stopped"
   end
 end

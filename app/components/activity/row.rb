@@ -16,8 +16,8 @@
 # digest and never a value: the controller does not send one, and the screen
 # must not become the hole the file format closed.
 class Components::Activity::Row < Components::Base
-  # The colour of the action itself, so an eye scanning the column can tell a
-  # deploy from a deletion without reading. Deliberately NOT the status colour:
+  # The color of the action itself, so an eye scanning the column can tell a
+  # deploy from a deletion without reading. Deliberately NOT the status color:
   # a successful delete is still a delete, and the two facts are separate.
   ACTION_TONES = {
     "apply" => "var(--voodu-blue)",
@@ -350,7 +350,7 @@ class Components::Activity::Row < Components::Base
     end
   end
 
-  # Labelled "declared", and that word is doing work. The controller cannot see
+  # Labeled "declared", and that word is doing work. The controller cannot see
   # this: its view of a CLI peer is always 127.0.0.1, because the CLI talks to
   # the loopback port and remote work runs on the box. The address is what the
   # operator's own machine reported, so the screen says so rather than

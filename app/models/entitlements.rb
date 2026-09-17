@@ -16,7 +16,7 @@ class Entitlements
   #
   # Enterprise is capped at one, deliberately. It is an upgrade of ONE account
   # to unlimited orgs, bought to run on the buyer's own infrastructure — not a
-  # licence to operate a service of their own on top of Voodu.
+  # license to operate a service of their own on top of Voodu.
   ACCOUNTS_BY_TIER = {"free" => 1, "enterprise" => 1, "unlimited" => nil}.freeze
 
   # What a plan grants. Free is the same everywhere: a customer of the hosted
@@ -32,7 +32,7 @@ class Entitlements
   # Current.license, not LicenseToken.current: resolving verifies an RSA
   # signature and reads the database, and several things per request want to
   # know the tier. Current memoises it for the request and Rails clears it
-  # between them, so a licence activated mid-session still lands on the next.
+  # between them, so a license activated mid-session still lands on the next.
   def self.current(license = Current.license)
     new(license)
   end
@@ -58,8 +58,8 @@ class Entitlements
   # Which plan governs this account.
   #
   # On the hosted service the account bought one. Anywhere else there is a
-  # single account and the box's own licence is what upgraded it — an
-  # Enterprise licence IS that account's pro plan, which is what "upgrade to
+  # single account and the box's own license is what upgraded it — an
+  # Enterprise license IS that account's pro plan, which is what "upgrade to
   # unlimited orgs on my own infrastructure" means.
   def plan
     return account&.plan || LicenseToken::DEFAULT_PLAN if tier == "unlimited"
@@ -88,7 +88,7 @@ class Entitlements
       granted = plan_grants
 
       # The tier's account cap is a DEFAULT, not a wall: an explicit grant in
-      # the licence lifts it, so a multi-account Enterprise can be sold on
+      # the license lifts it, so a multi-account Enterprise can be sold on
       # purpose rather than requiring a new tier to exist.
       accounts = granted.key?(:accounts) ? granted[:accounts] : ACCOUNTS_BY_TIER.fetch(tier, 1)
 
@@ -131,11 +131,11 @@ class Entitlements
   # and get the deploy plane: the gate would admit exactly whom it exists to
   # refuse. The tier is what already answers "what is this box".
   #
-  # WHEN THE FIRST ENTERPRISE BUYS IT, this becomes a licence entitlement —
+  # WHEN THE FIRST ENTERPRISE BUYS IT, this becomes a license entitlement —
   # `LicenseToken::Signed` already accepts `entitlements:` and already refuses
   # a key nothing reads, so the change is `table.fetch(:deploy_plane)` here
   # plus a key in the plan hashes. Enabling a customer then means ISSUING A
-  # LICENCE rather than shipping a release. Deliberately not built yet: there
+  # LICENSE rather than shipping a release. Deliberately not built yet: there
   # is no such customer, and a flag with one possible value is a flag that gets
   # its first real exercise in production.
   def deploy_plane? = tier == "unlimited"
@@ -161,7 +161,7 @@ class Entitlements
   # `Org.count` and a bare `Org.find` look identical in a diff and only one of
   # them is a tenant-scoping hole.
   #
-  # Counts are per INSTALLATION, not per account: the licence is bought by
+  # Counts are per INSTALLATION, not per account: the license is bought by
   # whoever runs this container, and "one org" means this deployment has one.
 
   def room_for_another_org? = within?(:orgs, scope_for(:orgs))
@@ -177,7 +177,7 @@ class Entitlements
 
   private
 
-  # Entitlement overrides ride on whichever licence granted the plan: the
+  # Entitlement overrides ride on whichever license granted the plan: the
   # account's on the hosted service, the box's everywhere else. A customer who
   # negotiated something specific gets it without a new plan name existing.
   def plan_grants

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# InternalEndpointAuth — shared defence-in-depth guards for the
+# InternalEndpointAuth — shared defense-in-depth guards for the
 # `/internal/*` family of machine-to-machine endpoints.
 #
 # Two guards, applied in this order:

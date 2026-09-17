@@ -3,7 +3,7 @@
 # Advisories — the standing warnings that belong above every page.
 #
 # One component rather than one per warning, because they stack: an install can
-# be anonymous AND reached from outside AND running Postgres without a licence,
+# be anonymous AND reached from outside AND running Postgres without a license,
 # and three sibling components in the layout would each have to know about the
 # others to avoid a wall of red.
 #
@@ -32,28 +32,28 @@ class Components::Layouts::Advisories < Components::Base
 
   # Postgres in use without an entitlement. Deliberately a notice and not a
   # refusal: the control plane already lives in that database, and an app that
-  # declined to read it would not be enforcing a licence, it would be locking
-  # the operator out of their own data. Enforcement here is the licence terms,
+  # declined to read it would not be enforcing a license, it would be locking
+  # the operator out of their own data. Enforcement here is the license terms,
   # and what the product owes is to make the state impossible to miss.
   def postgres_advisory
-    advisory(:warn, "Postgres without a licence") do
+    advisory(:warn, "Postgres without a license") do
       plain "This installation stores its control plane in Postgres, which the Elastic " \
-            "License 2.0 covers under an Enterprise licence. Nothing has been restricted — " \
+            "License 2.0 covers under an Enterprise license. Nothing has been restricted — " \
             "see Settings for the current plan."
     end
   end
 
   def advisory(tone, title)
-    colour = (tone == :danger) ? "red" : "amber"
+    color = (tone == :danger) ? "red" : "amber"
 
     div(
       role: "alert",
       class: "flex flex-col vmd:flex-row vmd:items-center gap-1.5 vmd:gap-3 px-4 py-2.5 " \
-             "border-b border-voodu-#{colour}/40 bg-voodu-#{colour}/10"
+             "border-b border-voodu-#{color}/40 bg-voodu-#{color}/10"
     ) do
       div(class: "flex items-center gap-2 min-w-0") do
-        render Icon::ExclamationTriangleOutline.new(class: "w-4 h-4 shrink-0 text-voodu-#{colour}")
-        span(class: "text-[12.5px] font-semibold text-voodu-#{colour} shrink-0") { title }
+        render Icon::ExclamationTriangleOutline.new(class: "w-4 h-4 shrink-0 text-voodu-#{color}")
+        span(class: "text-[12.5px] font-semibold text-voodu-#{color} shrink-0") { title }
       end
 
       span(class: "text-[12px] text-voodu-text-2 min-w-0") { yield }

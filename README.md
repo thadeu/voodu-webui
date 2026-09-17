@@ -197,7 +197,7 @@ provider.
 
 - → [docs/self-hosted.md](docs/self-hosted.md) — `docker run`, the perimeter,
   the volume, backups
-- → [docs/enterprise.md](docs/enterprise.md) — what a licence lifts, activating
+- → [docs/enterprise.md](docs/enterprise.md) — what a license lifts, activating
   it, what a lapse can and cannot do
 - → [docs/sso.md](docs/sso.md) — per-person identity and the workspace handover
 - → [docs/database.md](docs/database.md) — what `DATABASE_URL` moves, retention,
@@ -313,9 +313,9 @@ without `master.key`. Those keys are intentionally not secret.
 [Elastic License 2.0](LICENSE). Source-available, not OSI open source.
 
 Self-hosting is free — run it on your own boxes, for your own servers, with no
-licence to buy. Two things the licence does not permit: offering voodu-webui to
-third parties as a hosted or managed service, and circumventing licence-key
+license to buy. Two things the license does not permit: offering voodu-webui to
+third parties as a hosted or managed service, and circumventing license-key
 functionality.
 
-Releases published before this licence took effect remain under the terms they
+Releases published before this license took effect remain under the terms they
 shipped with.

@@ -17,7 +17,7 @@ import { Controller } from "@hotwired/stimulus"
 //   per controller instance — the topbar only has one of these, so
 //   there's no setInterval explosion to worry about).
 //
-// Click behaviour:
+// Click behavior:
 //   `click->updated-at#refresh` navigates to `?refresh=1` so the
 //   page rebuilds with a cache bypass. The Rails OverviewData hook
 //   on `?refresh=1` deletes the per-server snapshot cache; the next

@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 // TimeRangeFilterController — generic preset + custom date/hour range
 // picker, extracted from the logs-analytics filter so any surface
-// (alerts history, …) gets the same timezone-correct behaviour:
+// (alerts history, …) gets the same timezone-correct behavior:
 //
 //   1. Preset chips set the hidden `range` field and re-submit (the
 //      form targets its own frame, so only that region swaps).

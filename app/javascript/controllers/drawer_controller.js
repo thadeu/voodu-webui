@@ -238,7 +238,7 @@ export default class extends Controller {
 
     // Persist as the literal pixel value under THIS drawer's
     // storage key — operator sets the Logs/Pod width once, every
-    // subsequent peek honours it; the Settings drawer keeps its
+    // subsequent peek honors it; the Settings drawer keeps its
     // own compact size independently.
     try {
       localStorage.setItem(this.storageKeyValue, this.panelTarget.style.width)

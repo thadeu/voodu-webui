@@ -63,7 +63,7 @@ module Authentication
   # a boolean there, so the stored row was never reached and the SSO screen
   # could not turn sign-in on or off at all.
   #
-  # MEMOISED PER REQUEST, and that is not an optimisation now that a database
+  # MEMOISED PER REQUEST, and that is not an optimization now that a database
   # read is behind it. Two before_actions, the sidebar (once per nav item), the
   # topbar badge and the perimeter check all ask, so an unmemoised reader would
   # put half a dozen queries on every page.

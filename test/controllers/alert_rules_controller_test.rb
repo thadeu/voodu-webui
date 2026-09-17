@@ -184,7 +184,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "name=\"return_to\" value=\"#{origin}\""
   end
 
-  test "update honours return_to and lands back on that path" do
+  test "update honors return_to and lands back on that path" do
     rule = create_rule
     origin = alerts_path(server_key: @key, tab: "rules")
 
@@ -199,7 +199,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to origin
   end
 
-  test "create honours return_to" do
+  test "create honors return_to" do
     origin = alerts_path(server_key: @key, tab: "rules")
 
     post alert_rules_path(server_key: @key), params: {
@@ -213,7 +213,7 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to origin
   end
 
-  test "toggle honours return_to" do
+  test "toggle honors return_to" do
     rule = create_rule
     origin = alerts_path(server_key: @key, tab: "rules")
 

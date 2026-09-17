@@ -4,7 +4,7 @@ default: &default
       batch_size: 500
   workers:
     # One pool. Everything left here is short-running — log-metrics
-    # rollups, alert evaluation, HEP sync, the licence check. The
+    # rollups, alert evaluation, HEP sync, the license check. The
     # long-running tail consumers that once needed a pool of their own
     # moved into the Go poller, which is not a Solid Queue job at all.
     - queues: "default"

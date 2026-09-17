@@ -35,7 +35,7 @@ class Views::MetricDashboards::Manage < Views::Base
   def modal
     Components::UI::Modal.new(
       title: "Dashboards",
-      subtitle: "Build and organise your metric dashboards",
+      subtitle: "Build and organize your metric dashboards",
       icon: :Squares2x2Outline,
       size: :xl,
       close_to: metrics_path

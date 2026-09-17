@@ -19,7 +19,7 @@
 # The last line is the whole shape of the screen. Cards render from the cached
 # list; nothing talks to a box until somebody opens a card. A screen that spent
 # a call per card would be a screen that gets throttled the day a customer
-# authorises forty repositories.
+# authorizes forty repositories.
 #
 # ## What this does NOT do
 #
@@ -28,7 +28,7 @@
 # starts lying to the person reading it.
 class DeploysData
   # Long enough that clicking between cards costs nothing, short enough that a
-  # repository authorised on GitHub a minute ago shows up without anybody
+  # repository authorized on GitHub a minute ago shows up without anybody
   # having to know there is a cache. `refresh!` exists for the impatient.
   REPOS_TTL = 5.minutes
 
@@ -39,8 +39,8 @@ class DeploysData
 
   # Repo — one card.
   #
-  # `listed?` is the per-server decision: authorised on GitHub AND pointed at
-  # this box. A repository the customer authorised but never pointed anywhere
+  # `listed?` is the per-server decision: authorized on GitHub AND pointed at
+  # this box. A repository the customer authorized but never pointed anywhere
   # is a card with no trigger, which is a state the screen names.
   Repo = Struct.new(:full_name, :default_branch, :private, :listed, :trigger_id) do
     def listed? = listed
@@ -149,10 +149,10 @@ class DeploysData
 
   # ── the cards ──────────────────────────────────────────────────────────
 
-  # repos — every repository the customer authorised, each saying whether it
+  # repos — every repository the customer authorized, each saying whether it
   # points at THIS server.
   #
-  # Authorised-but-not-listed is shown rather than hidden: "I gave you access
+  # Authorized-but-not-listed is shown rather than hidden: "I gave you access
   # and it is not here" is the confusing state, and the fix for it is one card
   # away.
   def repos
@@ -194,7 +194,7 @@ class DeploysData
     @manifests ||= fetch_manifests
   end
 
-  # triggers — what the box has authorised, indexed by repository.
+  # triggers — what the box has authorized, indexed by repository.
   #
   # Read separately from the manifests because they answer different
   # questions: a repository can have a perfectly valid YAML and no trigger,
@@ -266,10 +266,10 @@ class DeploysData
   # different fixes, and "preflight failed" names none of them.
   #
   # Needs a trigger, because the box's endpoint does: the questions are about
-  # an authorisation, and there is nothing to ask about before one exists. The
+  # an authorization, and there is nothing to ask about before one exists. The
   # panel says "create a trigger first" in that case rather than offering a
   # button that cannot answer.
-  # `box_reachable?` is asked FIRST, and not as an optimisation. `trigger_for`
+  # `box_reachable?` is asked FIRST, and not as an optimization. `trigger_for`
   # answers nil both when the box has no trigger and when the box never
   # answered, so reading it alone would tell an operator whose server is down
   # that they have not created a trigger — sending them to create one that

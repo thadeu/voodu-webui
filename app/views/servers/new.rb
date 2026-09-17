@@ -2,7 +2,7 @@
 
 # Views::Servers::New — the "Add server" page.
 #
-# Was a modal over the servers list. A page instead, matching the licence and
+# Was a modal over the servers list. A page instead, matching the license and
 # sign-in screens: this form is not a quick confirmation, it is four fields plus
 # an endpoint and a token that people paste from a terminal in another window.
 # A modal is the wrong container for that — it cannot be linked to or reloaded

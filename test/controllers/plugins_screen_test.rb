@@ -128,9 +128,9 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
   end
 
   # A server with nothing installed is not an empty page any more — it is the
-  # catalogue, which is the whole reason discovery was added. The count says
+  # catalog, which is the whole reason discovery was added. The count says
   # zero; the cards say what could be there.
-  test "an empty server shows the catalogue rather than an empty state" do
+  test "an empty server shows the catalog rather than an empty state" do
     stub_plugins([])
 
     page
@@ -288,7 +288,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
     assert_select "h3", text: "plugin-26", count: 0
   end
 
-  # 30 installed + the catalogue's entries, none of which this server has.
+  # 30 installed + the catalog's entries, none of which this server has.
   test "the second page holds the remainder, installed and available together" do
     stub_plugins(many_plugins(30))
 
@@ -381,7 +381,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
       plugins_path(org_id: ORG, server_key: @server.key, sort: "name_desc")
   end
 
-  # ── The catalogue ─────────────────────────────────────────────────
+  # ── The catalog ─────────────────────────────────────────────────
 
   # Without this the screen is an inventory, not a marketplace: an operator
   # with nothing installed sees an empty page and no way to learn what exists.
@@ -395,7 +395,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "not installed"
   end
 
-  # And once it HAS one, the catalogue must stop offering it.
+  # And once it HAS one, the catalog must stop offering it.
   test "an installed plugin is not offered again" do
     stub_plugins([installed(name: "redis", homepage: "https://github.com/thadeu/voodu-redis")])
 
@@ -407,7 +407,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
   # The mismatch that caused a duplicate card on the controller: the repository
   # is voodu-traffik and the plugin inside it is traffik. Matching on either
   # alone would offer an install for something already installed.
-  test "a plugin whose repo is named differently is still recognised" do
+  test "a plugin whose repo is named differently is still recognized" do
     stub_plugins([installed(name: "traffik", homepage: "https://github.com/thadeu/voodu-traffik")])
 
     page
@@ -426,8 +426,8 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
   # Deduplication is by REPOSITORY, not by name — and a plugin installed from a
   # directory on the box, with no homepage, is deliberately not matched. Some-
   # thing called "redis" on disk is not necessarily thadeu/voodu-redis, and
-  # assuming it is would hide the real one from the catalogue.
-  test "a locally installed plugin does not suppress the catalogue entry" do
+  # assuming it is would hide the real one from the catalog.
+  test "a locally installed plugin does not suppress the catalog entry" do
     stub_plugins([{"name" => "redis", "version" => "0.1.0", "state" => "installed", "homepage" => ""}])
 
     page
@@ -439,9 +439,9 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
   # The duplicate on the INSTALL side, which is the same mismatch as the update
   # one wearing different clothes: the in-flight row is named for the
   # repository ("voodu-hep3") and carries the repo only in `source`, while the
-  # catalogue entry is named for the plugin ("hep3"). Looking at neither meant
-  # the catalogue kept offering an install for something already installing.
-  test "a catalogue plugin being installed is not offered again" do
+  # catalog entry is named for the plugin ("hep3"). Looking at neither meant
+  # the catalog kept offering an install for something already installing.
+  test "a catalog plugin being installed is not offered again" do
     stub_plugins([{"name" => "voodu-hep3", "state" => "installing",
                    "source" => "thadeu/voodu-hep3", "homepage" => ""}])
 
@@ -449,7 +449,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
 
     assert_select "h3", text: "voodu-hep3", count: 1
 
-    # Precisely: no install form targets this repository. The other catalogue
+    # Precisely: no install form targets this repository. The other catalog
     # cards keep their own Install buttons, so counting buttons would only have
     # counted those.
     assert_select "input[name=source][value=?]", "thadeu/voodu-hep3", count: 0
@@ -470,7 +470,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
 
   # Offering an install against a box we could not reach would be inviting a
   # click that cannot work.
-  test "an unreachable server is not offered a catalogue" do
+  test "an unreachable server is not offered a catalog" do
     stub_request(:get, %r{/api/pat/v1/plugins\z}).to_timeout
 
     page
@@ -478,7 +478,7 @@ class PluginsScreenTest < ActionDispatch::IntegrationTest
     assert_select "h3", text: "postgres", count: 0
   end
 
-  test "installing from a catalogue card sends the repository" do
+  test "installing from a catalog card sends the repository" do
     request = stub_request(:post, %r{/api/pat/v1/plugins/install\z})
       .with(body: hash_including("source" => "thadeu/voodu-mongodb"))
       .to_return(status: 202, body: {status: "ok"}.to_json,

@@ -122,12 +122,12 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
   end
 
   # Not red. A push that matched no trigger file is the normal outcome of a
-  # README change on a repository that watches `app/**`, and colouring it like
+  # README change on a repository that watches `app/**`, and coloring it like
   # a failure trains people to ignore failures.
   def skipped_card
     # NEUTRAL, never red. A push that matched no trigger file — a README
     # commit on a repository that watches `app/**` — is the normal outcome, and
-    # colouring it like a failure trains operators to ignore failures.
+    # coloring it like a failure trains operators to ignore failures.
     render Components::UI::Callout.new(tone: :neutral, title: "Nothing was deployed") do
       span(class: "text-[12.5px] text-voodu-text-2") do
         @deployment.skipped_reason.presence || "This push did not match any trigger."

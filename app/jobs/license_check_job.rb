@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# LicenseCheckJob — the daily look at the stored licence.
+# LicenseCheckJob — the daily look at the stored license.
 #
-# Deliberately NOT what makes a licence expire. Status is derived from the clock
+# Deliberately NOT what makes a license expire. Status is derived from the clock
 # every time it is read (see License#status), so expiry takes effect at the
 # second it happens whether or not this job ever runs. A scheduled task that
 # "activates" expiry would mean the product was wrong for up to a day, and the
@@ -46,7 +46,7 @@ class LicenseCheckJob < ApplicationJob
     case license.status
     when :invalid
       Rails.logger.error(
-        "[license] the stored licence no longer verifies (#{license.reason}). The " \
+        "[license] the stored license no longer verifies (#{license.reason}). The " \
         "installation is on the free tier. If the app was upgraded, the signing key " \
         "may have changed — a replacement token is needed."
       )

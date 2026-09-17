@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 
-// ColorPickerController — DS colour picker (spectrum + hue rail + hex),
+// ColorPickerController — DS color picker (spectrum + hue rail + hex),
 // ported from Stella's color-picker.tsx. Self-contained: drag the spectrum
 // for saturation/value, the hue rail for hue, or type a hex. Every change
 // dispatches a bubbling `color-picker:change` CustomEvent { color, name } the
@@ -155,7 +155,7 @@ export default class extends Controller {
   }
 }
 
-// ── Colour math (ported from color-picker.tsx) ──────────────────────────────
+// ── Color math (ported from color-picker.tsx) ──────────────────────────────
 
 function hexToHsv(hex) {
   const r = parseInt(hex.slice(1, 3), 16) / 255

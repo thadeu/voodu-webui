@@ -52,7 +52,7 @@ database's CPU. The entrypoint clears that on boot: rows and log directories
 matching no server are unreachable anyway, so they go before they can be
 mistaken for someone else's. Nothing you can still reach is touched.
 
-Your licence lives in the primary database too, so re-paste it at
+Your license lives in the primary database too, so re-paste it at
 `/ops/license` after switching.
 
 ## Retention: two numbers
@@ -62,11 +62,11 @@ VOODU_RETENTION_DAYS=90
 ```
 
 **How long telemetry stays on disk.** Yours to set, and never touched by the
-licence — an entitlement that could shrink this would delete your history the
+license — an entitlement that could shrink this would delete your history the
 day a renewal ran late.
 
-**How far back you can search** is the other number, and that one the licence
-caps: 3 days on the free tier, 90 by default with a licence. You cannot search
+**How far back you can search** is the other number, and that one the license
+caps: 3 days on the free tier, 90 by default with a license. You cannot search
 what was not kept, so an Enterprise install wanting 90 searchable days sets both.
 Buying the entitlement does not silently start consuming your disk.
 

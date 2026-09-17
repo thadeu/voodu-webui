@@ -154,7 +154,7 @@ export default class extends Controller {
   // contain) so a call opens fully visible instead of width-filled and clipped
   // tall — the operator had to zoom out on every open. The smaller of the two
   // scales binds; floor at MIN_K (a very long call stays pannable) and cap at
-  // 1.25 so a short call isn't blown up. Centred when it fits; when the content
+  // 1.25 so a short call isn't blown up. Centered when it fits; when the content
   // still overflows (a long call at MIN_K) it pins to the top-left pad, so the
   // call starts at the INVITE.
   fitToView() {
@@ -348,7 +348,7 @@ export default class extends Controller {
   }
 
   // panIndexIntoView — vertically pan (keeping zoom + horizontal pan) so the
-  // arrow at index i is centred. Uses the arrow's natural y (data-cf-y).
+  // arrow at index i is centered. Uses the arrow's natural y (data-cf-y).
   panIndexIntoView(i) {
     const g = this.arrowTargets.find((a) => Number(a.dataset.index) === i)
 
@@ -381,7 +381,7 @@ export default class extends Controller {
   }
 
   // ── collapse / expand ─────────────────────────────────────────────
-  // The header chevron TOGGLES; behaviour follows the layout:
+  // The header chevron TOGGLES; behavior follows the layout:
   //   row    → collapse to a thin left strip (reclaim the diagram's WIDTH)
   //   column → collapse the body, keep the header row (reclaim the diagram's
   //            HEIGHT) — a chevron row like the media footer.

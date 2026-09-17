@@ -8,7 +8,7 @@
 # is the focus — the presets are shortcuts that seed the custom dates.
 #
 # Mechanics: ONE GET form driven by the shared `time-range-filter`
-# Stimulus controller (preset↔custom highlight, local→UTC normalisation
+# Stimulus controller (preset↔custom highlight, local→UTC normalization
 # on submit). Presets are now buttons (they requestSubmit the form)
 # instead of <a> links, but carry the same segmented chrome. The form
 # targets `_top` with turbo_action advance: the whole page re-renders so

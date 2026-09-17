@@ -5,7 +5,7 @@ require "test_helper"
 # The plan has to be visible, including on the free tier.
 #
 # An operator who cannot see which plan they are on opens a ticket to ask, and
-# an operator whose licence lapsed silently opens a angrier one. This is the
+# an operator whose license lapsed silently opens a angrier one. This is the
 # only screen that can explain why a capability they paid for stopped applying,
 # so "it renders" is the actual requirement, not a detail.
 class LicenseVisibilityTest < ActionDispatch::IntegrationTest
@@ -17,7 +17,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   teardown { Rails.application.config.x.license = @previous }
 
-  # The licence has its own screen, named for what it is — not a card inside a
+  # The license has its own screen, named for what it is — not a card inside a
   # server's settings.
   def settings
     get ops_license_path
@@ -38,7 +38,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Free"
   end
 
-  test "a live licence names the customer and the date" do
+  test "a live license names the customer and the date" do
     stub_license(:valid, expires: Date.new(2027, 6, 1).to_time)
 
     settings
@@ -59,7 +59,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "in grace"
   end
 
-  test "a lapsed licence says whose, so it can be renewed" do
+  test "a lapsed license says whose, so it can be renewed" do
     stub_license(:lapsed, expires: 60.days.ago)
 
     settings
@@ -68,7 +68,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "acme-corp"
   end
 
-  test "an unverifiable licence admits it rather than showing Enterprise" do
+  test "an unverifiable license admits it rather than showing Enterprise" do
     Rails.application.config.x.license = LicenseToken.new(status: :invalid, reason: "VerificationError")
 
     settings
@@ -79,10 +79,10 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   # Why this screen is not inside /:org_id/:server_key/settings.
   #
-  # The licence and the sign-in method configure the container, so an operator
+  # The license and the sign-in method configure the container, so an operator
   # who has not registered a server yet — which is everyone on their first day —
   # must still be able to reach them. Hanging them off a server meant buying a
-  # licence required already having somewhere to put it.
+  # license required already having somewhere to put it.
   test "reachable with no server registered at all" do
     Server.delete_all
 
@@ -95,7 +95,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   # ── Env-pinned: the host decided ──────────────────────────────────
   #
-  # The rule sign-in already follows, applied to the licence: configuration the
+  # The rule sign-in already follows, applied to the license: configuration the
   # HOST set wins, so the screen shows it and does not offer an edit the next
   # boot would silently undo. This is what makes the hosted service safe to
   # leave these screens visible on — every tenant can read them, none can write.
@@ -109,10 +109,10 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   end
 
   # The renewal flow, which is why the environment does NOT lock the form: an
-  # operator's env-supplied licence expires, they buy another, and the only
+  # operator's env-supplied license expires, they buy another, and the only
   # place to put it is this form. Locking it would remove the form at exactly
   # the moment it was needed.
-  test "an env-supplied licence still offers the form, so a renewal can land" do
+  test "an env-supplied license still offers the form, so a renewal can land" do
     env_pinned
 
     settings
@@ -121,7 +121,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_select "textarea[name=license_token]"
   end
 
-  test "an env-supplied licence accepts a newer one pasted in" do
+  test "an env-supplied license accepts a newer one pasted in" do
     env_pinned
 
     post ops_license_path, params: {license_token: "eyJhbGciOiJSUzI1NiJ9.whatever"}
@@ -131,9 +131,9 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_no_match(/hosted plan/, flash[:alert].to_s)
   end
 
-  # The hosted service is the exception: its licence belongs to whoever runs
+  # The hosted service is the exception: its license belongs to whoever runs
   # the box, not to the customer reading the screen.
-  test "the hosted plan offers no form for the INSTALLATION's licence" do
+  test "the hosted plan offers no form for the INSTALLATION's license" do
     env_pinned(tier: "unlimited")
 
     settings
@@ -174,7 +174,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Your plan"
   end
 
-  test "a licence with no tier claim reads as Enterprise" do
+  test "a license with no tier claim reads as Enterprise" do
     env_pinned
 
     settings
@@ -183,7 +183,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
   end
 
   # Forward compatibility: a tier this build has not heard of is still a
-  # licence, and refusing to honour it would turn a new claim into an outage.
+  # license, and refusing to honor it would turn a new claim into an outage.
   test "an unknown tier falls back to Enterprise rather than failing" do
     env_pinned(tier: "galactic")
 
@@ -257,7 +257,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     license = LicenseToken.resolve(token, key: key.public_key)
 
     assert_equal "enterprise", license.tier,
-      "a tier hidden inside ent must not be honoured — it is not where the app looks"
+      "a tier hidden inside ent must not be honored — it is not where the app looks"
   end
 
   # ── The customer's plan, on the hosted service ────────────────────
@@ -271,7 +271,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Your plan"
   end
 
-  # Self-hosted has no plans: the licence on the box already says what the
+  # Self-hosted has no plans: the license on the box already says what the
   # operator has, and a second answer could only disagree with it.
   test "a self-hosted installation shows no plan section" do
     Rails.application.config.x.license = LicenseToken.new(
@@ -296,7 +296,7 @@ class LicenseVisibilityTest < ActionDispatch::IntegrationTest
 
   # The wrong-account refusal reaches the operator by name, so somebody handed
   # the wrong file knows which one they were handed.
-  test "a plan licence for another account is refused by name" do
+  test "a plan license for another account is refused by name" do
     env_pinned(tier: "unlimited")
 
     post ops_license_path, params: {scope: "plan", license_token: "not-a-token"}

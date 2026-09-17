@@ -23,7 +23,7 @@ class Components::Plugins::Card < Components::Base
     article(class: tokens(
       "flex flex-col h-full min-w-0 border transition-colors",
       @plugin.failed? ? "border-voodu-red/40" : "border-voodu-border hover:border-voodu-border-2",
-      # Catalogue entries sit back: what this server HAS should be what the eye
+      # Catalog entries sit back: what this server HAS should be what the eye
       # lands on first, with what it could have available but quieter.
       (@plugin.installed? || @plugin.installing? || @plugin.failed?) ? "bg-voodu-surface" : "bg-voodu-bg-2"
     )) do

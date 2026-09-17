@@ -4,7 +4,7 @@ import { Controller } from "@hotwired/stimulus"
 // caret, selection, undo, form submission) with a syntax-highlighted
 // layer painted behind it, plus the code-editor ergonomics people
 // expect: auto-close pairs, auto-indent on Enter, Tab = 2 spaces, and a
-// one-tap Format. No dependency — these behaviours are easy ON A
+// one-tap Format. No dependency — these behaviors are easy ON A
 // TEXTAREA (the hard part CodeJar carries is contenteditable caret
 // bookkeeping, which a textarea gives us for free). Every mutation goes
 // through execCommand("insertText") so the NATIVE undo stack stays

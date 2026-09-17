@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Issuing licences from a terminal.
+# Issuing licenses from a terminal.
 #
 # There is no licensing service and there should not be one until the customer
 # count justifies operating it. A signed token needs a private key, a script and
@@ -28,7 +28,7 @@
 #   bundle exec rake 'license:pro[Pz9IUrm2,365]'
 #
 namespace :license do
-  desc "Issue a signed licence: license:issue[customer,days,'k=v k=v']"
+  desc "Issue a signed license: license:issue[customer,days,'k=v k=v']"
   task :issue, [:customer, :days, :overrides] => :environment do |_task, args|
     customer = args[:customer].to_s.strip
     abort "customer is required — rake 'license:issue[acme-corp,365]'" if customer.empty?
@@ -56,25 +56,25 @@ namespace :license do
     puts token
   end
 
-  # Pro licences, for customers of the hosted service.
+  # Pro licenses, for customers of the hosted service.
   #
   # Pro is the only plan worth signing. Free is what an account IS without a
-  # licence — Account#plan falls back to it whenever there is nothing entitled
+  # license — Account#plan falls back to it whenever there is nothing entitled
   # to read — so a token claiming `plan: "free"` produces a state
   # indistinguishable from having none, and an argument that can only be filled
   # in one useful way is an argument that gets filled in wrongly.
   #
-  # Bound to ONE account by short_id. Without that binding a pro licence is a
+  # Bound to ONE account by short_id. Without that binding a pro license is a
   # file that circulates: one customer's, pasted into another customer's
   # account. Account#activate_plan! refuses a subject that is not the account
   # activating it, and this is what puts the subject there.
-  desc "Issue a pro licence for one hosted account: license:pro[short_id,days]"
+  desc "Issue a pro license for one hosted account: license:pro[short_id,days]"
   task :pro, [:account, :days, :overrides] => :environment do |_task, args|
     short_id = args[:account].to_s.strip
     abort "account short_id is required — rake 'license:pro[Pz9IUrm2,365]'" if short_id.empty?
 
     # Looked up, not just accepted. A typo in a short_id would otherwise produce
-    # a signed licence for an account that does not exist, which the customer
+    # a signed license for an account that does not exist, which the customer
     # discovers when they paste it and we discover never. The lookup is the
     # terminal's job: a webhook already holds the account it is charging.
     account = Account.find_by(short_id: short_id)
@@ -95,7 +95,7 @@ namespace :license do
     puts token
   end
 
-  desc "Inspect a licence the way the app would: license:inspect[token]"
+  desc "Inspect a license the way the app would: license:inspect[token]"
   task :inspect, [:token] => :environment do |_task, args|
     license = LicenseToken.resolve(args[:token].to_s.strip)
 
@@ -110,7 +110,7 @@ namespace :license do
 end
 
 # Argument handling for the tasks above — the shape of a command line, not of a
-# licence. Not autoloaded: lib/tasks is excluded (config/application.rb).
+# license. Not autoloaded: lib/tasks is excluded (config/application.rb).
 module LicenseArgs
   NUMERIC = /\A-?\d+\z/
 

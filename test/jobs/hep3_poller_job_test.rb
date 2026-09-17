@@ -3,7 +3,7 @@
 require "test_helper"
 
 # Hep3PollerJob drains a reader's /export tail into the read model. These
-# pin the behaviour that matters: it inserts the lines, advances the
+# pin the behavior that matters: it inserts the lines, advances the
 # cursor, NEVER re-reads across ticks (the cardinal sin — duplicates),
 # and a malformed line is skipped without stalling the cursor.
 class Hep3PollerJobTest < ActiveSupport::TestCase

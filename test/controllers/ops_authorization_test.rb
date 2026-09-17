@@ -2,11 +2,11 @@
 
 require "test_helper"
 
-# Who may configure the INSTALLATION — its licence and its sign-in.
+# Who may configure the INSTALLATION — its license and its sign-in.
 #
 # These two screens carry no :org_id, and that is the whole difficulty: the
 # capability table normally answers about the org in the URL, so on a route with
-# no org it answered nil and denied everyone. The licence an operator had paid
+# no org it answered nil and denied everyone. The license an operator had paid
 # for could not be installed by anybody through the browser, and the SSO screen
 # redirected to itself until the browser gave up.
 #
@@ -36,7 +36,7 @@ class OpsAuthorizationTest < ActionDispatch::IntegrationTest
 
   # The regression that shipped. Owner of acme, following the menu link, was
   # told they needed owner access to do that.
-  test "an owner opens the licence screen with no org in the URL" do
+  test "an owner opens the license screen with no org in the URL" do
     sign_in_as(email: users(:owner).email)
 
     get LICENSE
@@ -55,7 +55,7 @@ class OpsAuthorizationTest < ActionDispatch::IntegrationTest
   # The screens are not merely reachable — they must carry their controls. Both
   # bodies gate on the same capability, and a page that opens empty is the same
   # bug wearing a 200.
-  test "the licence screen renders its activation form, not an empty page" do
+  test "the license screen renders its activation form, not an empty page" do
     sign_in_as(email: users(:owner).email)
 
     get LICENSE
@@ -73,7 +73,7 @@ class OpsAuthorizationTest < ActionDispatch::IntegrationTest
 
   # A member holds no such capability in any org, and must still be refused —
   # the fix widened WHERE the role is looked for, not WHICH role is required.
-  test "a member is refused the licence screen" do
+  test "a member is refused the license screen" do
     sign_in_as(email: users(:contractor).email)
 
     get LICENSE
@@ -182,7 +182,7 @@ class OpsAuthorizationTest < ActionDispatch::IntegrationTest
   # path with org_id/server_key, which a route taking neither appends as a query
   # string — so "/ops/license" was compared against "/ops/license?org_id=…" and
   # never matched.
-  test "the licence item is marked current on the licence page" do
+  test "the license item is marked current on the license page" do
     sign_in_as(email: users(:owner).email)
 
     get LICENSE

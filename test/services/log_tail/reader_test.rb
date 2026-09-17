@@ -3,7 +3,7 @@
 require "test_helper"
 
 # Pins LogTail::Reader's read-side ANSI scrub. A line captured WITH terminal
-# colour escapes (a legacy warehouse line, ingested before LogTail::Parser
+# color escapes (a legacy warehouse line, ingested before LogTail::Parser
 # started stripping) must come back clean on read, so the analytics table /
 # surrounding modal / export never show `[m` litter. Clean lines pass through
 # untouched, and only matched lines pay the scrub — not the whole scan.
@@ -20,7 +20,7 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
 
   teardown { clear_server_logs }
 
-  test "strips ANSI colour escapes from msg and raw on read (legacy line)" do
+  test "strips ANSI color escapes from msg and raw on read (legacy line)" do
     dirty = "#{ESC}[m#{ESC}[msend 609 bytes to udp/[54.20.49.188]:5060"
     seed("fsw", @day, msg: dirty, raw: "2026-06-29T12:00:00.000Z #{dirty}")
 
@@ -50,7 +50,7 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
     assert_equal "SIP/2.0 200 OK", rows.first.last["msg"]
   end
 
-  test "drops a line that was nothing but colour escapes (scrubbed to blank)" do
+  test "drops a line that was nothing but color escapes (scrubbed to blank)" do
     seed("fsw", @day, msg: "#{ESC}[m#{ESC}[m", raw: "2026-06-29T12:00:00.000Z #{ESC}[m#{ESC}[m")
 
     assert_empty read_all, "an escapes-only line has no content once scrubbed"
@@ -89,7 +89,7 @@ class LogTail::ReaderTest < ActiveSupport::TestCase
   end
 end
 
-# The seek is an optimisation with a correctness contract: whatever offset
+# The seek is an optimization with a correctness contract: whatever offset
 # the binary search picks, the [from, until] filter must still see every
 # line inside the window. These pin the boundaries the search can get wrong:
 # a window deep inside a large file, a short out-of-order overlap at a write

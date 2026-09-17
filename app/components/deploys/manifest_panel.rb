@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # What the box read out of one repository: its `.voodu/**/*.yml`, the verdict
-# on each, and whether anything on the box authorises them to run.
+# on each, and whether anything on the box authorizes them to run.
 #
 # FOUR STATES, FOUR DIFFERENT SENTENCES, and that is the design rather than
 # tidiness. Each has a different fix:
@@ -98,12 +98,12 @@ class Components::Deploys::ManifestPanel < Components::Base
     end
   end
 
-  # Whether the BOX authorises this repository, which is a different question
+  # Whether the BOX authorizes this repository, which is a different question
   # from whether the YAML is valid. A perfect file with no trigger deploys
   # nothing, and that is the state most likely to be mistaken for a bug.
   def trigger_state
     unless @data.box_reachable?
-      return warn_row("#{@data.server.name} did not answer, so we cannot say what it authorises.")
+      return warn_row("#{@data.server.name} did not answer, so we cannot say what it authorizes.")
     end
 
     trigger = @data.trigger_for(@repo.full_name)
@@ -124,7 +124,7 @@ class Components::Deploys::ManifestPanel < Components::Base
   def connect_form
     render Components::UI::Callout.new(tone: :warning, title: "Not deploying here yet") do
       span(class: "text-[12px] text-voodu-text-2") do
-        plain "The files below are read, but nothing on #{@data.server.name} authorises them to run."
+        plain "The files below are read, but nothing on #{@data.server.name} authorizes them to run."
       end
 
       form(action: connect_repo_deploys_path, method: "post", class: "flex flex-col gap-2.5") do
@@ -245,7 +245,7 @@ class Components::Deploys::ManifestPanel < Components::Base
   # Asked for, not automatic: see Components::Deploys::PreflightPanel.
   #
   # AND ONLY ONCE A TRIGGER EXISTS. The box's preflight endpoint takes a
-  # trigger id — the four questions are about an AUTHORISATION, so there is
+  # trigger id — the four questions are about an AUTHORIZATION, so there is
   # nothing to ask before one exists. Offering the button beside "Not deploying
   # here yet" put two contradictory things on screen and made the operator
   # click one to be told to use the other.

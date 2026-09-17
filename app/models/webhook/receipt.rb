@@ -78,7 +78,7 @@ class Webhook::Receipt < ApplicationRecord
 
   # THE PAYLOAD IS NEVER TRUSTED AS INSTRUCTIONS. It is written by whoever
   # could reach the endpoint, and it is stored as evidence of what arrived —
-  # not as a source of behaviour. Everything the app acts on is re-derived
+  # not as a source of behavior. Everything the app acts on is re-derived
   # from our own records after the signature verified.
   def payload_hash = payload.is_a?(Hash) ? payload : {}
 

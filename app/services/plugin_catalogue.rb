@@ -41,14 +41,14 @@ class PluginCatalogue
     Entry.new("thadeu/voodu-traffik",
       "Layer 4 load balancer with connection-aware draining, for zero-drop rolling restarts."),
     Entry.new("thadeu/voodu-hep3",
-      "HEP3 capture: SIP signalling and RTP quality, stored and searchable.")
+      "HEP3 capture: SIP signaling and RTP quality, stored and searchable.")
     # Entry.new("thadeu/voodu-mysql",
     #   "MySQL with replication and managed backups.")
   ].freeze
 
   def self.all = ENTRIES
 
-  # Everything the catalogue knows that this server does not already have — or
+  # Everything the catalog knows that this server does not already have — or
   # is not in the middle of getting.
   #
   # Two handles, because neither sees every case:
@@ -73,7 +73,7 @@ class PluginCatalogue
 
   # "https://github.com/thadeu/voodu-redis" → "thadeu/voodu-redis". Nil for
   # anything without that shape, so a locally-installed plugin never collides
-  # with a catalogue entry by accident.
+  # with a catalog entry by accident.
   def self.repo_path(ref)
     path = ref.to_s.strip
     return nil if path.empty? || path.start_with?("/")

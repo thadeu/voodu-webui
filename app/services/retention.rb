@@ -3,13 +3,13 @@
 # Retention — two windows, and they are not the same number.
 #
 #   keep_days  — how long bytes stay on disk. Set by the OPERATOR, never by the
-#                licence, and honoured by the Go poller, which owns the sweep.
+#                license, and honored by the Go poller, which owns the sweep.
 #
-#   serve_days — how far back a query may look. Capped by the LICENCE, and
+#   serve_days — how far back a query may look. Capped by the LICENSE, and
 #                never more than what is actually kept.
 #
 # Splitting them is the whole safety property of licensed retention. If the
-# licence drove deletion, letting one lapse would erase a customer's history —
+# license drove deletion, letting one lapse would erase a customer's history —
 # not degrade the product, damage their data, at the exact moment they are
 # deciding whether to renew. So a lapse narrows what can be SEEN and touches
 # nothing on disk: renew, and the window reopens over bytes that never left.
@@ -20,7 +20,7 @@
 # consuming their disk.
 class Retention
   # What the free tier keeps, and the floor everything else starts from. Matches
-  # the sweeper's historical behaviour so an upgrade changes nothing by itself.
+  # the sweeper's historical behavior so an upgrade changes nothing by itself.
   DEFAULT_KEEP_DAYS = LogTail::FilePath::RETENTION_DAYS
 
   def self.keep_days

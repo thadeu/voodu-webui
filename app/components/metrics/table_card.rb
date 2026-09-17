@@ -43,7 +43,7 @@ class Components::Metrics::TableCard < Components::Base
     # ({key:, event:, title:, icon:}). Renders a leading icon cell that
     # dispatches `datatable:rowaction` for a page host to act on.
     @row_action = row_action
-    # range/window — the page's time picker, so the table honours the same
+    # range/window — the page's time picker, so the table honors the same
     # window as the charts (relative token, or the custom from/until span).
     @range = range.to_s
     @window_from = window_from

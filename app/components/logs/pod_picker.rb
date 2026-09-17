@@ -5,7 +5,7 @@
 #
 # Thin adapter: builds the data structure that
 # Components::UI::ScopePicker expects (trigger label, ALL primary
-# section, pod groups) and delegates the render. Look + behaviour
+# section, pod groups) and delegates the render. Look + behavior
 # stay in lock-step with Components::Metrics::PodPicker because
 # both surfaces go through the same UI primitive.
 class Components::Logs::PodPicker < Components::Base

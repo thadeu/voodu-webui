@@ -468,7 +468,7 @@ class Components::Layouts::Sidebar < Components::Base
     div(class: "hidden vmd:group-data-[collapsed]:block border-t border-voodu-border w-7 mx-auto")
   end
 
-  # nav_group — one labelled block of nav items. The heading hides when the
+  # nav_group — one labeled block of nav items. The heading hides when the
   # sidebar is collapsed (icons only); a thin divider-like gap (the nav's
   # `gap-3.5`) separates the Server + Org blocks.
   def nav_group(label, items)
@@ -508,7 +508,7 @@ class Components::Layouts::Sidebar < Components::Base
   # new_server_path is /:org_id/servers/new, and default_url_options fills
   # :org_id in only when the URL already carries one. The /ops/* screens render
   # this same chrome with no org in their path, so the helper raised
-  # UrlGenerationError and took the whole page down — a 500 on the licence
+  # UrlGenerationError and took the whole page down — a 500 on the license
   # screen an operator had just paid to use.
   #
   # Resolved the way every other nav link already resolves it (nav_org_id),
@@ -577,10 +577,10 @@ class Components::Layouts::Sidebar < Components::Base
     # is about. On the hosted tier an admin invited into somebody else's org
     # owns a workspace elsewhere, so "may they manage an account anywhere" is
     # yes, and License appeared while they browsed the org that invited them:
-    # a door labelled as that org's licence, opening onto their own. Inside an
+    # a door labeled as that org's license, opening onto their own. Inside an
     # org, only its owner sees it. With no org in the URL (/ops/*, the
     # org-less registry) it falls back to the org-less question the endpoint
-    # itself enforces, or the licence screen could not be reached from itself.
+    # itself enforces, or the license screen could not be reached from itself.
     if item[:global]
       return allowed_in?(nav_org, item[:capability]) if nav_org
       return allowed_anywhere?(item[:capability])

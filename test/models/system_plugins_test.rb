@@ -3,7 +3,7 @@
 require "test_helper"
 
 # System#plugin_installed? (and Server's delegation) is the gate every
-# plugin-specific WebUI feature reads. These pin the behaviour that
+# plugin-specific WebUI feature reads. These pin the behavior that
 # matters: a plugin is found by canonical name OR alias, unknown names
 # and old controllers (no `plugins` key) gate OFF, and the gate resolves
 # off the locally-synced row with no live call.

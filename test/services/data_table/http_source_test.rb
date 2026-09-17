@@ -47,13 +47,13 @@ class DataTable::HttpSourceTest < ActiveSupport::TestCase
     assert_equal %w[host v], src.fields, "columns drive the field list"
   end
 
-  test "series: maps ts + value, sorts by ts, normalises the timestamp" do
+  test "series: maps ts + value, sorts by ts, normalizes the timestamp" do
     src = source({"root" => "data.points", "ts" => "t", "value" => "v"})
 
     points = stub_fetch(json: SERIES_JSON) { src.series }
 
     assert_equal 2, points.size
-    assert_equal "2025-07-02T12:00:00.000Z", points.first[:ts], "sorted oldest-first, ISO-normalised"
+    assert_equal "2025-07-02T12:00:00.000Z", points.first[:ts], "sorted oldest-first, ISO-normalized"
     assert_equal 9.0, points.first[:value]
   end
 

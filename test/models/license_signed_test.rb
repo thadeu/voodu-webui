@@ -2,9 +2,9 @@
 
 require "test_helper"
 
-# Minting the other half of the licence story.
+# Minting the other half of the license story.
 #
-# LicenseToken is the reader and never raises — a licence that can throw can
+# LicenseToken is the reader and never raises — a license that can throw can
 # take a customer's monitoring down. Signed is the writer and raises for
 # everything, because the failure it is guarding against is the opposite one: a
 # token that verifies and grants no more than having none. The customer paid,
@@ -28,18 +28,18 @@ class LicenseSignedTest < ActiveSupport::TestCase
 
   # ── What it signs ──────────────────────────────────────────────────────
 
-  test "an installation licence reads back as the tier it was sold as" do
-    licence = read_back(signed(tier: "enterprise").generate!)
+  test "an installation license reads back as the tier it was sold as" do
+    license = read_back(signed(tier: "enterprise").generate!)
 
-    assert_equal :valid, licence.status
-    assert_equal "enterprise", licence.tier
-    assert_equal "acme-corp", licence.customer
+    assert_equal :valid, license.status
+    assert_equal "enterprise", license.tier
+    assert_equal "acme-corp", license.customer
   end
 
-  # Unknown tiers fall back to enterprise on the READ side, so a licence with no
-  # tier claim is still a licence. Asserting it here keeps that contract visible
+  # Unknown tiers fall back to enterprise on the READ side, so a license with no
+  # tier claim is still a license. Asserting it here keeps that contract visible
   # from the minting end, where it would otherwise look like an omission.
-  test "a licence with no tier claim is still enterprise when read" do
+  test "a license with no tier claim is still enterprise when read" do
     token = signed.generate!
 
     assert_not_includes JWT.decode(token, PUBLIC, true, algorithm: "RS256").first.keys, "tier"
@@ -47,9 +47,9 @@ class LicenseSignedTest < ActiveSupport::TestCase
   end
 
   test "entitlement overrides travel in ent, not at the top level" do
-    licence = read_back(signed(tier: "enterprise", entitlements: {"retention_days" => 180}).generate!)
+    license = read_back(signed(tier: "enterprise", entitlements: {"retention_days" => 180}).generate!)
 
-    assert_equal({retention_days: 180}, licence.granted)
+    assert_equal({retention_days: 180}, license.granted)
   end
 
   test "expiry is days from now" do
@@ -61,19 +61,19 @@ class LicenseSignedTest < ActiveSupport::TestCase
   # ── Plans carry their tier by construction ─────────────────────────────
   #
   # Entitlements#plan reads the account's plan only when the tier is unlimited
-  # and ignores it otherwise, so a plan licence signed with any other tier is a
+  # and ignores it otherwise, so a plan license signed with any other tier is a
   # token that verifies and does nothing. The caller cannot get that wrong here
   # because the caller does not supply it.
 
-  test "a plan licence carries tier unlimited without being asked" do
-    licence = read_back(signed(subject: "Pz9IUrm2", plan: "pro").generate!)
+  test "a plan license carries tier unlimited without being asked" do
+    license = read_back(signed(subject: "Pz9IUrm2", plan: "pro").generate!)
 
-    assert_equal "unlimited", licence.tier
-    assert_equal "pro", licence.plan
-    assert_equal "Pz9IUrm2", licence.subject_account
+    assert_equal "unlimited", license.tier
+    assert_equal "pro", license.plan
+    assert_equal "Pz9IUrm2", license.subject_account
   end
 
-  test "a plan licence refuses a tier that would make it inert" do
+  test "a plan license refuses a tier that would make it inert" do
     error = assert_raises(ArgumentError) { signed(plan: "pro", tier: "enterprise").generate! }
 
     assert_match(/hosted-only/, error.message)
@@ -123,9 +123,9 @@ class LicenseSignedTest < ActiveSupport::TestCase
   end
 
   test "symbol entitlement keys are accepted, since a caller in Ruby will use them" do
-    licence = read_back(signed(entitlements: {retention_days: 90}).generate!)
+    license = read_back(signed(entitlements: {retention_days: 90}).generate!)
 
-    assert_equal({retention_days: 90}, licence.granted)
+    assert_equal({retention_days: 90}, license.granted)
   end
 
   # ── The key ────────────────────────────────────────────────────────────
@@ -149,9 +149,9 @@ class LicenseSignedTest < ActiveSupport::TestCase
     previous = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"]
     ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = KEY.to_pem
 
-    licence = read_back(LicenseToken::Signed.new(subject: "acme", days: 30).generate!)
+    license = read_back(LicenseToken::Signed.new(subject: "acme", days: 30).generate!)
 
-    assert_equal :valid, licence.status
+    assert_equal :valid, license.status
   ensure
     previous.nil? ? ENV.delete("VOODU_LICENSE_PRIVATE_KEY_PEM") : ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = previous
   end
@@ -163,9 +163,9 @@ class LicenseSignedTest < ActiveSupport::TestCase
     previous = ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"]
     ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = KEY.to_pem.gsub("\n", '\n')
 
-    licence = read_back(LicenseToken::Signed.new(subject: "acme", days: 30).generate!)
+    license = read_back(LicenseToken::Signed.new(subject: "acme", days: 30).generate!)
 
-    assert_equal :valid, licence.status
+    assert_equal :valid, license.status
   ensure
     previous.nil? ? ENV.delete("VOODU_LICENSE_PRIVATE_KEY_PEM") : ENV["VOODU_LICENSE_PRIVATE_KEY_PEM"] = previous
   end

@@ -248,7 +248,7 @@ function renderContent(formatted, ts, color, tz) {
 // Operators can remote-desktop / SSH from one TZ to a browser in
 // another (or just prefer a different display TZ than the OS
 // reports). The Settings → Display preferences is the source of
-// truth across the whole app — sparkline tooltips honour it too.
+// truth across the whole app — sparkline tooltips honor it too.
 function formatTs(iso, tz) {
   const d = new Date(iso)
 

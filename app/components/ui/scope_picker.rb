@@ -60,7 +60,7 @@ class Components::UI::ScopePicker < Components::Base
     # h-9 matches the standard header-level action button height
     # (Open pod, Refresh, Restart pod…) so the picker reads as
     # part of the same toolbar row instead of sitting 4px shorter
-    # than its neighbours. Inline toolbar pills (Follow/Wrap/Pause
+    # than its neighbors. Inline toolbar pills (Follow/Wrap/Pause
     # in Logs, RangePicker pills in Metrics) intentionally stay
     # h-8 — they're a denser secondary surface.
     button(
@@ -125,7 +125,7 @@ class Components::UI::ScopePicker < Components::Base
   # a turbo_stream that drives an in-place swap (modal-local
   # navigation, stays open). Without it, the row falls back to
   # `data-turbo="false"` for full-page navigation — the original
-  # page-level pod picker behaviour.
+  # page-level pod picker behavior.
   def option_row(opt)
     active = opt[:active]
     title = opt.fetch(:title)

@@ -331,9 +331,9 @@ end
 # ── License belongs to the org's owner ─────────────────────────────
 #
 # The screen is org-less and always shows the visitor's OWN account, so an
-# invited admin was never shown another org's licence — but the sidebar
+# invited admin was never shown another org's license — but the sidebar
 # offered the door while they browsed the org that invited them, which reads
-# as that org's licence. Inside an org, only its owner is offered it.
+# as that org's license. Inside an org, only its owner is offered it.
 class LicenseDoorTest < ActionDispatch::IntegrationTest
   setup do
     @previous = Rails.application.config.x.license

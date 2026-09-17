@@ -173,7 +173,7 @@ class Components::Hep3::CallFlowModal < Components::Base
   end
 
   # media_footer — media whose RTP endpoint ISN'T a SIP lifeline ("gap": RTP on
-  # a different host than signalling, so it can't sit inline in the ladder like
+  # a different host than signaling, so it can't sit inline in the ladder like
   # the on-lifeline streams do). Rendered as a COLLAPSED (default) strip pinned
   # to the bottom of the flow column; expanding overlays the diagram (which
   # scrolls underneath) instead of pushing it. In-lifeline media is drawn in

@@ -74,7 +74,7 @@ export default class extends Controller {
 
   // initGroupSortables — one Sortable per group popover. Initialized
   // at connect even though the popover is hidden, so by the time the
-  // operator opens it the drag behaviour is wired.
+  // operator opens it the drag behavior is wired.
   initGroupSortables() {
     this.cardTargets.forEach(card => {
       if (card.dataset.cardType !== "group") return

@@ -35,7 +35,7 @@ class LogMetricsSyncServerJob < ApplicationJob
   RECOMPUTE_WINDOW = 10.minutes
 
   # Deepest history a first-sight backfill walks — what is actually kept on
-  # disk, which is the operator's setting and never the licence.
+  # disk, which is the operator's setting and never the license.
   def self.retention = Retention.keep_days.days
 
   # Upper bound on lines a single scan tallies. The live window is tiny; this

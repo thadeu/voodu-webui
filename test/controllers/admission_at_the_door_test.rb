@@ -20,7 +20,7 @@ class AdmissionAtTheDoorTest < ActionDispatch::IntegrationTest
     Current.reset
   end
 
-  # The suite's default licence is what gets left behind otherwise, and the
+  # The suite's default license is what gets left behind otherwise, and the
   # next test to read it as "how this box is licensed" measures this one.
   teardown { Rails.application.config.x.license = @installed }
 

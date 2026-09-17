@@ -161,7 +161,7 @@ class LogQuery
   end
 
   # scan_delimited — read a `delim`…`delim` literal starting at `start`,
-  # honouring `\delim` so the delimiter can appear inside. Returns [body, next].
+  # honoring `\delim` so the delimiter can appear inside. Returns [body, next].
   # Regex bodies keep their backslashes verbatim (so `\d`, `\.` survive into
   # Regexp.new); quoted strings unescape `\"` and `\\`.
   def scan_delimited(src, start, delim, unescape: false)

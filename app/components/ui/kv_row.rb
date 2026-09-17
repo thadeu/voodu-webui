@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Components::UI::KvRow — one labelled row inside a SectionCard.
+# Components::UI::KvRow — one labeled row inside a SectionCard.
 #
 # Three columns:
 #

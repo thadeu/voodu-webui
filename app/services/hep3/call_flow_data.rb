@@ -206,7 +206,7 @@ module Hep3
     end
 
     # build_message — one parsed message as a flat, view-ready hash. `kind`
-    # drives the arrow colour; `label` is what the arrow reads.
+    # drives the arrow color; `label` is what the arrow reads.
     def build_message(record, index)
       payload = record.payload_json
       code = payload["response_code"].to_i
@@ -249,7 +249,7 @@ module Hep3
       "#{code} #{REASONS.fetch(code, "#{code / 100}xx")}".strip
     end
 
-    # classify — arrow colour bucket. Requests are neutral (blue) EXCEPT BYE,
+    # classify — arrow color bucket. Requests are neutral (blue) EXCEPT BYE,
     # which ends the call: flagged red so a hangup stands out. Responses split
     # by class so a 4xx/5xx stands out red and 1xx/2xx read green.
     def classify(request, method, code)

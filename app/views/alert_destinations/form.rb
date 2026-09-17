@@ -217,7 +217,7 @@ class Views::AlertDestinations::Form < Views::Base
   end
 
   # Tokens + filters reference. A popover (not a drawer) because the
-  # form is a centred modal — a side drawer would cover the very editor
+  # form is a centered modal — a side drawer would cover the very editor
   # it documents; this is peek-and-dismiss, in-flow with the Templates
   # popover beside it.
   def help_popover

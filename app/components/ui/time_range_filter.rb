@@ -2,11 +2,11 @@
 
 # Components::UI::TimeRangeFilter — reusable preset + custom date/hour
 # range picker, extracted from the logs-analytics filter so any
-# surface gets the same timezone-correct behaviour. A GET form that
+# surface gets the same timezone-correct behavior. A GET form that
 # targets a Turbo Frame with `turbo_action: advance`: each pick swaps
 # just that frame AND pushes a bookmarkable URL. The
 # `time-range-filter` Stimulus controller wires the preset chips, the
-# custom popover, and the local→UTC normalisation on submit.
+# custom popover, and the local→UTC normalization on submit.
 #
 #   form_action  — where the GET goes (e.g. alerts_path)
 #   frame        — Turbo Frame id to scope the re-query to

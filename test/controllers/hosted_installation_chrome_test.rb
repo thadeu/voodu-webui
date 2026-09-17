@@ -11,11 +11,11 @@ require "test_helper"
 #   SSO      decided once, for every tenant at the same time. A form offering
 #            to change it offers something it cannot do, and `destroy` would be
 #            one customer turning sign-in off for everybody.
-#   Licence  the badge reports OUR licence's health in two words, Free and
+#   License  the badge reports OUR license's health in two words, Free and
 #            Licensed, neither of which describes anything they bought.
 #
 # What they DID buy is the plan on their account, so /ops/license stays — that
-# screen is where a plan licence gets activated.
+# screen is where a plan license gets activated.
 class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
   HOSTED = LicenseToken.new(
     status: :valid,
@@ -96,7 +96,7 @@ class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", SSO_HREF, count: 0
   end
 
-  test "the installation licence badge is gone from the topbar" do
+  test "the installation license badge is gone from the topbar" do
     hosted!
 
     a_page
@@ -106,7 +106,7 @@ class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
 
   # The half that must survive: a hosted customer buys a plan, and this is
   # where they activate it.
-  test "the licence screen stays, because the plan lives there" do
+  test "the license screen stays, because the plan lives there" do
     hosted!
 
     visit_license
@@ -139,7 +139,7 @@ class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
   # the ONLY form that can upgrade it, was gated on `current_org&.account`. It
   # returned early every time. The effect was a dead end with no error in it: a
   # free account saw "0 invites", and nothing on any screen offered a way to
-  # buy more. The controller could activate a plan licence the whole time.
+  # buy more. The controller could activate a plan license the whole time.
 
   test "a hosted customer sees their plan without an org in the URL" do
     hosted!
@@ -159,10 +159,10 @@ class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
     assert_select "input[name=?][value=?]", "scope", "plan"
   end
 
-  # The form has to name the account it binds to, because a plan licence issued
+  # The form has to name the account it binds to, because a plan license issued
   # for another one is refused — and the customer needs the short_id to ask for
   # the right token in the first place.
-  test "the form names the account the licence must be issued for" do
+  test "the form names the account the license must be issued for" do
     hosted!
 
     visit_license
@@ -170,7 +170,7 @@ class HostedInstallationChromeTest < ActionDispatch::IntegrationTest
     assert_includes response.body, users(:owner).owned_accounts.first.short_id
   end
 
-  # Self-hosted has no plan card at all: the box's licence already says what
+  # Self-hosted has no plan card at all: the box's license already says what
   # they have, and a second answer could only disagree with it.
   test "a self-hosted box is offered no plan form" do
     visit_license

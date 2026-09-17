@@ -95,7 +95,7 @@ class ServerFormPagesTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", servers_path(org_id: ORG), text: "Cancel"
   end
 
-  test "cancel honours the page that sent the operator here" do
+  test "cancel honors the page that sent the operator here" do
     destination = settings_path(org_id: ORG, server_key: servers(:alpha).key)
 
     get edit_server_path(servers(:alpha), org_id: ORG, return_to: destination)
@@ -103,7 +103,7 @@ class ServerFormPagesTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", destination, text: "Cancel"
   end
 
-  # The form still works — the container changed, not the behaviour.
+  # The form still works — the container changed, not the behavior.
   #
   # The endpoint is stubbed because create PREFLIGHTS it (ServerHealth.probe!
   # calls /system before saving), and a blocked request would fail the save for

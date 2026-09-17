@@ -28,7 +28,7 @@ class Components::UI::StatusPill < Components::Base
     # Outcomes of an operator ACTION (the /activity trail), as opposed to the
     # health of a thing. `succeeded` and `failed` could borrow online/error,
     # but `partial` has no equivalent above — an apply of ten manifests that
-    # landed eight is neither, and amber is the only honest colour for it.
+    # landed eight is neither, and amber is the only honest color for it.
     # Added here rather than in a second pill so every status in the product
     # keeps one shape.
     succeeded: {label: "Succeeded", color: "var(--voodu-green)", bg: "var(--voodu-green-dim)"},

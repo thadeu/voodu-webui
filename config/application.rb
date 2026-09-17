@@ -60,7 +60,7 @@ module VooduWebui
     # db/schema.rb has to LOAD on both adapters — the self-hosted install runs
     # SQLite, the SaaS runs Postgres on the primary — so only SQLite may WRITE
     # it. One `bin/rails db:migrate` against Postgres rewrites the file in PG
-    # dialect (`where: "pinned = true"` normalised to `where: "pinned"`,
+    # dialect (`where: "pinned = true"` normalized to `where: "pinned"`,
     # `enable_extension "plpgsql"`, datetime precision) and the next
     # `db:prepare` on a SQLite install fails to load it.
     #

@@ -39,7 +39,7 @@ class Views::AuthMigrations::Show < Views::Base
     end
   end
 
-  # Counts rather than a bare yes/no: the operator should recognise their own
+  # Counts rather than a bare yes/no: the operator should recognize their own
   # installation before handing it anywhere.
   def summary_card
     div(class: "flex flex-col gap-4 p-5 border border-voodu-border bg-voodu-bg") do

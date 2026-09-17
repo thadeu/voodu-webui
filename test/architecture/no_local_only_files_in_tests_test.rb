@@ -8,7 +8,7 @@ require "test_helper"
 # reason the failure does not name — and the fix is always "oh, that file is
 # gitignored". It has now happened twice in this repository:
 #
-#   config/license/private_key.pem   two tests signed plan licences with the
+#   config/license/private_key.pem   two tests signed plan licenses with the
 #                                    REAL key, which is gitignored precisely
 #                                    so it never leaves the machine that
 #                                    holds it. Errno::ENOENT in CI.

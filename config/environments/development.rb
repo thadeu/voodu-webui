@@ -37,7 +37,7 @@ Rails.application.configure do
 
   # Tunnel hosts, so a GitHub webhook can reach a laptop.
   #
-  # Rails refuses a Host header it does not recognise — the guard against DNS
+  # Rails refuses a Host header it does not recognize — the guard against DNS
   # rebinding, and it is right to have. But testing the deploy plane end to end
   # means GitHub POSTing to this machine, which means a tunnel, which means a
   # hostname nobody can predict: `resolve-men-heart-validation.trycloudflare.com`

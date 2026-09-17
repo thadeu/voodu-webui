@@ -128,7 +128,7 @@ class DatatableController < ApplicationController
     [n, MAX_LIMIT].min
   end
 
-  # time_window — the {from:, to:} epoch-second bounds the table honours, from
+  # time_window — the {from:, to:} epoch-second bounds the table honors, from
   # the page's range picker (so the table follows the same window as the
   # charts). Relative range (1h/24h/…) → lower bound now−range, upper OPEN so
   # live rows still flow. `custom` → the explicit from/until span (both bounds

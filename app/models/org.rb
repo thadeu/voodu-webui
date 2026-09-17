@@ -62,7 +62,7 @@ class Org < ApplicationRecord
 
   private
 
-  # An IANA name ActiveSupport recognises, or blank (inherit). Guards against
+  # An IANA name ActiveSupport recognizes, or blank (inherit). Guards against
   # a typo silently degrading every chart in the org to UTC — the operator
   # gets a form error instead of a wrong-but-quiet render.
   def timezone_is_a_known_zone

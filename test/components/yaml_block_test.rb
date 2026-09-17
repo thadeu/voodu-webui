@@ -2,13 +2,13 @@
 
 require "test_helper"
 
-# The trigger-file viewer: colour, and the copy that has to reproduce the file
+# The trigger-file viewer: color, and the copy that has to reproduce the file
 # byte for byte.
 #
 # Hand-rolled rather than a gem because the input is not arbitrary — it is
-# `spec.to_yaml`, re-serialised by us from a struct the box already validated.
+# `spec.to_yaml`, re-serialized by us from a struct the box already validated.
 # These tests are what keeps that claim honest: anything the tokeniser does not
-# recognise must come through as plain text, never dropped.
+# recognize must come through as plain text, never dropped.
 class YamlBlockTest < ActiveSupport::TestCase
   def render(text, **opts)
     ApplicationController.render(
@@ -40,14 +40,14 @@ class YamlBlockTest < ActiveSupport::TestCase
     assert_not_includes html, %(<span class="text-voodu-muted-2">#b.hcl")
   end
 
-  test "a trailing comment is muted while the value keeps its colour" do
+  test "a trailing comment is muted while the value keeps its color" do
     html = render("name: Web # the front end\n")
 
     assert_includes html, %(<span class="text-voodu-green">Web </span>)
     assert_includes html, %(<span class="text-voodu-muted-2"># the front end</span>)
   end
 
-  # THE PROPERTY THAT MATTERS MOST. Colour is a nicety; a copy button that
+  # THE PROPERTY THAT MATTERS MOST. Color is a nicety; a copy button that
   # hands back something other than the file is a trap — somebody pastes it
   # into their repository and wonders why the deploy changed.
   test "the copy button carries the text unchanged" do
@@ -57,17 +57,17 @@ class YamlBlockTest < ActiveSupport::TestCase
     assert_includes html, %(data-clipboard-value-value="#{CGI.escapeHTML(text)}")
   end
 
-  test "indentation survives the colouring" do
+  test "indentation survives the coloring" do
     html = render("on:\n  push:\n    branches: [main]\n")
 
-    # Four spaces before `branches`, outside any coloured span.
+    # Four spaces before `branches`, outside any colored span.
     assert_includes html, %(    <span class="text-voodu-blue">branches</span>)
   end
 
   # Fail-soft: a highlighter that hides what it cannot parse is worse than one
-  # that does not colour it. The operator is reading this to find out why their
+  # that does not color it. The operator is reading this to find out why their
   # deploy did not fire.
-  test "a line the tokeniser does not recognise still renders" do
+  test "a line the tokeniser does not recognize still renders" do
     html = render("|\n  some block scalar\n>-\n")
 
     assert_includes html, "some block scalar"
@@ -78,7 +78,7 @@ class YamlBlockTest < ActiveSupport::TestCase
     assert_nothing_raised { render("") }
   end
 
-  test "list items keep their dash and colour the item" do
+  test "list items keep their dash and color the item" do
     html = render("branches:\n  - main\n  - staging\n")
 
     assert_includes html, %(<span class="text-voodu-green">main</span>)

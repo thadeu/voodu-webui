@@ -41,7 +41,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     assert Entitlements.current.free?
   end
 
-  test "pasting a licence activates Enterprise on the next request" do
+  test "pasting a license activates Enterprise on the next request" do
     assert_difference("Ops::License.count", 1) do
       post ops_license_path, params: {license_token: token, return_to: settings_url}
     end
@@ -65,7 +65,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   end
 
   # A row that never grants anything would sit in Settings looking like a
-  # licence and behaving like nothing.
+  # license and behaving like nothing.
   test "a token that does not verify is refused and not stored" do
     forged = JWT.encode({"sub" => "pirate", "exp" => 1.year.from_now.to_i},
       OpenSSL::PKey::RSA.new(2048), "RS256")
@@ -81,11 +81,11 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
   test "an empty paste is told what to paste" do
     assert_no_difference("Ops::License.count") { post ops_license_path, params: {license_token: "  "} }
 
-    assert_match(/paste the licence token/i, flash[:alert])
+    assert_match(/paste the license token/i, flash[:alert])
   end
 
   # Renewal is the same act as activation, and the newer token must win.
-  test "renewing replaces which licence is in force" do
+  test "renewing replaces which license is in force" do
     post ops_license_path, params: {license_token: token({"sub" => "old", "iat" => 2.days.ago.to_i})}
 
     assert_equal "old", LicenseToken.current.customer
@@ -98,7 +98,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
 
   # Expired is expired. Re-pasting the same lapsed token buys nothing — the only
   # way out is a new one, which is what makes the exp claim mean anything.
-  test "re-activating a lapsed licence does not revive it" do
+  test "re-activating a lapsed license does not revive it" do
     post ops_license_path, params: {license_token: token({"exp" => 400.days.ago.to_i, "iat" => 800.days.ago.to_i})}
 
     assert_equal :lapsed, LicenseToken.current.status
@@ -135,7 +135,7 @@ class LicenseActivationTest < ActionDispatch::IntegrationTest
     assert_includes response.body, users(:owner).display_name
   end
 
-  test "only the licence in force is marked as such" do
+  test "only the license in force is marked as such" do
     post ops_license_path, params: {license_token: token({"sub" => "acme-2025", "iat" => 3.days.ago.to_i}),
                                     return_to: settings_url}
     post ops_license_path, params: {license_token: token({"sub" => "acme-2026"}), return_to: settings_url}

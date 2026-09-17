@@ -5,7 +5,7 @@ require "test_helper"
 # Hep3::CallFlowData turns one call's SIP messages into the ladder model.
 # These pin the SHAPE the SVG depends on: request vs response classing
 # (code 0 == request), lifelines by first-appearance IP, arrow labels/
-# colours, and that corr_id folds B2BUA legs into ONE flow. If any of
+# colors, and that corr_id folds B2BUA legs into ONE flow. If any of
 # these invert, the ladder draws the wrong picture — so they're scenario
 # tests, not mirrors of the implementation.
 class Hep3::CallFlowDataTest < ActiveSupport::TestCase
@@ -150,7 +150,7 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
   end
 
   test "media BETWEEN lifelines is inline (has from/to cols); off-lifeline is a gap" do
-    # signalling 1.1.1.1 ⇄ 2.2.2.2 (the lifelines); media c= is ALSO on them.
+    # signaling 1.1.1.1 ⇄ 2.2.2.2 (the lifelines); media c= is ALSO on them.
     HepMessage.bulk_insert([
       req("INVITE", "1.1.1.1", "2.2.2.2", ts: 1, x_cid: "inl", raw: sdp_raw("INVITE sip:x SIP/2.0", "1.1.1.1", 1000)),
       res(200, "2.2.2.2", "1.1.1.1", ts: 2, x_cid: "inl", raw: sdp_raw("SIP/2.0 200 OK", "2.2.2.2", 2000))
@@ -165,7 +165,7 @@ class Hep3::CallFlowDataTest < ActiveSupport::TestCase
   end
 
   test "media on an off-lifeline host is a gap (footer), never inline" do
-    # answer media 9.9.9.9 isn't a signalling party → can't sit in the ladder.
+    # answer media 9.9.9.9 isn't a signaling party → can't sit in the ladder.
     HepMessage.bulk_insert([
       req("INVITE", "1.1.1.1", "2.2.2.2", ts: 1, x_cid: "gp", raw: sdp_raw("INVITE sip:x SIP/2.0", "1.1.1.1", 1000)),
       res(200, "2.2.2.2", "1.1.1.1", ts: 2, x_cid: "gp", raw: sdp_raw("SIP/2.0 200 OK", "9.9.9.9", 2000))

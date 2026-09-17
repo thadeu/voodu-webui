@@ -3,8 +3,8 @@
 require "test_helper"
 
 # Every path through License must produce a License — never an exception.
-# The product decision behind that is in the class comment: a licence that can
-# raise is a licence that can take a customer's monitoring down, and a
+# The product decision behind that is in the class comment: a license that can
+# raise is a license that can take a customer's monitoring down, and a
 # monitoring tool failing closed during an incident is worse than one quietly
 # dropping to the free tier. So each test below is really the same assertion
 # twice: the right status, and nothing thrown getting there.
@@ -28,7 +28,7 @@ class LicenseTest < ActiveSupport::TestCase
     assert_not license.present?
   end
 
-  test "a signed licence inside its window is valid" do
+  test "a signed license inside its window is valid" do
     license = resolve(token)
 
     assert_equal :valid, license.status
@@ -57,12 +57,12 @@ class LicenseTest < ActiveSupport::TestCase
     assert_equal :lapsed, license.status
     assert_not license.entitled?
     assert_empty license.granted
-    # Still readable, so settings can say whose licence lapsed and when.
+    # Still readable, so settings can say whose license lapsed and when.
     assert_equal "acme", license.customer
   end
 
   # The customer's clock is not ours to trust to the second.
-  test "a licence expiring seconds ago survives the leeway" do
+  test "a license expiring seconds ago survives the leeway" do
     license = resolve(token({"exp" => 1.minute.ago.to_i}))
 
     assert_equal :valid, license.status
@@ -70,7 +70,7 @@ class LicenseTest < ActiveSupport::TestCase
 
   # ── Everything below is a refusal, and none of it may raise ────────────
 
-  test "a licence signed by another key is invalid" do
+  test "a license signed by another key is invalid" do
     other = OpenSSL::PKey::RSA.new(2048)
 
     assert_equal :invalid, resolve(token({}, key: other)).status
@@ -84,8 +84,8 @@ class LicenseTest < ActiveSupport::TestCase
   end
 
   # alg:none is the classic JWT bypass. The verifier pins RS256, so this is a
-  # refusal rather than a free licence.
-  test "an unsigned licence is invalid" do
+  # refusal rather than a free license.
+  test "an unsigned license is invalid" do
     unsigned = JWT.encode({"sub" => "pirate", "exp" => 1.year.from_now.to_i}, nil, "none")
 
     assert_equal :invalid, resolve(unsigned).status
@@ -98,8 +98,8 @@ class LicenseTest < ActiveSupport::TestCase
   end
 
   # A token that simply omits exp must not read as "never expires" — that would
-  # make one leaked licence permanent.
-  test "a licence with no expiry is invalid, not eternal" do
+  # make one leaked license permanent.
+  test "a license with no expiry is invalid, not eternal" do
     no_expiry = JWT.encode({"sub" => "acme", "iat" => Time.current.to_i}, KEY, "RS256")
 
     assert_equal :invalid, resolve(no_expiry).status
@@ -125,7 +125,7 @@ class LicenseTest < ActiveSupport::TestCase
     File.delete(path) if path&.exist?
   end
 
-  test "an unreadable licence file is empty, not an exception" do
+  test "an unreadable license file is empty, not an exception" do
     ENV["VOODU_LICENSE_FILE"] = "/nonexistent/nowhere.jwt"
 
     assert_equal "", LicenseToken.token_from_env
@@ -136,10 +136,10 @@ class LicenseTest < ActiveSupport::TestCase
   # The bug this class had, pinned so it cannot come back.
   #
   # Status used to be computed once at resolve time and frozen into the object.
-  # A container that booted with a valid licence therefore reported :valid for
-  # as long as it ran — the licence expired on the calendar and never in the
+  # A container that booted with a valid license therefore reported :valid for
+  # as long as it ran — the license expired on the calendar and never in the
   # process. Deriving on read is the fix, and it needs no scheduled job.
-  test "status follows the clock on a licence resolved long ago" do
+  test "status follows the clock on a license resolved long ago" do
     license = resolve(token({"exp" => 10.days.from_now.to_i}))
 
     assert_equal :valid, license.status

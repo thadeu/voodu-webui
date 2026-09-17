@@ -8,7 +8,7 @@
 #
 # The token that reaches a customer's box comes from here, lives one hour, and
 # is never stored. It is minted per request and passed in the call that needs
-# it; a field holding one would outlive the request that was authorised to use
+# it; a field holding one would outlive the request that was authorized to use
 # it.
 #
 # The box has its own GitHub client (internal/github in clowk-voodu) for
@@ -44,7 +44,7 @@ class Integration::Github::Client
   # installation — who this installation belongs to.
   #
   # Called once at connect time, for the account login the screen shows. The
-  # id alone is a number; "acme-corp" is what a person recognises.
+  # id alone is a number; "acme-corp" is what a person recognizes.
   def installation(installation_id)
     get("/app/installations/#{installation_id}", auth: "Bearer #{app_jwt}")
   end

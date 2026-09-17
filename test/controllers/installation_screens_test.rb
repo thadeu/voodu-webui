@@ -13,7 +13,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
     sign_in_as(email: users(:owner).email)
   end
 
-  test "the licence screen is about the licence" do
+  test "the license screen is about the license" do
     get ops_license_path
 
     assert_response :success
@@ -54,7 +54,7 @@ class InstallationScreensTest < ActionDispatch::IntegrationTest
 
   # The account menu does not exist in anonymous mode, so the sidebar is the
   # only way in — and the free tier is precisely who goes looking for the
-  # licence screen. Without the sidebar entry this is unreachable.
+  # license screen. Without the sidebar entry this is unreachable.
   test "the sidebar still offers them when there is no account menu" do
     previous = Rails.application.config.x.clowk_enabled
     Rails.application.config.x.clowk_enabled = false

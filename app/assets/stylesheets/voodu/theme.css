@@ -227,7 +227,7 @@ turbo-frame:has(.log-list.la-list:not(.cols-ready)) .la-render-label { display: 
  * A grid-participating cell can't also be size-contained, so these rows
  * can't carry `content-visibility:auto` (it broke the column tracks — the
  * cells collapsed into a stack). Correctness over the long-list paint
- * optimisation; revisit with row virtualisation if 20k lists ever jank. */
+ * optimization; revisit with row virtualisation if 20k lists ever jank. */
 
 /* /logs/analytics results table — reuses the live-tail `.log-list` grid so
  * the column header + every row share ONE set of column tracks (perfect
@@ -239,7 +239,7 @@ turbo-frame:has(.log-list.la-list:not(.cols-ready)) .la-render-label { display: 
  * higher-specificity `.log-row.la-grid-row` only re-targets analytics rows. */
 /* Data rows ARE `.log-row` (display:contents from the base rule), so the
  * cells below flow straight into the `.log-list` grid — same proven layout
- * as the live tail. la-grid-row only adds analytics behaviour. */
+ * as the live tail. la-grid-row only adds analytics behavior. */
 .log-row.la-grid-row { cursor: default; }
 
 /* display:contents rows generate no box, so a row-level background can't
@@ -776,7 +776,7 @@ body.log-cols-resizing * {
  * default `.log-row > .log-body` rule (class chain on the row) but
  * not the global `.log-wrap` (operator-driven, applied on the parent
  * list), so the global toggle still wins if both are on — harmless
- * since both produce the same wrap behaviour. */
+ * since both produce the same wrap behavior. */
 .log-row.log-row-wrap > .log-body {
   white-space: pre-wrap;
   word-break: break-all;
@@ -865,7 +865,7 @@ body.log-cols-resizing * {
   --voodu-accent-line: #34d39966;
 
   /* ── Button fill ──
-   * The accent above is a CHROME colour: it backs small tinted surfaces
+   * The accent above is a CHROME color: it backs small tinted surfaces
    * (active nav, selected chips, focus rings) where its brightness is
    * exactly the point. Behind white LABEL text it is not — #34d399
    * against #ffffff measures 1.92:1, and the hover (--voodu-accent-2,
@@ -931,7 +931,7 @@ body.log-cols-resizing * {
    * which is Memory, so the two never read as the same signal.
    * rose = client error (4xx) — in the red family per the RED-FOR-
    * ERRORS rule above, but distinguishably warmer than --voodu-red
-   * (5xx), signalling "less severe than a server failure". */
+   * (5xx), signaling "less severe than a server failure". */
   --voodu-sky:     #38bdf8; /* HTTP 3xx */
   --voodu-rose:    #fb7185; /* HTTP 4xx */
 
@@ -1005,7 +1005,7 @@ html[data-theme="light"] {
    * (bg/bg-2) under WHITE panels (surface). The lift now comes from
    * the bg↔surface contrast, NOT the border — so cards read as
    * distinct without heavy separators. Earlier bg==surface==#fff made
-   * a card exist only by its border. Neutral grey, no blue tint. */
+   * a card exist only by its border. Neutral gray, no blue tint. */
   --voodu-bg:        #f7f8fa;
   --voodu-bg-2:      #f3f4f6;
   --voodu-surface:   #ffffff;
@@ -1015,18 +1015,18 @@ html[data-theme="light"] {
 
   /* Borders are soft hairlines — the bg↔surface contrast carries the
    * hierarchy (Supabase model), so separators only need to whisper.
-   * Heavier lines made tables/cards feel boxed-in and "grey". */
+   * Heavier lines made tables/cards feel boxed-in and "gray". */
   --voodu-border:    #e8eaee;
   --voodu-border-2:  #d9dbe1;
 
   /* Neutral text ramp (de-blued from the previous slate): near-black
-   * primary, intentional greys for secondary/muted. */
+   * primary, intentional grays for secondary/muted. */
   --voodu-text:    #16191f;
   --voodu-text-2:  #3d434d;
   --voodu-muted:   #5c636e;
   --voodu-muted-2: #868d99;
   /* Log body text — near-black on white, matching CloudWatch's crisp
-   * black @message column (a slate-grey here read as washed-out next to
+   * black @message column (a slate-gray here read as washed-out next to
    * it). Scoped to log payload only; app chrome (--voodu-text) stays
    * the softer #1b212b so headings/labels don't turn harsh. */
   --voodu-log-payload: #0e1116;
@@ -1120,7 +1120,7 @@ html[data-theme="light"] .voodu-dark {
   --voodu-accent-line: #34d39966;
 
   /* ── Button fill ──
-   * The accent above is a CHROME colour: it backs small tinted surfaces
+   * The accent above is a CHROME color: it backs small tinted surfaces
    * (active nav, selected chips, focus rings) where its brightness is
    * exactly the point. Behind white LABEL text it is not — #34d399
    * against #ffffff measures 1.92:1, and the hover (--voodu-accent-2,

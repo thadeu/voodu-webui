@@ -8,12 +8,12 @@
 # their token stays valid, and if they hold access to some OTHER org here they
 # keep browsing on a session that was minted before you removed them.
 #
-# So this is defence in depth, and it is deliberately BEST EFFORT. Clowk being
+# So this is defense in depth, and it is deliberately BEST EFFORT. Clowk being
 # unreachable must never block an admin from removing someone: the removal is
 # the control, this is the tidy-up. A failure here is logged and swallowed.
 #
 # Needs CLOWK_SECRET_KEY — the management API authenticates with it. Without
-# one this is a no-op, which is the honest behaviour: we cannot ask Clowk to do
+# one this is a no-op, which is the honest behavior: we cannot ask Clowk to do
 # anything, and pretending otherwise would hide that from the operator.
 class ClowkSessionRevoker
   # What the gem's retries can still surface, plus connection-refused, which

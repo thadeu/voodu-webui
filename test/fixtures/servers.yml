@@ -4,7 +4,7 @@
 # ciphertexts below decrypt deterministically.
 #
 # We can't write the ciphertext by hand (it's keyed). Instead we
-# rely on the encrypted_load behaviour: when an `encrypts` column
+# rely on the encrypted_load behavior: when an `encrypts` column
 # value in a fixture is plaintext, Rails encrypts it on load. Set
 # config.active_record.encryption.encrypt_fixtures = true in test
 # env to opt in.

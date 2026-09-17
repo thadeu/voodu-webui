@@ -23,7 +23,7 @@
 #     Net Tx   net_tx_delta_bytes      bytes
 #
 # 4 round-trips to /metrics per page load, each cached 60s by
-# MetricsData. Hits are sequential because the metric serialised
+# MetricsData. Hits are sequential because the metric serialized
 # chart-by-chart over a single Faraday connection — parallelisation
 # is a future win when round-trip cost dominates.
 class MetricsPageData
@@ -742,7 +742,7 @@ class MetricsPageData
     rescale_points(raw_points, scale)
   end
 
-  # rescale_points — per-chart numeric normalisation. Bypasses
+  # rescale_points — per-chart numeric normalization. Bypasses
   # MetricsData's default per-metric formatter when we want a
   # specific unit (e.g. GB instead of auto-MB).
   def rescale_points(points, scale)

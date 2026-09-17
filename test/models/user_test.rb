@@ -46,7 +46,7 @@ class UserTest < ActiveSupport::TestCase
   # died with "Email has already been taken" — on a service with open sign-up,
   # not an edge case.
   #
-  # This test used to assert the opposite, as defence in depth: it refused to
+  # This test used to assert the opposite, as defense in depth: it refused to
   # bind a second subject to an address already bound. That refusal is gone by
   # decision, and what remains standing between an address and somebody else's
   # orgs is `email_verified` ALONE. It is now load-bearing rather than a second

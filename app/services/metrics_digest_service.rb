@@ -120,7 +120,7 @@ class MetricsDigestService
   # parse_line — same tolerant shape Voodu::Client#parse_dump_line
   # uses: silently drop malformed JSON / missing-ts / missing-source
   # lines rather than poisoning the whole batch. The controller has
-  # already filtered, so this is defence in depth.
+  # already filtered, so this is defense in depth.
   def self.parse_line(line)
     parsed = JSON.parse(line)
     ts = parsed["ts"]

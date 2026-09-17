@@ -24,7 +24,7 @@ module LogTail
     LOG_ROOT = "storage/logs"
 
     # Cap per (pod, day) file in bytes. 250MB matches the operator
-    # decision — drop+warn behaviour kicks in when a file hits this.
+    # decision — drop+warn behavior kicks in when a file hits this.
     PER_FILE_CAP_BYTES = 250 * 1024 * 1024
 
     # Cap total disk under storage/logs/<server_id>/. 2GB matches the

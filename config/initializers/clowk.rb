@@ -132,7 +132,7 @@ Clowk.configure do |config|
   # through api.clowk.dev — one fewer network dependency on the path that
   # authenticates every request, and on the JWKS fetch behind it. Left nil, the
   # gem derives it from the publishable key on first use.
-  # Normalised, not passed through: a bare host here 500s the OAuth callback.
+  # Normalized, not passed through: a bare host here 500s the OAuth callback.
   # AuthSettings.normalize_url carries the full reasoning and does this for the
   # env and stored credentials both — spelled out again rather than called
   # because app/ is not autoloadable this early, and the four lines are cheaper

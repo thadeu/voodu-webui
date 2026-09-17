@@ -7,7 +7,7 @@
 #
 # The template is parsed as JSON, the tree is walked, and {{token}}
 # markers inside STRING values are replaced with their token value;
-# the result is re-serialised. Re-marshalling is what keeps the output
+# the result is re-serialized. Re-marshalling is what keeps the output
 # valid — a token value containing a quote is JSON-escaped
 # automatically, so it can't break the operator's payload.
 #

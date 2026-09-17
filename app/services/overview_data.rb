@@ -109,7 +109,7 @@ class OverviewData
     @system&.dig("host", "kernel")
   end
 
-  # Pods normalised for the table component. Every pod is a hash with
+  # Pods normalized for the table component. Every pod is a hash with
   # the keys the PodsTable expects.
   def pods(filter_status: nil)
     list = @pods_raw.map { |p| prepare_pod(p) }
@@ -313,7 +313,7 @@ class OverviewData
   # actually ask — is answered by disk_used_gb/disk_total_gb.
   # Per-pod block I/O is now on UsageStats; pod show renders it.
 
-  # prepare_pod — normalise the PAT-plane pod record + decorate with
+  # prepare_pod — normalize the PAT-plane pod record + decorate with
   # mocked fields the API doesn't expose yet.
   #
   # Carries the identity tuple (scope / resource_name / replica_id)

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Activating an Enterprise licence from Settings.
+# Activating an Enterprise license from Settings.
 #
-# The upgrade path this serves: someone runs the free tier, buys a licence, is
+# The upgrade path this serves: someone runs the free tier, buys a license, is
 # sent a token, pastes it here, and is Enterprise on the very next request — no
 # env var, no redeploy, no restarting the dashboard their on-call is watching.
 #
@@ -17,15 +17,15 @@ class Ops::LicenseController < ApplicationController
     render Views::Ops::License::Index.new(current_path: request.path, servers: sidebar_servers)
   end
 
-  # Refused only on the hosted service, whose licence belongs to whoever runs
+  # Refused only on the hosted service, whose license belongs to whoever runs
   # the box rather than to the customer reading the screen.
   #
   # NOT refused merely because the environment supplied it. An operator whose
-  # env licence expires buys a newer one and pastes it here — precedence is by
+  # env license expires buys a newer one and pastes it here — precedence is by
   # issue date, so the newer one wins — and locking the form would have removed
   # it at exactly the moment it was needed.
   def create
-    # Two forms post here, and they mean different things. A plan licence
+    # Two forms post here, and they mean different things. A plan license
     # belongs to ONE account; the installation's belongs to the box. Routing on
     # a hidden field rather than on two endpoints keeps the screen's two
     # sections obviously the same action with different scope.
@@ -36,7 +36,7 @@ class Ops::LicenseController < ApplicationController
     license = Ops::License.activate!(params[:license_token], by: Current.user)
 
     if license.verified?
-      redirect_to back_to_settings, notice: "Licence activated — #{license.summary}."
+      redirect_to back_to_settings, notice: "License activated — #{license.summary}."
     else
       redirect_to back_to_settings, alert: refusal_for(license)
     end
@@ -48,9 +48,9 @@ class Ops::LicenseController < ApplicationController
 
   # A refused token is nearly always a paste accident, so say which kind.
   def refusal_for(license)
-    return "Paste the licence token you were sent." if license.status == :none
+    return "Paste the license token you were sent." if license.status == :none
 
-    "That licence could not be verified (#{license.reason}). Check it was pasted " \
+    "That license could not be verified (#{license.reason}). Check it was pasted " \
       "whole — the token is one long line with no spaces."
   end
 
@@ -61,7 +61,7 @@ class Ops::LicenseController < ApplicationController
   def back_to_settings = return_to_path(ops_license_path)
 
   # The customer's own plan, on the hosted service. Refused anywhere else: on a
-  # self-hosted box the licence on the box already says what they have, and a
+  # self-hosted box the license on the box already says what they have, and a
   # second answer could only disagree with it.
   def activate_plan
     return refuse_not_hosted unless LicenseToken.current.unlimited?
@@ -83,25 +83,25 @@ class Ops::LicenseController < ApplicationController
     when :ok
       {notice: "Plan activated — #{account.reload.plan.capitalize}."}
     when :not_a_plan
-      {alert: "That licence is for an installation (#{detail}), not for a plan. " \
-              "Ask for a plan licence issued for account #{account.short_id}."}
+      {alert: "That license is for an installation (#{detail}), not for a plan. " \
+              "Ask for a plan license issued for account #{account.short_id}."}
     when :wrong_account
-      {alert: "That licence was issued for account #{detail}, not for #{account.short_id}."}
+      {alert: "That license was issued for account #{detail}, not for #{account.short_id}."}
     when :expired
-      {alert: "That licence has expired. Ask for a current one."}
+      {alert: "That license has expired. Ask for a current one."}
     else
-      {alert: "That licence could not be verified#{" (#{detail})" if detail.present?}."}
+      {alert: "That license could not be verified#{" (#{detail})" if detail.present?}."}
     end
   end
 
   def refuse_not_hosted
     redirect_to back_to_settings,
-      alert: "Plans apply to the hosted service. This installation is governed by its own licence."
+      alert: "Plans apply to the hosted service. This installation is governed by its own license."
   end
 
   def refuse_unlimited
     redirect_to back_to_settings,
-      alert: "This installation runs on a hosted plan. Its licence is managed by whoever " \
+      alert: "This installation runs on a hosted plan. Its license is managed by whoever " \
              "operates it, not from here."
   end
 end

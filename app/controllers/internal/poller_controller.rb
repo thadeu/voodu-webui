@@ -10,7 +10,7 @@ module Internal
   #   - No CSRF (machine-to-machine, no browser).
   #   - No view rendering (JSON only).
   #
-  # Defence in depth — three independent guards:
+  # Defense in depth — three independent guards:
   #
   #   1. The endpoint is only reachable from loopback or RFC1918
   #      private addresses (see `enforce_loopback_or_private!`).

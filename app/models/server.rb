@@ -69,7 +69,7 @@ class Server < ApplicationRecord
   # both owning a box called "web-1". Mirrors AlertDestination.
   validates :name, presence: true, uniqueness: {scope: :org_id}, length: {maximum: 64}
   validates :endpoint, presence: true, format: {
-    with: %r{\Ahttps?://[^/]+:\d+\z}, message: "could not be normalised to scheme://host:port"
+    with: %r{\Ahttps?://[^/]+:\d+\z}, message: "could not be normalized to scheme://host:port"
   }
   validates :pat_ciphertext, presence: true
   validates :key, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{6}\z/}
@@ -214,7 +214,7 @@ class Server < ApplicationRecord
   # normalize_endpoint — turn operator-friendly input into a fully-
   # qualified URL the HTTP client can consume.
   #
-  # Accepted inputs (all normalise to `http://1.2.3.4:8687`):
+  # Accepted inputs (all normalize to `http://1.2.3.4:8687`):
   #
   #   1.2.3.4
   #   1.2.3.4:8687

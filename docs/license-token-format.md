@@ -1,7 +1,7 @@
-# Licence token format
+# License token format
 
-A voodu-webui Enterprise licence is a **JWS** — a signed JSON Web Token, RS256,
-in compact serialisation. Nothing about it is voodu-specific: any JWT library in
+A voodu-webui Enterprise license is a **JWS** — a signed JSON Web Token, RS256,
+in compact serialization. Nothing about it is voodu-specific: any JWT library in
 any language can issue one, and the sections below include a worked example you
 can reproduce byte for byte.
 
@@ -29,10 +29,10 @@ the definition.
 | `iat` | integer | no | issued at, seconds since epoch |
 | `ent` | object | no | entitlement overrides; `{}` or absent means the licensed defaults |
 | `tier` | string | no | `enterprise` (default) or `unlimited`. Names the PRODUCT, not an entitlement — an unrecognised value falls back to `enterprise` so a claim a newer build adds cannot turn an older one into an outage |
-| `plan` | string | no | `free` (default) or `pro`. Only meaningful on a plan licence, where `sub` is an account's short_id rather than a customer name |
+| `plan` | string | no | `free` (default) or `pro`. Only meaningful on a plan license, where `sub` is an account's short_id rather than a customer name |
 
 `exp` is required and a token without it is rejected — otherwise one leaked
-licence would be permanent.
+license would be permanent.
 
 **`ent` keys.** Anything not listed is ignored, so a typo behaves like the
 default rather than silently granting:
@@ -54,7 +54,7 @@ volume, so an unbounded window is a disk that fills and a container that dies.
 ## Keys
 
 The **public** key ships in the image at `config/license/public_key.pem` (SPKI
-PEM, RSA-4096) and is what verifies. The **private** key mints licences and is
+PEM, RSA-4096) and is what verifies. The **private** key mints licenses and is
 never committed — `rake license:issue` looks for it at
 `config/license/private_key.pem` (gitignored by pattern), or wherever
 `VOODU_LICENSE_PRIVATE_KEY` points.
@@ -156,13 +156,13 @@ costing anything.
 
 1. Token absent → `:none`, the free tier. Not an error.
 2. Signature or algorithm fails → `:invalid`. `alg` is pinned to RS256, so
-   `alg:none` is a refusal rather than a free licence.
+   `alg:none` is a refusal rather than a free license.
 3. `exp` missing → `:invalid`.
 4. `exp` in the future (plus 5 minutes of clock leeway) → `:valid`.
 5. `exp` past, within 30 days → `:grace`. **Still entitled.**
 6. Beyond that → `:lapsed`. Free tier.
 
-Every branch produces a licence object. **None raises**, because a licence that
+Every branch produces a license object. **None raises**, because a license that
 can fail closed can take a customer's monitoring down at 3am.
 
 ## Why JWS and not JWE
@@ -177,7 +177,7 @@ anything — symmetric HMAC, JWE, whatever. Here the verifier runs on the
 
 - **JWE with a symmetric key** — the image would carry the key that decrypts
   *and* the ability to mint. Anyone who pulls the image issues their own
-  licences. Strictly worse than no mechanism.
+  licenses. Strictly worse than no mechanism.
 - **JWE with RSA-OAEP** — the image carries a private decryption key. That does
   not let anyone forge, but it does not authenticate the issuer either:
   encryption is not a signature. You would still need a JWS inside the JWE
@@ -192,5 +192,5 @@ anything.
 
 And confidentiality would be theatre regardless: whoever runs the container can
 read the process memory that holds the decrypted claims. The Elastic License 2.0
-clause on circumventing licence-key functionality is what actually carries this
+clause on circumventing license-key functionality is what actually carries this
 — see the reasoning in `.scratch/enterprise-license/PRD.md`.

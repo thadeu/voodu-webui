@@ -8,7 +8,7 @@
 # for a list that changes rarely, invalidated whenever this installation itself
 # changes something.
 #
-# AUTHORIZATION IS DELIBERATELY TIGHTER HERE than on the neighbouring screens.
+# AUTHORIZATION IS DELIBERATELY TIGHTER HERE than on the neighboring screens.
 # Restarting a pod is gated by nothing today; installing a plugin clones a
 # repository and runs its lifecycle hooks as the controller's user, which is
 # arbitrary code execution on the operator's machine. That is not a day-to-day

@@ -91,7 +91,7 @@ Rails.application.routes.draw do
   # list update in place, no reload. M1 puts the org's short_id in the path.
   resources :orgs, only: [:create, :update, :destroy]
 
-  # Installation-wide, so it hangs off the root rather than a server: a licence
+  # Installation-wide, so it hangs off the root rather than a server: a license
   # belongs to whoever runs this container, not to one of the boxes it watches.
   # Operational settings for the whole container — not a property of any server
   # or org, which is why they sit outside the /:org_id/:server_key prefix.
@@ -101,7 +101,7 @@ Rails.application.routes.draw do
   # added.
   # One controller per subject, each owning its own screen and its own actions.
   #
-  # No `update` anywhere on purpose: replacing a licence or a set of SSO
+  # No `update` anywhere on purpose: replacing a license or a set of SSO
   # credentials is a `create`. Each writes a new row and leaves the old one, and
   # that history is what answers "when did this change, and who changed it" —
   # an update that overwrote would throw away the only record of it.
@@ -169,7 +169,7 @@ Rails.application.routes.draw do
     as: :github_integration_callback
 
   # GitHub's own POST. No session, no org, no CSRF token — the HMAC is the
-  # whole authorisation. See Integrations::GithubWebhooksController.
+  # whole authorization. See Integrations::GithubWebhooksController.
   post "integrations/github/webhook", to: "integrations/github_webhooks#create",
     as: :github_integration_webhook
 

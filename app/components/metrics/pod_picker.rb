@@ -30,7 +30,7 @@ class Components::Metrics::PodPicker < Components::Base
   #                 the modal. When false (default), rows fall
   #                 back to `data-turbo="false"` for full-page
   #                 navigation (the original /metrics page
-  #                 sidebar picker behaviour).
+  #                 sidebar picker behavior).
   #   hide_host:    skip the HOST primary section. The chart-modal
   #                 endpoint is per-metric and metrics are scoped
   #                 to either host OR pod — offering "host" inside

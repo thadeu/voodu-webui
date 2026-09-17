@@ -538,8 +538,8 @@ export default class extends Controller {
     })
   }
 
-  // applyCustomColor — reveal + colour the row's custom swatch (so the choice
-  // is visible + re-selectable), set the current colour, and re-ring swatches.
+  // applyCustomColor — reveal + color the row's custom swatch (so the choice
+  // is visible + re-selectable), set the current color, and re-ring swatches.
   applyCustomColor(name, color) {
     const sw = this.element.querySelector(`[data-role="custom-${name}"]`)
 
@@ -1052,7 +1052,7 @@ export default class extends Controller {
 
     this.currentLogColor = panel.color || this.defaultLogColor()
     this.highlightLogColor()
-    // A saved hex is a custom colour (presets are CSS vars) — surface it as
+    // A saved hex is a custom color (presets are CSS vars) — surface it as
     // the row's custom swatch so it shows as selected.
     if (String(panel.color).startsWith("#")) this.applyCustomColor("log", panel.color)
   }
@@ -1611,7 +1611,7 @@ export default class extends Controller {
   }
 
   // fillJson — paint a pane with syntax-highlighted JSON. highlightJson is a
-  // lexical tokenizer (regex, not a parser), so it colours a truncated tail just
+  // lexical tokenizer (regex, not a parser), so it colors a truncated tail just
   // fine — NO JSON.parse guard, which would reject the 4k-clipped RESPONSE (cut
   // mid-token → invalid) and silently drop the whole pane to plain text.
   fillJson(el, str) {

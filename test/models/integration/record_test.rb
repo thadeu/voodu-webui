@@ -240,7 +240,7 @@ class Integration::RecordTest < ActiveSupport::TestCase
     server = @server
     other = servers(:beta)
 
-    # SQLite serialises writers, so the lock is what makes the read-modify-write
+    # SQLite serializes writers, so the lock is what makes the read-modify-write
     # atomic rather than merely ordered.
     threads = [
       Thread.new { Integration::Record.find(integration.id).add_repo!(repo: "acme/web", server_id: server.id, trigger_id: "a") },

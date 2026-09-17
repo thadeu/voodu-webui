@@ -163,8 +163,8 @@ class Components::Orgs::Panel < Components::Base
   end
 
   # "Acme (Pz9IUrm2)" — the short_id because two accounts may be named after
-  # two people with the same name, and it is the id a plan licence is issued
-  # for, so it is the one worth recognising.
+  # two people with the same name, and it is the id a plan license is issued
+  # for, so it is the one worth recognizing.
   def account_label(org)
     account = org.account
     return "no account" if account.nil?

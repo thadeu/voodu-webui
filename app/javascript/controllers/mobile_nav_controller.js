@@ -12,7 +12,7 @@ import { Controller } from "@hotwired/stimulus"
 //     </header>
 //   </div>
 //
-// Behaviour:
+// Behavior:
 //   - toggle()  flips the sidebar's transform + backdrop visibility
 //   - close()   forces shut (escape key, backdrop click, link click)
 //   - On md+ widths the sidebar is statically positioned by Tailwind;

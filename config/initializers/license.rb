@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Resolves the Enterprise licence once, into config.x.license, so every reader
+# Resolves the Enterprise license once, into config.x.license, so every reader
 # agrees — the entitlement table, the settings screen, and the tests that
 # exercise both.
 #
@@ -10,12 +10,12 @@
 # what you want while fiddling with a token.
 #
 # Verification is offline and cannot fail loudly — see LicenseToken. The worst
-# possible token produces a :invalid licence and the free tier, never a boot
-# failure, because a licence that can stop the app from starting is a licence
+# possible token produces a :invalid license and the free tier, never a boot
+# failure, because a license that can stop the app from starting is a license
 # that can take a customer's monitoring down during an incident.
 
 # Said once at boot, where an operator setting the container up will see it. A
-# lapsed or unverifiable licence is worth a warning: it means capabilities the
+# lapsed or unverifiable license is worth a warning: it means capabilities the
 # operator is paying for silently stopped applying.
 Rails.application.config.after_initialize do
   license = LicenseToken.current

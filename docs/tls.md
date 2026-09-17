@@ -92,7 +92,7 @@ and you must pick one:
 - **Leave `TLS_DOMAIN` empty** and let Cloudflare hold the certificate. Set the
   SSL mode to Full so the hop to your origin is not plaintext across the
   internet.
-- **Set the record to DNS-only** (grey cloud) and let Thruster hold it.
+- **Set the record to DNS-only** (gray cloud) and let Thruster hold it.
 
 The same reasoning applies to any proxy in front — an ALB, an nginx, a Caddy you
 already run. Whoever terminates TLS owns the certificate; two owners is a broken

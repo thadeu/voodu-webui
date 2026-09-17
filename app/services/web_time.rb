@@ -37,7 +37,7 @@ class WebTime
 
   # zone_name — the IANA name to render timestamps in. The current org's
   # timezone (a per-org display preference) when it's set to a zone
-  # ActiveSupport recognises, else "UTC". Resolved once per request and
+  # ActiveSupport recognizes, else "UTC". Resolved once per request and
   # cached as a Ruby string for the rest of the render.
   #
   # Org-less pages (servers list, org manager, onboarding) and background
@@ -73,7 +73,7 @@ class WebTime
     ActiveSupport::TimeZone[zone_name] || ActiveSupport::TimeZone[DEFAULT_ZONE_NAME]
   end
 
-  # valid_zone? — true when ActiveSupport recognises the name.
+  # valid_zone? — true when ActiveSupport recognizes the name.
   # Used by the Settings form to validate operator input before
   # persisting; also used internally by `zone_name` so bad data
   # in the DB silently degrades to UTC instead of crashing renders.
@@ -127,9 +127,9 @@ class WebTime
   end
   private_class_method :request_cache
 
-  # coerce — best-effort normalisation. Returns a Time / DateTime /
+  # coerce — best-effort normalization. Returns a Time / DateTime /
   # TimeWithZone (any of which respond to `in_time_zone`), or nil
-  # if the input shape isn't recognised. Bad strings (typoed ISO,
+  # if the input shape isn't recognized. Bad strings (typoed ISO,
   # empty string) → nil; views render "—" instead of 500-ing.
   def self.coerce(input)
     return nil if input.nil?
@@ -141,7 +141,7 @@ class WebTime
       input.to_time
     when Numeric
       # Seconds since epoch. Matches the controller's `time` field
-      # which we serialise as unix seconds in /metrics responses.
+      # which we serialize as unix seconds in /metrics responses.
       Time.at(input)
     when String
       parse_string(input)

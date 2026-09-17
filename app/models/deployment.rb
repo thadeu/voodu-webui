@@ -236,7 +236,7 @@ class Deployment < ApplicationRecord
   #
   # Two things land here: a push superseded by a newer one, and a push the box
   # read and decided nothing matched (wrong branch, no watched path). Neither
-  # is an error, and colouring them red would train operators to ignore red.
+  # is an error, and coloring them red would train operators to ignore red.
   def skip!(reason, log: nil)
     update!(status: "skipped", finished_at: Time.current,
       details: details.merge("skipped_reason" => reason.to_s, "log" => log.presence).compact)

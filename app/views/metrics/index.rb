@@ -332,7 +332,7 @@ class Views::Metrics::Index < Views::Base
     # "Host (default)" labels the trigger so it's clear you're on the
     # built-in view, not a dashboard. Don't return the generic "Dashboards"
     # here: that's the drawer/switcher's own title, not the active view's
-    # name (and the host view must stay reachable + labelled past a pin).
+    # name (and the host view must stay reachable + labeled past a pin).
     "Host (default)"
   end
 
@@ -831,7 +831,7 @@ class Views::Metrics::Index < Views::Base
 
   # current_request_url — request path + query string. Used as the
   # turbo-frame `src` so the polling reload refetches the exact same
-  # scope/range/refresh the operator is viewing. Re-serialising via
+  # scope/range/refresh the operator is viewing. Re-serializing via
   # `to_query` instead of `request.original_url` because the latter
   # carries the host+port which would force a CORS-like fetch in
   # local dev with non-default ports.

@@ -6,7 +6,7 @@ import { Controller } from "@hotwired/stimulus"
 //      targets the results Turbo Frame, so only the table swaps).
 //   2. The "Custom" chip reveals two datetime-local inputs instead of
 //      submitting, pre-filled with a sensible window so they're never
-//      blank/incomplete (a date-only datetime-local serialises as "").
+//      blank/incomplete (a date-only datetime-local serializes as "").
 //   3. normalizeDates converts the from/until inputs local→UTC on submit
 //      (the server's Time.zone.parse assumes UTC, so an unconverted
 //      local value lands hours off).
@@ -224,7 +224,7 @@ export default class extends Controller {
   }
 
   // applyPods — Apply the chosen pod scope (the checked pods[] checkboxes
-  // serialise with the form). Dropdown closes via its own action.
+  // serialize with the form). Dropdown closes via its own action.
   applyPods() {
     this.formTarget.requestSubmit()
   }
@@ -276,7 +276,7 @@ export default class extends Controller {
     }
   }
 
-  // normalizeDates — runs on submit (before Turbo serialises the form).
+  // normalizeDates — runs on submit (before Turbo serializes the form).
   // Only a custom window submits explicit from/until: we write the UTC
   // equivalent of the VISIBLE local pickers into the HIDDEN companions
   // (never the "…Z" string back into the datetime-local — the browser

@@ -26,7 +26,7 @@ class PluginsData
   ) do
     def installed? = state == "installed"
 
-    # In the catalogue and not on this server.
+    # In the catalog and not on this server.
     def available? = state == "available"
 
     def installing? = state == "installing"
@@ -58,7 +58,7 @@ class PluginsData
 
   attr_reader :sort
 
-  # Installed first, then what the catalogue offers and this server does not
+  # Installed first, then what the catalog offers and this server does not
   # have. Order within each group follows the sort; the groups themselves do
   # not interleave, because "what I have" and "what I could have" are different
   # questions and mixing them makes the first one hard to answer.

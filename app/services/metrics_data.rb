@@ -151,7 +151,7 @@ class MetricsData
   # `limit 0.5`; mem_used_label shows `512 MB` — tooltip must
   # speak the same dialect).
   #
-  # Centralising here means a new metric needs ONE change (this
+  # Centralizing here means a new metric needs ONE change (this
   # case statement) — Sparkline / Stimulus don't know about units.
   def formatter_for(metric)
     case metric
@@ -295,7 +295,7 @@ class MetricsData
   end
 
   # digest — stable hash of a params hash. Sorts keys + drops nils
-  # before serialising so:
+  # before serializing so:
   #   - {a:1,b:2} and {b:2,a:1} produce the same digest
   #   - {a:1,b:nil} and {a:1} produce the same digest (consistent
   #     handling of "param not set")

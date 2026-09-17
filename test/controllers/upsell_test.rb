@@ -6,7 +6,7 @@ require "test_helper"
 #
 # The rule that matters is not that the pitch appears — it is that it appears
 # ONLY where there is something to sell. Advertising Enterprise to somebody
-# holding an Enterprise licence reads as a product that does not know what it
+# holding an Enterprise license reads as a product that does not know what it
 # sold, and advertising sign-in to an installation that already asks for it is
 # the same mistake with a different noun.
 class UpsellTest < ActionDispatch::IntegrationTest
@@ -31,7 +31,7 @@ class UpsellTest < ActionDispatch::IntegrationTest
     )
   end
 
-  # ── Licence screen ────────────────────────────────────────────────
+  # ── License screen ────────────────────────────────────────────────
 
   test "the free tier is told the paid tier exists" do
     free_tier
@@ -61,7 +61,7 @@ class UpsellTest < ActionDispatch::IntegrationTest
 
   # Grace still GRANTS the licensed entitlements. The expiry on the left is what
   # needs acting on; a purchase pitch would be aiming at the wrong lever.
-  test "a licence in grace is not advertised at either" do
+  test "a license in grace is not advertised at either" do
     licensed(:grace, expires: 2.days.ago)
 
     get ops_license_path
@@ -71,7 +71,7 @@ class UpsellTest < ActionDispatch::IntegrationTest
 
   # Lapsed means the entitlements are gone — this installation really is back on
   # the free tier, and renewing is exactly what it should be offered.
-  test "a lapsed licence is offered the way back" do
+  test "a lapsed license is offered the way back" do
     licensed(:lapsed, expires: 90.days.ago)
 
     get ops_license_path
@@ -96,7 +96,7 @@ class UpsellTest < ActionDispatch::IntegrationTest
 
     get ops_license_path
 
-    plan = response.body.index("Activate a licence")
+    plan = response.body.index("Activate a license")
     pitch = response.body.index("Run it without the limits")
 
     assert plan, "the activation form is missing"

@@ -134,7 +134,7 @@ class Components::Metrics::MetricPicker < Components::Base
   # build_url — picker rows override metric/scale/label/color/unit
   # (each spec carries all five) and leave the rest of the query
   # untouched (scope_kind/scope_id/range/etc.). Same merge pattern
-  # as PodPicker so behaviour stays consistent.
+  # as PodPicker so behavior stays consistent.
   def build_url(spec)
     params = @extra_params.merge(
       metric: spec[:metric],

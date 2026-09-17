@@ -104,7 +104,7 @@ self.addEventListener("fetch", (event) => {
 
   // Same-origin only. Cross-origin requests (CDN, controller's
   // direct IP if ever called from the browser) keep the browser's
-  // default behaviour — the SW isn't the right layer to police
+  // default behavior — the SW isn't the right layer to police
   // those.
   if (url.origin !== self.location.origin) return;
 

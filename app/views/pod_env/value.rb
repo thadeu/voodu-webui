@@ -70,7 +70,7 @@ class Views::PodEnv::Value < Views::Base
     div(class: "flex items-center gap-2 min-w-0") do
       # ONE LINE, always. `truncate` (overflow-hidden + ellipsis + nowrap) and
       # not `break-all`, which wrapped 48 characters onto three lines and made
-      # a revealed row three times the height of its neighbours — the list
+      # a revealed row three times the height of its neighbors — the list
       # jumped every time somebody clicked an eye.
       #
       # Two cuts stack here and they answer different things. The Ruby one is

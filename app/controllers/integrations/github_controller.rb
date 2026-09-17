@@ -49,9 +49,9 @@ module Integrations
       redirect_to "#{settings.install_url}?state=#{CGI.escape(state)}", allow_other_host: true
     end
 
-    # callback — GitHub sends the operator back after they authorise.
+    # callback — GitHub sends the operator back after they authorize.
     #
-    # No `authorize` filter: authorisation here comes from the STATE, not from
+    # No `authorize` filter: authorization here comes from the STATE, not from
     # the URL, because the URL cannot name an org. The state names the org, the
     # server and the person, and the checks below confirm all three still hold.
     def callback
@@ -79,7 +79,7 @@ module Integrations
       # removed from the org, or lost the capability, between leaving and
       # returning. The signature proves who started it; it does not prove they
       # may still finish it.
-      return reject("You no longer have access to that organisation.") if org.nil?
+      return reject("You no longer have access to that organization.") if org.nil?
 
       server = org.servers.find_by(id: payload.server_id)
 

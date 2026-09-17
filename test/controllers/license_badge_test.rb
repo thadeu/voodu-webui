@@ -7,8 +7,8 @@ require "test_helper"
 #
 # Two words carry the answer, because that is the question people ask. The
 # states underneath are five: the extra three are exceptions somebody has to act
-# on, and they are told apart by colour and tooltip rather than by inventing
-# labels nobody would recognise. What each one must NOT do is lie about whether
+# on, and they are told apart by color and tooltip rather than by inventing
+# labels nobody would recognize. What each one must NOT do is lie about whether
 # the entitlements are currently granted — that is the whole point of the badge.
 class LicenseBadgeTest < ActionDispatch::IntegrationTest
   setup do
@@ -34,16 +34,16 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
     css_select("header span[title]").find { |node| node["title"].to_s.include?("icen") }
   end
 
-  test "the free tier is named on every page, not only on the licence screen" do
+  test "the free tier is named on every page, not only on the license screen" do
     Rails.application.config.x.license = LicenseToken.new(status: :none)
 
     a_page
 
     assert_equal "Free", badge.text.strip
-    assert_match(/no licence installed/, badge["title"])
+    assert_match(/no license installed/, badge["title"])
   end
 
-  test "a valid licence says Licensed and names the customer" do
+  test "a valid license says Licensed and names the customer" do
     stub_license(:valid)
 
     a_page
@@ -54,7 +54,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
   # Grace still GRANTS the entitlements, so calling it Free would be the lie.
   # The tooltip and the amber are what say "act on this".
-  test "a licence in grace still says Licensed" do
+  test "a license in grace still says Licensed" do
     stub_license(:grace, expires: 2.days.ago)
 
     a_page
@@ -66,7 +66,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
   # Lapsed does NOT grant them, so the opposite lie is the one to avoid: this
   # installation really is on the free tier now.
-  test "a lapsed licence says Free" do
+  test "a lapsed license says Free" do
     stub_license(:lapsed, expires: 90.days.ago)
 
     a_page
@@ -76,7 +76,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
     assert_match(/red/, badge["class"])
   end
 
-  test "a licence that cannot be verified says Free rather than claiming a plan" do
+  test "a license that cannot be verified says Free rather than claiming a plan" do
     Rails.application.config.x.license = LicenseToken.new(status: :invalid, reason: "bad signature")
 
     a_page
@@ -85,11 +85,11 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
     assert_match(/could not be verified/, badge["title"])
   end
 
-  # The badge renders on EVERY page, and resolving a licence verifies an RSA
+  # The badge renders on EVERY page, and resolving a license verifies an RSA
   # signature and queries the database. It reads what the controller already
   # memoised, so adding it must not have put a second resolution on every
   # request in the app.
-  test "the badge costs no extra licence resolution" do
+  test "the badge costs no extra license resolution" do
     Rails.application.config.x.license = nil
     calls = 0
     counter = Module.new do
@@ -102,7 +102,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
     a_page
 
-    assert_equal 1, calls, "expected one licence resolution per request, got #{calls}"
+    assert_equal 1, calls, "expected one license resolution per request, got #{calls}"
   end
 
   # At 360px the bar already holds a menu button, the server name, a search
@@ -136,7 +136,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
   end
 
   # The two menu rows answer the question that makes someone open them.
-  test "the account menu names the plan beside the licence row" do
+  test "the account menu names the plan beside the license row" do
     Rails.application.config.x.license = LicenseToken.new(status: :none)
 
     a_page
@@ -154,7 +154,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
   # Grace still grants the LICENSED table, so the row must not drop to free
   # while the limits in force are still the licensed ones.
-  test "a licence in grace still reads enterprise on that row" do
+  test "a license in grace still reads enterprise on that row" do
     stub_license(:grace, expires: 2.days.ago)
 
     a_page
@@ -162,7 +162,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
     assert_select "a[href='/ops/license'] span", text: "enterprise"
   end
 
-  test "a lapsed licence reads free on that row" do
+  test "a lapsed license reads free on that row" do
     stub_license(:lapsed, expires: 90.days.ago)
 
     a_page
@@ -180,7 +180,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
 
   # ── The word inside the account menu ───────────────────────────────
   #
-  # A different question from the badge above: not "is this licence healthy"
+  # A different question from the badge above: not "is this license healthy"
   # but "what governs my limits". The answer comes from a different place on
   # each kind of installation, and the reading that is right on one is useless
   # on the other.
@@ -200,7 +200,7 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
     response.body[%r{<span>License</span><span[^>]*>([^<]+)</span>}, 1]
   end
 
-  test "a self-hosted box names its licence" do
+  test "a self-hosted box names its license" do
     stub_license(:valid)
 
     assert_equal "enterprise", account_menu_chip
@@ -221,6 +221,6 @@ class LicenseBadgeTest < ActionDispatch::IntegrationTest
       claims: {"sub" => "hosted", "exp" => 1.year.from_now.to_i, "tier" => "unlimited"}
     )
 
-    assert_equal "free", account_menu_chip, "a hosted account with no plan licence is on free"
+    assert_equal "free", account_menu_chip, "a hosted account with no plan license is on free"
   end
 end

@@ -93,7 +93,7 @@ class Integrations::GithubWebhooksControllerTest < ActionDispatch::IntegrationTe
     assert_response :unauthorized
   end
 
-  # The signature covers the exact bytes GitHub sent. Verifying a re-serialised
+  # The signature covers the exact bytes GitHub sent. Verifying a re-serialized
   # hash instead would accept a body edited after it was signed.
   test "a body altered after signing is refused" do
     body = JSON.generate(push_payload)
@@ -123,7 +123,7 @@ class Integrations::GithubWebhooksControllerTest < ActionDispatch::IntegrationTe
     end
 
     assert_response :success
-    assert JSON.parse(response.body)["duplicate"], "the retry should be recognised"
+    assert JSON.parse(response.body)["duplicate"], "the retry should be recognized"
 
     # And one receipt, not two.
     assert_equal 1, Webhook::Receipt.where(external_id: "d-1").count

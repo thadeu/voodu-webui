@@ -31,7 +31,7 @@ class LicenseCheckJobTest < ActiveJob::TestCase
     Ops::License.activate!(token)
   end
 
-  test "no licence is nothing to do" do
+  test "no license is nothing to do" do
     assert_nothing_raised { LicenseCheckJob.perform_now }
   end
 
@@ -60,7 +60,7 @@ class LicenseCheckJobTest < ActiveJob::TestCase
     activate(exp: 1.day.from_now)
 
     travel_to (1.day + LicenseToken::GRACE_PERIOD + 1.day).from_now do
-      # No job has run in that window. The licence is lapsed anyway.
+      # No job has run in that window. The license is lapsed anyway.
       assert_equal :lapsed, LicenseToken.current.status
       assert Entitlements.current.free?
     end
@@ -90,7 +90,7 @@ class LicenseCheckJobTest < ActiveJob::TestCase
     assert_not_includes captured_log { LicenseCheckJob.perform_now }, "expires in"
   end
 
-  test "it is loud when a stored licence stops verifying" do
+  test "it is loud when a stored license stops verifying" do
     activate(exp: 365.days.from_now)
     # What an upgrade that rotated the signing key would look like.
     LicenseToken.instance_variable_set(:@public_key, OpenSSL::PKey::RSA.new(2048).public_key)

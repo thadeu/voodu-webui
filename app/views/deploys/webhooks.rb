@@ -11,7 +11,10 @@ class Views::Deploys::Webhooks < Views::Deploys::Shell
 
   def tab = :webhooks
 
-  def subtitle = "Every webhook this installation received, and what it did with each one."
+  # Named for the server: the table is fenced to what reached this box (see
+  # WebhookReceiptsData#scope_for_org), and a subtitle claiming the whole
+  # installation would promise rows the fence keeps out.
+  def subtitle = "Every webhook that reached #{@data.server&.name || "this server"}, and what it did with each one."
 
   def content
     div(data: {controller: "polling", polling_interval_value: DeploysController::POLL_MS}) do

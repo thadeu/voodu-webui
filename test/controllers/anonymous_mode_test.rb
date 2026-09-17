@@ -65,7 +65,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
   end
 
   # Two Puma workers can take a first request at the same instant. The unique
-  # index on email is the serialisation point; the workspace is built in the
+  # index on email is the serialization point; the workspace is built in the
   # same transaction, so a loser leaves nothing behind.
   test "concurrent resolution provisions one operator, not two" do
     threads = 4.times.map { Thread.new { User.local_operator } }
@@ -163,7 +163,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
     assert_equal 1, User.local_operator.active_orgs.count
   end
 
-  # The upgrade path this product is sold on: run the free tier, buy a licence,
+  # The upgrade path this product is sold on: run the free tier, buy a license,
   # paste it in. It was impossible — /ops/license carries no :org_id, so the
   # capability table had no org to answer about and refused the one operator
   # this installation has.
@@ -171,7 +171,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
   # Drops the test-only global default_url_options[:org_id]: a real /ops/*
   # request has no org in its path, and with the global left in place these
   # rendered while the browser got a 500.
-  test "the anonymous operator can open the licence screen they paid for" do
+  test "the anonymous operator can open the license screen they paid for" do
     pinned = Rails.application.routes.default_url_options.delete(:org_id)
 
     get "/ops/license"
@@ -195,7 +195,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
 
   # The account menu was hidden entirely in anonymous mode. It also carries the
   # License and SSO links, so hiding it left a free-tier operator with no way to
-  # reach the licence they had just paid for.
+  # reach the license they had just paid for.
   test "the account menu is shown in anonymous mode, with the same details" do
     pinned = Rails.application.routes.default_url_options.delete(:org_id)
 
@@ -225,7 +225,7 @@ class AnonymousModeTest < ActionDispatch::IntegrationTest
   # The address was renamed. An installation that ran an earlier build already
   # holds its whole workspace under the old one, so the row is adopted rather
   # than passed over — otherwise a second operator appears beside the first and
-  # the servers, PATs and licence history end up behind a sign-in anonymous mode
+  # the servers, PATs and license history end up behind a sign-in anonymous mode
   # never shows.
   test "an operator provisioned under the old address is adopted, not duplicated" do
     User.where(email: User::LOCAL_OPERATOR_EMAIL).destroy_all

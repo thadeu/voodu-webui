@@ -7,7 +7,7 @@
 # the query string, in the browser of whoever is logged in. Without this, a
 # signed-in attacker could paste SOMEBODY ELSE'S installation id and bind that
 # installation to their own org — and then read every repository the victim had
-# authorised, using a token we would mint for them ourselves.
+# authorized, using a token we would mint for them ourselves.
 #
 # So the flow starts here: we sign who is going, and refuse a return that does
 # not carry it back.
@@ -16,7 +16,7 @@
 # path that has no session yet, and would answer the same question — the
 # signature already proves we minted it, and the expiry already bounds it.
 class Integration::Github::State
-  # Long enough to authorise an App on GitHub, including reading the permission
+  # Long enough to authorize an App on GitHub, including reading the permission
   # screen and picking repositories out of a list. Short enough that a link
   # left in a browser history is not a working credential tomorrow.
   TTL = 30.minutes

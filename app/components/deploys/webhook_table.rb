@@ -75,8 +75,8 @@ class Components::Deploys::WebhookTable < Components::Base
     end
   end
 
-  # Only the three an operator is hunting for are coloured. A working
-  # installation is a wall of `accepted` and `ignored`, and colouring those
+  # Only the three an operator is hunting for are colored. A working
+  # installation is a wall of `accepted` and `ignored`, and coloring those
   # makes the two that matter harder to find, not easier.
   def variant_for(receipt)
     case receipt.status

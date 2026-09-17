@@ -162,8 +162,8 @@ class Components::Activity::FilterBar < Components::Base
   end
 
   # Icon only. The two dropdowns beside it are already 132px each; a third
-  # labelled control would push the strip past the table's own left edge on a
-  # laptop, and this one is a reset — recognisable without a word.
+  # labeled control would push the strip past the table's own left edge on a
+  # laptop, and this one is a reset — recognizable without a word.
   def clear_button
     a(
       href: activity_path,

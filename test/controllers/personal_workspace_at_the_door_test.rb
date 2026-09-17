@@ -19,7 +19,7 @@ class PersonalWorkspaceAtTheDoorTest < ActionDispatch::IntegrationTest
   OSS = LicenseToken.new(status: :none)
 
   # Restored, not merely set. Every one of these swaps the installation's
-  # licence, and the suite's own default is the thing left behind — the next
+  # license, and the suite's own default is the thing left behind — the next
   # test to read it as "how this box is licensed" would silently be measuring
   # the hosted tier.
   setup do

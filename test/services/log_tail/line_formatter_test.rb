@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Pins LogTail::LineFormatter — the shared serialiser behind the
+# Pins LogTail::LineFormatter — the shared serializer behind the
 # analytics export. ndjson keeps the FULL record; csv/txt project the
 # 5-field shape; csv stays RFC-4180 safe.
 class LogTail::LineFormatterTest < ActiveSupport::TestCase

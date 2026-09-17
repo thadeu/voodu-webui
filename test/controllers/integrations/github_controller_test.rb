@@ -7,7 +7,7 @@ require "test_helper"
 # The two halves are asymmetric on purpose and that is what most of this file
 # pins. `connect` is a normal server-scoped screen — the URL names the org, so
 # the usual capability check applies. `callback` has no org in its URL, because
-# GitHub redirects there knowing nothing about us, so EVERY authorisation it
+# GitHub redirects there knowing nothing about us, so EVERY authorization it
 # performs comes out of the signed state. A callback that trusted its query
 # string would let anyone who is logged in bind an installation id they read
 # off somebody else's screen.

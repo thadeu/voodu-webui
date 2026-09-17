@@ -4,7 +4,7 @@
 #
 #   - Outer V: gradient from a light brand green (#6ee7b7) to a
 #     deeper green (#059669). Sits at full opacity.
-#   - Inner v: smaller, dimmer (60% opacity), pure light grey. Adds
+#   - Inner v: smaller, dimmer (60% opacity), pure light gray. Adds
 #     the subtle depth the brand has in the inspiration.
 #
 # Ported 1:1 from the inspiration's `Icons.Logo` (icons.jsx). The
@@ -37,7 +37,7 @@ class Components::UI::Logo < Components::Base
         "stroke-linecap": "round", "stroke-linejoin": "round"
       )
 
-      # Inner v — dim grey for depth.
+      # Inner v — dim gray for depth.
       s.path(
         d: "M8.5 5 L12 12 L15.5 5",
         stroke: "#e8e8ee", "stroke-width": "2.2",

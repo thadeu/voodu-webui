@@ -58,7 +58,7 @@ module Integrations
     # verified? — the HMAC, over the raw body.
     #
     # `request.raw_post` and never `params`: the signature covers the exact
-    # bytes GitHub sent, and a re-serialised hash is not those bytes.
+    # bytes GitHub sent, and a re-serialized hash is not those bytes.
     #
     # Fails closed when no secret is configured. An installation that forgot
     # the secret must reject deliveries, not accept them unchecked — the second
@@ -115,7 +115,7 @@ module Integrations
       targets = Integration::Record.for_delivery("github", installation_id, repo)
 
       if targets.empty?
-        # THE STATE THAT USED TO VANISH. A repository authorised on GitHub but
+        # THE STATE THAT USED TO VANISH. A repository authorized on GitHub but
         # pointed at no server produces nothing, silently — and from the
         # outside that is indistinguishable from the webhook never arriving.
         reason = "no server listed #{repo}"

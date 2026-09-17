@@ -45,7 +45,7 @@ class Components::Layouts::Breadcrumb < Components::Base
   # Contract: whenever the request carries a `?tab=` query param, append
   # it as the current crumb and turn the section (previously-last) crumb
   # into a link to the tab-less page. Lives here — not in the per-page
-  # crumb builders — so EVERY breadcrumb gains the behaviour for free
+  # crumb builders — so EVERY breadcrumb gains the behavior for free
   # (e.g. /alerts?tab=destinations → Overview › Alerts › Destinations).
   def with_active_tab(crumbs)
     crumbs = Array(crumbs).compact.map(&:dup)

@@ -148,7 +148,7 @@ class Components::LogAnalytics::SurroundingModal < Components::Base
   end
 
   # scope_button — switching scope re-anchors at the default window
-  # (no expand carried), since the new pool is a fresh neighbourhood.
+  # (no expand carried), since the new pool is a fresh neighborhood.
   def scope_button(label, all_pods:, active:)
     button(
       type: "button",

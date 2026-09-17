@@ -27,13 +27,14 @@ class WebhookReceiptsData
   # calls `to_h` on it.
   KEYS = %i[status provider reference q range from until before after].freeze
 
-  def initialize(org:, id: nil, params: {})
+  def initialize(org:, server: nil, id: nil, params: {})
     @org = org
+    @server = server
     @id = id
     @params = narrow(params)
   end
 
-  attr_reader :org
+  attr_reader :org, :server
 
   def receipt
     return nil if @id.blank?
@@ -126,8 +127,39 @@ class WebhookReceiptsData
   # payload for a refused signature.
   #
   # A delivery that DID resolve an org is fenced to it.
+  #
+  # AND TO THE SERVER, when the screen is a server's. The installation is one
+  # per account, so every push GitHub sends reaches this table once — and
+  # showing the lot under a database box read as that box having a deploy
+  # history it never had. A delivery belongs on this server's tab when it
+  # produced a deployment here, or names a repository listed here (so a
+  # "nothing matched" for your own repository still shows up where you look
+  # for it). Two kinds stay visible on every server, because they belong to
+  # nobody and somebody has to see them: a delivery naming no repository at
+  # all (an `installation` event, a refused signature), and the trouble
+  # outcomes — no server listed it, refused, errored — which are exactly the
+  # rows an operator on the wrong tab needs to find.
   def scope_for_org
-    Webhook::Receipt.where(org_id: [nil, @org&.id])
+    rows = Webhook::Receipt.where(org_id: [nil, @org&.id])
+    return rows if @server.nil?
+
+    rows.where(
+      "webhook_receipts.reference IS NULL OR webhook_receipts.reference = '' " \
+      "OR webhook_receipts.status IN (:trouble) " \
+      "OR LOWER(webhook_receipts.reference) IN (:listed) " \
+      "OR webhook_receipts.id IN (SELECT webhook_receipt_id FROM deployments WHERE server_id = :server_id)",
+      trouble: Webhook::Receipt::TROUBLE, listed: listed_repos, server_id: @server.id
+    )
+  end
+
+  # listed_repos — the repositories that deploy to this server, lower-cased
+  # for the comparison above (GitHub is case-insensitive about names).
+  def listed_repos
+    @listed_repos ||= begin
+      integration = Integration::Record.active.find_by(org: @org, provider: "github")
+      names = integration ? integration.repos_for_server(@server).map { |entry| entry.repo.to_s.downcase } : []
+      names.presence || [""]
+    end
   end
 
   def scope

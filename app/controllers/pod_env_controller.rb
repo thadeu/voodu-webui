@@ -23,7 +23,7 @@
 #              shadows it, permanently, including across future images.
 #
 # The drawer says which one it is. They are the same form because they submit
-# the same request; they are labelled differently because they are not the
+# the same request; they are labeled differently because they are not the
 # same decision.
 class PodEnvController < ApplicationController
   # Matches PluginsController and the old config screen: setting a production

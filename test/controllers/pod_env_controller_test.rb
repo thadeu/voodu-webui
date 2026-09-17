@@ -570,7 +570,7 @@ class PodEnvControllerTest < ActionDispatch::IntegrationTest
   end
 
   # nil provenance is a THIRD state, not "everything is from the image". The
-  # drawer variant does not spend a round trip on it, and labelling rows there
+  # drawer variant does not spend a round trip on it, and labeling rows there
   # would be stating something never checked.
   test "the drawer variant of the pod page claims no origin it did not check" do
     get pod_path(org_id: ACME, server_key: @server.key, name: POD, embed: 1)

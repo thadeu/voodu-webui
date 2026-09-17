@@ -3,7 +3,7 @@ import { Controller } from "@hotwired/stimulus"
 import { escapeHtml } from "../lib/html.js"
 import { readJSON, writeJSON } from "../lib/storage.js"
 
-// CommandPaletteController — ⌘K palette behaviour.
+// CommandPaletteController — ⌘K palette behavior.
 //
 // Lifecycle (stale-while-revalidate):
 //   - connect: opportunistic prefetch — warm `this.commands` from

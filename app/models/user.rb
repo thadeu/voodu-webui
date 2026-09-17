@@ -83,7 +83,7 @@ class User < ApplicationRecord
 
   # What this address used to be. An installation that ran an earlier build
   # already holds a workspace under it — its org, its servers, its PATs, its
-  # licence history. Looking only for the current address would find none of
+  # license history. Looking only for the current address would find none of
   # that, provision a SECOND operator beside it, and strand the first behind a
   # sign-in that anonymous mode never shows. So the old address is adopted, not
   # ignored, and the row is renamed in place the first time it is seen.
@@ -106,7 +106,7 @@ class User < ApplicationRecord
   #
   # Idempotent under a race. Two Puma workers can take a first request at the
   # same instant; both would find nothing and both would create. The unique
-  # index on `email` is the serialisation point, and the workspace is built in
+  # index on `email` is the serialization point, and the workspace is built in
   # the SAME transaction — so the loser's account and org roll back with its
   # user instead of leaving a second orphan workspace behind.
   def self.local_operator
@@ -119,7 +119,7 @@ class User < ApplicationRecord
   # Both the seeded address and the seeded name have changed since earlier
   # builds. They are corrected ON THE ROW THAT ALREADY EXISTS rather than by
   # creating a new one: the whole workspace — the org, its servers, their PATs,
-  # the licence history — hangs off this row, and a second operator beside it
+  # the license history — hangs off this row, and a second operator beside it
   # would strand all of it behind a sign-in that anonymous mode never shows.
   #
   # Only values this code seeded are replaced, so anything a later feature sets

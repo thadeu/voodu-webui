@@ -215,6 +215,35 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
 
   # A valid file with no trigger deploys nothing, and that is the state most
   # likely to be mistaken for a bug. It gets the form that fixes it.
+  # The list is per server; the installation is per account. A database box
+  # must not present every app repository as if something were set up for
+  # it — those fold under "Available from GitHub", and the head counts only
+  # what deploys here.
+  test "repositories that do not deploy here fold under Available from GitHub" do
+    connect!(list_repo: false)
+    stub_github_repos_returning([REPO, "acme/other"])
+    integration = Integration::Record.active.find_by!(org: @org, provider: "github")
+    integration.add_repo!(repo: "acme/other", server_id: @server.id, trigger_id: "t9")
+
+    get deploys_repositories_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_select "details summary", text: /Available from GitHub/
+    assert_select "details a[title='#{REPO}']", count: 1
+    assert_select "details a[title='acme/other']", count: 0
+    assert_select "details[open]", count: 0
+  end
+
+  test "with nothing deploying here the available section opens by itself" do
+    connect!(list_repo: false)
+
+    get deploys_repositories_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_includes response.body, "Nothing deploys to this server yet."
+    assert_select "details[open] summary", text: /Available from GitHub/
+  end
+
   test "a repository with no trigger on the box offers to connect it" do
     connect!
     stub_manifests(files: [{"path" => ".voodu/api.yml", "spec" => {"name" => "API"}}])
@@ -241,7 +270,7 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
     assert_match(/activity trail/i, response.body)
   end
 
-  test "a repository with a trigger shows what the box authorised instead" do
+  test "a repository with a trigger shows what the box authorized instead" do
     connect!
     stub_manifests(files: [{"path" => ".voodu/api.yml", "spec" => {"name" => "API"}}])
     stub_triggers([{"id" => "t1", "repo" => REPO, "branch" => "main", "enabled" => true,
@@ -307,7 +336,7 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
   # ── preflight ──────────────────────────────────────────────────────────
 
   # The box's preflight takes a TRIGGER ID: the four questions are about an
-  # authorisation, so there is nothing to ask before one exists. Offering the
+  # authorization, so there is nothing to ask before one exists. Offering the
   # button beside "Not deploying here yet" put two contradictory things on
   # screen and made the operator click one to be told to use the other.
   test "a repository with no trigger is not offered a preflight" do
@@ -483,7 +512,7 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
   end
 
   # The box refuses an empty list too, but its message says "allow_scopes is
-  # required" and the person is looking at a field labelled Scopes.
+  # required" and the person is looking at a field labeled Scopes.
   test "connecting with no scopes is refused before the box is called" do
     connect!(list_repo: false)
     create = stub_trigger_create
@@ -507,7 +536,7 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
   end
 
   # Checked before the box is called: otherwise the trigger would be created
-  # on the server and the local write would raise, leaving an authorisation
+  # on the server and the local write would raise, leaving an authorization
   # nothing points at.
   test "connecting with no GitHub integration touches the box at all" do
     create = stub_trigger_create
@@ -593,10 +622,10 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
 
   # ── the cards ──────────────────────────────────────────────────────────
 
-  # Authorised-but-not-pointed-here is shown rather than hidden: "I gave you
+  # Authorized-but-not-pointed-here is shown rather than hidden: "I gave you
   # access and it is not here" is the confusing state, and the fix is one card
   # away.
-  test "a repository authorised on GitHub but not pointed at this server still gets a card" do
+  test "a repository authorized on GitHub but not pointed at this server still gets a card" do
     connect!(list_repo: false)
 
     get deploys_repositories_path(org_id: ACME, server_key: @server.key)
@@ -720,6 +749,14 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
 
     stub_github_repos
     integration
+  end
+
+  def stub_github_repos_returning(names)
+    WebMock.stub_request(:get, %r{https://api\.github\.com/installation/repositories})
+      .to_return(status: 200, body: {
+        total_count: names.size,
+        repositories: names.map { |name| {full_name: name, default_branch: "main", private: false} }
+      }.to_json, headers: {"Content-Type" => "application/json"})
   end
 
   def stub_github_repos

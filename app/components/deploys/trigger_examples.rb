@@ -149,7 +149,7 @@ class Components::Deploys::TriggerExamples < Components::Base
     render Components::UI::Callout.new(tone: :neutral) do
       span(class: "text-[11.5px] text-voodu-text-2") do
         plain "Committing the file is half of it. This repository also has to be "
-        plain "connected to this server above — that is what authorises the box to act on a push."
+        plain "connected to this server above — that is what authorizes the box to act on a push."
       end
     end
   end

@@ -4,9 +4,9 @@ require "test_helper"
 
 # Two windows that must never collapse into one.
 #
-# The last two tests are the reason this class exists at all: a licence narrows
+# The last two tests are the reason this class exists at all: a license narrows
 # what can be SEEN and must never narrow what is KEPT. Get that backwards and a
-# lapsed licence deletes a paying customer's history during the week their
+# lapsed license deletes a paying customer's history during the week their
 # renewal is on someone's desk.
 class RetentionTest < ActiveSupport::TestCase
   setup do
@@ -16,7 +16,7 @@ class RetentionTest < ActiveSupport::TestCase
 
   teardown do
     ENV["VOODU_RETENTION_DAYS"] = @previous
-    # The licence is process-wide state; a test that swaps it and walks away
+    # The license is process-wide state; a test that swaps it and walks away
     # poisons whatever runs next.
     Rails.application.config.x.license = @license
   end
@@ -55,7 +55,7 @@ class RetentionTest < ActiveSupport::TestCase
   test "serving is the smaller of kept and licensed" do
     ENV["VOODU_RETENTION_DAYS"] = "90"
 
-    assert_equal 30, Retention.serve_days(entitled(30)), "the licence is the binding side here"
+    assert_equal 30, Retention.serve_days(entitled(30)), "the license is the binding side here"
 
     ENV["VOODU_RETENTION_DAYS"] = "7"
 
@@ -70,7 +70,7 @@ class RetentionTest < ActiveSupport::TestCase
 
   # ── The rule, asserted directly ────────────────────────────────────────
 
-  test "the keep window is identical under every licence state" do
+  test "the keep window is identical under every license state" do
     ENV["VOODU_RETENTION_DAYS"] = "90"
     baseline = Retention.keep_days
 
@@ -78,11 +78,11 @@ class RetentionTest < ActiveSupport::TestCase
       Rails.application.config.x.license = LicenseToken.new(status: status, claims: {"exp" => 1.day.ago.to_i})
 
       assert_equal baseline, Retention.keep_days,
-        "a #{status} licence changed how long bytes are kept — that deletes customer data"
+        "a #{status} license changed how long bytes are kept — that deletes customer data"
     end
   end
 
-  test "a lapsed licence narrows what is served without touching what is kept" do
+  test "a lapsed license narrows what is served without touching what is kept" do
     ENV["VOODU_RETENTION_DAYS"] = "90"
     lapsed = Entitlements.new(LicenseToken.new(status: :lapsed, claims: {"exp" => 90.days.ago.to_i}))
 

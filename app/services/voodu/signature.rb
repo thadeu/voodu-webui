@@ -33,7 +33,7 @@ module Voodu
     VERSION = "v1"
 
     # Somebody else's clock is not ours to trust to the second. Same leeway the
-    # licence verifier uses.
+    # license verifier uses.
     SKEW = 300
 
     module_function
@@ -101,7 +101,7 @@ module Voodu
     # as `+` in one API and `%20` in another, and Go's url.Values sorts by key
     # but not by value for repeated keys.
     def canonical_query(query)
-      pairs = normalise_query(query)
+      pairs = normalize_query(query)
       return "" if pairs.empty?
 
       pairs
@@ -111,7 +111,7 @@ module Voodu
         .join("&")
     end
 
-    def normalise_query(query)
+    def normalize_query(query)
       case query
       when nil, "" then []
       when Hash then query.flat_map { |k, v| Array(v).map { |one| [k.to_s, one.to_s] } }

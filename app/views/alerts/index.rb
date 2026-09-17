@@ -66,7 +66,7 @@ class Views::Alerts::Index < Views::Base
   end
 
   # Request path + query string for the frame `src` — refetches the
-  # exact page the operator is on. Re-serialised via to_query rather
+  # exact page the operator is on. Re-serialized via to_query rather
   # than request.original_url so a non-default dev port doesn't turn
   # the reload into a cross-origin fetch (same rationale as the
   # metrics page).

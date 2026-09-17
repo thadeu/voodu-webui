@@ -12,14 +12,14 @@
 # and the page reads as an incident; four and the operator stops seeing any of
 # them. Tint is a volume control, and every block was set to loud.
 #
-# A 2px rule and a coloured glyph are enough to sort a page at a glance:
+# A 2px rule and a colored glyph are enough to sort a page at a glance:
 # "something to know", "something to fix", "something that worked". That is
 # what an operator is doing when they scan — sorting, not being alarmed.
 #
 # `danger` is the exception and keeps a faint fill. A deploy that failed is the
 # one thing on this dashboard that should catch the eye before it is read.
 class Components::UI::Callout < Components::Base
-  # [rule, icon colour, icon, background]
+  # [rule, icon color, icon, background]
   TONES = {
     info: ["border-l-voodu-blue", "text-voodu-blue", :InformationCircleOutline, nil],
     warning: ["border-l-voodu-amber", "text-voodu-amber", :ExclamationTriangleOutline, nil],

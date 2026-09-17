@@ -56,7 +56,7 @@ class Components::Logs::PodSelectorButton < Components::Base
   # on the stream filter; the trigger label stays "all pods" until
   # the operator opens the drawer again. Acceptable trade-off
   # vs. hydrating the label via JS just to keep it accurate at
-  # rest — the actual filter behaviour IS accurate.
+  # rest — the actual filter behavior IS accurate.
   def label
     n = unique_resource_names.size
     n.zero? ? "no pods" : "all pods"

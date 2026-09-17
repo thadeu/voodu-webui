@@ -513,7 +513,7 @@ export default class extends Controller {
     // measure natural widths as the starting point.
     if (haveWidths) {
       table.style.tableLayout = "fixed"
-      // A definite table width is what makes fixed layout actually honour the
+      // A definite table width is what makes fixed layout actually honor the
       // per-column widths (otherwise columns snap back to content width). The
       // table then scrolls-x inside the viewport when wider than it.
       table.style.width = `${this.tableWidth(columns)}px`
@@ -568,7 +568,7 @@ export default class extends Controller {
 
   // tableWidth — the sum of the visible columns' widths (px), plus the fixed
   // action column when present. Feeds the table's explicit width so fixed
-  // layout honours each <col>.
+  // layout honors each <col>.
   tableWidth(columns) {
     const base = (columns || this.visibleColumns()).reduce((sum, c) => sum + (this.colWidths[c] || 120), 0)
 

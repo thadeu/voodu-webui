@@ -6,7 +6,7 @@
 #
 # The capability table lives in Permissions; this is the enforcement half.
 # Views ask the same question through `allowed?` to decide what to draw — but
-# drawing is not deciding: a hidden button whose endpoint still honours the
+# drawing is not deciding: a hidden button whose endpoint still honors the
 # request is not a control.
 module Authorization
   extend ActiveSupport::Concern
@@ -37,7 +37,7 @@ module Authorization
   # `allowed?` reads Current.role, which answers for the org in the URL — and
   # /ops/license and /ops/sso have no :org_id segment by design, so Current.role
   # is nil there by construction and every check against it denies. Not a
-  # missing membership: there is no org for the question to be about. Licence
+  # missing membership: there is no org for the question to be about. License
   # and sign-in belong to the installation, not to one org in it.
   #
   # The trade this accepts, stated because it is not obvious: on a hosted

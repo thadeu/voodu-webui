@@ -11,7 +11,7 @@
 #   │   ╲___╱    ╲______________╱     │
 #   └──────────────────────────────────┘
 #
-# Hover behaviour:
+# Hover behavior:
 #   - One invisible vertical strip per point covers the chart.
 #   - mouseenter / mousemove fires the sparkline-tooltip Stimulus
 #     controller, which:

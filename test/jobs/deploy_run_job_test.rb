@@ -47,7 +47,7 @@ class DeployRunJobTest < ActiveJob::TestCase
   end
 
   # An empty `applied` is NOT a failure. Pushing a README change to a
-  # repository that watches `app/**` is the normal case, and colouring it red
+  # repository that watches `app/**` is the normal case, and coloring it red
   # trains operators to ignore red.
   test "a push that matched no trigger file is skipped, not failed" do
     deployment = queued
@@ -109,7 +109,7 @@ class DeployRunJobTest < ActiveJob::TestCase
   # decides what to skip once a job RUNS; this decides what may run at all.
   #
   # Pinned as a value because the lambda is one edit from returning something
-  # constant — and a constant key would serialise every deploy on the
+  # constant — and a constant key would serialize every deploy on the
   # installation behind one another, which looks like the feature working
   # until somebody notices staging waiting on production.
   test "the concurrency key is per server and repository" do

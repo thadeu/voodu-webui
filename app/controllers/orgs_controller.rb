@@ -28,7 +28,7 @@ class OrgsController < ApplicationController
 
   def create
     # The free tier is one org. Refusing CREATION is the whole enforcement —
-    # nothing existing is touched, so a licence that lapses leaves every org
+    # nothing existing is touched, so a license that lapses leaves every org
     # readable and only stops the next one. That asymmetry is deliberate: an
     # entitlement that could remove access would be a way to lock a customer
     # out of their own dashboard.
@@ -52,7 +52,7 @@ class OrgsController < ApplicationController
     #
     # This used to be a private `current_account` right here, shadowing the
     # parent's method of the same name with a different meaning. Same
-    # behaviour, one name per idea.
+    # behavior, one name per idea.
     @org = Org.new(org_params.merge(account: plan_account))
 
     # The creator gets an owner membership in the same transaction — membership
@@ -101,7 +101,7 @@ class OrgsController < ApplicationController
     limit = Entitlements.for(plan_account).limit(:orgs)
 
     "This installation is licensed for #{limit} #{"org".pluralize(limit)}. " \
-      "An Enterprise licence lifts the limit."
+      "An Enterprise license lifts the limit."
   end
 
   def grant_creator_ownership

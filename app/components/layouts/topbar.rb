@@ -65,21 +65,21 @@ class Components::Layouts::Topbar < Components::Base
   #
   # Two words, because that is the question: is this the free tier or a bought
   # one. The states underneath are five, and the extra three are exceptions an
-  # operator has to act on — so the WORD stays Free or Licensed and the colour
-  # and tooltip carry the rest. A licence in grace still says Licensed because
+  # operator has to act on — so the WORD stays Free or Licensed and the color
+  # and tooltip carry the rest. A license in grace still says Licensed because
   # the entitlements are still granted; a lapsed one says Free because they are
   # not, which is the fact that matters at a glance.
   #
-  # Reads the licence off `entitlements`, which the controller already memoised
+  # Reads the license off `entitlements`, which the controller already memoised
   # for this request. LicenseToken.current verifies an RSA signature and queries
   # the database, and the topbar renders on every page — resolving it a second
   # time here would put that on every request in the app.
   #
   # Hidden below the breakpoint: the bar is already tight at 360px, and the
-  # licence screen carries the whole story anyway.
+  # license screen carries the whole story anyway.
   def license_badge
     # Nothing to tell a hosted customer. This badge reports the health of the
-    # INSTALLATION's licence — ours, on the hosted service — and its two words
+    # INSTALLATION's license — ours, on the hosted service — and its two words
     # are Free and Licensed, neither of which describes anything they bought.
     # What they did buy is their plan, and the account menu carries that.
     return if Current.unlimited?
@@ -121,11 +121,11 @@ class Components::Layouts::Topbar < Components::Base
     license = entitlements.license
 
     case license.status
-    when :none then "Free tier — no licence installed"
+    when :none then "Free tier — no license installed"
     when :valid then "Licensed to #{license.customer}"
-    when :grace then "Licence for #{license.customer} expired — still granted, for now"
-    when :lapsed then "Licence for #{license.customer} lapsed — back on the free tier"
-    when :invalid then "Licence could not be verified — running as free tier"
+    when :grace then "License for #{license.customer} expired — still granted, for now"
+    when :lapsed then "License for #{license.customer} lapsed — back on the free tier"
+    when :invalid then "License could not be verified — running as free tier"
     end
   end
 
@@ -139,7 +139,7 @@ class Components::Layouts::Topbar < Components::Base
   # that the address is a handle rather than a person, and that "Sign out" leads
   # to a door which is not the way in. Both still hold; neither is a reason to
   # withhold the whole menu. It also carries License and SSO, so hiding it left
-  # a free-tier operator with no way to reach the licence they had just bought.
+  # a free-tier operator with no way to reach the license they had just bought.
   # Sign out is what goes, not the menu.
   def account_menu
     return if current_user.nil?
@@ -256,7 +256,7 @@ class Components::Layouts::Topbar < Components::Base
   # signed-in operator looks for anything that is not about the server in front
   # of them. They are in the sidebar too, and that is not redundancy: this menu
   # does not exist in anonymous mode, which is exactly the free tier that would
-  # be going looking for the licence screen.
+  # be going looking for the license screen.
   # Each row names its own current setting. Without it the menu offered two
   # doors and no way to tell whether either needed opening — "am I on the free
   # tier" and "does this installation ask anyone to sign in" is the reason
@@ -275,14 +275,14 @@ class Components::Layouts::Topbar < Components::Base
   # What governs THIS viewer's limits, which is a different question on each
   # kind of installation — so the word comes from a different place on each.
   #
-  # Self-hosted, the licence on the box is the answer: free or enterprise.
+  # Self-hosted, the license on the box is the answer: free or enterprise.
   # Hosted, the box is `unlimited` and saying so would be true and useless — the
   # customer shares it with every other tenant and it caps nothing they have.
   # What caps them is the plan their account bought, so that is what shows.
   #
   # Both readings come off `entitlements`, which the controller already resolved
   # against the account in scope, so this word cannot disagree with the limits
-  # actually in force — including inside a licence's grace period, where the
+  # actually in force — including inside a license's grace period, where the
   # entitlements are still granted and the word still says so.
   def plan_badge
     license = entitlements.license
