@@ -183,7 +183,7 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
         fact("Repository", @deployment.repo)
         fact(@deployment.tag? ? "Tag" : "Branch", @deployment.branch.presence)
         fact("Pushed by", @deployment.sender.presence || @deployment.pusher.presence)
-        changed_files_fact
+        fact("Files changed", @deployment.changed_files&.to_s)
         fact("Started", timestamp(@deployment.started_at))
         fact("Finished", timestamp(@deployment.finished_at))
         fact("Took", duration)
@@ -196,45 +196,13 @@ class Views::Deploys::Deployment < Views::Deploys::Shell
     end
   end
 
-  # Known from the webhook, so it is on the screen from the first second,
-  # while the box is still building: the count, and the paths themselves
-  # when the push carried them. A push GitHub truncated, or a tag, has the
-  # count from the head commit and no list. Folded: forty paths would push
-  # the Started / Took facts off the first screen, and the count is the
-  # glance; the list is the answer to "why did this file fire".
-  def changed_files_fact
-    paths = @deployment.changed_paths
-
-    return fact("Files changed", @deployment.changed_files&.to_s) if paths.empty?
-
-    fact("Files changed") do
-      details(class: "group/changed") do
-        summary(class: "cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden " \
-                       "inline-flex items-center gap-1.5 hover:text-voodu-text") do
-          render Icon::ChevronRightOutline.new(class: "w-3 h-3 shrink-0 transition-transform group-open/changed:rotate-90")
-          span { "#{paths.size} #{"file".pluralize(paths.size)}" }
-        end
-
-        ul(class: "mt-1.5 mb-0 pl-0 list-none flex flex-col gap-0.5") do
-          paths.each do |path|
-            li(class: "font-voodu-mono text-[11.5px] text-voodu-text-2 break-all") { path }
-          end
-        end
-      end
-    end
-  end
-
-  # A row of the Details grid. With a block, the block draws the value — for
-  # the one fact that is a list rather than a word.
-  def fact(label, value = nil, &block)
-    return if value.blank? && block.nil?
+  def fact(label, value)
+    return if value.blank?
 
     div(class: "flex flex-col vmd:flex-row vmd:items-baseline gap-0.5 vmd:gap-3 " \
                "px-3.5 py-2 border-b border-voodu-border") do
       span(class: "text-[11px] uppercase tracking-[0.06em] text-voodu-muted vmd:w-32 shrink-0") { label }
-      span(class: "text-[12.5px] text-voodu-text-2 min-w-0 break-words") do
-        block ? yield : plain(value)
-      end
+      span(class: "text-[12.5px] text-voodu-text-2 min-w-0 break-words") { value }
     end
   end
 

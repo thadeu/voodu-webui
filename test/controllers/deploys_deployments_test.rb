@@ -484,36 +484,19 @@ class DeploysDeploymentsTest < ActionDispatch::IntegrationTest
     assert_not_equal 200, response.status
   end
 
-  # What the webhook already told us is on the screen before the box answers:
-  # the paths the push touched, and a placeholder that does not read as a
-  # verdict while the build is still running.
-  test "a running deploy lists the changed paths and waits rather than reporting nothing applied" do
+  # While the box is still building, the empty resources card must not read
+  # as a verdict.
+  test "a running deploy waits rather than reporting nothing applied" do
     deployment = Deployment.create!(
       org: @org, server: @server, repo: "acme/api", ref: "refs/heads/main", sha: "abc1234abc",
-      status: "running", started_at: 1.minute.ago,
-      details: {"changed_files" => 2, "changed_paths" => ["apps/pwa/src/App.tsx", "apps/pwa/README.md"]}
+      status: "running", started_at: 1.minute.ago, details: {"changed_files" => 1}
     )
 
     get deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
 
     assert_response :success
-    assert_select "details.group\\/changed li", count: 2
-    assert_includes response.body, "apps/pwa/src/App.tsx"
     assert_includes response.body, "Waiting for #{@server.name} to build and apply"
     assert_not_includes response.body, "Nothing was applied."
-  end
-
-  test "without a path list the count still shows" do
-    deployment = Deployment.create!(
-      org: @org, server: @server, repo: "acme/api", ref: "refs/tags/v1", sha: "abc1234abc",
-      status: "running", started_at: 1.minute.ago, details: {"changed_files" => 3}
-    )
-
-    get deploys_deployment_path(org_id: ACME, server_key: @server.key, id: deployment.id)
-
-    assert_response :success
-    assert_select "details.group\\/changed", count: 0
-    assert_includes response.body, "Files changed"
   end
 
   private
