@@ -247,6 +247,10 @@ class Deployment < ApplicationRecord
   # reached the box.
   def log = details["log"].to_s
 
+  # The paths the push touched, from the webhook — empty when it could not
+  # say (a tag, a push GitHub truncated). See Integration::Github::Push.
+  def changed_paths = Array(details["changed_paths"]).map(&:to_s)
+
   def finished? = %w[succeeded failed skipped held].include?(status)
 
   # The short SHA every screen shows. Seven characters is what GitHub prints,
