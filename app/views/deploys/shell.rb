@@ -55,10 +55,61 @@ class Views::Deploys::Shell < Views::Base
   end
 
   # page_head, not `header` — that is a Phlex HTML tag method.
+  #
+  # Once GitHub is connected the head carries the three things an operator
+  # otherwise had to find on github.com by hand: the installation's page
+  # (add or remove repositories), the account picker (connect another
+  # account — one org may deploy from several), and the uninstall, which
+  # lives in that same page's danger zone. Stacked on narrow screens, labels
+  # hidden so the icons still fit beside the title.
   def page_head
-    div(class: "flex flex-col gap-1") do
-      h1(class: "text-[17px] font-semibold text-voodu-text") { "Deploys" }
-      p(class: "text-[12.5px] text-voodu-muted") { subtitle } if subtitle
+    div(class: "flex flex-col vmd:flex-row vmd:items-start gap-3") do
+      div(class: "flex flex-col gap-1 min-w-0 flex-1") do
+        h1(class: "text-[17px] font-semibold text-voodu-text") { "Deploys" }
+        p(class: "text-[12.5px] text-voodu-muted") { subtitle } if subtitle
+      end
+
+      github_actions if github_integration
+    end
+  end
+
+  # github_integration — the org's GitHub connection, when the tab's data
+  # object carries one (Repositories does; the Deployments and Webhooks tabs
+  # hand in a different data object and show the head without the links).
+  def github_integration
+    return nil unless @data.respond_to?(:connected?) && @data.connected?
+
+    @data.integration
+  end
+
+  def github_actions
+    integration = github_integration
+
+    div(class: "flex items-center gap-2 shrink-0") do
+      render Components::UI::Button.new(
+        tag: :a, href: integration.settings_url, target: "_blank", rel: "noopener",
+        variant: :ghost, size: :sm, title: "Add or remove repositories on GitHub"
+      ) do
+        render Icon::ArrowTopRightOnSquareOutline.new(class: "w-3.5 h-3.5")
+        span(class: "hidden vmd:inline") { "Repositories on GitHub" }
+      end
+
+      render Components::UI::Button.new(
+        tag: :a, href: connect_github_path,
+        variant: :ghost, size: :sm, title: "Connect another GitHub account"
+      ) do
+        render Icon::PlusOutline.new(class: "w-3.5 h-3.5")
+        span(class: "hidden vmd:inline") { "Connect another" }
+      end
+
+      render Components::UI::Button.new(
+        tag: :a, href: integration.settings_url, target: "_blank", rel: "noopener",
+        variant: :ghost, size: :sm, title: "Uninstall the app on GitHub (danger zone at the bottom of that page)",
+        class: "text-voodu-red hover:text-voodu-red"
+      ) do
+        render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
+        span(class: "hidden vmd:inline") { "Uninstall" }
+      end
     end
   end
 end

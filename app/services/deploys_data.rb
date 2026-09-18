@@ -139,6 +139,21 @@ class DeploysData
     return @integration if defined?(@integration)
 
     @integration = Integration::Record.active.find_by(org: org, provider: "github")
+    backfill_html_url!(@integration)
+    @integration
+  end
+
+  # backfill_html_url! — rows connected before html_url was captured point
+  # the head's GitHub links at the personal-account form of the settings
+  # URL, which is wrong for an organization's installation. One lookup, once,
+  # best-effort: a GitHub hiccup leaves the fallback in place for this render.
+  def backfill_html_url!(record)
+    return if record.nil? || record.html_url.present?
+
+    url = github.installation(record.installation_id)["html_url"]
+    record.update!(html_url: url) if url.present?
+  rescue Integration::Github::Client::Error, Integration::Github::AppJwt::MissingCredentials => e
+    Rails.logger.warn("[github] could not backfill html_url for installation #{record.installation_id}: #{e.class}")
   end
 
   def connected? = integration.present?

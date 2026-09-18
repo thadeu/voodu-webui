@@ -39,10 +39,17 @@ class GithubSettings
     # Where an operator sends a customer to authorize the App. Derived, never
     # stored: a stored URL is one more thing that can disagree with the App it
     # names.
+    #
+    # `select_target`, not `installations/new`: once the App is installed on
+    # ANY account the person can reach, `new` skips the account picker and
+    # lands on that installation's settings — so the second org of an
+    # operator who had already connected their personal GitHub could never
+    # pick the company's. `select_target` always asks "where?", listing the
+    # installed account (configure) beside the others (install).
     def install_url
       return nil if app_slug.blank?
 
-      "https://github.com/apps/#{app_slug}/installations/new"
+      "https://github.com/apps/#{app_slug}/installations/select_target"
     end
   end
 

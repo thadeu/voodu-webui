@@ -234,6 +234,31 @@ class DeploysControllerTest < ActionDispatch::IntegrationTest
     assert_select "details[open]", count: 0
   end
 
+  # The head carries the GitHub-side chores once connected: the installation
+  # page (repositories, and the uninstall in its danger zone) and the account
+  # picker for a second account. Without a connection there is nothing to
+  # manage, and the only affordance is Connect.
+  test "the head links to the installation on GitHub, to connect another account, and to uninstall" do
+    connect!(list_repo: false)
+    integration = Integration::Record.active.find_by!(org: @org, provider: "github")
+    integration.update!(html_url: "https://github.com/organizations/acme/settings/installations/4242")
+
+    get deploys_repositories_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_select "a[href='https://github.com/organizations/acme/settings/installations/4242'][target=_blank]", minimum: 2
+    assert_select "a[href=?]", connect_github_path(org_id: ACME, server_key: @server.key), text: /Connect another/
+    assert_includes response.body, "Uninstall"
+  end
+
+  test "the head has no GitHub links before a connection exists" do
+    get deploys_repositories_path(org_id: ACME, server_key: @server.key)
+
+    assert_response :success
+    assert_select "a", text: /Connect another/, count: 0
+    refute_includes response.body, "Uninstall"
+  end
+
   test "with nothing deploying here the available section opens by itself" do
     connect!(list_repo: false)
 

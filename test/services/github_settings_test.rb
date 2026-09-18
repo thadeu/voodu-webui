@@ -51,7 +51,7 @@ class GithubSettingsTest < ActiveSupport::TestCase
     assert resolved.configured?
     assert_equal :database, resolved.source
     assert_equal "123456", resolved.app_id
-    assert_equal "https://github.com/apps/voodu-deploy/installations/new", resolved.install_url
+    assert_equal "https://github.com/apps/voodu-deploy/installations/select_target", resolved.install_url
   end
 
   # THE safety rule. A wrong private key saved through a screen breaks every

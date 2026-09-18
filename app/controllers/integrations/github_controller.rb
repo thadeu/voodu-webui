@@ -136,22 +136,28 @@ module Integrations
 
       integration.name ||= "GitHub"
       integration.status = "active"
-      integration.account_login = account_login_for(installation_id) || integration.account_login
+
+      details = installation_details(installation_id)
+      integration.account_login = details[:account_login] || integration.account_login
+      integration.html_url = details[:html_url] || integration.html_url
 
       integration.save!
       integration
     end
 
-    # account_login_for — whose GitHub account this is, for the screen.
+    # installation_details — whose GitHub account this is, and where its
+    # settings page lives (repositories, uninstall), for the screen.
     #
     # Best-effort: the id alone is enough to deploy, and failing the whole
     # connection because a cosmetic lookup timed out would turn a working
     # integration into an error the operator cannot act on.
-    def account_login_for(installation_id)
-      Integration::Github::Client.new.installation(installation_id).dig("account", "login")
+    def installation_details(installation_id)
+      data = Integration::Github::Client.new.installation(installation_id)
+
+      {account_login: data.dig("account", "login"), html_url: data["html_url"]}
     rescue Integration::Github::Client::Error, Integration::Github::AppJwt::MissingCredentials => e
       Rails.logger.warn("[github] could not read installation #{installation_id}: #{e.class}")
-      nil
+      {}
     end
 
     # reject — every failure lands on a page the operator can act from, with a

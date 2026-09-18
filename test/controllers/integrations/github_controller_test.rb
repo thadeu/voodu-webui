@@ -44,7 +44,7 @@ class Integrations::GithubControllerTest < ActionDispatch::IntegrationTest
     get connect_github_path(org_id: ACME, server_key: @server.key)
 
     assert_response :redirect
-    assert_match %r{\Ahttps://github\.com/apps/voodu-test/installations/new\?state=},
+    assert_match %r{\Ahttps://github\.com/apps/voodu-test/installations/select_target\?state=},
       response.location
 
     state = CGI.unescape(response.location.split("state=").last)
@@ -97,6 +97,26 @@ class Integrations::GithubControllerTest < ActionDispatch::IntegrationTest
     assert_equal "4242", integration.installation_id
     assert_predicate integration, :active?
     assert_redirected_to server_root_path(org_id: ACME, server_key: @server.key)
+  end
+
+  test "callback keeps the installation's GitHub settings page for the Deploys head" do
+    stub_request(:get, "https://api.github.com/app/installations/4242").to_return(
+      status: 200,
+      body: {account: {login: "acme"}, html_url: "https://github.com/organizations/acme/settings/installations/4242"}.to_json,
+      headers: {"Content-Type" => "application/json"}
+    )
+
+    get github_integration_callback_path, params: {state: valid_state, installation_id: "4242"}
+
+    integration = Integration::Record.last
+    assert_equal "acme", integration.account_login
+    assert_equal "https://github.com/organizations/acme/settings/installations/4242", integration.settings_url
+  end
+
+  test "settings_url falls back to the personal-account form when html_url was never captured" do
+    record = Integration::Record.new(external_id: "77")
+
+    assert_equal "https://github.com/settings/installations/77", record.settings_url
   end
 
   test "callback re-binding the same account updates the row instead of adding one" do

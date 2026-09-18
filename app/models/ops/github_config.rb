@@ -60,7 +60,7 @@ class Ops::GithubConfig < ApplicationRecord
   def install_url
     return nil if app_slug.blank?
 
-    "https://github.com/apps/#{app_slug}/installations/new"
+    "https://github.com/apps/#{app_slug}/installations/select_target"
   end
 
   private

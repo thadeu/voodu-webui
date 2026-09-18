@@ -28,6 +28,17 @@ class Integration::Record < ApplicationRecord
   # account_login is display: whose GitHub account the App is installed on.
   # `repos` is read through the reader below, which hands back value objects.
   store_accessor :config, :account_login
+  # html_url is GitHub's settings page for THIS installation — where the
+  # operator adds or removes repositories and, in its danger zone, uninstalls.
+  # Captured at connect time from the installations API; the URL differs for
+  # a personal account and an organization, so it is not derivable here.
+  store_accessor :config, :html_url
+
+  # settings_url — the installation's page on GitHub. Falls back to the
+  # personal-account form for rows recorded before html_url was captured.
+  def settings_url
+    html_url.presence || "https://github.com/settings/installations/#{external_id}"
+  end
 
   # The GitHub word for `external_id`, where it reads better. The column stays
   # provider-agnostic because GitLab calls this something else.
