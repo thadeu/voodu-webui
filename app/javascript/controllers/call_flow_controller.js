@@ -30,6 +30,7 @@ export default class extends Controller {
   MIN_W = 260
   MIN_K = 0.25
   MAX_K = 4
+  FIT_WIDTH = 0.95
 
   connect() {
     this.currentIndex = this.focusValue || 0
@@ -178,6 +179,29 @@ export default class extends Controller {
     this.applyTransform()
   }
 
+  // fitToWidth — the READING fit: scale the diagram until it spans FIT_WIDTH of
+  // the ladder container (the raw SIP panel is a sibling, so it is already out
+  // of the measure), and let the height overflow — a long call is scrolled, not
+  // squeezed. fitToView's "contain" makes an 89-message call a thin unreadable
+  // strip; this one makes every label legible in one click. Top-aligned on the
+  // INVITE, unless a message is selected — then that row is kept in view.
+  fitToWidth() {
+    this.setViewport()
+
+    const w = this.natW()
+
+    if (!w || !this.cw) return
+
+    const kFit = (this.cw * this.FIT_WIDTH) / w
+
+    this.k = Math.min(Math.max(kFit, this.MIN_K), this.MAX_K)
+    this.tx = (this.cw - w * this.k) / 2
+    this.ty = 16
+    this.applyTransform()
+
+    if (this.currentIndex > 0) this.panIndexIntoView(this.currentIndex)
+  }
+
   applyTransform() {
     if (this.hasCanvasTarget) {
       this.canvasTarget.setAttribute("transform", `matrix(${this.k},0,0,${this.k},${this.tx},${this.ty})`)
@@ -262,6 +286,10 @@ export default class extends Controller {
 
   fit() {
     this.fitToView()
+  }
+
+  fitWidth() {
+    this.fitToWidth()
   }
 
   // ── selection ─────────────────────────────────────────────────────

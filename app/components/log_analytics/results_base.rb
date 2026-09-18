@@ -61,6 +61,7 @@ class Components::LogAnalytics::ResultsBase < Components::Base
       q: data.search.presence,
       regex: (data.regex? ? "1" : nil),
       pods: data.pods.presence,
+      scope: (data.scope_all? ? "all" : nil),
       from: data.from_iso,
       until: data.until_iso,
       page: page

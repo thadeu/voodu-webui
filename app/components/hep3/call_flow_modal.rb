@@ -65,7 +65,7 @@ class Components::Hep3::CallFlowModal < Components::Base
   end
 
   # ladder_toolbar — a non-scrolling strip above the diagram: a canvas hint,
-  # the zoom controls (−/fit/+), and a Refresh button (re-fetches THIS call in
+  # the zoom controls (−/fit/fit-width/+), and a Refresh button (re-fetches THIS call in
   # place so the operator can watch a live call grow without a page reload).
   def ladder_toolbar
     div(class: "flex items-center gap-1.5 px-3 py-1.5 border-b border-voodu-border shrink-0") do
@@ -76,6 +76,7 @@ class Components::Hep3::CallFlowModal < Components::Base
       div(class: "flex items-center ml-auto") do
         zoom_button("call-flow#zoomOut", :MagnifyingGlassMinusOutline, "Zoom out")
         zoom_button("call-flow#fit", :ArrowsPointingOutOutline, "Fit to view")
+        zoom_button("call-flow#fitWidth", :ArrowsRightLeftOutline, "Fit to width")
         zoom_button("call-flow#zoomIn", :MagnifyingGlassPlusOutline, "Zoom in")
       end
 
@@ -136,7 +137,7 @@ class Components::Hep3::CallFlowModal < Components::Base
     end
   end
 
-  # zoom_button — one segmented control in the zoom group (−/fit/+). Borders
+  # zoom_button — one segmented control in the zoom group (−/fit/fit-width/+). Borders
   # collapse into a single group via -ml-px on the middle/last.
   def zoom_button(action, icon, title)
     button(

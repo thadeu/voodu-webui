@@ -34,6 +34,21 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   teardown { clear_server_logs }
 
+  test "reads nothing until a pod scope is chosen" do
+    seed("web", [[@base, "first"]])
+    window = {from: iso(@base - 1.second), until: iso(@base + 10.seconds)}
+
+    unscoped = LogSearchData.new(server: @server, params: window)
+
+    assert_not unscoped.scope_chosen?
+    assert_empty unscoped.rows
+    assert_equal 0, unscoped.matched
+    assert_not unscoped.has_more?
+
+    assert LogSearchData.new(server: @server, params: window.merge(scope: "all")).scope_chosen?
+    assert_equal 1, LogSearchData.new(server: @server, params: window.merge(pods: ["web"])).rows.size
+  end
+
   test "filters by time window and returns newest-first" do
     seed("web", [
       [@base, "first"],
@@ -240,8 +255,10 @@ class LogSearchDataTest < ActiveSupport::TestCase
 
   private
 
+  # scope: "all" by default — these tests pin the query shaping; the opt-in
+  # scope has its own test above.
   def search(params)
-    LogSearchData.new(server: @server, params: params)
+    LogSearchData.new(server: @server, params: {scope: "all"}.merge(params))
   end
 
   # with_page_size — temporarily shrink PAGE_SIZE so pagination is

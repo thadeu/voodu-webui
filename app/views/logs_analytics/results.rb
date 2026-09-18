@@ -6,11 +6,12 @@
 # rendered inline by LogAnalytics::Page on the initial full-page load, so
 # the markup matches and Turbo's frame match succeeds.
 class Views::LogsAnalytics::Results < Views::Base
-  def initialize(data:)
+  def initialize(data:, pods: [])
     @data = data
+    @pods = pods
   end
 
   def view_template
-    render Components::LogAnalytics::Results.new(data: @data)
+    render Components::LogAnalytics::Results.new(data: @data, pods: @pods)
   end
 end

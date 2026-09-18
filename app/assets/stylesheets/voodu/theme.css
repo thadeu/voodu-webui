@@ -1497,3 +1497,12 @@ input[type="search"]::-webkit-search-results-decoration {
   appearance: none;
   display: none;
 }
+
+/* Filter panel open (log-analytics#setFilterOpen puts `.la-filtering` on the
+ * scroller): hide the rows, Load more and the empty state, but keep the sticky
+ * column header (it hosts the toolbar). The rows stay in the DOM, so closing
+ * the panel is instant and keeps the loaded pages. */
+.la-filtering .log-list.la-list > :not(.log-header),
+.la-filtering .la-empty {
+  display: none;
+}

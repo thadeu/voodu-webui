@@ -65,7 +65,7 @@ class LogSearchData
 
   # @param server [Server]
   # @param params [Hash] the operator's filter choices. Recognized keys
-  #   (symbol or string): :range, :from, :until, :q, :regex, :pods.
+  #   (symbol or string): :range, :from, :until, :q, :regex, :pods, :scope.
   def initialize(server:, params: {})
     @server = server
     @params = normalize_params(params)
@@ -102,6 +102,19 @@ class LogSearchData
 
   def all_pods?
     pods.empty?
+  end
+
+  # scope_all? / scope_chosen? — the scan is OPT-IN. A bare /logs/analytics
+  # used to read "no pods" as "every pod" and paid a full-warehouse scan on
+  # first paint. Now the operator must choose: specific pods (`pods[]`) or an
+  # explicit `scope=all`. Until then the page shows the scope gate and load!
+  # never touches the disk.
+  def scope_all?
+    @params[:scope].to_s == "all"
+  end
+
+  def scope_chosen?
+    pods.any? || scope_all?
   end
 
   def search
@@ -184,6 +197,7 @@ class LogSearchData
 
   def load!
     return if @loaded
+    return load_unscoped! unless scope_chosen?
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     collected = []
@@ -212,6 +226,16 @@ class LogSearchData
     # reads honestly rather than hiding that more lines matched.
     @all = @all.first(query_limit) if query_limit
     @elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+    @loaded = true
+  end
+
+  # load_unscoped! — the defensive empty shape for the gate state: zero
+  # rows, zero cost, so every reader (rows / matched / has_more?) stays safe.
+  def load_unscoped!
+    @all = []
+    @matched = 0
+    @truncated = false
+    @elapsed_ms = 0
     @loaded = true
   end
 

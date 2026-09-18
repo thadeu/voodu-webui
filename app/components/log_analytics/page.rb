@@ -32,8 +32,8 @@ class Components::LogAnalytics::Page < Components::Base
         log_analytics_until_value: @data.until_iso
       }
     ) do
-      render Components::LogAnalytics::FilterBar.new(data: @data, pods: @pods)
-      render Components::LogAnalytics::Results.new(data: @data)
+      render Components::LogAnalytics::FilterBar.new(data: @data)
+      render Components::LogAnalytics::Results.new(data: @data, pods: @pods)
 
       surrounding_host
     end

@@ -22,7 +22,8 @@ class LogsAnalyticsController < ApplicationController
       render Views::LogsAnalytics::MoreRows.new(data: data), layout: false
     elsif data && frame.present?
       # Filter-bar re-query — swap just the results table.
-      render Views::LogsAnalytics::Results.new(data: data), layout: false
+      # Pods ride along: the frame carries the filter panel (pod cards).
+      render Views::LogsAnalytics::Results.new(data: data, pods: pods_for_picker), layout: false
     else
       render Views::LogsAnalytics::Index.new(
         **dashboard_context.merge(
@@ -170,6 +171,7 @@ class LogsAnalyticsController < ApplicationController
       :q,
       :regex,
       :page,
+      :scope,
       pods: []
     ).to_h.symbolize_keys
   end

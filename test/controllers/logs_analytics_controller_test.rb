@@ -37,8 +37,33 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_match 'data-controller="log-analytics"', @response.body
     assert_match "logs-analytics-results", @response.body
     assert_match 'data-controller="query-editor"', @response.body, "the DSL query editor renders"
-    assert_match "filterPanel", @response.body, "the filter drawer panel renders inside the form"
+    assert_no_match "filterPanel", @response.body, "the filter drawer is retired — the scope panel is the filter"
+    assert_match "log-analytics#refresh", @response.body, "the toolbar actions stay visible before a scope is chosen"
     assert_no_match 'name="regex"', @response.body, "the legacy regex checkbox is retired (the DSL carries /regex/ inline)"
+  end
+
+  test "index without a pod scope shows the gate and scans nothing" do
+    seed("web", [[@base, "GET /health 200"]])
+
+    get logs_analytics_path(server_key: @key),
+      params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds)}
+
+    assert_response :success
+    assert_match 'data-controller="log-scope-gate"', @response.body, "the scope gate renders in the results body"
+    assert_no_match "GET /health 200", @response.body, "no log line is read before a scope is chosen"
+    assert_no_match " matched", @response.body, "the summary strip waits for a real query"
+  end
+
+  test "a scoped query keeps the filter panel, hidden, with the applied pod checked" do
+    seed("web", [[@base, "GET /health 200"]])
+
+    get logs_analytics_path(server_key: @key),
+      params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), pods: ["web"]}
+
+    assert_response :success
+    assert_match "GET /health 200", @response.body
+    assert_match 'data-required="false"', @response.body, "the panel is on demand once a scope exists"
+    assert_match 'name="pods[]" value="web"', @response.body, "the applied scope rides the form as a hidden field"
   end
 
   test "frame request renders only the results table and applies the search" do
@@ -48,7 +73,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
     ])
 
     get logs_analytics_path(server_key: @key),
-      params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid"},
+      params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds), q: "callid", scope: "all"},
       headers: {"Turbo-Frame" => "logs-analytics-results"}
 
     assert_response :success
@@ -60,7 +85,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
 
   test "empty result set renders the empty state" do
     get logs_analytics_path(server_key: @key),
-      params: {range: "custom", from: iso(@base), until: iso(@base + 1.second), q: "nothing-matches-this"},
+      params: {range: "custom", from: iso(@base), until: iso(@base + 1.second), q: "nothing-matches-this", scope: "all"},
       headers: {"Turbo-Frame" => "logs-analytics-results"}
 
     assert_response :success
@@ -72,7 +97,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
       seed("web", (0..6).map { |i| [@base + i.seconds, "line-#{i}"] })
 
       get logs_analytics_path(server_key: @key),
-        params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds), page: 2},
+        params: {range: "custom", from: iso(@base - 1.second), until: iso(@base + 30.seconds), page: 2, scope: "all"},
         headers: {"Turbo-Frame" => "la-page-2"}
 
       assert_response :success
@@ -227,7 +252,7 @@ class LogsAnalyticsControllerTest < ActionDispatch::IntegrationTest
   # analytics_window — a custom range bracketing the seeded @base, so the
   # full-page render actually lists the seeded rows (not an empty window).
   def analytics_window(**extra)
-    {range: "custom", from: iso(@base - 1.second), until: iso(@base + 10.seconds)}.merge(extra)
+    {range: "custom", scope: "all", from: iso(@base - 1.second), until: iso(@base + 10.seconds)}.merge(extra)
   end
 
   def seed(pod, lines)

@@ -14,14 +14,16 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
 
   FRAME_ID = "logs-analytics-results"
 
-  def initialize(data:)
+  # pods — the server's pod list, for the ScopeGate cards.
+  def initialize(data:, pods: [])
     @data = data
+    @pods = Array(pods)
   end
 
   def view_template
     turbo_frame_tag(FRAME_ID, class: "relative flex-1 min-h-0 flex flex-col gap-2.5") do
       loading_overlay
-      summary_bar
+      summary_bar if @data.scope_chosen?
       truncation_note if @data.truncated?
 
       # Always render the table chrome (column header carries the toolbar —
@@ -105,7 +107,7 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
   # empty_state — centered message rendered BELOW the always-present column
   # header (inside the table), so the toolbar stays reachable on 0 matches.
   def empty_state
-    div(class: "flex flex-col items-center justify-center gap-2 text-center px-6 py-20") do
+    div(class: "la-empty flex flex-col items-center justify-center gap-2 text-center px-6 py-20") do
       render Icon::MagnifyingGlassOutline.new(class: "w-6 h-6 text-voodu-muted-2")
       div(class: "text-[13px] text-voodu-text-2") { "No log lines match this query." }
       div(class: "text-[11.5px] text-voodu-muted") { "Widen the time window, clear the search, or check the pod scope." }
@@ -136,7 +138,11 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
           end
         end
 
-        empty_state if @data.empty?
+        # Always present: REQUIRED (visible) until a scope is chosen, then
+        # hidden and toggled by the toolbar funnel.
+        render Components::LogAnalytics::ScopeGate.new(data: @data, pods: @pods)
+
+        empty_state if @data.scope_chosen? && @data.empty?
       end
       column_visibility_popover
     end
@@ -170,19 +176,19 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
     end
   end
 
-  # filter_button — opens the query drawer (FilterBar#filter_panel). Lights
-  # accent when a query is active so the toolbar shows a filter is on even
-  # before the operator reads the chip in the summary bar.
+  # filter_button — toggles the ScopeGate panel over the rows. Lights accent
+  # when a query or a pod scope is active (or while the panel is open), so the
+  # toolbar shows a filter is on before the operator reads the summary chip.
   def filter_button
-    active = @data.search.present?
+    active = @data.search.present? || @data.pods.any?
 
     button(
       type: "button",
       "aria-label": "Edit filter query",
-      "aria-expanded": "false",
+      "aria-expanded": (!@data.scope_chosen?).to_s,
       data: {action: "click->log-analytics#toggleFilter", tooltip: "Filter"},
       class: tokens(
-        "inline-flex items-center justify-center w-6 h-6 transition-colors",
+        "inline-flex items-center justify-center w-6 h-6 transition-colors aria-expanded:text-voodu-accent-2 aria-expanded:bg-voodu-accent-dim",
         active ? "text-voodu-accent-2 bg-voodu-accent-dim" : "text-voodu-muted hover:text-voodu-text hover:bg-voodu-surface-2"
       )
     ) do
@@ -361,7 +367,8 @@ class Components::LogAnalytics::Results < Components::LogAnalytics::ResultsBase
       regex: (@data.regex? ? "1" : nil),
       from: @data.from_iso,
       until: @data.until_iso,
-      pods: @data.pods.presence
+      pods: @data.pods.presence,
+      scope: (@data.scope_all? ? "all" : nil)
     )
   end
 
