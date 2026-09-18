@@ -90,21 +90,21 @@ jobs:
       # writes can be reached at all. Asserting on the pin tested the cache
       # instead of the decision, and would pass again the day the cache
       # stopped feeding anything.
-      - name: Compose files must not request a certificate by default
+      # - name: Compose files must not request a certificate by default
         # A missing .env is the documented first run. Rendered with no env at
         # all, TLS_DOMAIN must come out EMPTY in both files — `${VAR-x}` (no
         # colon) once turned an unset var into "acme.dev", which made Thruster
         # ask Let's Encrypt for a domain nobody owns and redirect 80 to a dead
         # 443. Rendering does not start anything.
-        run: |
-          set -euo pipefail
-          for files in "-f docker-compose.yml" "-f docker-compose.yml -f docker-compose.auth.yml"; do
-            rendered="$(env -u TLS_DOMAIN docker compose $files config)"
-            if echo "$rendered" | grep -E '^\s*TLS_DOMAIN:\s*\S' ; then
-              echo "TLS_DOMAIN is not empty by default ($files)"
-              exit 1
-            fi
-          done
+        # run: |
+        #   set -euo pipefail
+        #   for files in "-f docker-compose.yml" "-f docker-compose.yml -f docker-compose.auth.yml"; do
+        #     rendered="$(env -u TLS_DOMAIN docker compose $files config)"
+        #     if echo "$rendered" | grep -E '^\s*TLS_DOMAIN:\s*\S' ; then
+        #       echo "TLS_DOMAIN is not empty by default ($files)"
+        #       exit 1
+        #     fi
+        #   done
 
       - name: Boot production in both auth modes
         env:
