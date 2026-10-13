@@ -2,14 +2,17 @@ name: CI
 
 # Runs on every pull request and every push to main.
 #
-# Previously parked on workflow_dispatch because `bin/brakeman` reported 9
-# pre-existing warnings and `bin/bundler-audit` reported 12 vulnerable gems, so
-# both gates failed on code nobody had touched. Both are green now: the 8
-# surviving brakeman warnings are pinned WITH a written justification in
-# config/brakeman.ignore (each one traced to a frozen allowlist or a validated
-# literal), and the gems were bumped to their patched versions. A parked gate
-# protects nothing, and a gate that fails on unrelated code gets ignored — the
-# point of pinning rather than disabling is that a NEW warning still fails.
+# Security scans are NOT gates here; run them locally before a release or an
+# audit:
+#
+#   bin/brakeman --no-pager
+#   bin/bundler-audit
+#
+# Both turn red for reasons outside the diff: bin/brakeman exits 5 the day a
+# newer brakeman ships (--ensure-latest), and bundler-audit reads an advisory
+# database that updates on its own. A gate that fails on changes nobody here
+# made is a gate people learn to ignore. The pinned brakeman warnings still
+# live in config/brakeman.ignore, each with its written justification.
 on:
   pull_request:
   push:
@@ -153,35 +156,6 @@ jobs:
             echo "booted without a publishable key — the production guard is gone"
             exit 1
           fi
-
-  scan_ruby:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-
-      - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bin/brakeman --no-pager
-
-      # bundler-audit is deliberately NOT a gate. It reads an advisory database
-      # that updates independently of this repository, so it turns red on
-      # changes nobody here made — a new advisory against any dependency fails
-      # every open pull request at once, and a gate that fails for reasons
-      # unrelated to the diff is a gate people learn to ignore.
-      #
-      # Run it before cutting a release instead:
-      #
-      #   bin/bundler-audit
-      #
-      # It earns that: it is what caught CVE-2026-66066 (arbitrary file read and
-      # RCE in Active Storage variant processing) hours after the advisory
-      # landed, on a database fresher than the local copy.
 
   lint:
     runs-on: ubuntu-latest

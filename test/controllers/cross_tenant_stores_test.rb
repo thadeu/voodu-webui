@@ -117,15 +117,20 @@ class CrossTenantStoresTest < ActionDispatch::IntegrationTest
 
   # ── The NDJSON log tree (files on disk, tenant = a directory name) ──────
 
+  # The viewer scans nothing until a scope is chosen (the ScopeGate), so an
+  # unscoped request proves nothing either way. Both scopes are asked: every
+  # pod, and the victim's pod by its exact name — both servers run a "web".
   test "another org's log lines never reach the log viewer" do
     seed_log(@gamma, "web", FOREIGN)
     seed_log(@alpha, "web", OWN)
 
-    get logs_analytics_path(org_id: ACME, server_key: @alpha.key)
+    [{scope: "all"}, {pods: ["web"]}].each do |scope|
+      get logs_analytics_path(org_id: ACME, server_key: @alpha.key, **scope)
 
-    assert_response :success
-    assert_includes @response.body, OWN, "the attacker's own lines must still read back"
-    assert_not_includes @response.body, FOREIGN
+      assert_response :success
+      assert_includes @response.body, OWN, "the attacker's own lines must still read back (#{scope})"
+      assert_not_includes @response.body, FOREIGN, "another org's line leaked (#{scope})"
+    end
   end
 
   test "another org's log lines never reach the search stream" do
