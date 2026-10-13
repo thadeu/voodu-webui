@@ -10,6 +10,9 @@
 #     render Components::UI::Tooltip.new(label: "Logs", group: "nav")
 #   end
 #
+# Pass a block instead of `label:` when the tip needs more than one line
+# (the sidebar's server card: name, host, status). The block owns the body.
+#
 # ## The accessibility, which is not what it looks like
 #
 # THE TOOLTIP IS `aria-hidden`, and that is the correct wiring rather than a
@@ -66,18 +69,18 @@ class Components::UI::Tooltip < Components::Base
   # because the pages using this already have an unnamed `group` doing
   # something else — the sidebar's is the collapsed state — and sharing it
   # would pop every tooltip on the page at once.
-  def initialize(label:, group:, side: :right, visible_when: nil)
+  def initialize(group:, label: nil, side: :right, visible_when: nil)
     @label = label
     @group = group
     @side = SIDES.key?(side) ? side : :right
     @visible_when = visible_when
   end
 
-  def view_template
+  def view_template(&content)
     position, arrow_position, arrow_borders = SIDES.fetch(@side)
 
     span(role: "tooltip", "aria-hidden": "true", class: shell_class(position)) do
-      plain @label
+      content ? yield : plain(@label)
 
       # A rotated square, not a CSS border-triangle, so the 1px border carries
       # around the point. A border-triangle cannot have a border, and next to a

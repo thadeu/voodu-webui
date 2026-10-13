@@ -150,14 +150,11 @@ class Components::Layouts::Sidebar < Components::Base
       },
       aria: {label: "Sidebar"}
     ) do
-      # Turbo Stream subscriptions — one per visible server so the
-      # status dot in each row flips live when its state-sync job
-      # completes (success → :online, failure → :offline). The
-      # current_server's subscription also covers the topbar
-      # status pill (same channel; broadcast carries both targets).
-      recent_servers_to_render.each do |server|
-        turbo_stream_from "server-state-#{server.id}"
-      end
+      # Turbo Stream subscription for the current server only — it is
+      # the one row the sidebar draws, so its status dot flips live when
+      # the state-sync job completes. The same channel also covers the
+      # topbar status pill (the broadcast carries both targets).
+      turbo_stream_from "server-state-#{@current_server.id}" if @current_server
 
       brand
       servers_section
@@ -232,12 +229,14 @@ class Components::Layouts::Sidebar < Components::Base
         end
       end
 
-      list = recent_servers_to_render
-      if list.empty?
+      # Only the selected server + "See all servers". The topbar switcher
+      # already lists every server; a second list here read as a rival
+      # picker and pushed the nav down.
+      if recent_servers_to_render.empty?
         empty_servers
       else
         div(class: "flex flex-col gap-px") do
-          list.each { |server| server_row(server) }
+          server_row(@current_server) if @current_server
           see_all_link
         end
       end
@@ -289,16 +288,26 @@ class Components::Layouts::Sidebar < Components::Base
   #   Expanded:  [● dot] [name + host meta]
   #   Collapsed: [2-letter avatar with status-tinted background]
   #
-  # The `title` attribute supplies a native tooltip when collapsed
-  # so the operator can confirm which server they're hovering.
+  # Collapsed, the avatar is two letters, so a drawn tooltip carries the
+  # name, host and status. No `title`: the OS tip would pop a second, plainer
+  # copy under the drawn one.
   def server_row(server)
+    # `group/nav`, same reason as nav_item: the bare `group` is the aside's
+    # collapsed state, and hovering this row must not read as hovering it.
+    div(class: "relative group/nav") do
+      server_link(server)
+      server_tooltip(server)
+    end
+  end
+
+  def server_link(server)
     selected = @current_server && server.id == @current_server.id
     status = (server.status || :stopped).to_sym
     letters = avatar_letters_for(server.name)
 
     a(
       href: server_root_path(org_id: server.org.short_id, server_key: server.key),
-      title: "#{server.name} · #{server.host}",
+      "aria-label": "#{server.name} · #{server.host} · #{status}",
       class: tokens(
         "flex items-center gap-2.5 p-2 min-h-11 border transition-colors",
         "vmd:group-data-[collapsed]:justify-center vmd:group-data-[collapsed]:p-1 vmd:group-data-[collapsed]:min-h-0 vmd:group-data-[collapsed]:gap-0",
@@ -344,10 +353,47 @@ class Components::Layouts::Sidebar < Components::Base
       # its live status, and the accent matches the row's expanded
       # selected state for consistent "this is where you are" cue.
       span(
-        class: "hidden vmd:group-data-[collapsed]:inline-flex items-center justify-center w-8 h-8 font-voodu-mono text-[10.5px] font-semibold uppercase tracking-tight",
+        class: "hidden vmd:group-data-[collapsed]:inline-flex relative items-center justify-center w-8 h-8 font-voodu-mono text-[10.5px] font-semibold uppercase tracking-tight",
         style: avatar_style_for(status, selected: selected),
         aria: {hidden: "true"}
-      ) { letters }
+      ) do
+        plain letters
+
+        orbit_border if selected
+      end
+    end
+  end
+
+  # server_tooltip — collapsed only; expanded, the row already shows the name
+  # and host. Status is the value at render time (the live dot lives in the
+  # row; a second element with its broadcast id would split the updates).
+  def server_tooltip(server)
+    status = (server.status || :stopped).to_sym
+
+    render Components::UI::Tooltip.new(
+      group: "nav",
+      visible_when: "hidden vmd:group-data-[collapsed]:block"
+    ) do
+      span(class: "flex flex-col gap-0.5 py-0.5") do
+        span(class: "font-voodu-mono text-[12px] font-semibold text-voodu-text") { server.name }
+        span(class: "font-voodu-mono text-[11px] text-voodu-muted") { server.host.to_s }
+
+        span(class: "inline-flex items-center gap-1.5 text-[11px] text-voodu-text-2") do
+          render Components::UI::StatusDot.new(status: status)
+          plain status.to_s.capitalize
+        end
+      end
+    end
+  end
+
+  # orbit_border — dashed ring around the selected avatar in the collapsed
+  # rail. With the server list gone the tile sits alone above the nav and
+  # read as one more nav icon; the ring marks it as "the server you are on".
+  # An SVG rect, not a CSS dashed border: a border cannot move its dashes,
+  # and rotating the whole box would spin the square itself.
+  def orbit_border
+    svg(viewBox: "0 0 36 36", class: "voodu-orbit-border absolute -inset-0.5 pointer-events-none", "aria-hidden": "true") do |s|
+      s.rect(x: "0.5", y: "0.5", width: "35", height: "35", fill: "none", pathLength: "100")
     end
   end
 
@@ -371,12 +417,12 @@ class Components::Layouts::Sidebar < Components::Base
   # expanded-state's accent border so collapsed/expanded both read
   # as "this is your active context" without ambiguity.
   def avatar_style_for(status, selected: false)
-    # Selected: a FILLED accent tile — the only filled avatar in the rail, so
-    # the active server pops. (The theme accent is green, same hue as the
-    # online-status tint, so a filled unselected tile would read identically —
-    # hence unselected tiles drop the fill entirely.)
+    # Selected: the tinted tile the active nav item uses (accent-dim fill,
+    # accent-2 letters). It was a solid accent fill with white letters, which
+    # is too low-contrast to read the two letters; the dashed orbit ring now
+    # marks the selection, so the tile no longer needs the solid fill.
     if selected
-      return "background: var(--voodu-accent); color: var(--voodu-on-accent); " \
+      return "background: var(--voodu-accent-dim); color: var(--voodu-accent-2); " \
              "box-shadow: inset 0 0 0 1px var(--voodu-accent-line);"
     end
 

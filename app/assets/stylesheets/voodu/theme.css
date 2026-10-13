@@ -840,6 +840,28 @@ body.log-cols-resizing * {
   to { transform: rotate(360deg); }
 }
 
+/*  voodu-orbit — the dashed ring on the selected server avatar in the
+ *  collapsed sidebar. 16 dashes, 4 per side (pathLength 100, 6.25-unit
+ *  dash period). One lap (-100 is 16 whole periods, so it ends where 0
+ *  starts) in the first 30% of a 5s
+ *  cycle, then rest — a periodic "you are here" cue, not constant motion.
+ */
+@keyframes voodu-orbit {
+  0%        { stroke-dashoffset: 0; }
+  30%, 100% { stroke-dashoffset: -100; }
+}
+
+.voodu-orbit-border rect {
+  stroke: var(--voodu-accent);
+  stroke-width: 1;
+  stroke-dasharray: 3.75 2.5;
+  animation: voodu-orbit 30s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voodu-orbit-border rect { animation: none; }
+}
+
 :root {
   /* ── Backgrounds (deep → surfaces) ── */
   --voodu-bg:        #0a0d14;
