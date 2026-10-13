@@ -53,6 +53,12 @@ type Config struct {
 	// steady-state windows stay ~Interval.
 	LogBackfillSeconds int
 
+	// LogTailLines is the per-pod `tail` sent with every log fetch (default
+	// 10000). It stops dockerd from decoding a pod's whole log file on each
+	// poll; a bigger burst still loses nothing (the poller widens the read).
+	// 0 sends no tail: the old full read, as an escape hatch.
+	LogTailLines int
+
 	// DigestRoot is the parent of storage/poller/<streamType>/. Defaults
 	// to the same directory tree the logs poller uses so all on-disk
 	// artefacts sit under one storage root.
@@ -107,6 +113,7 @@ func loadConfig() (*Config, error) {
 	// "did my deploy land" tolerates.
 	activityInterval := envIntSeconds("POLLER_ACTIVITY_INTERVAL_SECONDS", 30, 5)
 	logBackfill := envIntSeconds("POLLER_LOG_BACKFILL_SECONDS", 24*60*60, 60)
+	logTailLines := envIntSeconds("POLLER_LOG_TAIL_LINES", poller.DefaultLogTailLines, 0)
 
 	// All three lanes default ON. The binary owns logs, state and
 	// metrics — there is no Ruby pipeline behind it any more, so
@@ -143,6 +150,7 @@ func loadConfig() (*Config, error) {
 		ActivityEnabled:         activityEnabled,
 		ActivityIntervalSeconds: activityInterval,
 		LogBackfillSeconds:      logBackfill,
+		LogTailLines:            logTailLines,
 		DigestRoot:              digestRoot,
 	}, nil
 }
@@ -366,6 +374,7 @@ func main() {
 				seen["logs|"+isl.ID] = true
 				p := poller.NewServerPoller(isl, cfg.StorageDir, logsInterval, logBackfill, writer, state)
 				p.Verbose = cfg.Verbose
+				p.TailLines = cfg.LogTailLines
 				// Live credentials — the PAT copied into isl is a snapshot
 				// and goes stale the moment the operator rotates it.
 				p.Voodu = client.NewLiveVooduClient(creds.fn(isl.ID))

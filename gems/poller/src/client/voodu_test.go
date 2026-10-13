@@ -132,10 +132,10 @@ func TestParsePodNames(t *testing.T) {
 	}
 }
 
-// FetchPodLogs must hit the per-pod endpoint with NO tail cap (so docker
-// returns the whole since-window), the pod name path-escaped, and since as
-// RFC3339Nano.
-func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
+// FetchPodLogs must hit the per-pod endpoint with the pod name
+// path-escaped, since as RFC3339Nano and the tail cap next to it (without
+// it dockerd decodes the pod's whole log file on every poll).
+func TestFetchPodLogs_SendsSinceAndTail(t *testing.T) {
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -156,7 +156,7 @@ func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
 	c := NewVooduClient(srv.URL, "pat-1")
 	since := time.Date(2026, 6, 18, 2, 45, 0, 0, time.UTC)
 
-	body, err := c.FetchPodLogs(context.Background(), "fsw-freeswitch.0", since)
+	body, err := c.FetchPodLogs(context.Background(), "fsw-freeswitch.0", since, 10000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,8 +167,8 @@ func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
 	}
 
 	q, _ := url.ParseQuery(gotQuery)
-	if q.Has("tail") {
-		t.Errorf("must NOT send tail (would cap the window): %q", gotQuery)
+	if q.Get("tail") != "10000" {
+		t.Errorf("tail=%q, want 10000: %q", q.Get("tail"), gotQuery)
 	}
 	if q.Get("follow") != "false" {
 		t.Errorf("follow=%q, want false", q.Get("follow"))
@@ -181,7 +181,8 @@ func TestFetchPodLogs_NoTailFullWindow(t *testing.T) {
 	}
 }
 
-// A zero since omits the param entirely (controller default), still no tail.
+// A zero since omits the param entirely (controller default); a zero tail
+// omits tail too, so the controller reads the full window.
 func TestFetchPodLogs_ZeroSinceOmitsParam(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +192,7 @@ func TestFetchPodLogs_ZeroSinceOmitsParam(t *testing.T) {
 
 	c := NewVooduClient(srv.URL, "pat-1")
 
-	body, err := c.FetchPodLogs(context.Background(), "p", time.Time{})
+	body, err := c.FetchPodLogs(context.Background(), "p", time.Time{}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

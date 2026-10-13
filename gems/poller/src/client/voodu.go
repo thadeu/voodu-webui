@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -116,26 +117,32 @@ func (c *VooduClient) FetchLogs(ctx context.Context, since time.Time) (io.ReadCl
 	return resp.Body, nil
 }
 
-// FetchPodLogs GETs `/api/pat/v1/pods/<pod>/logs?since=...&timestamps=true&follow=false`
+// FetchPodLogs GETs `/api/pat/v1/pods/<pod>/logs?since=...&tail=...&timestamps=true&follow=false`
 // for ONE pod and returns the body for line-by-line streaming. Caller MUST
 // Close() it.
 //
-// Unlike FetchLogs (the legacy multiplexed call), this sends NO `tail` cap.
-// The controller omits `--tail` when the param is absent, so docker returns
-// the FULL window since `since` instead of just the most-recent 500 lines —
-// that's what lets a restart backfill an offline gap. Because the window is
-// per-pod (each pod resumes from its OWN watermark), a quiet pod can't drag a
-// chatty pod's `since` backwards, so steady-state stays a ~poll-interval
-// window. A zero `since` omits the param (controller default).
+// `tail` > 0 is sent with `since`: docker takes the newest `tail` lines
+// first, THEN drops the ones older than `since`. That keeps dockerd from
+// decoding the pod's whole log file on every poll, but a window holding
+// more than `tail` lines comes back cut — the poller proves coverage and
+// widens (see poller.fetchWindow). `tail` <= 0 omits the param: the
+// controller then reads the FULL window since `since`.
+//
+// A zero `since` omits the param (controller default).
 //
 // Lines come back as `<ts> <body>` with no `[pod]` prefix (single-pod
 // stream) — the caller already knows the pod and attaches it.
-func (c *VooduClient) FetchPodLogs(ctx context.Context, pod string, since time.Time) (io.ReadCloser, error) {
+func (c *VooduClient) FetchPodLogs(ctx context.Context, pod string, since time.Time, tail int) (io.ReadCloser, error) {
 	q := url.Values{}
 	q.Set("follow", "false")
 	q.Set("timestamps", "true")
+
 	if !since.IsZero() {
 		q.Set("since", since.UTC().Format(time.RFC3339Nano))
+	}
+
+	if tail > 0 {
+		q.Set("tail", strconv.Itoa(tail))
 	}
 
 	cr := c.current()

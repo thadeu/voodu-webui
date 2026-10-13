@@ -2,6 +2,7 @@ package poller
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -51,6 +52,16 @@ type ServerPoller struct {
 	// ~Interval regardless. Wired from `POLLER_LOG_BACKFILL_SECONDS`.
 	MaxBackfill time.Duration
 
+	// TailLines is the `tail` sent with every per-pod log fetch. Docker's
+	// json-file reader has no time index: `since` alone makes dockerd decode
+	// EVERY line of every rotated file and drop the old ones (a 71MB
+	// FreeSWITCH log cost ~2s of daemon CPU on each tick). With `tail` it
+	// reads the newest file backwards and stops after N lines, so the cost
+	// follows N, not the file size. See fetchWindow for the no-loss rules.
+	// Zero sends no tail (the old full read). Wired from
+	// `POLLER_LOG_TAIL_LINES`.
+	TailLines int
+
 	// Per-pod state, created lazily as pod names appear in the roster.
 	//   rings    — content-hash dedup ring (boundary disambiguation only).
 	//   floors   — max ts persisted per pod: the dedup floor AND the resume
@@ -76,6 +87,15 @@ const DedupRingCapacity = 5000
 // fetch is small (a poll-interval window) except the rare backfill.
 const maxPodConcurrency = 8
 
+// DefaultLogTailLines is TailLines when the operator does not set one.
+// 10k lines covers a busy FreeSWITCH between two 15s ticks with room to
+// spare; a bigger burst still loses nothing (fetchWindow widens).
+const DefaultLogTailLines = 10000
+
+// tailEscalation widens the second tailed attempt after a burst outgrew
+// TailLines, before fetchWindow gives up and reads without tail.
+const tailEscalation = 8
+
 // NewServerPoller wires together an server descriptor and the shared
 // dependencies. Does NOT spawn the goroutine — call Run.
 func NewServerPoller(server client.Server, root string, interval, maxBackfill time.Duration, w *Writer, m Metrics) *ServerPoller {
@@ -84,6 +104,7 @@ func NewServerPoller(server client.Server, root string, interval, maxBackfill ti
 		Root:        root,
 		Interval:    interval,
 		MaxBackfill: maxBackfill,
+		TailLines:   DefaultLogTailLines,
 		Voodu:       client.NewVooduClient(server.Endpoint, server.PAT),
 		Writer:      w,
 		Metrics:     m,
@@ -311,7 +332,7 @@ func (p *ServerPoller) pollPod(ctx context.Context, pod string) (written, scanne
 	floor := p.dedupFloor(pod)
 	since := p.sinceFor(floor)
 
-	body, err := p.Voodu.FetchPodLogs(ctx, pod, since)
+	body, err := p.fetchWindow(ctx, pod, since)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return
@@ -407,6 +428,83 @@ func (p *ServerPoller) pollPod(ctx context.Context, pod string) (written, scanne
 	}
 
 	return
+}
+
+// fetchWindow returns the pod's log lines from `since` on, oldest first,
+// with a tailed read whenever that provably holds the whole window.
+//
+// Docker applies `tail` BEFORE `since`: a tailed answer is the newest
+// TailLines lines that are not older than `since`. In a burst (more lines
+// since the floor than the tail) the oldest part of the window is cut, so a
+// tailed answer is only used when one of these proves it complete:
+//
+//   - it holds a line at or before `since`: docker's since is inclusive, so
+//     on a steady-state poll the floor line itself comes back;
+//   - it is empty: none of the newest lines reach `since`, so nothing does;
+//   - a wider tail brought no more lines than the narrower one: the
+//     container has nothing older to give (a new pod with a short log).
+//
+// Otherwise it retries with TailLines×tailEscalation, and at last reads
+// without tail (the old full read). A burst costs one slow fetch, never a
+// lost line.
+func (p *ServerPoller) fetchWindow(ctx context.Context, pod string, since time.Time) (io.ReadCloser, error) {
+	if p.TailLines <= 0 {
+		return p.Voodu.FetchPodLogs(ctx, pod, since, 0)
+	}
+
+	prevLines := -1
+
+	for _, tail := range []int{p.TailLines, p.TailLines * tailEscalation} {
+		buf, lines, reached, err := p.fetchTailed(ctx, pod, since, tail)
+		if err != nil {
+			return nil, err
+		}
+
+		if reached || lines == 0 || lines == prevLines {
+			return io.NopCloser(bytes.NewReader(buf)), nil
+		}
+
+		prevLines = lines
+	}
+
+	log.Printf(
+		"[poller] %s/%s: more than %d lines since %s, reading the full window",
+		p.Server.ID, pod, p.TailLines*tailEscalation, since.UTC().Format(time.RFC3339Nano),
+	)
+
+	return p.Voodu.FetchPodLogs(ctx, pod, since, 0)
+}
+
+// fetchTailed reads one tailed answer into memory and reports how many
+// lines it holds and whether any of them is at or before `since` (the
+// proof that the tail reached the start of the window).
+func (p *ServerPoller) fetchTailed(ctx context.Context, pod string, since time.Time, tail int) (buf []byte, lines int, reached bool, err error) {
+	body, err := p.Voodu.FetchPodLogs(ctx, pod, since, tail)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	defer body.Close()
+
+	buf, err = io.ReadAll(body)
+	if err != nil {
+		return nil, 0, false, fmt.Errorf("read tailed logs: %w", err)
+	}
+
+	for _, raw := range bytes.Split(buf, []byte("\n")) {
+		if len(raw) == 0 {
+			continue
+		}
+
+		lines++
+
+		_, ts, _, ok := client.ParseLine(raw)
+
+		if ok && !ts.IsZero() && !ts.After(since) {
+			reached = true
+		}
+	}
+
+	return buf, lines, reached, nil
 }
 
 // sinceFor maps a pod's dedup floor to the `since` it fetches from:
