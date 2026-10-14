@@ -94,13 +94,19 @@ class HepMessage < HepRecord
 
   # calls_page — one row per call (grouped by call_key), most-recently-
   # active first. Backs the "Calls" view: each row summarizes a call
-  # (parties, message count, time span, a result-code hint). `before_epoch`
-  # pages older calls (the cursor is the group's MAX(ts_epoch), which the
-  # source also exposes as the row "id"). Returns an Array of column
-  # arrays (see CALLS_SELECT order) — the source maps them to hashes.
+  # (parties, message count, time span, a result-code hint). `before_id`
+  # pages older calls; the cursor is the group's MAX(id) — the arrival id of
+  # its last message — which the source also exposes as the row "id".
+  #
+  # NOT MAX(ts_epoch): that is a whole second, and many calls end in the same
+  # second. The DataTable dedups rows by id, so equal ids dropped calls (100
+  # fetched → 72 shown), and the `<` cursor skipped calls sharing the page
+  # boundary's second. A message belongs to one call, so MAX(id) is unique.
+  # Returns an Array of column arrays (see CALLS_SELECT order) — the source
+  # maps them to hashes.
   CALLS_SELECT = [
     "call_key",
-    "MAX(ts_epoch)",
+    "MAX(hep_messages.id)",
     "MIN(ts)",
     "MAX(ts)",
     "COUNT(*)",
@@ -110,15 +116,15 @@ class HepMessage < HepRecord
     "GROUP_CONCAT(DISTINCT sip_method)"
   ].freeze
 
-  def self.calls_page(server:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_epoch: nil, ts_from: nil, ts_to: nil)
+  def self.calls_page(server:, scope:, name:, where_sql: nil, where_binds: [], limit: 100, before_id: nil, ts_from: nil, ts_to: nil)
     ensure_regexp! if where_sql.present?
 
     rel = for_instance(server: server, scope: scope, name: name)
     rel = rel.where("ts_epoch >= ?", ts_from) if ts_from
     rel = rel.where("ts_epoch <= ?", ts_to) if ts_to
     rel = rel.where(where_sql, *where_binds) if where_sql.present?
-    rel = rel.group(:call_key).order(Arel.sql("MAX(ts_epoch) DESC")).limit(limit)
-    rel = rel.having("MAX(ts_epoch) < ?", before_epoch) if before_epoch
+    rel = rel.group(:call_key).order(Arel.sql("MAX(hep_messages.id) DESC")).limit(limit)
+    rel = rel.having("MAX(hep_messages.id) < ?", before_id) if before_id
 
     rel.pluck(*CALLS_SELECT.map { |expr| Arel.sql(expr) })
   end
@@ -142,6 +148,28 @@ class HepMessage < HepRecord
 
     rel.group(Arel.sql(bucket_sql)).order(Arel.sql(bucket_sql))
       .pluck(Arel.sql(bucket_sql), Arel.sql(count_sql))
+  end
+
+  # call_starts_series — DISTINCT calls per bucket, each call counted ONCE, in
+  # the bucket of its first message inside [ts_from, ts_to). count_series with
+  # distinct_corr counts a call in EVERY bucket its messages touch, so its
+  # buckets do not add up to the calls in the window; these do — the sum IS
+  # the distinct-call total. Returns [[bucket_epoch, calls], …] ascending.
+  def self.call_starts_series(server:, scope:, name:, ts_from:, ts_to:, bucket:, where_sql: nil, where_binds: [])
+    ensure_regexp! if where_sql.present?
+
+    b = [bucket.to_i, 1].max
+    starts = for_instance(server: server, scope: scope, name: name)
+      .where("ts_epoch >= ? AND ts_epoch < ?", ts_from.to_i, ts_to.to_i)
+      .where.not(call_key: [nil, ""])
+    starts = starts.where(where_sql, *where_binds) if where_sql.present?
+    starts = starts.group(:call_key).select(Arel.sql("MIN(ts_epoch) AS started_epoch"))
+
+    bucket_sql = "(started_epoch / #{b}) * #{b}"
+
+    unscoped.from(starts, :calls)
+      .group(Arel.sql(bucket_sql)).order(Arel.sql(bucket_sql))
+      .pluck(Arel.sql(bucket_sql), Arel.sql("COUNT(*)"))
   end
 
   # group_snapshot — ONE aggregated value per distinct value of `group_expr` over

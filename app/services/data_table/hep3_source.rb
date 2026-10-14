@@ -14,7 +14,7 @@
 # default_fields / rows / live_stream. Schema-less — rows are flat
 # string-keyed hashes; every row carries "id", the cursor the table uses
 # for infinite scroll (before_id) and, on append views, live-append
-# (since_id). For calls the "id" is the group's MAX(ts_epoch).
+# (since_id). For calls the "id" is the arrival id of the call's last message.
 module DataTable
   class Hep3Source
     VIEWS = [
@@ -133,6 +133,20 @@ module DataTable
         ts_from: ts_from, ts_to: ts_to, bucket: bucket,
         where_sql: where_sql, where_binds: where_binds,
         distinct_corr: calls?(view), min_code: errors?(view) ? ERROR_THRESHOLD : nil
+      )
+    end
+
+    # call_count_series — distinct calls per bucket, each call ONCE (in the
+    # bucket it starts in), so the buckets sum to the calls in the window. The
+    # /hep3 count card; see HepMessage.call_starts_series for why not
+    # count_series.
+    def call_count_series(ts_from:, ts_to:, bucket:, filter_query: nil)
+      where_sql, where_binds = compile_filter(filter_query)
+
+      HepMessage.call_starts_series(
+        server: @server, scope: @scope, name: @name,
+        ts_from: ts_from, ts_to: ts_to, bucket: bucket,
+        where_sql: where_sql, where_binds: where_binds
       )
     end
 
@@ -266,21 +280,22 @@ module DataTable
       HepMessage.calls_page(
         server: @server, scope: @scope, name: @name,
         where_sql: where_sql, where_binds: where_binds,
-        limit: limit, before_epoch: before_id, ts_from: ts_from, ts_to: ts_to
+        limit: limit, before_id: before_id, ts_from: ts_from, ts_to: ts_to
       ).map { |row| call_row(row) }
     end
 
-    # call_row — maps a CALLS_SELECT tuple to a flat hash. "id" is the
-    # group's MAX(ts_epoch) so the table's numeric before_id cursor pages
+    # call_row — maps a CALLS_SELECT tuple to a flat hash. "id" is the arrival
+    # id of the call's last message (unique per call — see
+    # HepMessage.calls_page), so the table's numeric before_id cursor pages
     # older calls uniformly with the message views. The group key is the
     # call_key; it is ALSO exposed as "corr_id" so the row action, the column
     # picker and saved dashboards keep working unchanged (for_call accepts
     # either key).
     def call_row(tuple)
-      call_key, last_epoch, started_at, last_ts, messages, last_code, from_user, to_user, methods = tuple
+      call_key, last_id, started_at, last_ts, messages, last_code, from_user, to_user, methods = tuple
 
       {
-        "id" => last_epoch,
+        "id" => last_id,
         "corr_id" => call_key,
         "call_key" => call_key,
         "started_at" => started_at,

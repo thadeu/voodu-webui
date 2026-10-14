@@ -80,6 +80,10 @@ class Components::Layouts::Sidebar < Components::Base
   # need admin access".
   ORG_NAV = [
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
+    # `plugin` — drawn only when the server has that plugin installed. The page
+    # refuses without it (Hep3Controller#require_hep3_plugin!), so the item and
+    # the door appear and disappear together.
+    {id: :hep3, label: "HEP3", icon: :PhoneArrowUpRightOutline, path: :hep3, plugin: "hep3"},
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count,
      capability: :read_org_surfaces},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
@@ -616,6 +620,7 @@ class Components::Layouts::Sidebar < Components::Base
   def nav_permitted?(item)
     return false if item[:clowk_only] && !clowk_enabled?
     return false if item[:entitlement] && !entitlements.public_send(item[:entitlement])
+    return false if item[:plugin] && !nav_server&.plugin_installed?(item[:plugin])
     return true if item[:capability].nil?
 
     # A container-wide screen has no org of its own, but the sidebar is drawn

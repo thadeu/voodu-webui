@@ -965,6 +965,9 @@ body.log-cols-resizing * {
   --voodu-sky:     #38bdf8; /* HTTP 3xx */
   --voodu-rose:    #fb7185; /* HTTP 4xx */
 
+  /* HEP3 — SIP calls (distinct calls in the window, /hep3 count card). */
+  --voodu-lime:    #a3e635; /* SIP Calls */
+
   /* ── Radius ──
    *
    * Voodu leans square — but not razor-sharp. A subtle 2px softens
@@ -1097,6 +1100,7 @@ html[data-theme="light"] {
   --voodu-violet: #9333ea;
   --voodu-sky:    #0284c7;
   --voodu-rose:   #e11d48;
+  --voodu-lime:   #65a30d;
   --voodu-purple: #7c5cff; /* CPU — kept identical to dark (reads fine on white) */
 
   /* Interaction + shadows for light. */

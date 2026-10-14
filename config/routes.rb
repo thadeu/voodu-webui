@@ -293,6 +293,9 @@ Rails.application.routes.draw do
     # the overlay fragment injected by the page host (mirrors #surrounding).
     # corr_id/scope/name ride in the query string (a SIP Call-ID has @ and .).
     get "/metrics/hep3/call", to: "hep3#call", as: :metrics_hep3_call
+    get "/hep3", to: "hep3#index", as: :hep3
+    get "/hep3/count", to: "hep3#count", as: :hep3_count
+    get "/hep3/display_settings", to: "hep3#display_settings", as: :hep3_display_settings
 
     # Saved metric dashboards — named multi-panel views the operator
     # builds in the right-drawer builder. `show` is omitted: a dashboard

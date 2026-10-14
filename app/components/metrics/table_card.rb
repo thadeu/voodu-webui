@@ -20,7 +20,8 @@
 class Components::Metrics::TableCard < Components::Base
   def initialize(label:, color:, source:, scope:, name:, view:, rows_url:,
     fields: [], default_fields: [], filter_query: "", metric: nil, default_visible: true,
-    row_action: nil, dashboard_uuid: nil, server_id: nil, range: "1h", window_from: nil, window_until: nil)
+    row_action: nil, dashboard_uuid: nil, server_id: nil, range: "1h", window_from: nil, window_until: nil,
+    key: nil, tall: false)
     @label = label
     @color = color
     @source = source
@@ -48,6 +49,13 @@ class Components::Metrics::TableCard < Components::Base
     @range = range.to_s
     @window_from = window_from
     @window_until = window_until
+    # key — the DataTable's storage namespace (columns / widths / live). A
+    # dashboard panel uses its panel_key; a standalone page (/hep3) passes
+    # its own, since it has no panel and must not join the dashboard grid.
+    @key = key || @metric
+    # tall — the card IS the page (/hep3): the viewport fills the screen
+    # instead of the dashboard grid's fixed 360px.
+    @tall = tall
   end
 
   def view_template
@@ -118,7 +126,7 @@ class Components::Metrics::TableCard < Components::Base
         data_table_scope_value: @scope,
         data_table_name_value: @name,
         data_table_view_value: @view,
-        data_table_key_value: @metric.to_s,
+        data_table_key_value: @key.to_s,
         data_table_dashboard_value: @dashboard_uuid,
         data_table_server_value: @server_id.to_s,
         data_table_range_value: @range,
@@ -134,7 +142,10 @@ class Components::Metrics::TableCard < Components::Base
       toolbar
       div(
         data: {data_table_target: "viewport", action: "scroll->data-table#onScroll"},
-        class: "relative overflow-auto max-h-[360px] border border-voodu-border bg-voodu-bg-2"
+        class: tokens(
+          "relative overflow-auto border border-voodu-border bg-voodu-bg-2",
+          @tall ? "min-h-[320px] max-h-[calc(100dvh-300px)]" : "max-h-[360px]"
+        )
       ) do
         div(
           data: {data_table_target: "status"},
