@@ -79,6 +79,12 @@ plugin :tmp_restart
 # Run the Solid Queue supervisor inside of Puma for single-server deployments.
 plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"]
 
+# SOLID_QUEUE_MODE=async runs the worker, dispatcher and scheduler as THREADS
+# in this Puma process instead of 4 forked Ruby processes — the biggest memory
+# lever on a single box. Fork stays the default. Async shares Puma's DB pool:
+# raise DB_POOL (config/database.yml) by the job threads + 3.
+solid_queue_mode ENV.fetch("SOLID_QUEUE_MODE", "fork").to_sym if ENV["SOLID_QUEUE_IN_PUMA"]
+
 # Run the poller Go binary inside Puma: spawned on :booted, drained via
 # SIGTERM on :stopped. Unconditional — it is the only thing that fills the
 # warehouse, and Poller::Railtie has already refused to boot without the

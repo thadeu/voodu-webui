@@ -38,6 +38,10 @@ RUN apt-get update -qq && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Set production environment variables and enable jemalloc for reduced memory usage and latency.
+#
+# SOLID_QUEUE_MODE=async runs the job worker/dispatcher/scheduler as threads in
+# Puma instead of 4 forked Ruby processes. DB_POOL covers 16 Puma threads + the
+# 3 job threads + the dispatcher/scheduler/supervisor connections.
 # Thruster listens on HTTP_PORT (public) and proxies to Rails on TARGET_PORT — they must differ.
 # Container's external contract: bind 3000. Rails runs internally on 3001 behind Thruster.
 # Thruster overrides $PORT to $TARGET_PORT when spawning Rails, so TARGET_PORT is the knob.
@@ -51,6 +55,8 @@ ENV RAILS_ENV="production" \
     BUNDLE_PATH="/usr/local/bundle" \
     BUNDLE_WITHOUT="development" \
     LD_PRELOAD="/usr/local/lib/libjemalloc.so" \
+    SOLID_QUEUE_MODE="async" \
+    DB_POOL="24" \
     HTTP_PORT="3000" \
     TARGET_PORT="3001" \
     SOLID_QUEUE_IN_PUMA="true" \

@@ -18,7 +18,7 @@ default: &default
   # worker pool, no Mystery Pool-Exhaustion error). Bumping the pool
   # is cheap on SQLite WAL — readers don't block each other, writers
   # serialize behind the file lock either way.
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 10 } %>
+  pool: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS") { 10 } } %>
   timeout: 5000
 
 development:
