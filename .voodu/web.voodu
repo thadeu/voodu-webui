@@ -49,4 +49,9 @@ app "vdui" "web" {
       memory = "1Gi"
     }
   }
+
+  logs {
+    max_size  = "25m"
+    max_files = 2
+  }
 }
