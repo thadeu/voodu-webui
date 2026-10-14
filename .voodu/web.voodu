@@ -46,7 +46,7 @@ app "vdui" "web" {
   resources {
     limits {
       cpu = "0.5"
-      memory = "768Mi"
+      memory = "1Gi"
     }
   }
 }
