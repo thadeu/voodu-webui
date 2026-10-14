@@ -17,7 +17,7 @@
 # `gems/poller/dist/poller` for the Puma plugin + binstub.
 # Make sure RUBY_VERSION matches the Ruby version in .ruby-version
 ARG GO_VERSION=1.25
-ARG RUBY_VERSION=3.4.2
+ARG RUBY_VERSION=4.0.7
 FROM docker.io/library/golang:${GO_VERSION}-alpine AS poller-build
 WORKDIR /src
 COPY gems/poller/src/go.mod gems/poller/src/go.sum ./
