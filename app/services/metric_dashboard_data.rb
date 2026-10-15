@@ -195,6 +195,7 @@ class MetricDashboardData
       # source maps the response's own points into the series; hep3 counts.
       return table_chart_for(panel, key, server) if panel["chart_type"].to_s == "table"
       return http_chart_for(panel, key, server) if http
+      return fswapi_chart_for(panel, key, server) if panel["source"].to_s == "fswapi"
 
       return hep_chart_for(panel, key, server)
     end
@@ -622,6 +623,60 @@ class MetricDashboardData
       default_visible: true, panel_key: key,
       dashboard_uuid: @dashboard&.uuid, panel_index: index,
       scope_kind: "pod", scope_id: nil, server_id: server&.id
+    }
+  end
+
+  # fswapi_chart_for — a FreeSWITCH history view (active calls, channels,
+  # sessions/s, idle CPU) from the warehouse samples the overview sync writes.
+  # These are GAUGES sampled every 15s, so the headline is the LATEST value
+  # (how many calls are up now), never a sum over the range — "1,200 calls in
+  # the last hour" would be the same few calls counted every 15s. Gauges read
+  # the latest against the window's peak; idle CPU is already a percentage.
+  # No maximize (expand_url_for skips source "fswapi").
+  def fswapi_chart_for(panel, key, server)
+    source = DataTable::Registry.build("fswapi", server: server, params: {})
+    return missing_card(panel, key) if source.nil?
+
+    view = panel["view"].to_s
+    unit = DataTable::FswapiSource.view(view)&.dig(:unit).to_s
+    chart_type = panel["chart_type"].presence || "area"
+
+    points = source.series(view: view, range: @range, interval: @interval, from: @from, until_: @until_)
+    latest = points.last&.dig(:value)
+    formatted = latest.nil? ? "—" : "#{AlertRule.format_metric_number(latest)}#{unit}"
+
+    if chart_type == "number"
+      return {
+        kind: :number, label: panel["label"].to_s, color: panel["color"].to_s,
+        formatted: formatted, value: latest, series: show_chart?(panel) ? points : [],
+        range: @range, range_ms: range_ms, truncated: false, clamped: false, meta: nil,
+        default_visible: true, panel_key: key
+      }
+    end
+
+    gauge = %w[gauge_radial gauge_linear].include?(chart_type)
+    peak = points.map { |p| p[:value] }.max.to_f
+    pct = if unit == "%" then latest.to_f.round
+    elsif peak.positive? then ((latest.to_f / peak) * 100).round
+    else 0
+    end
+
+    {
+      label: panel["label"].to_s,
+      color: panel["color"].to_s,
+      unit: unit,
+      points: points,
+      current: latest,
+      metric: key,
+      source: "fswapi",
+      section: "resource",
+      capacity_label: nil,
+      capacity_pct: gauge ? pct : nil,
+      chart_type: chart_type,
+      percent: panel["percent"] == true,
+      server_id: server&.id,
+      default_visible: true,
+      panel_key: key
     }
   end
 

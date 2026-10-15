@@ -49,59 +49,17 @@ class Components::Fswapi::LiveTable < Components::Base
 
   private
 
+  # columns — the shared view columns (::Fswapi::Format, the same ones a
+  # dashboard table shows) plus, on Channels, the page-only Leg tree column.
   def columns
-    case @view
-    when "calls" then call_columns
-    when "channels" then channel_columns
-    when "registrations" then registration_columns
-    else gateway_columns
+    @columns ||= begin
+      shared = ::Fswapi::Format.columns(@view)
+
+      (@view == "channels") ? [LEG_COLUMN, *shared] : shared
     end
   end
 
-  def call_columns
-    [
-      {label: "Duration", value: ->(r) { duration(r["created_epoch"]) }, mono: true},
-      {label: "From", value: ->(r) { party(r["cid_num"], r["cid_name"]) }},
-      {label: "To", value: ->(r) { party(decoded(r["dest"].presence || r["callee_num"]), r["callee_name"]) }},
-      {label: "B-leg", value: ->(r) { decoded(r["b_dest"]).presence || r["b_cid_num"] }},
-      {label: "State", value: ->(r) { r["callstate"] }},
-      {label: "Direction", value: ->(r) { r["direction"] }}
-    ]
-  end
-
-  # Channels arrive grouped by call (FswapiPageData.group_channels): each call
-  # gets a summary row (call_header_row), then its legs — the A-leg, then the
-  # B-legs bridged to it.
-  def channel_columns
-    [
-      {label: "Leg", value: ->(r) { r["_leg"] }, leg: true},
-      {label: "Duration", value: ->(r) { duration(r["created_epoch"]) }, mono: true},
-      {label: "Channel", value: ->(r) { r["name"] }, mono: true},
-      {label: "From", value: ->(r) { party(r["cid_num"], r["cid_name"]) }},
-      {label: "Dest", value: ->(r) { decoded(r["dest"]) }},
-      {label: "State", value: ->(r) { r["callstate"] }},
-      {label: "App", value: ->(r) { r["application"] }},
-      {label: "Codec", value: ->(r) { r["read_codec"] }, mono: true}
-    ]
-  end
-
-  def registration_columns
-    [
-      {label: "User", value: ->(r) { [r["reg_user"], r["realm"]].compact_blank.join("@") }, mono: true},
-      {label: "Network", value: ->(r) { network(r) }, mono: true},
-      {label: "Contact", value: ->(r) { r["url"] }, mono: true},
-      {label: "Expires", value: ->(r) { expires(r["expires"]) }, mono: true}
-    ]
-  end
-
-  def gateway_columns
-    [
-      {label: "Kind", value: ->(r) { r["kind"] }},
-      {label: "Name", value: ->(r) { r["name"] }, mono: true},
-      {label: "Data", value: ->(r) { r["data"] }, mono: true},
-      {label: "State", value: ->(r) { r["state"] }, state: true}
-    ]
-  end
+  LEG_COLUMN = {field: "leg", label: "Leg", leg: true, value: ->(r, _) { r["_leg"] }}.freeze
 
   def th_cell(label)
     th(class: "px-3 h-8 text-left text-[10.5px] font-medium uppercase tracking-wider text-voodu-muted border-b border-voodu-border whitespace-nowrap") do
@@ -112,7 +70,7 @@ class Components::Fswapi::LiveTable < Components::Base
   def body_row(row)
     tr(class: row_class(row)) do
       columns.each do |col|
-        text = col[:value].call(row).to_s.presence || "—"
+        text = col[:value].call(row, @now).to_s.presence || "—"
 
         td(class: tokens("px-3 h-9 text-voodu-text-2 whitespace-nowrap max-w-[320px] truncate", col[:mono] && "font-voodu-mono text-[12px]")) do
           if col[:leg] then leg_cell(row)
@@ -154,7 +112,7 @@ class Components::Fswapi::LiveTable < Components::Base
       td(colspan: columns.size, class: "px-3 pt-2.5 pb-1") do
         div(class: "flex items-center gap-3 text-[12.5px] whitespace-nowrap") do
           span(class: "inline-block w-2 h-2 rounded-full shrink-0", style: "background: #{tone};")
-          span(class: "font-voodu-mono text-[12px] text-voodu-text") { duration(lead["created_epoch"]) || "—" }
+          span(class: "font-voodu-mono text-[12px] text-voodu-text") { ::Fswapi::Format.duration(lead["created_epoch"], @now) || "—" }
           call_parties(lead, b)
           span(class: "font-voodu-mono text-[11px] text-voodu-text-2") { state.presence || "—" }
           transcode_badge(lead["_transcode"]) if lead["_transcode"]
@@ -189,7 +147,7 @@ class Components::Fswapi::LiveTable < Components::Base
     ) { "#{a_codec} → #{b_codec}" }
   end
 
-  def decoded(value) = FswapiPageData.decode(value)
+  def decoded(value) = ::Fswapi::Format.decode(value)
 
   # leg_cell — the call's header row is the parent and its legs the children:
   # "├ A-leg", then "└ B-leg" (├ while another leg follows). Words, not
@@ -245,43 +203,4 @@ class Components::Fswapi::LiveTable < Components::Base
     "registrations" => "No endpoint is registered.",
     "gateways" => "No SIP profile or gateway reported."
   }.freeze
-
-  def party(number, name)
-    number = number.to_s.strip
-    name = name.to_s.strip
-
-    return number if name.empty? || name == number
-
-    number.empty? ? name : "#{number} (#{name})"
-  end
-
-  def duration(epoch)
-    started = epoch.to_i
-
-    return nil unless started.positive?
-
-    secs = (@now.to_i - started).clamp(0, Float::INFINITY).to_i
-    hours, rem = secs.divmod(3600)
-    minutes, seconds = rem.divmod(60)
-
-    hours.positive? ? Kernel.format("%d:%02d:%02d", hours, minutes, seconds) : Kernel.format("%d:%02d", minutes, seconds)
-  end
-
-  def network(row)
-    ip = row["network_ip"].to_s
-
-    return nil if ip.empty?
-
-    [[ip, row["network_port"].presence].compact.join(":"), row["network_proto"].presence].compact.join(" ")
-  end
-
-  def expires(epoch)
-    at = epoch.to_i
-
-    return nil unless at.positive?
-
-    left = at - @now.to_i
-
-    left.positive? ? "in #{left}s" : "expired"
-  end
 end

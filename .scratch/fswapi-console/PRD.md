@@ -73,7 +73,7 @@ history.
 | 07 | (local dev, P4) two Solid Queue supervisors run jobs twice | — |
 | 08 | (clowk-voodu, P4) flaky pod-exec test in CI | — |
 
-Status 2026-10-15: 01, 02, 06, 07 resolved; 05 partly (alert C left). Next: 03, 04, 05-C, 08.
+Status 2026-10-15: 01, 02, 03, 06, 07 resolved; 05 partly (alert C left). Next: 04, 05-C, 08.
 
 ## Out of scope
 

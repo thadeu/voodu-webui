@@ -149,4 +149,46 @@ class DatatableControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  # ── FreeSWITCH (fswapi) ─────────────────────────────────────────
+
+  class FakeFswapi
+    def initialize(reply: nil, error: nil)
+      @reply = reply
+      @error = error
+    end
+
+    def fswapi(_route, _params = nil)
+      raise @error if @error
+
+      @reply
+    end
+  end
+
+  test "fswapi rows: the live list, through the plugin" do
+    Rails.cache.clear
+    fake = FakeFswapi.new(reply: {"rows" => [{"reg_user" => "1000", "realm" => "pbx", "network_ip" => "10.0.0.9", "network_port" => "5060"}]})
+
+    Voodu::Client.stub(:new, fake) do
+      get metrics_datatable_rows_path(server_key: @key, source: "fswapi", scope: "plugins", name: "fswapi", view: "registrations")
+    end
+
+    assert_response :success
+
+    body = JSON.parse(@response.body)
+    assert_equal "1000@pbx", body["rows"].first["user"]
+    assert_equal %w[user network contact expires], body["fields"]
+  end
+
+  test "fswapi rows: FreeSWITCH down is a 502 carrying the plugin's message" do
+    Rails.cache.clear
+    fake = FakeFswapi.new(error: Voodu::Client::ServerError.new("esl: dial host.docker.internal:8021: connection refused"))
+
+    Voodu::Client.stub(:new, fake) do
+      get metrics_datatable_rows_path(server_key: @key, source: "fswapi", scope: "plugins", name: "fswapi", view: "calls")
+    end
+
+    assert_response :bad_gateway
+    assert_includes JSON.parse(@response.body)["error"], "connection refused"
+  end
 end

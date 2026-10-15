@@ -29,6 +29,8 @@ module Views::Metrics::ExpandUrl
     # A zeroed card (a render the measure can't fill) has nothing to expand.
     return nil if chart[:zeroed]
 
+    # FreeSWITCH history panels have no maximize view yet.
+    return nil if chart[:source] == "fswapi"
     return hep3_expand_url(chart, data) if chart[:source] == "hep3"
     return log_expand_url(chart, data) if chart[:source] == "log"
     return multi_expand_url(chart, data) if chart[:multi]

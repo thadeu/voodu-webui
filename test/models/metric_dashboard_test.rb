@@ -321,4 +321,28 @@ class MetricDashboardTest < ActiveSupport::TestCase
     record.valid?
     record.errors[:panels].present?
   end
+
+  # ── FreeSWITCH (fswapi) panels ──────────────────────────────────
+
+  def fswapi_panel(view:, chart_type:)
+    {"scope_kind" => "table", "source" => "fswapi", "server_id" => servers(:alpha).id,
+     "scope" => "plugins", "name" => "fswapi", "view" => view, "chart_type" => chart_type,
+     "label" => "FS", "color" => "var(--voodu-fuchsia)"}
+  end
+
+  test "a FreeSWITCH view takes only the shapes it can draw" do
+    org = servers(:alpha).org
+
+    assert org.metric_dashboards.new(name: "fs-ok", panels: [
+      fswapi_panel(view: "calls", chart_type: "table"),
+      fswapi_panel(view: "calls", chart_type: "area"),
+      fswapi_panel(view: "idle_cpu", chart_type: "gauge_radial"),
+      fswapi_panel(view: "gateways", chart_type: "table")
+    ]).valid?
+
+    assert_not org.metric_dashboards.new(name: "fs-list-chart", panels: [fswapi_panel(view: "gateways", chart_type: "area")]).valid?,
+      "a list with no history cannot be a chart"
+    assert_not org.metric_dashboards.new(name: "fs-metric-table", panels: [fswapi_panel(view: "idle_cpu", chart_type: "table")]).valid?,
+      "a history metric has no rows"
+  end
 end

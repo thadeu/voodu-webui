@@ -213,8 +213,15 @@ class MetricDashboard < ApplicationRecord
         # Count as number / over-time chart / (empty) gauge — never a table.
         errors.add(:panels, "log panel #{i + 1} can't use the #{ct} chart type") unless LOG_CHART_TYPES.include?(ct.presence || "number")
       elsif sk == "table"
-        # The logs source only tabulates; hep3 + http can also be a count viz.
-        allowed = %w[hep3 http].include?(panel["source"].to_s) ? TABLE_CHART_TYPES : %w[table]
+        # The logs source only tabulates; hep3 + http can also be a count viz;
+        # FreeSWITCH depends on the view — a live list is a Table, a history
+        # metric is a chart (DataTable::FswapiSource.shapes_for).
+        allowed = case panel["source"].to_s
+        when "hep3", "http" then TABLE_CHART_TYPES
+        when "fswapi" then DataTable::FswapiSource.shapes_for(panel["view"])
+        else %w[table]
+        end
+
         errors.add(:panels, "table panel #{i + 1} can't use the #{ct} chart type") unless allowed.include?(ct.presence || "table")
       end
 

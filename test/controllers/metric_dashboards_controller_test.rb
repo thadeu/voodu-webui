@@ -66,6 +66,36 @@ class MetricDashboardsControllerTest < ActionDispatch::IntegrationTest
     assert_match "dashboard-builder", @response.body
   end
 
+  test "with the fswapi plugin, the builder offers a FreeSWITCH type with per-view shapes" do
+    System.create!(server: @server, synced_at: Time.current,
+      payload: {"host" => {}, "plugins" => [{"name" => "fswapi", "version" => "0.1.3"}]}.to_json)
+
+    get new_metric_dashboard_path(server_key: @key, embed: 1)
+
+    assert_match %(data-add-type="fswapi"), @response.body
+    assert_operator @response.body.index(">Plugins<"), :<, @response.body.index(%(data-add-type="fswapi")),
+      "the FreeSWITCH card sits in the Plugins list"
+    assert_operator @response.body.index(%(data-add-type="http")), :<, @response.body.index(">Plugins<"),
+      "HTTP is built-in"
+    views = JSON.parse(CGI.unescapeHTML(@response.body[/data-dashboard-builder-fswapi-source-views-value="([^"]*)"/, 1]))
+
+    calls = views.find { |v| v["view"] == "calls" }
+    assert_equal ["plugins", "fswapi"], [calls["scope"], calls["name"]]
+    assert_equal "Calls", calls["option"]
+    assert_equal "#{@server.name} · FreeSWITCH", calls["group"], "listed under its server's FreeSWITCH heading"
+    assert_match "Filter sources…", @response.body
+    assert_includes calls["shapes"], "table"
+    assert_equal ["table"], views.find { |v| v["view"] == "gateways" }["shapes"]
+  end
+
+  test "without any plugin there is no FreeSWITCH type and no Plugins list" do
+    get new_metric_dashboard_path(server_key: @key, embed: 1)
+
+    assert_no_match %(data-add-type="fswapi"), @response.body
+    assert_match ">Built-in<", @response.body
+    assert_no_match ">Plugins<", @response.body
+  end
+
   test "with the hep3 plugin + a reader pod, the builder offers a HEP3 type — no pod picker, reader folded into the source·view" do
     System.create!(server: @server, synced_at: Time.current,
       payload: {"host" => {}, "plugins" => [{"name" => "hep3", "version" => "0.5.0"}]}.to_json)

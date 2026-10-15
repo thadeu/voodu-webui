@@ -133,6 +133,7 @@ class Views::MetricDashboards::Form < Views::Base
         dashboard_builder_logs_fields_value: DataTable::LogsSource::FIELDS.to_json,
         dashboard_builder_hep3_fields_value: hep3_filter_fields.to_json,
         dashboard_builder_hep3_hints_value: TABLE_FILTER_HINTS.to_json,
+        dashboard_builder_fswapi_source_views_value: fswapi_source_views.to_json,
         dashboard_builder_http_test_url_value: metrics_datatable_http_test_path,
         dashboard_builder_preview_url_value: metrics_preview_panel_path,
         # default_server — the server a fresh (host) panel binds to before the
@@ -322,14 +323,38 @@ class Views::MetricDashboards::Form < Views::Base
     # hidden by default — the detail pane opens on idleStep; the controller
     # reveals this only when "Add panel" is clicked (prevents a pre-JS flash
     # of both idle + chooser).
-    div(hidden: true, data: {dashboard_builder_target: "typeStep"}, class: "flex flex-col gap-2") do
+    div(hidden: true, data: {dashboard_builder_target: "typeStep"}, class: "flex flex-col gap-4") do
       span(class: "text-[11.5px] font-medium text-voodu-text-2 uppercase tracking-[0.04em]") { "Choose panel type" }
 
-      div(class: "flex flex-wrap gap-3") do
+      # Two lists so the operator can tell what ships with voodu from what a
+      # plugin brings. A plugin card shows only where that plugin is installed
+      # (and, for HEP3, a reader runs); with none, the Plugins list is gone.
+      type_group("Built-in") do
         type_card("metric", "Metric", "CPU, memory, log queries — chart, gauge or number") { metric_preview_svg }
-        type_card("hep3", "HEP3", "SIP capture — Messages, Calls, Errors — filter, sort, live") { table_preview_svg } if hep3_readers.any?
         type_card("http", "HTTP / external API", "Fetch JSON from any URL — table or chart") { metric_preview_svg }
       end
+
+      if plugin_type_cards?
+        type_group("Plugins") do
+          type_card("hep3", "HEP3", "SIP capture — Messages, Calls, Errors — filter, sort, live") { table_preview_svg } if hep3_readers.any?
+          type_card("fswapi", "FreeSWITCH", "Live calls, channels, registrations — or calls and CPU over time") { table_preview_svg } if fswapi_source_views.any?
+        end
+      end
+    end
+  end
+
+  def plugin_type_cards?
+    hep3_readers.any? || fswapi_source_views.any?
+  end
+
+  # type_group — a labelled row of type cards (role=group, named by its
+  # heading for screen readers).
+  def type_group(label, &)
+    id = "panel-types-#{label.parameterize}"
+
+    div(role: "group", aria: {labelledby: id}, class: "flex flex-col gap-2") do
+      span(id: id, class: "text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted") { label }
+      div(class: "flex flex-wrap gap-3", &)
     end
   end
 
@@ -409,7 +434,11 @@ class Views::MetricDashboards::Form < Views::Base
 
       hep3_shape_chips
       hep3_percent_toggle
-      table_filter_editor
+
+      # FreeSWITCH lists filter as plain text on the panel itself; the query DSL
+      # here is HEP3's and the logs', so the builder hides it for that kind.
+      div(data: {dashboard_builder_target: "tableFilterRow"}) { table_filter_editor }
+
       table_color_swatches
     end
   end
@@ -838,11 +867,26 @@ class Views::MetricDashboards::Form < Views::Base
   # populated by the builder (dashboard-builder#activateTableKind) from the
   # logs pods OR the hep3 readers, depending on the chosen type — so one block
   # serves both the Table and HEP3 kinds.
+  #
+  # The menu is wider than the trigger (a "FSW01 · FreeSWITCH — Registrations"
+  # label wrapped to two lines at 220px) and has a filter; the builder fills
+  # `tableSourceMenu` with the options, grouped under headings (a server's
+  # FreeSWITCH, a HEP3 reader) when the source-views carry a `group`.
   def table_source_view_picker
-    div(class: "vmd:w-[220px] shrink-0 relative", data: {controller: "dropdown"}) do
+    div(class: "vmd:w-2/5 vmd:shrink-0 min-w-0 relative", data: {controller: "dropdown"}) do
       picker_trigger("Select data", :tableSourceViewLabel)
-      div(hidden: true, data: {dropdown_target: "menu", dashboard_builder_target: "tableSourceMenu"}, class: menu_classes)
+
+      div(hidden: true, data: {dropdown_target: "menu"}, class: source_menu_classes) do
+        dropdown_filter("Filter sources…")
+        div(data: {dashboard_builder_target: "tableSourceMenu"})
+        dropdown_empty
+      end
     end
+  end
+
+  def source_menu_classes
+    "absolute left-0 top-[calc(100%+4px)] z-30 min-w-full w-max max-w-[min(440px,calc(100vw-32px))] " \
+      "max-h-[340px] overflow-auto scrollbar-hidden border border-voodu-border-2 bg-voodu-surface shadow-2xl"
   end
 
   # table_color_swatches — accent for the table panel's title. Reuses the
@@ -1395,7 +1439,30 @@ class Views::MetricDashboards::Form < Views::Base
 
         src[:views].map do |v|
           {source: src[:key], server_id: reader[:server_id], scope: reader[:scope], name: reader[:name],
-           view: v[:key], label: "#{prefix} — #{v[:label]}", fields: v[:fields]}
+           view: v[:key], label: "#{prefix} — #{v[:label]}", group: prefix, option: v[:label], fields: v[:fields]}
+        end
+      end
+    end
+  end
+
+  # fswapi_source_views — the FreeSWITCH kind's picker options: one entry per
+  # (server with the voodu-fswapi plugin, view). Each carries the builtin
+  # resource as scope/name (plugins/fswapi) and the shapes the view can take,
+  # so the builder only offers those (Table for a live list, charts for a
+  # history metric).
+  def fswapi_source_views
+    @fswapi_source_views ||= begin
+      servers = @server_pods.map(&:first).select { |s| DataTable::FswapiSource.available_for?(s) }
+      multi = @server_pods.size > 1
+
+      servers.flat_map do |server|
+        DataTable::FswapiSource.view_options.map do |v|
+          prefix = multi ? "#{server.name} · FreeSWITCH" : "FreeSWITCH"
+
+          {source: "fswapi", server_id: server.id.to_s,
+           scope: DataTable::FswapiSource::SCOPE, name: DataTable::FswapiSource::NAME,
+           view: v[:key], label: "#{prefix} — #{v[:label]}", group: prefix, option: v[:label],
+           fields: v[:fields], shapes: v[:shapes]}
         end
       end
     end

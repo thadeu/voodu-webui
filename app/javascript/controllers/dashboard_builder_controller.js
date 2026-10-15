@@ -19,7 +19,7 @@ export default class extends Controller {
   static targets = ["sourceLabel", "metricLabel", "metricMenu", "metricQuery", "metricQueryRow", "metricTimelineRow", "metricShowChart", "metricColoredRow", "metricColored", "shapeChip", "shapeSkeleton", "metricSwatch", "list", "empty", "hidden",
                     "logSourceLabel", "logLabel", "logQuery", "logSwatch", "logShowChart",
                     "tableBlock", "tableBlockTitle", "tableSourceViewLabel", "tableSourceMenu", "tableLabel", "tableQuery", "tableSwatch",
-                    "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent",
+                    "hep3Shapes", "hep3ShapeChip", "hep3PercentRow", "hep3Percent", "tableFilterRow",
                     "httpBlock", "httpBlockTitle", "httpUrl", "httpMethod", "httpMethodLabel", "httpBody",
                     "httpInterval", "httpMapping", "httpChartChip", "httpLabel", "httpSwatch",
                     "httpTab", "httpTabPanel", "httpHeadersRows", "httpHeaderTemplate", "httpHeaderKey", "httpHeaderValue",
@@ -31,6 +31,9 @@ export default class extends Controller {
     catalog:          Object,
     logsSourceViews:  Array,
     hep3SourceViews:  Array,
+    // fswapiSourceViews — FreeSWITCH (voodu-fswapi) options: one per (server,
+    // view), each carrying the `shapes` that view can take.
+    fswapiSourceViews: Array,
     logsFields:       Array,
     hep3Fields:       Array,
     hep3Hints:        Object,
@@ -153,7 +156,7 @@ export default class extends Controller {
 
     // Table (logs) + HEP3 share one block; activate the kind's options + the
     // first source·view so autoCommit can create the panel immediately.
-    if (type === "table" || type === "hep3") this.activateTableKind(type)
+    if (this.isTableKind(type)) this.activateTableKind(type)
 
     this.syncWizard()
     // Every type now has valid defaults (host · first metric / a HEP3 reader /
@@ -225,7 +228,7 @@ export default class extends Controller {
     const step = this.wizardStep
     const config = step === "config"
     const isLog = this.addType === "log"
-    const isTable = this.addType === "table" || this.addType === "hep3"
+    const isTable = this.isTableKind(this.addType)
     const isHttp = this.addType === "http"
     const editing = this.editingIndex != null
 
@@ -241,7 +244,7 @@ export default class extends Controller {
 
     if (this.hasMetricBlockTitleTarget) this.metricBlockTitleTarget.textContent = editing ? "Edit metric panel" : "New metric panel"
     if (this.hasLogBlockTitleTarget) this.logBlockTitleTarget.textContent = editing ? "Edit log count" : "New log count"
-    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = editing ? "Edit table panel" : "New table panel"
+    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = this.tableBlockTitle()
     if (this.hasHttpBlockTitleTarget) this.httpBlockTitleTarget.textContent = editing ? "Edit HTTP panel" : "New HTTP panel"
     this.backLinkTargets.forEach((el) => { el.textContent = editing ? "Cancel" : "Change type" })
   }
@@ -793,7 +796,7 @@ export default class extends Controller {
   panelForType() {
     if (this.addType === "log") return this.buildLogPanelSafe()
 
-    if (this.addType === "table" || this.addType === "hep3") return this.buildTablePanelSafe()
+    if (this.isTableKind(this.addType)) return this.buildTablePanelSafe()
 
     if (this.addType === "http") return this.buildHttpPanelSafe()
 
@@ -851,7 +854,7 @@ export default class extends Controller {
     this.syncWizard()
 
     if (this.addType === "log") this.loadLogPanel(panel)
-    else if (this.addType === "table" || this.addType === "hep3") this.loadTablePanel(panel)
+    else if (this.isTableKind(this.addType)) this.loadTablePanel(panel)
     else if (this.addType === "http") this.loadHttpPanel(panel)
     else this.loadMetricPanel(panel)
 
@@ -868,6 +871,7 @@ export default class extends Controller {
 
     if (panel.scope_kind === "table") {
       if (panel.source === "hep3") return "hep3"
+      if (panel.source === "fswapi") return "fswapi"
       if (panel.source === "http") return "http"
       if (panel.source === "logs") return "metric"
 
@@ -1273,8 +1277,27 @@ export default class extends Controller {
   // and the title — so "Table" (logs, pod-based) and "HEP3" (reader-based)
   // stay distinct panel types without duplicating the block.
 
+  // TABLE_KINDS — the types that share the Table block. HEP3 and FreeSWITCH
+  // also pick a visualization (SHAPED); logs only tabulate.
+  TABLE_KINDS = ["table", "hep3", "fswapi"]
+  SHAPED_KINDS = ["hep3", "fswapi"]
+  KIND_NAMES = { table: "table", hep3: "HEP3", fswapi: "FreeSWITCH" }
+
+  // tableBlockTitle — "New FreeSWITCH panel" / "Edit HEP3 panel": the mode AND
+  // the kind, so editing a FreeSWITCH panel never reads "Edit table panel".
+  tableBlockTitle() {
+    const mode = this.editingIndex != null ? "Edit" : "New"
+
+    return `${mode} ${this.KIND_NAMES[this.tableKind] || "table"} panel`
+  }
+
+  isTableKind(type) {
+    return this.TABLE_KINDS.includes(type)
+  }
+
   sourceViews() {
-    const list = this.tableKind === "hep3" ? this.hep3SourceViewsValue : this.logsSourceViewsValue
+    const lists = { hep3: this.hep3SourceViewsValue, fswapi: this.fswapiSourceViewsValue }
+    const list = lists[this.tableKind] || this.logsSourceViewsValue
 
     return Array.isArray(list) ? list : []
   }
@@ -1283,19 +1306,23 @@ export default class extends Controller {
   // option menu, swap the filter-editor's fields, retitle, and pre-pick the
   // first option (so autoCommit can create the panel).
   activateTableKind(kind) {
-    this.tableKind = kind === "hep3" ? "hep3" : "table"
+    this.tableKind = this.isTableKind(kind) ? kind : "table"
     this.currentTableSourceView = null
 
-    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = this.tableKind === "hep3" ? "HEP3 panel" : "Table panel"
+    if (this.hasTableBlockTitleTarget) this.tableBlockTitleTarget.textContent = this.tableBlockTitle()
 
-    // The HEP3 kind picks a visualization (Table rows / Area / Radial /
+    // HEP3 and FreeSWITCH pick a visualization (Table rows / Area / Radial /
     // Linear); the Table (logs) kind only tabulates. Default Table.
-    const isHep3 = this.tableKind === "hep3"
+    const shaped = this.SHAPED_KINDS.includes(this.tableKind)
 
-    if (this.hasHep3ShapesTarget) this.hep3ShapesTarget.hidden = !isHep3
-    if (isHep3 && !this.currentHep3Shape) this.currentHep3Shape = "table"
-    if (!isHep3) this.currentHep3Shape = "table"
+    if (this.hasHep3ShapesTarget) this.hep3ShapesTarget.hidden = !shaped
+    if (shaped && !this.currentHep3Shape) this.currentHep3Shape = "table"
+    if (!shaped) this.currentHep3Shape = "table"
     this.highlightHep3Shape()
+
+    // The query DSL is HEP3's and the logs'; a FreeSWITCH table filters as
+    // plain text on the panel itself.
+    if (this.hasTableFilterRowTarget) this.tableFilterRowTarget.hidden = this.tableKind === "fswapi"
 
     this.rebuildSourceMenu()
     this.setQueryEditorFields()
@@ -1318,12 +1345,25 @@ export default class extends Controller {
   }
 
   highlightHep3Shape() {
+    // A FreeSWITCH view only takes some shapes (a live list → Table; a history
+    // metric → the charts). Others dim out; a shape the view can't take moves
+    // to the first one it can.
+    const allowed = this.currentTableSourceView?.shapes
+
+    if (Array.isArray(allowed) && allowed.length && !allowed.includes(this.currentHep3Shape)) {
+      this.currentHep3Shape = allowed[0]
+    }
+
     const shape = this.currentHep3Shape || "table"
 
     if (this.hasHep3ShapeChipTarget) {
       this.hep3ShapeChipTargets.forEach((chip) => {
         const active = chip.dataset.chartType === shape
+        const disabled = Array.isArray(allowed) && !allowed.includes(chip.dataset.chartType)
 
+        chip.disabled = disabled
+        chip.classList.toggle("opacity-40", disabled)
+        chip.classList.toggle("pointer-events-none", disabled)
         chip.classList.toggle("border-voodu-accent-line", active)
         chip.classList.toggle("ring-1", active)
         chip.classList.toggle("ring-voodu-accent-line", active)
@@ -1337,21 +1377,55 @@ export default class extends Controller {
   }
 
   // rebuildSourceMenu — fill the dropdown with the active kind's options.
+  // Source-views that carry a `group` (a server's FreeSWITCH, a HEP3 reader)
+  // are listed under that heading with their short `option` text; the
+  // dropdown's filter matches the text or the heading, and hides an empty
+  // group. Ungrouped ones (logs) stay a flat list.
   rebuildSourceMenu() {
     if (!this.hasTableSourceMenuTarget) return
 
     this.tableSourceMenuTarget.innerHTML = ""
 
+    let groupEl = null
+    let groupName = null
+
     this.sourceViews().forEach((sv) => {
+      if (sv.group && sv.group !== groupName) {
+        groupName = sv.group
+        groupEl = this.sourceGroup(sv.group)
+        this.tableSourceMenuTarget.appendChild(groupEl)
+      }
+
       const btn = document.createElement("button")
 
       btn.type = "button"
       btn.className = "flex items-center gap-2.5 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text hover:bg-voodu-hover"
       btn.dataset.action = "click->dashboard-builder#selectTableSourceView click->dropdown#close"
+      btn.dataset.dropdownTarget = "option"
       btn.dataset.sourceView = JSON.stringify(sv)
-      btn.textContent = sv.label
-      this.tableSourceMenuTarget.appendChild(btn)
+      btn.textContent = sv.group ? (sv.option || sv.label) : sv.label
+
+      const parent = sv.group ? groupEl : this.tableSourceMenuTarget
+
+      parent.appendChild(btn)
     })
+  }
+
+  // sourceGroup — a heading + its options, one block the filter hides whole.
+  sourceGroup(label) {
+    const group = document.createElement("div")
+    const heading = document.createElement("div")
+
+    group.setAttribute("role", "group")
+    group.setAttribute("aria-label", label)
+    group.dataset.dropdownTarget = "group"
+    group.dataset.groupLabel = label
+
+    heading.className = "px-3 pt-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-voodu-muted"
+    heading.textContent = label
+    group.appendChild(heading)
+
+    return group
   }
 
   // setQueryEditorFields — point the filter editor's autocomplete + validation
@@ -1378,6 +1452,9 @@ export default class extends Controller {
   applySourceView(sv) {
     this.currentTableSourceView = sv
     if (this.hasTableSourceViewLabelTarget) this.tableSourceViewLabelTarget.textContent = sv.label
+
+    // The picked view may narrow the shapes (FreeSWITCH).
+    this.highlightHep3Shape()
   }
 
   selectTableSourceView(event) {
@@ -1410,9 +1487,11 @@ export default class extends Controller {
   buildTablePanel() {
     const sv = this.currentTableSourceView
     const label = (this.hasTableLabelTarget ? this.tableLabelTarget.value : "").trim()
-    const filterQuery = (this.hasTableQueryTarget ? this.tableQueryTarget.value : "").trim()
-    // HEP3 picks a visualization (table rows / area / gauge_*); logs → table.
-    const chartType = this.tableKind === "hep3" ? (this.currentHep3Shape || "table") : "table"
+    // FreeSWITCH hides the DSL editor (its tables filter as plain text).
+    const filterQuery = this.tableKind === "fswapi" ? "" : (this.hasTableQueryTarget ? this.tableQueryTarget.value : "").trim()
+    // HEP3 + FreeSWITCH pick a visualization (table rows / area / gauge_*);
+    // logs → table.
+    const chartType = this.SHAPED_KINDS.includes(this.tableKind) ? (this.currentHep3Shape || "table") : "table"
     const isGauge = chartType === "gauge_radial" || chartType === "gauge_linear"
     // Gauges default to the raw count; "show %" flips them to "% of peak".
     const percent = isGauge && this.hasHep3PercentTarget && this.hep3PercentTarget.checked
@@ -1703,10 +1782,10 @@ export default class extends Controller {
   loadTablePanel(panel) {
     // Activate the kind the panel belongs to FIRST (source=hep3 → HEP3 kind),
     // so the options list + filter fields match before we restore.
-    this.activateTableKind(panel.source === "hep3" ? "hep3" : "table")
+    this.activateTableKind(this.SHAPED_KINDS.includes(panel.source) ? panel.source : "table")
 
-    // Restore the HEP3 visualization (chart_type) + the gauge "show %" toggle.
-    if (panel.source === "hep3") {
+    // Restore the visualization (chart_type) + the gauge "show %" toggle.
+    if (this.SHAPED_KINDS.includes(panel.source)) {
       this.currentHep3Shape = panel.chart_type || "table"
       this.highlightHep3Shape()
       if (this.hasHep3PercentTarget) this.hep3PercentTarget.checked = panel.percent === true
@@ -1841,7 +1920,7 @@ export default class extends Controller {
     const viz = this.vizLabel(panel.chart_type)
 
     if (panel.scope_kind === "table") {
-      const src = { hep3: "HEP3", http: "API" }[panel.source] || (panel.source || "").toUpperCase()
+      const src = { hep3: "HEP3", http: "API", fswapi: "FreeSWITCH" }[panel.source] || (panel.source || "").toUpperCase()
 
       return src ? `${src} · ${viz}` : viz
     }

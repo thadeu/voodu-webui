@@ -423,6 +423,52 @@ class MetricDashboardDataTest < ActiveSupport::TestCase
 
   private
 
+  # ── FreeSWITCH (fswapi) panels ──────────────────────────────────
+
+  def fswapi_panel(view:, chart_type:)
+    {"scope_kind" => "table", "source" => "fswapi", "scope" => "plugins", "name" => "fswapi",
+     "view" => view, "chart_type" => chart_type, "label" => "FS", "color" => "var(--voodu-fuchsia)"}
+  end
+
+  def seed_fswapi(*values, metric: "fs_calls")
+    values.each_with_index do |v, i|
+      ts = (Time.current - (values.size - i) * 60).utc.iso8601
+      MetricSample.bulk_insert([{server_id: @server.id, source: "fswapi", ts_iso: ts,
+                                 payload: {:source => "fswapi", :ts => ts, :fs_up => 1, metric => v}.to_json}])
+    end
+  end
+
+  test "a FreeSWITCH number panel shows the LATEST value, not a sum over the range" do
+    seed_fswapi(150, 157, 120)
+    dash = make_dashboard([fswapi_panel(view: "calls", chart_type: "number")])
+
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
+
+    assert_equal :number, c[:kind]
+    assert_equal "120", c[:formatted]
+  end
+
+  test "a FreeSWITCH idle CPU gauge reads its own percentage, and has no maximize" do
+    seed_fswapi(80.0, 62.5, metric: "fs_idle_cpu")
+    dash = make_dashboard([fswapi_panel(view: "idle_cpu", chart_type: "gauge_radial")])
+
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
+
+    assert_equal "fswapi", c[:source]
+    assert_equal 63, c[:capacity_pct]
+    assert_equal "%", c[:unit]
+  end
+
+  test "a FreeSWITCH table panel is a DataTable envelope over the source" do
+    dash = make_dashboard([fswapi_panel(view: "registrations", chart_type: "table")])
+
+    c = MetricDashboardData.new(@org, dash, visible_servers: @org.servers, range: "1h").charts.first
+
+    assert_equal :table, c[:kind]
+    assert_equal "fswapi", c[:source]
+    assert_equal %w[user network contact expires], c[:fields]
+  end
+
   # make_dashboard — an org dashboard whose server panels bind to @server (M2:
   # every non-http panel carries its server_id; the read-path resolves each
   # panel's server WITHIN the org). http panels are external — no server_id.

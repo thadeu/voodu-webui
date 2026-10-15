@@ -111,6 +111,15 @@ class FswapiPageData
     "peak #{status["sessions_peak"].to_i} · max #{status["sessions_max"].to_i}"
   end
 
+  # list_error — the error of the current list ONLY: a dashboard table needs
+  # its list, and asking `error` would also read /overview — a second ESL
+  # round-trip per panel load for nothing.
+  def list_error
+    all_rows
+
+    @live.values.find { |v| v.is_a?(LiveError) }&.message
+  end
+
   # error — the plugin's own message when FreeSWITCH (or the route) could not
   # answer; nil when every live read worked. Makes the page's live reads first,
   # so it can be asked before anything else is rendered.
@@ -200,9 +209,7 @@ class FswapiPageData
   # decode — FreeSWITCH writes some characters of a dial string URL-encoded in
   # channel names and destinations (`0656%23552…` is `0656#552…`). Decoded for
   # reading and for the filter; ASCII only, so a stray byte stays as it was.
-  def self.decode(value)
-    value.to_s.gsub(/%(\h\h)/) { ((h = ::Regexp.last_match(1).hex) < 0x80) ? h.chr : ::Regexp.last_match(0) }
-  end
+  def self.decode(value) = Fswapi::Format.decode(value)
 
   SEARCH_FIELDS = %w[
     cid_num cid_name dest callee_num callee_name name uuid call_uuid

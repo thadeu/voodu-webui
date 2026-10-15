@@ -1,6 +1,6 @@
 # 03 — Dashboard builder: FreeSWITCH panels
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01, 02
 
 ## Goal
@@ -26,3 +26,13 @@ Like HEP3, operators can build dashboard panels from FreeSWITCH data.
 
 - Create, edit, preview and render each panel type; mobile works.
 - Tests for `MetricDashboard` validation and the builder form.
+
+## Comments
+
+2026-10-15 — Done. Source `fswapi` (DataTable::FswapiSource), one per server (scope/name =
+plugins/fswapi). Views: calls/channels/registrations/gateways (live Table) and
+calls/channels/sessions_per_sec/idle_cpu (history charts); each view declares its shapes,
+the model refuses the others, the builder dims them. Charts show the LATEST value (gauges
+sampled every 15s), not a sum. No maximize yet. Shared column formatting: Fswapi::Format
+(the page and the panel read the same).
+

@@ -30,7 +30,8 @@ module DataTable
     SOURCES = {
       "hep3" => "DataTable::Hep3Source",
       "logs" => "DataTable::LogsSource",
-      "http" => "DataTable::HttpSource"
+      "http" => "DataTable::HttpSource",
+      "fswapi" => "DataTable::FswapiSource"
     }.freeze
 
     # build — instantiate the source for `key` from request params, or

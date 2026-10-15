@@ -59,7 +59,7 @@ class DatatableController < ApplicationController
     )
 
     render json: {rows: rows, fields: source.fields(view: view), default_fields: source.default_fields(view: view)}
-  rescue DataTable::HttpSource::FetchError => e
+  rescue DataTable::HttpSource::FetchError, DataTable::FswapiSource::FetchError => e
     # An external-API source failed — surface WHY (timeout / HTTP 5xx / bad
     # JSON) instead of a silent empty table. 502: the upstream, not us.
     render json: {rows: [], error: e.message, fields: [], default_fields: []}, status: :bad_gateway
