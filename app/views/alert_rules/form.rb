@@ -14,8 +14,9 @@
 #
 # The alert-rule-form Stimulus controller keeps metric ↔ target
 # combinations honest as the operator types (disk = host-only,
-# req/s = deployments-only, FreeSWITCH = the Host row of a server with the
-# voodu-fswapi plugin) and swaps the unit suffix. Server-side
+# req/s = deployments-only, a plugin metric = the Host row of a server with
+# that plugin) and swaps the unit suffix. Metrics are listed in groups —
+# General, then one per plugin with alertable metrics (AlertRule::METRIC_GROUPS). Server-side
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
   def initialize(current_path:, rule:, targets: [], servers: [], destinations: [], current_server: nil, return_to: nil)
@@ -73,7 +74,14 @@ class Views::AlertRules::Form < Views::Base
     form(
       action: persisted? ? alert_rule_path(@rule) : alert_rules_path,
       method: "post",
-      data: {turbo: false, controller: "alert-rule-form"},
+      data: {
+        turbo: false, controller: "alert-rule-form",
+        # The JS knows no metric or plugin by name: it gets the maps from the
+        # model, so a new plugin group needs no JS change.
+        alert_rule_form_plugins_value: AlertRule::PLUGIN_FOR.to_json,
+        alert_rule_form_units_value: AlertRule::UNITS.to_json,
+        alert_rule_form_fixed_value: AlertRule::FIXED_CONDITION_KINDS.to_json
+      },
       id: "alert-rule-form",
       class: "flex flex-col"
     ) do
@@ -162,24 +170,37 @@ class Views::AlertRules::Form < Views::Base
   end
 
   def metric_select
-    ds_select(
-      name: "alert_rule[metric_kind]", selected: @rule.metric_kind, options: metric_options,
+    render Components::UI::Select.new(
+      name: "alert_rule[metric_kind]", selected: @rule.metric_kind, groups: metric_groups,
       # Metric drives the target constraint + unit — its pick dispatches change,
       # which alert-rule-form listens for on the hidden input.
       input_data: {alert_rule_form_target: "metric", action: "change->alert-rule-form#metricChanged"}
     )
   end
 
-  def metric_options
-    [
-      ["cpu", "CPU usage (%)"],
-      ["memory", "Memory usage (%)"],
-      ["disk", "Disk usage (%)"],
-      ["req_s", "Requests per second"],
-      ["fs_calls", "FreeSWITCH active calls"],
-      ["fs_idle_cpu", "FreeSWITCH idle CPU (%)"],
-      ["fs_down", "FreeSWITCH unavailable"]
-    ]
+  # metric_groups — General, then one group per plugin with alertable
+  # metrics that a server of this org has installed. A group whose plugin no
+  # server has stays out (nothing could be picked as its target), unless the
+  # rule being edited already uses one of its metrics.
+  def metric_groups
+    AlertRule::METRIC_GROUPS.filter_map do |group|
+      next unless group_available?(group)
+
+      options = group[:metrics].map do |m|
+        title = group[:plugin] ? "#{group[:label]} · #{m[:label]}" : m[:label]
+
+        [m[:kind], m[:label], title]
+      end
+
+      [group[:label], options]
+    end
+  end
+
+  def group_available?(group)
+    return true if group[:plugin].nil?
+    return true if group[:metrics].any? { |m| m[:kind] == @rule.metric_kind }
+
+    servers_for_select.any? { |server| server.plugin_installed?(group[:plugin]) }
   end
 
   # target_select — the DS custom dropdown (trigger + hidden input + filterable
@@ -218,7 +239,7 @@ class Views::AlertRules::Form < Views::Base
     @target_rows ||= begin
       rows = servers_for_select.flat_map do |server|
         host = {value: "host|#{server.id}", kind: "host", label: target_label_for(server, "Host (entire server)"),
-                fswapi: server.plugin_installed?("fswapi")}
+                plugins: plugins_on(server)}
         pods = targets_for(server).map do |t|
           {value: encode_target(t[:server_id], t[:scope], t[:name]), kind: t[:kind],
            label: target_label_for(server, "#{t[:scope]}/#{t[:name]}")}
@@ -250,7 +271,7 @@ class Views::AlertRules::Form < Views::Base
         action: "click->alert-rule-form#pickTarget click->dropdown#close",
         dropdown_target: "option", alert_rule_form_target: "option",
         value: row[:value], kind: row[:kind], label: row[:label], active: active.to_s,
-        fswapi: row[:fswapi].to_s
+        plugins: row[:plugins].to_s
       },
       class: "flex items-center gap-2 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text " \
              "hover:bg-voodu-hover data-[active=true]:text-voodu-accent-2 " \
@@ -259,6 +280,12 @@ class Views::AlertRules::Form < Views::Base
       span(class: "w-3.5 shrink-0 text-voodu-accent-2", data: {alert_rule_form_target: "optionCheck"}) { active ? "✓" : "" }
       span(class: "flex-1 min-w-0 truncate", title: row[:label]) { row[:label] }
     end
+  end
+
+  # plugins_on — the alert-relevant plugins installed on a server, space-
+  # separated, for the form's metric ↔ target constraint.
+  def plugins_on(server)
+    AlertRule::PLUGIN_FOR.values.uniq.select { |plugin| server.plugin_installed?(plugin) }.join(" ")
   end
 
   # servers_for_select — the org's servers; falls back to the current server so
@@ -320,12 +347,13 @@ class Views::AlertRules::Form < Views::Base
   # swaps the inputs for a sentence; the model pins the condition anyway.
   def condition_inputs
     p(
-      hidden: @rule.metric_kind != "fs_down",
+      hidden: !AlertRule::FIXED_CONDITION_KINDS.include?(@rule.metric_kind),
       data: {alert_rule_form_target: "downNote"},
       class: "flex items-center h-9 text-[12.5px] text-voodu-text-2"
     ) { "Fires when FreeSWITCH does not answer for the whole window." }
 
-    div(class: "flex items-stretch gap-2", hidden: @rule.metric_kind == "fs_down", data: {alert_rule_form_target: "condition"}) do
+    div(class: "flex items-stretch gap-2", hidden: AlertRule::FIXED_CONDITION_KINDS.include?(@rule.metric_kind),
+      data: {alert_rule_form_target: "condition"}) do
       div(class: "w-20 shrink-0") do
         ds_select(
           name: "alert_rule[comparator]",

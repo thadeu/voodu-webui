@@ -7,9 +7,14 @@
 //     disk  → host only (pods have no disk series in the warehouse)
 //     req_s → deployments only (ingress samples are per-deployment; the host
 //             row + non-deployment workloads dim out)
-//     fs_*  → the Host row of a server with the voodu-fswapi plugin
-//     fs_down → no threshold: the condition inputs give way to a sentence
-//     also swaps the threshold's unit suffix (%, req/s, calls).
+//     a plugin metric → the Host row of a server with that plugin
+//     a fixed-condition metric (FreeSWITCH unavailable) → no threshold: the
+//       condition inputs give way to a sentence
+//     also swaps the threshold's unit suffix.
+//
+// Which metric needs which plugin, the units and the fixed-condition metrics
+// come from the server (AlertRule::PLUGIN_FOR / UNITS / FIXED_CONDITION_KINDS)
+// as values: a plugin that adds alert metrics needs no change here.
 //
 // Pure progressive enhancement — AlertRule's validations are the real guard.
 
@@ -17,8 +22,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static targets = ["metric", "target", "targetLabel", "unit", "option", "condition", "downNote", "threshold"]
-
-  UNITS = { req_s: "req/s", fs_calls: "calls", fs_down: "" }
+  static values = { plugins: Object, units: Object, fixed: Array }
 
   connect() {
     this.metricChanged()
@@ -54,12 +58,12 @@ export default class extends Controller {
   metricChanged() {
     const metric = this.metricTarget.value
 
-    this.unitTarget.textContent = metric in this.UNITS ? this.UNITS[metric] : "%"
-    this.toggleCondition(metric === "fs_down")
+    this.unitTarget.textContent = metric in this.unitsValue ? this.unitsValue[metric] : "%"
+    this.toggleCondition(this.fixedValue.includes(metric))
     this.constrainTargets(metric)
   }
 
-  // toggleCondition — fs_down's condition is fixed, so the direction +
+  // toggleCondition — a fixed-condition metric's condition is pinned, so the direction +
   // threshold inputs hide behind a sentence. The threshold keeps a valid value
   // so a hidden field never blocks the submit.
   toggleCondition(down) {
@@ -79,7 +83,11 @@ export default class extends Controller {
 
       if (metric === "disk") disabled = kind !== "host"
       else if (metric === "req_s") disabled = kind !== "deployment"
-      else if (metric.startsWith("fs_")) disabled = kind !== "host" || opt.dataset.fswapi !== "true"
+      else if (this.pluginsValue[metric]) {
+        const installed = (opt.dataset.plugins || "").split(" ")
+
+        disabled = kind !== "host" || !installed.includes(this.pluginsValue[metric])
+      }
 
       opt.dataset.disabled = String(disabled)
       if (!disabled && !firstEnabled) firstEnabled = opt

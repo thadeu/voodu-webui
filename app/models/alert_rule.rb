@@ -37,10 +37,50 @@ class AlertRule < ApplicationRecord
   has_many :alert_rule_destinations, dependent: :destroy
   has_many :alert_destinations, through: :alert_rule_destinations
 
-  METRIC_KINDS = %w[cpu memory disk req_s fs_calls fs_idle_cpu fs_down].freeze
+  # METRIC_GROUPS — every metric a rule can watch, grouped the way the form
+  # shows them. "General" is the core warehouse; every other group belongs to
+  # one plugin (`plugin`: its name) and only applies to a server where that
+  # plugin is installed. A plugin that brings alertable metrics adds ONE
+  # entry here — the form grows a group, the plugin gate and the form's
+  # target constraint follow — plus its series in AlertEvaluator#fetch_series
+  # and its units below.
+  #
+  # `label` is the option as listed under its group; `title` is what the
+  # closed select shows, where the group heading is not there to say whose
+  # metric it is.
+  METRIC_GROUPS = [
+    {
+      label: "General", plugin: nil,
+      metrics: [
+        {kind: "cpu", label: "CPU usage (%)"},
+        {kind: "memory", label: "Memory usage (%)"},
+        {kind: "disk", label: "Disk usage (%)"},
+        {kind: "req_s", label: "Requests per second"}
+      ]
+    },
+    {
+      label: "FreeSWITCH", plugin: "fswapi",
+      metrics: [
+        {kind: "fs_calls", label: "Active calls"},
+        {kind: "fs_idle_cpu", label: "Idle CPU (%)"},
+        {kind: "fs_down", label: "Unavailable"}
+      ]
+    }
+  ].freeze
 
-  # FS_KINDS — read the voodu-fswapi overview; need the plugin on the server.
-  FS_KINDS = %w[fs_calls fs_idle_cpu fs_down].freeze
+  METRIC_KINDS = METRIC_GROUPS.flat_map { |g| g[:metrics].map { |m| m[:kind] } }.freeze
+
+  # PLUGIN_FOR — metric kind → the plugin it needs (only plugin groups).
+  PLUGIN_FOR = METRIC_GROUPS.select { |g| g[:plugin] }
+    .flat_map { |g| g[:metrics].map { |m| [m[:kind], g[:plugin]] } }.to_h.freeze
+
+  # FS_KINDS — read the voodu-fswapi overview (the evaluator and the label key
+  # on it; the plugin gate reads PLUGIN_FOR).
+  FS_KINDS = METRIC_GROUPS.find { |g| g[:plugin] == "fswapi" }[:metrics].map { |m| m[:kind] }.freeze
+
+  # FIXED_CONDITION_KINDS — a state, not a number: the condition is pinned
+  # (see pin_fs_down_condition) and the form hides direction + threshold.
+  FIXED_CONDITION_KINDS = %w[fs_down].freeze
 
   # Unit per kind, the one place every surface (form, tables, cards, webhook
   # {{unit}}) reads it from.
@@ -100,7 +140,7 @@ class AlertRule < ApplicationRecord
 
   validate :disk_is_host_only
   validate :req_s_is_deployment_only
-  validate :fs_kinds_need_the_plugin
+  validate :plugin_kinds_need_their_plugin
   validate :target_server_in_org
   validate :destinations_in_org
 
@@ -331,16 +371,18 @@ class AlertRule < ApplicationRecord
     self.threshold = 1
   end
 
-  # A FreeSWITCH rule watches the server's FreeSWITCH (target "host" = the
-  # server), and needs the plugin whose samples it reads — without it the rule
-  # would sit on "no data" forever.
-  def fs_kinds_need_the_plugin
-    return unless fs_kind?
+  # A plugin metric watches what that plugin runs on the server (target
+  # "host" = the server), and needs the plugin whose samples it reads —
+  # without it the rule would sit on "no data" forever.
+  def plugin_kinds_need_their_plugin
+    plugin = PLUGIN_FOR[metric_kind]
+
+    return unless plugin
 
     if target_kind != "host"
-      errors.add(:target_kind, "FreeSWITCH rules watch the server — pick its Host row")
-    elsif server && !server.plugin_installed?("fswapi")
-      errors.add(:target_kind, "this server has no voodu-fswapi plugin")
+      errors.add(:target_kind, "plugin metrics watch the server — pick its Host row")
+    elsif server && !server.plugin_installed?(plugin)
+      errors.add(:target_kind, "this server has no #{plugin} plugin")
     end
   end
 

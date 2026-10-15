@@ -298,9 +298,20 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
 
     get new_alert_rule_path(server_key: @key)
 
-    assert_includes response.body, "FreeSWITCH unavailable"
-    assert_includes response.body, "FreeSWITCH active calls"
-    assert_match %r{data-value="host\|#{@server.id}"[^>]*data-fswapi="true"}, response.body
+    body = response.body
+
+    assert_match %r{data-group-label="General"}, body
+    assert_match %r{data-group-label="FreeSWITCH"}, body
+    assert_operator body.index('data-group-label="General"'), :<, body.index('data-group-label="FreeSWITCH"')
+    assert_match %r{data-value="fs_down"[^>]*data-label="FreeSWITCH · Unavailable"}, body, "the closed select names the group"
+    assert_match %r{data-value="host\|#{@server.id}"[^>]*data-plugins="fswapi"}, body
+  end
+
+  test "a plugin group stays out when no server of the org has the plugin" do
+    get new_alert_rule_path(server_key: @key)
+
+    assert_match %r{data-group-label="General"}, response.body
+    assert_no_match %r{data-group-label="FreeSWITCH"}, response.body
   end
 
   test "create a FreeSWITCH down rule: the condition is pinned whatever was sent" do

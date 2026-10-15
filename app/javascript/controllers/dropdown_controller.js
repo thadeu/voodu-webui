@@ -12,9 +12,11 @@ import { Controller } from "@hotwired/stimulus"
 export default class extends Controller {
   // filter/option/empty are OPTIONAL — a menu with a search box at the top
   // (data-dropdown-target="filter") + rows tagged data-dropdown-target="option"
-  // becomes type-to-filter; `empty` shows a "no matches" row. Menus without
-  // them behave exactly as before.
-  static targets = ["menu", "filter", "option", "empty"]
+  // becomes type-to-filter; `empty` shows a "no matches" row. `group` wraps
+  // options under a heading (data-group-label): the filter also matches the
+  // heading, and hides a group with nothing left in it. Menus without them
+  // behave exactly as before.
+  static targets = ["menu", "filter", "option", "empty", "group"]
 
   connect() {
     this.outsideClick = this.outsideClick.bind(this)
@@ -55,10 +57,16 @@ export default class extends Controller {
     let shown = 0
 
     this.optionTargets.forEach((opt) => {
-      const match = q === "" || opt.textContent.toLowerCase().includes(q)
+      const group = opt.closest("[data-dropdown-target='group']")
+      const heading = (group?.dataset.groupLabel || "").toLowerCase()
+      const match = q === "" || opt.textContent.toLowerCase().includes(q) || (heading !== "" && heading.includes(q))
 
       opt.hidden = !match
       if (match) shown++
+    })
+
+    this.groupTargets.forEach((group) => {
+      group.hidden = !group.querySelector("[data-dropdown-target='option']:not([hidden])")
     })
 
     if (this.hasEmptyTarget) this.emptyTarget.hidden = shown > 0

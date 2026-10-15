@@ -277,7 +277,7 @@ class AlertRuleTest < ActiveSupport::TestCase
     rule = fs_rule("fs_calls")
 
     assert_not rule.valid?
-    assert_includes rule.errors[:target_kind].join, "voodu-fswapi"
+    assert_includes rule.errors[:target_kind].join, "no fswapi plugin"
 
     install_fswapi(servers(:alpha))
 
