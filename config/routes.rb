@@ -296,6 +296,8 @@ Rails.application.routes.draw do
     get "/hep3", to: "hep3#index", as: :hep3
     get "/hep3/count", to: "hep3#count", as: :hep3_count
     get "/hep3/display_settings", to: "hep3#display_settings", as: :hep3_display_settings
+    # FreeSWITCH (voodu-fswapi plugin) — status, count history, live lists.
+    get "/fswapi", to: "fswapi#index", as: :fswapi
 
     # Saved metric dashboards — named multi-panel views the operator
     # builds in the right-drawer builder. `show` is omitted: a dashboard

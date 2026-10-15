@@ -492,6 +492,13 @@ module Voodu
       raise TransportError, e.message
     end
 
+    # fswapi — one read of the voodu-fswapi plugin's API (the builtin resource
+    # plugins/fswapi), through the controller's PAT proxy:
+    #   GET /api/pat/v1/fswapi/<route>
+    # A FreeSWITCH that is down or refuses the ESL password answers 502, which
+    # raises ServerError carrying the plugin's message (it names the fix).
+    def fswapi(route, params = nil) = get("fswapi/#{route}", params)
+
     # hep_export — pulls one bounded page of a voodu-hep3 reader's
     # /export NDJSON tail for (scope, name), resuming at the `since`
     # cursor (nil/"" = from the beginning). Returns [body, next_cursor]:

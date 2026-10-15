@@ -40,6 +40,13 @@ common: &common
     # read model. No-op for servers without the plugin or without a reader.
     schedule: every 15 seconds
 
+  fswapi_sync:
+    class: FswapiSyncOrchestratorJob
+    # 15s — the aggregated FreeSWITCH history: one /overview call per server
+    # with the voodu-fswapi plugin installed, written as one warehouse sample.
+    # No-op (no request) for servers without the plugin.
+    schedule: every 15 seconds
+
   deployment_sweep:
     class: DeploymentSweepJob
     # 5 min — the row it fixes is one a killed worker left saying `running`,

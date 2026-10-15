@@ -122,6 +122,9 @@ Canonical mapping (assignments live in `MetricsPageData#chart_specs`,
 | HTTP 5xx Errors   | `--voodu-red`      |
 | HTTP Bytes Out    | `--voodu-pink`     |
 | SIP Calls (HEP3)  | `--voodu-lime`     |
+| FreeSWITCH Calls  | `--voodu-fuchsia`  |
+| FreeSWITCH Channels | `--voodu-sand`   |
+| FreeSWITCH Sessions/s | `--voodu-olive` |
 
 CPU uses `--voodu-purple` (the old accent hue), kept distinct from the
 green chrome accent so charts stay one-color-per-metric.

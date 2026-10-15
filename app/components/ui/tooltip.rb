@@ -45,6 +45,14 @@ class Components::UI::Tooltip < Components::Base
       "bottom-full left-1/2 -translate-x-1/2 mb-2",
       "-bottom-1 left-1/2 -translate-x-1/2",
       "border-r border-b"
+    ],
+    # Below, aligned to the trigger's LEFT edge: for a wide tip on a trigger
+    # near the top-left of the page, where one above is cut by the page's top
+    # and a centered one leaves the screen on the left.
+    bottom_start: [
+      "top-full left-0 mt-2",
+      "-top-1 left-3",
+      "border-l border-t"
     ]
   }.freeze
 
@@ -62,7 +70,10 @@ class Components::UI::Tooltip < Components::Base
     "nav" => "group-hover/nav:opacity-100",
     "rail" => "group-hover/rail:opacity-100",
     "sender" => "group-hover/sender:opacity-100",
-    "private" => "group-hover/private:opacity-100"
+    "private" => "group-hover/private:opacity-100",
+    # Focus too: the FreeSWITCH status facts explain themselves on a tap, where
+    # a touch screen has no hover.
+    "fact" => "group-hover/fact:opacity-100 group-focus/fact:opacity-100"
   }.freeze
 
   # `group` names the hover group the PARENT declares. Named rather than bare

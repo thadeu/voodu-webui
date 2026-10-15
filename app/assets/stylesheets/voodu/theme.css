@@ -968,6 +968,13 @@ body.log-cols-resizing * {
   /* HEP3 — SIP calls (distinct calls in the window, /hep3 count card). */
   --voodu-lime:    #a3e635; /* SIP Calls */
 
+  /* FreeSWITCH — the voodu-fswapi overview (/fswapi cards, dashboard counts).
+   * Hues kept away from the HTTP and host families so a PBX chart never reads
+   * as one of theirs: fuchsia (calls), sand (channels), olive (sessions/s). */
+  --voodu-fuchsia: #e879f9; /* FreeSWITCH Calls */
+  --voodu-sand:    #d6a77a; /* FreeSWITCH Channels */
+  --voodu-olive:   #b5b35c; /* FreeSWITCH Sessions/s */
+
   /* ── Radius ──
    *
    * Voodu leans square — but not razor-sharp. A subtle 2px softens
@@ -1101,6 +1108,9 @@ html[data-theme="light"] {
   --voodu-sky:    #0284c7;
   --voodu-rose:   #e11d48;
   --voodu-lime:   #65a30d;
+  --voodu-fuchsia: #c026d3;
+  --voodu-sand:    #9a6b3c;
+  --voodu-olive:   #77752a;
   --voodu-purple: #7c5cff; /* CPU — kept identical to dark (reads fine on white) */
 
   /* Interaction + shadows for light. */

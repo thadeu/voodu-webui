@@ -80,14 +80,24 @@ class Components::Layouts::Sidebar < Components::Base
   # need admin access".
   ORG_NAV = [
     {id: :metrics, label: "Metrics", icon: :ChartBarOutline, path: :metrics},
-    # `plugin` — drawn only when the server has that plugin installed. The page
-    # refuses without it (Hep3Controller#require_hep3_plugin!), so the item and
-    # the door appear and disappear together.
-    {id: :hep3, label: "HEP3", icon: :PhoneArrowUpRightOutline, path: :hep3, plugin: "hep3"},
     {id: :alerts, label: "Alerts", icon: :BellOutline, path: :alerts, badge: :alerts_count,
      capability: :read_org_surfaces},
     {id: :members, label: "Members", icon: :UsersOutline, path: :org_members,
      org_only: true, capability: :invite_member, clowk_only: true}
+  ].freeze
+
+  # VOICE_NAV — the telephony surfaces of the CURRENT server, each one a plugin.
+  # `plugin` — drawn only when the server has that plugin installed. Each page
+  # refuses without it (Hep3Controller#require_hep3_plugin!,
+  # FswapiController#require_fswapi_plugin!), so the item and the door appear
+  # and disappear together; with neither plugin the group draws nothing, not
+  # even its heading.
+  #
+  # Two pages, not one: HEP3 is for investigating SIP traffic (history, call
+  # flow), FreeSWITCH for operating the PBX now (state, actions).
+  VOICE_NAV = [
+    {id: :hep3, label: "HEP3", icon: :PhoneArrowUpRightOutline, path: :hep3, plugin: "hep3"},
+    {id: :fswapi, label: "FreeSWITCH", icon: :PhoneOutline, path: :fswapi, plugin: "fswapi"}
   ].freeze
 
   # INSTALLATION_NAV — the container itself: what it is licensed for, and how
@@ -470,6 +480,12 @@ class Components::Layouts::Sidebar < Components::Base
       # "nothing happens" rather than as a refusal.
       if nav_org_id
         nav_group("Org", org_nav_items)
+        nav_divider
+      end
+
+      # Per server, like the Server group: the plugins live on the box.
+      if nav_server_key && VOICE_NAV.any? { |item| nav_permitted?(item) }
+        nav_group("Voice", VOICE_NAV)
         nav_divider
       end
 

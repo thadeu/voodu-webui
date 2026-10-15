@@ -40,6 +40,7 @@ class TooltipTest < ActiveSupport::TestCase
   test "the arrow flips with the side" do
     assert_includes render(side: :left), "-right-1"
     assert_includes render(side: :top), "-bottom-1"
+    assert_includes render(side: :bottom_start), "-top-1"
   end
 
   # THE BUG THIS CONSTANT EXISTS FOR. Tailwind scans SOURCE TEXT for candidate
@@ -48,7 +49,9 @@ class TooltipTest < ActiveSupport::TestCase
   # invisible with nothing to grep for.
   test "the reveal class is a literal, not interpolated" do
     Components::UI::Tooltip::HOVER.each_value do |klass|
-      assert_match(%r{\Agroup-hover/\w+:opacity-100\z}, klass)
+      # An optional group-focus twin (a tap opens the tip on touch) obeys the
+      # same rule: literal, same group.
+      assert_match(%r{\Agroup-hover/(\w+):opacity-100( group-focus/\1:opacity-100)?\z}, klass)
 
       # And it appears verbatim in this file, which is what Tailwind reads.
       assert_includes File.read(Rails.root.join("app/components/ui/tooltip.rb")), klass

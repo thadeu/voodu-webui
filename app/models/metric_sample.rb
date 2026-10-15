@@ -29,7 +29,14 @@ class MetricSample < MetricsRecord
 
   extend ServerScoped
 
-  # last_ts_for — highest ts_epoch we've persisted for this server.
+  # POLLER_SOURCES — the sources the Go poller pulls from the controller. The
+  # WebUI writes other sources itself (`log`, `fswapi`), stamped "now".
+  POLLER_SOURCES = %w[system pod ingress].freeze
+
+  # last_ts_for — highest ts_epoch the POLLER has persisted for this server.
+  # Only POLLER_SOURCES count: a `log` or `fswapi` row written a second ago
+  # would move the boundary past controller samples not pulled yet, and the
+  # next poller restart would skip them — a silent gap in every chart.
   # Internal::PollerController#metrics_watermark uses this as the `?since=<ts>` boundary on
   # the next incremental pull. Hits idx_metric_samples_watermark.
   #
@@ -40,7 +47,11 @@ class MetricSample < MetricsRecord
   # Takes a Server, never an id — see ServerScoped. These rows have no org
   # column, so the object is the only proof the caller was allowed to ask.
   def self.last_ts_for(server)
-    where(server_id: server_id_of(server)).maximum(:ts_epoch) || 0
+    id = server_id_of(server)
+
+    # One MAX per source: each comes off idx_metric_samples_source_ts, where a
+    # single `source IN (...)` MAX would scan the server's rows.
+    POLLER_SOURCES.filter_map { |source| where(server_id: id, source: source).maximum(:ts_epoch) }.max || 0
   end
 
   # ── Scopes ──────────────────────────────────────────────────────

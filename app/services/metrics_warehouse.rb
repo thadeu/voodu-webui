@@ -52,6 +52,9 @@ class MetricsWarehouse
     bytes_out
 
     log_count
+
+    fs_calls fs_channels fs_sessions
+    fs_sessions_peak fs_sessions_per_sec fs_idle_cpu
   ].freeze
 
   # Friendly range aliases (mirror rangeAliases in handlers_metrics.go).
@@ -147,7 +150,17 @@ class MetricsWarehouse
     # total count. The panel's agg (count=latest / sum=total / avg=mean /
     # min/max) is then applied OVER that per-render-bucket count series in
     # LogMetricData — not here.
-    "log_count" => "SUM"
+    "log_count" => "SUM",
+
+    # FreeSWITCH overview (FswapiSyncServerJob): gauges sampled every 15s.
+    # MAX keeps a short call burst visible in a wide bucket; idle CPU keeps
+    # its worst (lowest) point.
+    "fs_calls" => "MAX",
+    "fs_channels" => "MAX",
+    "fs_sessions" => "MAX",
+    "fs_sessions_peak" => "MAX",
+    "fs_sessions_per_sec" => "MAX",
+    "fs_idle_cpu" => "MIN"
   }.freeze
   DEFAULT_AGGREGATION = "AVG"
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_02_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_14_120000) do
   create_table "activity_actions", force: :cascade do |t|
     t.string "action", null: false
     t.string "activity_id", null: false
@@ -46,6 +46,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_02_120000) do
     t.virtual "ts_epoch", type: :integer, as: "CAST(strftime('%s', ts_iso) AS INTEGER)", stored: true
     t.string "ts_iso", null: false
     t.index ["server_id", "source", "scope", "name", "pod", "ts_epoch"], name: "idx_metric_samples_pod", where: "source = 'pod'"
+    t.index ["server_id", "source", "ts_epoch"], name: "idx_metric_samples_source_ts"
     t.index ["server_id", "source", "ts_epoch"], name: "idx_metric_samples_system", where: "source = 'system'"
     t.index ["server_id", "ts_epoch"], name: "idx_metric_samples_watermark"
   end
