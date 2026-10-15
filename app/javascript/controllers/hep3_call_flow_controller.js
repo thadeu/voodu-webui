@@ -15,7 +15,7 @@ export default class extends Controller {
   static targets = ["host"]
   static values = { url: String }
 
-  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus", "cf_callid", "cf_server"]
+  PARAMS = ["cf_scope", "cf_name", "cf_corr", "cf_focus", "cf_callid", "cf_fsuuid", "cf_server"]
 
   connect() {
     this.onAction = this.onAction.bind(this)
@@ -53,6 +53,14 @@ export default class extends Controller {
       return
     }
 
+    const fsUuid = p.get("cf_fsuuid")
+
+    if (fsUuid) {
+      this.fetchInto({ fsUuid, server: p.get("cf_server") || "" })
+
+      return
+    }
+
     const corr = p.get("cf_corr")
 
     if (!corr) return
@@ -73,6 +81,10 @@ export default class extends Controller {
       // Logs bridge: hand the server just the SIP Call-ID; it resolves the
       // reader instance + corr_id (folding x_cid) from the read model.
       params.set("call_id", detail.callId)
+    } else if (detail.fsUuid) {
+      // FreeSWITCH bridge: a live channel's uuid; the server asks the plugin
+      // for its SIP Call-ID, then resolves it like the Logs bridge.
+      params.set("fs_uuid", detail.fsUuid)
     } else {
       params.set("scope", detail.scope || "")
       params.set("name", detail.name || "")
@@ -112,6 +124,8 @@ export default class extends Controller {
 
     if (detail.callId) {
       url.searchParams.set("cf_callid", detail.callId)
+    } else if (detail.fsUuid) {
+      url.searchParams.set("cf_fsuuid", detail.fsUuid)
     } else {
       url.searchParams.set("cf_scope", detail.scope || "")
       url.searchParams.set("cf_name", detail.name || "")

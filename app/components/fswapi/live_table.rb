@@ -22,10 +22,11 @@ class Components::Fswapi::LiveTable < Components::Base
     "EXPIRED" => "var(--voodu-red)", "UNREGED" => "var(--voodu-red)"
   }.freeze
 
-  def initialize(view:, rows:, now: Time.current)
+  def initialize(view:, rows:, now: Time.current, call_flow: false)
     @view = view
     @rows = rows
     @now = now
+    @call_flow = call_flow
   end
 
   def view_template
@@ -204,6 +205,22 @@ class Components::Fswapi::LiveTable < Components::Base
       else
         span(class: "font-medium text-voodu-text") { "A-leg" }
       end
+
+      call_flow_button(row["uuid"]) if @call_flow && row["uuid"].present?
+    end
+  end
+
+  # call_flow_button — this leg's SIP flow in HEP3. Each leg is its own SIP
+  # dialog with its own Call-ID, so the button sits on the leg, not the call.
+  def call_flow_button(uuid)
+    button(
+      type: "button",
+      title: "Open this leg's SIP call-flow (HEP3)",
+      "aria-label": "Open this leg's SIP call-flow",
+      data: {controller: "fswapi-call-flow", action: "click->fswapi-call-flow#open", fs_uuid: uuid},
+      class: "inline-flex items-center justify-center w-5 h-5 rounded-voodu-sm text-voodu-muted hover:text-voodu-text hover:bg-voodu-hover"
+    ) do
+      render Icon::ArrowsRightLeftOutline.new(class: "w-3 h-3")
     end
   end
 

@@ -260,4 +260,53 @@ class AlertRuleTest < ActiveSupport::TestCase
     assert_equal "90m", AlertRule.new(duration_seconds: 5400).duration_label
     assert_equal "2h", AlertRule.new(duration_seconds: 7200).duration_label
   end
+
+  # ── FreeSWITCH kinds ────────────────────────────────────────────
+
+  def fs_rule(kind, server: servers(:alpha), **attrs)
+    server.alert_rules.new({name: kind, metric_kind: kind, target_kind: "host",
+                            comparator: "gte", threshold: 10, duration_seconds: 300}.merge(attrs))
+  end
+
+  def install_fswapi(server)
+    System.create!(server: server, synced_at: Time.current,
+      payload: {host: {}, plugins: [{"name" => "fswapi", "aliases" => []}]}.to_json)
+  end
+
+  test "a FreeSWITCH rule needs the plugin on its server" do
+    rule = fs_rule("fs_calls")
+
+    assert_not rule.valid?
+    assert_includes rule.errors[:target_kind].join, "voodu-fswapi"
+
+    install_fswapi(servers(:alpha))
+
+    assert fs_rule("fs_calls").valid?
+  end
+
+  test "a FreeSWITCH rule watches the server, not a pod" do
+    install_fswapi(servers(:alpha))
+    rule = fs_rule("fs_idle_cpu", target_kind: "pod", target_scope: "web", target_name: "web")
+
+    assert_not rule.valid?
+    assert_includes rule.errors[:target_kind].join, "Host row"
+  end
+
+  test "fs_down pins its condition: down is the only meaning" do
+    install_fswapi(servers(:alpha))
+    rule = fs_rule("fs_down", comparator: "lte", threshold: 42)
+
+    assert rule.valid?
+    assert_equal "gte", rule.comparator
+    assert_equal 1, rule.threshold
+    assert_equal "down for 5m", rule.condition_label
+    assert_equal "down", rule.format_value(1.0)
+    assert_equal "up", rule.format_value(0.0)
+  end
+
+  test "FreeSWITCH units read right on every surface" do
+    assert_equal "157 calls", AlertRule.format_metric_value(157, "fs_calls")
+    assert_equal "13.5%", AlertRule.format_metric_value(13.5, "fs_idle_cpu")
+    assert_equal "3.2 req/s", AlertRule.format_metric_value(3.2, "req_s")
+  end
 end

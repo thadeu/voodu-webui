@@ -107,20 +107,40 @@ class Hep3Controller < ApplicationController
     @reader_server = lookup_server
   end
 
+  FS_UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
+
+  # fswapi_sip_call_id — the SIP Call-ID of one live FreeSWITCH channel, read
+  # through the voodu-fswapi plugin (GET channels/<uuid>/sip_call_id). nil when
+  # there is no uuid, it is not a uuid, the plugin is missing or older than
+  # 0.1.3, or the channel is gone — the modal then says "Call not found".
+  def fswapi_sip_call_id(server, uuid)
+    return nil unless uuid.to_s.match?(FS_UUID)
+    return nil unless server.plugin_installed?("fswapi")
+
+    Voodu::Client.new(server).fswapi("channels/#{uuid.downcase}/sip_call_id")["sip_call_id"].presence
+  rescue Voodu::Client::Error
+    nil
+  end
+
   def call_flow_data
     server = reader_server
     return if server.nil?
 
-    if params[:call_id].present?
-      # Logs bridge: find any captured message with this SIP Call-ID → its
-      # reader instance + corr_id (which folds x_cid). Not captured → an
+    # Two id-only entry points share one path: the Logs bridge hands a SIP
+    # Call-ID; the FreeSWITCH bridge hands a live channel's uuid, whose
+    # Call-ID the plugin is asked for (the channel list does not carry it).
+    if params[:call_id].present? || params[:fs_uuid].present?
+      call_id = params[:call_id].presence || fswapi_sip_call_id(server, params[:fs_uuid])
+
+      # Find any captured message with this SIP Call-ID → its reader instance
+      # + corr_id (which folds x_cid). Not captured, or no Call-ID at all → an
       # empty-state modal carrying the id (a dead click still explains itself).
-      message = HepMessage.locate_by_call_id(server, params[:call_id])
+      message = call_id && HepMessage.locate_by_call_id(server, call_id)
 
       return Hep3::CallFlowData.new(
         server: server,
         scope: message&.scope.to_s, name: message&.name.to_s,
-        corr_id: message&.corr_id.presence || params[:call_id].to_s
+        corr_id: message&.corr_id.presence || call_id.presence || params[:fs_uuid].to_s
       )
     end
 

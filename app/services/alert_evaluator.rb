@@ -261,6 +261,8 @@ class AlertEvaluator
     when "memory" then memory_series(rule)
     when "disk" then disk_series(rule)
     when "req_s" then req_s_series(rule)
+    when "fs_calls", "fs_idle_cpu" then points(query(rule, source: "fswapi", metric: rule.metric_kind))
+    when "fs_down" then fs_down_series(rule)
     else []
     end
   end
@@ -302,6 +304,13 @@ class AlertEvaluator
     return [] unless interval.positive?
 
     points(envelope).map { |p| {epoch: p[:epoch], value: p[:value] / interval} }
+  end
+
+  # fs_down — 1 where the sync recorded FreeSWITCH not answering (fs_up 0),
+  # 0 where it answered. A WebUI that cannot reach the controller records
+  # nothing: that stays "no data", never "FreeSWITCH down".
+  def fs_down_series(rule)
+    points(query(rule, source: "fswapi", metric: "fs_up")).map { |p| {epoch: p[:epoch], value: 1.0 - p[:value]} }
   end
 
   def query(rule, source:, metric:)

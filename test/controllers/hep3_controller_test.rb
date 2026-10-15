@@ -124,6 +124,76 @@ class Hep3ControllerTest < ActionDispatch::IntegrationTest
     assert_match "never-captured@10.0.0.9", @response.body
   end
 
+  # ── FreeSWITCH bridge: a live channel's uuid → its SIP Call-ID ──
+
+  FS_UUID = "0b7a8f2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b"
+
+  # FakeFswapi stands in for Voodu::Client: answers the one route the bridge
+  # asks for, or raises like the PAT proxy does when the channel is gone.
+  class FakeFswapi
+    attr_reader :routes
+
+    def initialize(call_id: nil, error: nil)
+      @call_id = call_id
+      @error = error
+      @routes = []
+    end
+
+    def fswapi(route, _params = nil)
+      @routes << route
+
+      raise @error if @error
+
+      {"uuid" => FS_UUID, "sip_call_id" => @call_id}
+    end
+  end
+
+  def install_fswapi
+    System.create!(
+      server: @server,
+      payload: {host: {}, plugins: [{"name" => "fswapi", "aliases" => []}, {"name" => "hep3", "aliases" => []}]}.to_json,
+      synced_at: Time.current
+    )
+  end
+
+  test "FreeSWITCH bridge: a live channel's uuid opens its captured SIP call" do
+    install_fswapi
+    fake = FakeFswapi.new(call_id: "call-1")
+
+    Voodu::Client.stub(:new, fake) do
+      get metrics_hep3_call_path(server_key: @key, fs_uuid: FS_UUID.upcase)
+    end
+
+    assert_response :success
+    assert_equal ["channels/#{FS_UUID}/sip_call_id"], fake.routes
+    assert_match "INVITE", @response.body
+    assert_no_match(/Call not found/, @response.body)
+  end
+
+  test "FreeSWITCH bridge: a channel that is gone still opens the overlay, explained" do
+    install_fswapi
+    fake = FakeFswapi.new(error: Voodu::Client::NotFoundError.new("channel has no SIP Call-ID"))
+
+    Voodu::Client.stub(:new, fake) do
+      get metrics_hep3_call_path(server_key: @key, fs_uuid: FS_UUID)
+    end
+
+    assert_response :success
+    assert_match "Call not found", @response.body
+  end
+
+  test "FreeSWITCH bridge: a uuid that is not one never reaches the plugin" do
+    install_fswapi
+    fake = FakeFswapi.new(call_id: "call-1")
+
+    Voodu::Client.stub(:new, fake) do
+      get metrics_hep3_call_path(server_key: @key, fs_uuid: "../../actions/hupall")
+    end
+
+    assert_response :success
+    assert_empty fake.routes
+  end
+
   test "an unknown call renders the in-overlay empty state, not a 404" do
     get metrics_hep3_call_path(server_key: @key, scope: "fsw", name: "hep3-api", corr_id: "ghost")
 

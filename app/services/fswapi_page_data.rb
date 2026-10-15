@@ -53,6 +53,12 @@ class FswapiPageData
 
   def views = VIEWS
 
+  # call_flow? — a live channel can open its SIP flow only where HEP3 captures
+  # it; without the plugin the button would open onto nothing.
+  def call_flow?
+    server.plugin_installed?("hep3")
+  end
+
   # ── Status (live /overview — the same call the sync job makes) ───
 
   def status

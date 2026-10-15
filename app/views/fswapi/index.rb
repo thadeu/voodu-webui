@@ -28,6 +28,12 @@ class Views::Fswapi::Index < Views::Base
           page_head
           live_frame
         end
+
+        # Outside the polled frame, like on Metrics and HEP3: an open SIP
+        # ladder must survive the 15s refresh.
+        if @data.call_flow?
+          render Components::Hep3::CallFlowHost.new(call_url: metrics_hep3_call_path(server_key: @current_server.key))
+        end
       end
     end
   end

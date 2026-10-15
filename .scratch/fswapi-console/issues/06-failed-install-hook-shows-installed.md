@@ -1,6 +1,6 @@
 # 06 — A failed install hook still lists the plugin as "installed"
 
-Status: ready-for-agent
+Status: resolved
 Priority: P3
 Repo: clowk-voodu
 Blocked by: —
@@ -24,3 +24,8 @@ Seen on fsw02 (controller 0.18.32): voodu-fswapi built its image, stopped at
   `failed` + its error, for as long as the marker exists.
 - Optional (P4): `requires_voodu: ">= x.y.z"` in plugin.yml, checked before
   the hook runs — only helps on controllers that know the field.
+
+## Comments
+
+2026-10-15 — clowk-voodu v0.18.34 (9a72f9f): .install-error marker; PAT list "failed", vd plugins:list,
+/system install_error. WebUI: System#plugin_installed? skips a plugin with install_error.

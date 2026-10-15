@@ -38,7 +38,13 @@ class AlertEvent < ApplicationRecord
   # Unit derived from the snapshotted metric_kind (no dependency on
   # the live rule, which may be edited/gone).
   def unit
-    AlertRule::PERCENT_KINDS.include?(metric_kind) ? "%" : "req/s"
+    AlertRule.unit_for(metric_kind)
+  end
+
+  # up_down? — the episode is a state (FreeSWITCH down), not a number crossing
+  # a threshold: "peak" and "threshold" mean nothing for it.
+  def up_down?
+    metric_kind == "fs_down"
   end
 
   # Episode length — open episodes measure against now.

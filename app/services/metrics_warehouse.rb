@@ -54,7 +54,7 @@ class MetricsWarehouse
     log_count
 
     fs_calls fs_channels fs_sessions
-    fs_sessions_peak fs_sessions_per_sec fs_idle_cpu
+    fs_sessions_peak fs_sessions_per_sec fs_idle_cpu fs_up
   ].freeze
 
   # Friendly range aliases (mirror rangeAliases in handlers_metrics.go).
@@ -160,7 +160,9 @@ class MetricsWarehouse
     "fs_sessions" => "MAX",
     "fs_sessions_peak" => "MAX",
     "fs_sessions_per_sec" => "MAX",
-    "fs_idle_cpu" => "MIN"
+    "fs_idle_cpu" => "MIN",
+    # 1 answered / 0 did not: MIN, so one failed poll marks its bucket down.
+    "fs_up" => "MIN"
   }.freeze
   DEFAULT_AGGREGATION = "AVG"
 

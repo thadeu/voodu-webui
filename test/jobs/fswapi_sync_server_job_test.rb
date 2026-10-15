@@ -52,12 +52,22 @@ class FswapiSyncServerJobTest < ActiveSupport::TestCase
     assert_equal 9, payload["fs_sessions_peak"]
     assert_in_delta 97.1, payload["fs_idle_cpu"]
     assert payload["up"]
+    assert_equal 1, payload["fs_up"]
   end
 
-  test "FreeSWITCH down (502) writes nothing — a gap, not a zero" do
+  test "FreeSWITCH down (502) records fs_up 0 alone — gauges get a gap, not a zero" do
     error = Voodu::Client::ServerError.new("esl: authentication failed — set the event_socket password")
 
-    assert_nil FswapiSyncServerJob.new.sync(@server, FakeFswapi.new(error: error))
+    FswapiSyncServerJob.new.sync(@server, FakeFswapi.new(error: error))
+
+    payload = JSON.parse(MetricSample.where(source: "fswapi").sole.payload)
+
+    assert_equal 0, payload["fs_up"]
+    assert_nil payload["fs_calls"], "a zero would read as 'no calls'"
+  end
+
+  test "a controller the WebUI cannot reach records nothing — no data, not 'down'" do
+    assert_nil FswapiSyncServerJob.new.sync(@server, FakeFswapi.new(error: Voodu::Client::TransportError.new("timeout")))
     assert_equal 0, MetricSample.where(source: "fswapi").count
   end
 

@@ -289,4 +289,35 @@ class AlertRulesControllerTest < ActionDispatch::IntegrationTest
       firing: firing, firing_since: firing ? 5.minutes.ago : nil
     )
   end
+
+  # ── FreeSWITCH kinds ────────────────────────────────────────────
+
+  test "the form offers the FreeSWITCH kinds and flags the servers that can take them" do
+    System.create!(server: @server, synced_at: Time.current,
+      payload: {host: {}, plugins: [{"name" => "fswapi", "aliases" => []}]}.to_json)
+
+    get new_alert_rule_path(server_key: @key)
+
+    assert_includes response.body, "FreeSWITCH unavailable"
+    assert_includes response.body, "FreeSWITCH active calls"
+    assert_match %r{data-value="host\|#{@server.id}"[^>]*data-fswapi="true"}, response.body
+  end
+
+  test "create a FreeSWITCH down rule: the condition is pinned whatever was sent" do
+    System.create!(server: @server, synced_at: Time.current,
+      payload: {host: {}, plugins: [{"name" => "fswapi", "aliases" => []}]}.to_json)
+
+    post alert_rules_path(server_key: @key), params: {
+      alert_rule: {
+        name: "fs down", metric_kind: "fs_down", target: "host|#{@server.id}",
+        comparator: "lte", threshold: "", duration_minutes: "2"
+      }
+    }
+
+    rule = AlertRule.order(:id).last
+    assert_equal "fs_down", rule.metric_kind
+    assert_equal "gte", rule.comparator
+    assert_equal 1, rule.threshold
+    assert_equal "down for 2m", rule.condition_label
+  end
 end

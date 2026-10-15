@@ -71,8 +71,9 @@ history.
 | 05 | HEP3 call-flow link + alerts | 02, 03 |
 | 06 | (clowk-voodu, P3) a failed install hook still lists the plugin as installed | — |
 | 07 | (local dev, P4) two Solid Queue supervisors run jobs twice | — |
+| 08 | (clowk-voodu, P4) flaky pod-exec test in CI | — |
 
-Status 2026-10-15: 01 and 02 resolved (voodu-webui d1105d7). Next: 03, 04, 06, 07.
+Status 2026-10-15: 01, 02, 06, 07 resolved; 05 partly (alert C left). Next: 03, 04, 05-C, 08.
 
 ## Out of scope
 

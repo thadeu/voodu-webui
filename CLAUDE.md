@@ -185,7 +185,7 @@ support drawer-mode (`Views::Pods::Show`, `Views::Logs::Show`) take a
 
 ```sh
 bin/setup            # one-time: install + db:prepare
-bin/dev              # Procfile.dev: rails s + esbuild watch + tailwind watch + bin/jobs
+bin/dev              # Procfile.dev: rails s (+ Solid Queue in Puma, SOLID_QUEUE_IN_PUMA=1) + esbuild watch + tailwind watch
 ```
 
 Tests: `bin/rails test` (Minitest). System tests under

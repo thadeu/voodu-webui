@@ -121,11 +121,17 @@ class System < ApplicationRecord
   # installed, matching the canonical name OR any alias (so "hep" finds
   # "hep3"). Reads the locally-synced row, so WebUI feature gates resolve
   # offline and free at render time — no live controller call.
+  #
+  # A plugin whose install hook failed is on disk but not working; the
+  # controller (v0.18.34+) flags it with `install_error`, and it does not
+  # count — a page gated on it would open onto a plugin that never came up.
   def plugin_installed?(name)
     wanted = name.to_s
     return false if wanted.empty?
 
     plugins.any? do |p|
+      next false if p["install_error"].present?
+
       p["name"].to_s == wanted || Array(p["aliases"]).map(&:to_s).include?(wanted)
     end
   end

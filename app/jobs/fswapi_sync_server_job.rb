@@ -8,9 +8,15 @@
 # The lists (calls, channels, registrations, gateways) are NOT stored: they
 # are current state, read live when someone looks (DataTable::FswapiSource).
 #
-# A FreeSWITCH that is down, or refuses the ESL password, answers 502: nothing
-# is written. A gap in the series is the honest signal; a zero would read as
-# "no calls".
+# Every poll the plugin answers is recorded, success or not:
+#
+#   - 200 → fs_up 1 plus the gauges;
+#   - 502 (FreeSWITCH down, ESL password refused, the API pod down) → fs_up 0
+#     ALONE. The gauges get a gap, not a zero (a zero would read as "no
+#     calls"), and the "FreeSWITCH down" alert rule has a series to read.
+#
+# A WebUI that cannot reach the controller at all (TransportError) records
+# nothing: that is "no data" for every alert, not "FreeSWITCH down".
 class FswapiSyncServerJob < ApplicationJob
   queue_as :default
 
@@ -29,16 +35,21 @@ class FswapiSyncServerJob < ApplicationJob
   end
 
   # sync — the testable core; `client` is injected so tests drive a fake.
-  # Returns the inserted row Hash, or nil when FreeSWITCH could not answer.
+  # Returns the inserted row Hash, or nil when the controller was unreachable.
   def sync(server, client, now: Time.current)
-    overview = client.fswapi("overview")
-    row = sample_row(server, overview, now)
+    row = begin
+      sample_row(server, client.fswapi("overview"), now)
+    rescue Voodu::Client::ServerError => e
+      Rails.logger.warn("fswapi-sync server=#{server.key} FreeSWITCH down: #{e.message}")
+
+      down_row(server, now)
+    end
 
     MetricSample.bulk_insert([row])
 
     row
-  rescue Voodu::Client::ServerError, Voodu::Client::TransportError => e
-    Rails.logger.warn("fswapi-sync server=#{server.key} skipped: #{e.message}")
+  rescue Voodu::Client::TransportError => e
+    Rails.logger.warn("fswapi-sync server=#{server.key} skipped (controller unreachable): #{e.message}")
 
     nil
   end
@@ -53,6 +64,7 @@ class FswapiSyncServerJob < ApplicationJob
       source: "fswapi",
       ts: ts,
       up: status["up"] ? true : false,
+      fs_up: 1,
       version: status["version"].to_s,
       fs_calls: overview["calls"].to_i,
       fs_channels: overview["channels"].to_i,
@@ -63,5 +75,11 @@ class FswapiSyncServerJob < ApplicationJob
     }
 
     {server_id: server.id, source: "fswapi", ts_iso: ts, payload: payload.to_json}
+  end
+
+  def down_row(server, now)
+    ts = now.utc.iso8601
+
+    {server_id: server.id, source: "fswapi", ts_iso: ts, payload: {source: "fswapi", ts: ts, fs_up: 0}.to_json}
   end
 end

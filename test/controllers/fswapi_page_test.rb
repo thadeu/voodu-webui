@@ -74,6 +74,18 @@ class FswapiPageTest < ActionDispatch::IntegrationTest
     assert_no_match PLUGINS_HEADING, @response.body
   end
 
+  test "a plugin whose install hook failed does not count as installed" do
+    System.create!(
+      server: @server,
+      payload: {host: {}, plugins: [{"name" => "fswapi", "aliases" => [], "install_error" => "controller too old"}]}.to_json,
+      synced_at: Time.current
+    )
+
+    get fswapi_path(server_key: @key)
+
+    assert_redirected_to server_root_path(server_key: @key)
+  end
+
   test "with the plugin the Plugins group holds the FreeSWITCH item" do
     install("fswapi")
 
@@ -123,6 +135,29 @@ class FswapiPageTest < ActionDispatch::IntegrationTest
     assert_match "external", @response.body
     assert_no_match "ALIASED", @response.body
     assert_no_match "<aside", @response.body
+  end
+
+  test "with HEP3 too, each leg gets a SIP-flow button and the page mounts the host" do
+    install("fswapi", "hep3")
+
+    with_fswapi(FakeFswapi.new(replies: REPLIES)) do
+      get fswapi_path(server_key: @key, view: "channels")
+    end
+
+    assert_match %(data-fs-uuid="aaaa"), @response.body
+    assert_match %(data-fs-uuid="bbbb"), @response.body
+    assert_match "hep3-call-flow", @response.body
+  end
+
+  test "without HEP3 there is no SIP-flow button" do
+    install("fswapi")
+
+    with_fswapi(FakeFswapi.new(replies: REPLIES)) do
+      get fswapi_path(server_key: @key, view: "channels")
+    end
+
+    assert_no_match "data-fs-uuid", @response.body
+    assert_no_match "hep3-call-flow", @response.body
   end
 
   test "the channels tab draws each call as a tree: A-leg, then its bridged leg" do

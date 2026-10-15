@@ -10,6 +10,16 @@
 #   req_s  → req_count ÷ bucket (ingress; per-deployment only, since
 #                                ingress samples carry scope+name)
 #
+# Three more watch the server's FreeSWITCH, through the overview samples the
+# voodu-fswapi plugin's sync writes (source=fswapi). They target the server
+# itself (target_kind "host"), and only a server with that plugin:
+#
+#   fs_calls    → fs_calls      active calls ≥ N
+#   fs_idle_cpu → fs_idle_cpu   FreeSWITCH's idle CPU ≤ X %
+#   fs_down     → 1 − fs_up     FreeSWITCH did not answer (ESL down, password
+#                               refused, API pod down). Fixed condition:
+#                               "down for N minutes" — no threshold to tune.
+#
 # Targets reuse the /metrics PodPicker addressing: host, or a
 # (scope, resource_name) pair — NEVER a replica id, so rules survive
 # pod churn (replica ids rotate on every restart, resource names
@@ -27,7 +37,17 @@ class AlertRule < ApplicationRecord
   has_many :alert_rule_destinations, dependent: :destroy
   has_many :alert_destinations, through: :alert_rule_destinations
 
-  METRIC_KINDS = %w[cpu memory disk req_s].freeze
+  METRIC_KINDS = %w[cpu memory disk req_s fs_calls fs_idle_cpu fs_down].freeze
+
+  # FS_KINDS — read the voodu-fswapi overview; need the plugin on the server.
+  FS_KINDS = %w[fs_calls fs_idle_cpu fs_down].freeze
+
+  # Unit per kind, the one place every surface (form, tables, cards, webhook
+  # {{unit}}) reads it from.
+  UNITS = {
+    "cpu" => "%", "memory" => "%", "disk" => "%", "req_s" => "req/s",
+    "fs_calls" => "calls", "fs_idle_cpu" => "%", "fs_down" => ""
+  }.freeze
   TARGET_KINDS = %w[host pod].freeze
   COMPARATORS = %w[gte lte].freeze
 
@@ -41,7 +61,7 @@ class AlertRule < ApplicationRecord
 
   # Percent-typed kinds share the 0–100 threshold bound; req_s is an
   # open-ended rate.
-  PERCENT_KINDS = %w[cpu memory disk].freeze
+  PERCENT_KINDS = %w[cpu memory disk fs_idle_cpu].freeze
 
   validates :name, presence: true, length: {maximum: 64},
     uniqueness: {scope: :server_id}
@@ -74,8 +94,13 @@ class AlertRule < ApplicationRecord
   # `||=` leaves an explicitly-set (possibly forged) org for the guard to reject.
   before_validation :derive_org_from_server
 
+  # fs_down has one meaning — "down" — so its condition is not the operator's
+  # to set: ≥ 1 on the 0/1 down series. Pinned here, whatever the form sent.
+  before_validation :pin_fs_down_condition
+
   validate :disk_is_host_only
   validate :req_s_is_deployment_only
+  validate :fs_kinds_need_the_plugin
   validate :target_server_in_org
   validate :destinations_in_org
 
@@ -154,11 +179,21 @@ class AlertRule < ApplicationRecord
   # "host <server>"; pod → "<server> · <scope>/<name>". Snapshotted onto events
   # at fire time, so history says which server fired.
   def target_label
+    return "FreeSWITCH #{server.name}" if fs_kind?
+
     host_target? ? "host #{server.name}" : "#{server.name} · #{target_scope}/#{target_name}"
   end
 
+  def fs_kind?
+    FS_KINDS.include?(metric_kind)
+  end
+
   def unit
-    PERCENT_KINDS.include?(metric_kind) ? "%" : "req/s"
+    self.class.unit_for(metric_kind)
+  end
+
+  def self.unit_for(metric_kind)
+    UNITS.fetch(metric_kind.to_s, "")
   end
 
   def comparator_symbol
@@ -207,8 +242,10 @@ class AlertRule < ApplicationRecord
   # never renders with the unit glued differently in two places.
   def self.format_metric_value(value, metric_kind)
     return "—" if value.nil?
+    return (value.to_f >= 1) ? "down" : "up" if metric_kind == "fs_down"
 
-    suffix = PERCENT_KINDS.include?(metric_kind) ? "%" : " req/s"
+    unit = unit_for(metric_kind)
+    suffix = (unit == "%") ? "%" : " #{unit}"
 
     "#{format_metric_number(value)}#{suffix}"
   end
@@ -219,6 +256,8 @@ class AlertRule < ApplicationRecord
 
   # "≥ 85% for 5m" — the one condition string every surface renders.
   def condition_label
+    return "down for #{duration_label}" if metric_kind == "fs_down"
+
     "#{comparator_symbol} #{format_value(threshold)} for #{duration_label}"
   end
 
@@ -283,6 +322,26 @@ class AlertRule < ApplicationRecord
     return if alert_destinations.all? { |destination| destination.org_id == org_id }
 
     errors.add(:alert_destinations, "must belong to this org")
+  end
+
+  def pin_fs_down_condition
+    return unless metric_kind == "fs_down"
+
+    self.comparator = "gte"
+    self.threshold = 1
+  end
+
+  # A FreeSWITCH rule watches the server's FreeSWITCH (target "host" = the
+  # server), and needs the plugin whose samples it reads — without it the rule
+  # would sit on "no data" forever.
+  def fs_kinds_need_the_plugin
+    return unless fs_kind?
+
+    if target_kind != "host"
+      errors.add(:target_kind, "FreeSWITCH rules watch the server — pick its Host row")
+    elsif server && !server.plugin_installed?("fswapi")
+      errors.add(:target_kind, "this server has no voodu-fswapi plugin")
+    end
   end
 
   def disk_is_host_only

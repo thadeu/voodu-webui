@@ -145,7 +145,7 @@ class Components::Fswapi::Body < Components::Base
       end
 
       summary_line
-      render Components::Fswapi::LiveTable.new(view: @data.view, rows: @data.rows)
+      render Components::Fswapi::LiveTable.new(view: @data.view, rows: @data.rows, call_flow: @data.call_flow?)
     end
   end
 

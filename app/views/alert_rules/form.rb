@@ -14,7 +14,8 @@
 #
 # The alert-rule-form Stimulus controller keeps metric ↔ target
 # combinations honest as the operator types (disk = host-only,
-# req/s = deployments-only) and swaps the unit suffix. Server-side
+# req/s = deployments-only, FreeSWITCH = the Host row of a server with the
+# voodu-fswapi plugin) and swaps the unit suffix. Server-side
 # model validations remain the real guard.
 class Views::AlertRules::Form < Views::Base
   def initialize(current_path:, rule:, targets: [], servers: [], destinations: [], current_server: nil, return_to: nil)
@@ -174,7 +175,10 @@ class Views::AlertRules::Form < Views::Base
       ["cpu", "CPU usage (%)"],
       ["memory", "Memory usage (%)"],
       ["disk", "Disk usage (%)"],
-      ["req_s", "Requests per second"]
+      ["req_s", "Requests per second"],
+      ["fs_calls", "FreeSWITCH active calls"],
+      ["fs_idle_cpu", "FreeSWITCH idle CPU (%)"],
+      ["fs_down", "FreeSWITCH unavailable"]
     ]
   end
 
@@ -213,7 +217,8 @@ class Views::AlertRules::Form < Views::Base
   def target_rows
     @target_rows ||= begin
       rows = servers_for_select.flat_map do |server|
-        host = {value: "host|#{server.id}", kind: "host", label: target_label_for(server, "Host (entire server)")}
+        host = {value: "host|#{server.id}", kind: "host", label: target_label_for(server, "Host (entire server)"),
+                fswapi: server.plugin_installed?("fswapi")}
         pods = targets_for(server).map do |t|
           {value: encode_target(t[:server_id], t[:scope], t[:name]), kind: t[:kind],
            label: target_label_for(server, "#{t[:scope]}/#{t[:name]}")}
@@ -244,7 +249,8 @@ class Views::AlertRules::Form < Views::Base
       data: {
         action: "click->alert-rule-form#pickTarget click->dropdown#close",
         dropdown_target: "option", alert_rule_form_target: "option",
-        value: row[:value], kind: row[:kind], label: row[:label], active: active.to_s
+        value: row[:value], kind: row[:kind], label: row[:label], active: active.to_s,
+        fswapi: row[:fswapi].to_s
       },
       class: "flex items-center gap-2 w-full px-3 py-2 min-h-[34px] text-left text-[12.5px] text-voodu-text " \
              "hover:bg-voodu-hover data-[active=true]:text-voodu-accent-2 " \
@@ -310,8 +316,16 @@ class Views::AlertRules::Form < Views::Base
       @rule.errors[:target_name].first
   end
 
+  # fs_down has no threshold to tune ("down" is the condition), so its pick
+  # swaps the inputs for a sentence; the model pins the condition anyway.
   def condition_inputs
-    div(class: "flex items-stretch gap-2") do
+    p(
+      hidden: @rule.metric_kind != "fs_down",
+      data: {alert_rule_form_target: "downNote"},
+      class: "flex items-center h-9 text-[12.5px] text-voodu-text-2"
+    ) { "Fires when FreeSWITCH does not answer for the whole window." }
+
+    div(class: "flex items-stretch gap-2", hidden: @rule.metric_kind == "fs_down", data: {alert_rule_form_target: "condition"}) do
       div(class: "w-20 shrink-0") do
         ds_select(
           name: "alert_rule[comparator]",
@@ -324,6 +338,7 @@ class Views::AlertRules::Form < Views::Base
         input(
           type: "number", name: "alert_rule[threshold]", value: threshold_value,
           step: "0.1", min: "0.1", inputmode: "decimal",
+          data: {alert_rule_form_target: "threshold"},
           class: tokens(input_classes, "pr-14 font-voodu-mono text-[12.5px]")
         )
         span(

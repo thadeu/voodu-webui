@@ -71,6 +71,10 @@ class Components::Alerts::FiringCard < Components::Base
   def values_block
     div(class: "flex items-center gap-4 vmd:gap-5 pl-[21px] vmd:pl-0 shrink-0") do
       value_cell("now", @event.format_value(@event.last_value), strong: true)
+
+      # A down/up episode has no peak and no threshold to compare against.
+      next if @event.up_down?
+
       value_cell("peak", @event.format_value(@event.peak_value))
       value_cell("threshold", "#{comparator_symbol} #{@event.format_value(@event.threshold)}")
     end

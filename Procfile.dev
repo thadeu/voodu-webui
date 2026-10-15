@@ -6,4 +6,8 @@ js: pnpm run build --watch
 # TTY (make up piped to a log, CI, nohup, a backgrounded bin/dev) it exits one
 # second in, and foreman then tears the whole stack down with it.
 css: pnpm run build:css --watch=always
-jobs: bin/jobs
+# No `jobs: bin/jobs`: .env sets SOLID_QUEUE_IN_PUMA=1, so Solid Queue already
+# runs inside `web` — the same way the image runs it. A second supervisor here
+# scheduled every recurring task twice per tick (two fswapi samples per 15s,
+# double hep3/log-metrics work). Unset SOLID_QUEUE_IN_PUMA and bring the line
+# back only if you want jobs in their own process.

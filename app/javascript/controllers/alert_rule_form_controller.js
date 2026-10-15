@@ -7,14 +7,18 @@
 //     disk  → host only (pods have no disk series in the warehouse)
 //     req_s → deployments only (ingress samples are per-deployment; the host
 //             row + non-deployment workloads dim out)
-//     also swaps the threshold's unit suffix (% ↔ req/s).
+//     fs_*  → the Host row of a server with the voodu-fswapi plugin
+//     fs_down → no threshold: the condition inputs give way to a sentence
+//     also swaps the threshold's unit suffix (%, req/s, calls).
 //
 // Pure progressive enhancement — AlertRule's validations are the real guard.
 
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["metric", "target", "targetLabel", "unit", "option"]
+  static targets = ["metric", "target", "targetLabel", "unit", "option", "condition", "downNote", "threshold"]
+
+  UNITS = { req_s: "req/s", fs_calls: "calls", fs_down: "" }
 
   connect() {
     this.metricChanged()
@@ -50,8 +54,18 @@ export default class extends Controller {
   metricChanged() {
     const metric = this.metricTarget.value
 
-    this.unitTarget.textContent = metric === "req_s" ? "req/s" : "%"
+    this.unitTarget.textContent = metric in this.UNITS ? this.UNITS[metric] : "%"
+    this.toggleCondition(metric === "fs_down")
     this.constrainTargets(metric)
+  }
+
+  // toggleCondition — fs_down's condition is fixed, so the direction +
+  // threshold inputs hide behind a sentence. The threshold keeps a valid value
+  // so a hidden field never blocks the submit.
+  toggleCondition(down) {
+    if (this.hasConditionTarget) this.conditionTarget.hidden = down
+    if (this.hasDownNoteTarget) this.downNoteTarget.hidden = !down
+    if (down && this.hasThresholdTarget && !this.thresholdTarget.value) this.thresholdTarget.value = "1"
   }
 
   // constrainTargets — dim the rows an incompatible metric can't target; if the
@@ -65,6 +79,7 @@ export default class extends Controller {
 
       if (metric === "disk") disabled = kind !== "host"
       else if (metric === "req_s") disabled = kind !== "deployment"
+      else if (metric.startsWith("fs_")) disabled = kind !== "host" || opt.dataset.fswapi !== "true"
 
       opt.dataset.disabled = String(disabled)
       if (!disabled && !firstEnabled) firstEnabled = opt

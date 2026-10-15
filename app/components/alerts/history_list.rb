@@ -71,7 +71,10 @@ class Components::Alerts::HistoryList < Components::Base
             span(class: "text-[11px] font-voodu-mono text-voodu-muted truncate") { event.target_label }
           end
           span(class: "text-[11px] text-voodu-muted") do
-            "peak #{event.format_value(event.peak_value)} vs #{event.format_value(event.threshold)} · lasted #{Server.humanize_uptime(event.duration_seconds)}"
+            lasted = "lasted #{Server.humanize_uptime(event.duration_seconds)}"
+
+            # A down/up episode has no peak to set against a threshold.
+            event.up_down? ? "down · #{lasted}" : "peak #{event.format_value(event.peak_value)} vs #{event.format_value(event.threshold)} · #{lasted}"
           end
         end
       end
