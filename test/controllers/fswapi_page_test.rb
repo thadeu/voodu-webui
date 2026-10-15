@@ -3,7 +3,7 @@
 require "test_helper"
 
 # /fswapi — the FreeSWITCH page (voodu-fswapi plugin). Pins: the page and its
-# "Voice" sidebar item exist only with the plugin; the page shows the live
+# "Plugins" sidebar group exist only with the plugin; the page shows the live
 # status, the chosen list and the count cards; a FreeSWITCH that does not
 # answer shows the plugin's own message (it names the fix).
 class FswapiPageTest < ActionDispatch::IntegrationTest
@@ -41,6 +41,9 @@ class FswapiPageTest < ActionDispatch::IntegrationTest
       {"kind" => "alias", "name" => "1.2.3.4", "data" => "external", "state" => "ALIASED"}]}
   }.freeze
 
+  # The group HEADING, not the Server group's "Plugins" item (the install page).
+  PLUGINS_HEADING = %r{uppercase tracking-\[0\.06em\][^"]*">Plugins<}
+
   setup do
     @server = servers(:alpha)
     @key = @server.key
@@ -59,7 +62,7 @@ class FswapiPageTest < ActionDispatch::IntegrationTest
     Voodu::Client.stub(:new, fake, &)
   end
 
-  test "without the plugin the page refuses and the Voice group is not drawn" do
+  test "without the plugin the page refuses and the Plugins group is not drawn" do
     get fswapi_path(server_key: @key)
 
     assert_redirected_to server_root_path(server_key: @key)
@@ -68,24 +71,24 @@ class FswapiPageTest < ActionDispatch::IntegrationTest
     get pods_path(server_key: @key)
 
     assert_no_match %r{href="[^"]*/fswapi"}, @response.body
-    assert_no_match ">Voice<", @response.body
+    assert_no_match PLUGINS_HEADING, @response.body
   end
 
-  test "with the plugin the Voice group holds the FreeSWITCH item" do
+  test "with the plugin the Plugins group holds the FreeSWITCH item" do
     install("fswapi")
 
     get pods_path(server_key: @key)
 
     assert_match %r{href="[^"]*/#{@key}/fswapi"}, @response.body
-    assert_match ">Voice<", @response.body
+    assert_match PLUGINS_HEADING, @response.body
   end
 
-  test "HEP3 moves into the Voice group" do
+  test "HEP3 moves into the Plugins group" do
     install("hep3")
 
     get pods_path(server_key: @key)
 
-    assert_match ">Voice<", @response.body
+    assert_match PLUGINS_HEADING, @response.body
     assert_match %r{href="[^"]*/#{@key}/hep3"}, @response.body
     assert_no_match %r{href="[^"]*/fswapi"}, @response.body
   end
