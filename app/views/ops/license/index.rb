@@ -127,6 +127,7 @@ class Views::Ops::License::Index < Views::Base
 
       if account.owner_id == current_user&.id
         billing_actions(account)
+        payment_history(account)
         plan_form(account)
       end
 
@@ -165,6 +166,19 @@ class Views::Ops::License::Index < Views::Base
   end
 
   def day(time) = time ? time.to_date.to_s : "—"
+
+  # Owner-only, with the actions above it: it names amounts and dates of the
+  # account's own card. Not drawn until there is a charge — an empty table on
+  # a Free account would read as something that failed to load.
+  def payment_history(account)
+    payments = account.payments.newest_first.limit(Components::Payments::HistoryTable::LIMIT).to_a
+    return if payments.empty?
+
+    div(class: "flex flex-col gap-1.5 p-3.5 border-t border-voodu-border") do
+      span(class: "text-[11px] uppercase tracking-wide text-voodu-muted") { "Payments" }
+      render Components::Payments::HistoryTable.new(payments: payments)
+    end
+  end
 
   # One action at a time, the one that applies: upgrade when Free, cancel while
   # it renews, resume while it is set to end. Nothing when the broker is not

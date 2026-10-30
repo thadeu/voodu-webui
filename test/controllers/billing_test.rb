@@ -153,6 +153,26 @@ class BillingTest < ActionDispatch::IntegrationTest
     assert_match(/no subscription to cancel/i, flash[:alert])
   end
 
+  test "the owner sees the payments of their subscription, newest first" do
+    paid!
+    @account.payments.create!(pay_session_id: "ses_1", status: "paid", amount: "9.99", currency: "USD",
+      paid_at: 40.days.ago, created_at: 40.days.ago)
+    @account.payments.create!(pay_session_id: "ses_2", status: "failed", amount: "9.99", currency: "USD")
+
+    get LICENSE
+
+    assert_includes response.body, "Payments"
+    assert_includes response.body, "USD 9.99"
+    assert_includes response.body, "declined"
+    assert_operator response.body.index("declined"), :<, response.body.index(40.days.ago.to_date.to_s)
+  end
+
+  test "no payments section before the first charge" do
+    get LICENSE
+
+    assert_not_includes response.body, ">Payments<"
+  end
+
   test "the screen offers the one action that applies" do
     paid!
 
