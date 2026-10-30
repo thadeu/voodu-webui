@@ -191,6 +191,7 @@ be replayed. The states:
 |---|---|
 | `subscription.activated` | Pro |
 | `subscription.renewed` | Pro, next period |
+| `subscription.updated` | period end and `cancel_at` as the broker has them; a `cancel_at` means canceling |
 | `subscription.past_due` | still Pro while the gateway retries the card |
 | `subscription.canceling` | still Pro until `cancel_at` |
 | `subscription.resumed` | Pro, renews as usual |
