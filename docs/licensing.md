@@ -198,6 +198,11 @@ be replayed. The states:
 | `subscription.canceled` | Free |
 | `session.refunded` (full) | cancelled at the broker now, then Free |
 
+Each `session.paid`, `session.failed` and `session.refunded` becomes one row of
+`billing_payments`, found by the broker's session id, so a refund lands on the
+charge it refunds. The owner sees the last 24 under **Payments** on the same
+card. The broker's dashboard stays the full ledger.
+
 A plan license is independent of all this: a customer whose subscription ends
 keeps Pro if they also hold a valid plan license. No signing key lives on the
 server for this — the paid plan is a row the webhook writes, not a license.

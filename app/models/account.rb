@@ -20,6 +20,8 @@ class Account < ApplicationRecord
 
   has_many :orgs, dependent: :restrict_with_error
 
+  has_many :payments, class_name: "Billing::Payment", dependent: :delete_all
+
   validates :name, presence: true, length: {maximum: 64}
   validates :short_id, presence: true, uniqueness: true, format: {with: /\A[a-zA-Z0-9]{8}\z/}
 

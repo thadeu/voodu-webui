@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_000633) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_023830) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -106,6 +106,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_000633) do
     t.index ["server_id", "firing"], name: "index_alert_rules_on_server_id_and_firing"
     t.index ["server_id", "name"], name: "index_alert_rules_on_server_id_and_name", unique: true
     t.index ["server_id"], name: "index_alert_rules_on_server_id"
+  end
+
+  create_table "billing_payments", force: :cascade do |t|
+    t.string "account_id", null: false
+    t.decimal "amount", precision: 12, scale: 2, null: false
+    t.datetime "created_at", null: false
+    t.string "currency", null: false
+    t.string "description"
+    t.datetime "paid_at"
+    t.string "pay_session_id", null: false
+    t.string "pay_subscription_id"
+    t.decimal "refunded_amount", precision: 12, scale: 2, default: "0.0", null: false
+    t.string "status", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "created_at"], name: "index_billing_payments_on_account_id_and_created_at"
+    t.index ["pay_session_id"], name: "index_billing_payments_on_pay_session_id", unique: true
   end
 
   create_table "deployments", force: :cascade do |t|
@@ -344,6 +360,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_000633) do
   add_foreign_key "alert_rule_destinations", "alert_rules", on_delete: :cascade
   add_foreign_key "alert_rules", "orgs"
   add_foreign_key "alert_rules", "servers", on_delete: :cascade
+  add_foreign_key "billing_payments", "accounts", on_delete: :cascade
   add_foreign_key "deployments", "integrations"
   add_foreign_key "deployments", "orgs"
   add_foreign_key "deployments", "servers"

@@ -163,6 +163,49 @@ class PayWebhookTest < ActionDispatch::IntegrationTest
     assert_nil @account.pay_cancel_at
   end
 
+  def charge(type, id: "ses_1", subscription_id: "sub_1", amount: "9.99", **attrs)
+    deliver(type, {session: {id: id, status: type.split(".").last, amount: amount, refunded_amount: "0.0",
+                             currency: "USD", subscription_id: subscription_id, metadata: {description: "Voodu Pro"},
+                             customer: {external_ref: @account.id}, **attrs}})
+
+    assert_response :success
+  end
+
+  test "each charge becomes one payment row" do
+    charge("session.paid")
+    charge("session.paid", id: "ses_2")
+    charge("session.failed", id: "ses_3")
+
+    payments = @account.payments.order(:id)
+
+    assert_equal %w[paid paid failed], payments.map(&:status)
+    assert_equal BigDecimal("9.99"), payments.first.amount
+    assert_equal "USD", payments.first.currency
+    assert_equal "sub_1", payments.first.pay_subscription_id
+    assert payments.first.paid_at
+    assert_nil payments.last.paid_at
+  end
+
+  test "a refund lands on the payment it refunds, and keeps when it was paid" do
+    charge("session.paid")
+    paid_at = @account.payments.sole.paid_at
+
+    charge("session.refunded", refunded_amount: "4.00")
+
+    payment = @account.payments.sole
+
+    assert_equal "refunded", payment.status
+    assert payment.partially_refunded?
+    assert_equal paid_at, payment.paid_at
+  end
+
+  test "a charge for an unknown customer is not recorded" do
+    deliver("session.paid", {session: {id: "ses_x", amount: "9.99", currency: "USD", customer: {external_ref: "nobody"}}})
+
+    assert_response :success
+    assert_equal 0, Billing::Payment.count
+  end
+
   test "canceled is Free" do
     activate!
     deliver("subscription.canceled", subscription)

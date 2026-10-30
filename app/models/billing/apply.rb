@@ -13,9 +13,9 @@
 #   subscription.resumed    the cancellation is taken back
 #   subscription.canceled   back to Free
 #   session.refunded        a FULL refund of the current subscription ends it now
+#   session.paid/failed/refunded  one Billing::Payment row per charge
 #
-# Everything else (session.paid, ping, …) is accepted and does nothing: there
-# is no payments table here, and the broker's dashboard is the ledger.
+# Everything else (ping, disputes, …) is accepted and does nothing.
 #
 # Every subscription event other than `activated` finds its account by the
 # subscription id, never by customer_ref. After a re-subscription the old
@@ -23,6 +23,12 @@
 # than take Pro away from the account that just paid for the new one.
 class Billing::Apply
   PLAN = "pro"
+
+  PAYMENT_STATUSES = {
+    "session.paid" => "paid",
+    "session.failed" => "failed",
+    "session.refunded" => "refunded"
+  }.freeze
 
   def initialize(event)
     @event = event
@@ -37,8 +43,10 @@ class Billing::Apply
     when "subscription.canceling" then current { |account| account.update!(pay_status: "canceling", pay_cancel_at: time(subscription[:cancel_at])) }
     when "subscription.resumed" then current { |account| account.update!(pay_status: "active", pay_cancel_at: nil) }
     when "subscription.canceled" then current { |account| end_plan(account) }
-    when "session.refunded" then take_plan_back if full_refund?
+    when *PAYMENT_STATUSES.keys then record_payment(PAYMENT_STATUSES.fetch(@event.type))
     end
+
+    take_plan_back if @event.type == "session.refunded" && full_refund?
   end
 
   private
@@ -124,6 +132,35 @@ class Billing::Apply
     end
 
     end_plan(account)
+  end
+
+  # One row per charge, found by the broker's session id, so a refund lands on
+  # the payment it refunds. By customer_ref and not by subscription: a renewal
+  # of a subscription that has since been replaced is still this customer's
+  # money. A charge that was paid keeps its paid_at through a later refund.
+  def record_payment(status)
+    account = Account.find_by(id: @event.customer_ref)
+
+    return if account.nil? || session[:id].blank?
+
+    payment = Billing::Payment.find_or_initialize_by(pay_session_id: session[:id])
+
+    payment.update!(
+      account: account,
+      pay_subscription_id: session[:subscription_id],
+      status: status,
+      description: session.dig(:metadata, :description) || payment.description,
+      amount: decimal(session[:amount]),
+      refunded_amount: decimal(session[:refunded_amount]),
+      currency: session[:currency].to_s.upcase,
+      paid_at: payment.paid_at || ((status == "paid") ? @event.created_at || Time.current : nil)
+    )
+  end
+
+  def decimal(value)
+    BigDecimal(value.to_s)
+  rescue ArgumentError
+    0
   end
 
   def time(value)
