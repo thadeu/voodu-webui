@@ -117,11 +117,105 @@ class Views::Ops::License::Index < Views::Base
           span(class: "font-voodu-mono text-[12px] text-voodu-text") { account.plan.capitalize }
         end
         render(Components::UI::KvRow.new(key: "Limits")) { plan_limits_value }
-        plan_expiry_row(account)
+
+        if account.pay_subscription_id.present?
+          subscription_row(account)
+        else
+          plan_expiry_row(account)
+        end
       end
 
-      plan_form(account) if account.owner_id == current_user&.id
+      if account.owner_id == current_user&.id
+        billing_actions(account)
+        plan_form(account)
+      end
+
       hosted_footnote
+    end
+  end
+
+  # ── Billing (ContaGorda Pay) ───────────────────────────────────────
+
+  # What the subscription is doing, in the words a customer would use. Shown
+  # for a canceled one too: "ended on" answers the question of somebody who
+  # just noticed they are on Free again.
+  def subscription_row(account)
+    render(Components::UI::KvRow.new(key: "Subscription")) do
+      span(class: "font-voodu-mono text-[12px] #{subscription_tone(account)}") { subscription_text(account) }
+    end
+  end
+
+  def subscription_text(account)
+    price = Billing::Price.pro.label
+
+    case account.pay_status
+    when "active" then "#{price} · renews #{day(account.pay_period_end)}"
+    when "past_due" then "#{price} · payment failed, retrying"
+    when "canceling" then "#{price} · ends #{day(account.pay_cancel_at || account.pay_period_end)}"
+    else "Ended"
+    end
+  end
+
+  def subscription_tone(account)
+    case account.pay_status
+    when "active" then "text-voodu-text-2"
+    when "past_due", "canceling" then "text-voodu-amber"
+    else "text-voodu-muted"
+    end
+  end
+
+  def day(time) = time ? time.to_date.to_s : "—"
+
+  # One action at a time, the one that applies: upgrade when Free, cancel while
+  # it renews, resume while it is set to end. Nothing when the broker is not
+  # configured — a button that can only fail is worse than none.
+  #
+  # Pro by a license and not by a subscription offers nothing here: there is
+  # no subscription to cancel, and selling Pro to someone who has it is the
+  # product not knowing what it sold.
+  def billing_actions(account)
+    return unless ContaGorda::Pay.configured?
+
+    if !account.pro?
+      upgrade_form
+    elsif account.paid_plan? && account.pay_status == "canceling"
+      billing_form(ops_billing_resume_path, "Keep subscription", variant: :secondary,
+        hint: "Takes back the cancellation. Nothing is charged now.")
+    elsif account.paid_plan?
+      billing_form(ops_billing_cancel_path, "Cancel subscription", variant: :danger,
+        hint: "Pro stays until the end of the paid period.",
+        confirm: "Cancel Pro? It stays until the end of the paid period, then this account goes back to Free.")
+    end
+  end
+
+  # data-turbo false: the answer is a redirect to the broker's checkout on
+  # another origin, and Turbo's fetch cannot follow a cross-origin redirect —
+  # the click would do nothing at all.
+  def upgrade_form
+    form(action: ops_billing_checkout_path, method: "post", data: {turbo: "false"},
+      class: "flex flex-col gap-2 p-3.5 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
+        render Components::UI::Button.new(type: :submit, variant: :primary, size: :sm) do
+          "Upgrade to Pro — #{Billing::Price.pro.label}"
+        end
+        span(class: "text-[11.5px] text-voodu-muted") do
+          plain "Unlimited orgs and invites, 90 days of history. Cancel any time."
+        end
+      end
+    end
+  end
+
+  def billing_form(action, label, variant:, hint:, confirm: nil)
+    form(action: action, method: "post", class: "flex flex-col gap-2 p-3.5 border-t border-voodu-border") do
+      input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
+
+      div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2") do
+        render Components::UI::Button.new(type: :submit, variant: variant, size: :sm,
+          data: ({turbo_confirm: confirm} if confirm)) { label }
+        span(class: "text-[11.5px] text-voodu-muted") { hint }
+      end
     end
   end
 

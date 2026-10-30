@@ -101,6 +101,7 @@ GEM
       railties (>= 7.0)
     concurrent-ruby (1.3.8)
     connection_pool (3.0.2)
+    contagorda-pay (0.1.0)
     crack (1.0.1)
       bigdecimal
       rexml
@@ -385,6 +386,7 @@ DEPENDENCIES
   brakeman
   bundler-audit
   clowk (~> 0.6)
+  contagorda-pay (~> 0.1)
   cssbundling-rails
   csv (~> 3.3)
   debug

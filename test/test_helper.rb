@@ -109,3 +109,39 @@ module ActiveSupport
     end
   end
 end
+
+require "contagorda/pay/testing"
+
+# ContaGorda Pay, configured with the suite's own secrets and nothing else.
+#
+# PAY_* is taken out of ENV for the duration: the gem reads the environment
+# whenever a value is not set, so a developer's .env with real keys would
+# otherwise leak into the suite — and a test that "passes" against the live
+# broker is a test that charges somebody.
+module PayTestHelper
+  SECRET_KEY = "sk_app_test_voodu"
+  WEBHOOK_SECRET = "pwhsec_test_voodu"
+  URL = "https://pay.test"
+
+  PAY_ENV = %w[PAY_SECRET_KEY PAY_WEBHOOK_SECRET PAY_URL].freeze
+
+  def self.included(base)
+    base.setup do
+      @pay_env = PAY_ENV.to_h { [it, ENV.delete(it)] }
+
+      ContaGorda::Pay.reset!
+      ContaGorda::Pay.configure do |pay|
+        pay.secret_key = SECRET_KEY
+        pay.webhook_secret = WEBHOOK_SECRET
+        pay.url = URL
+      end
+    end
+
+    base.teardown do
+      ContaGorda::Pay.reset!
+      @pay_env.each { |key, value| ENV[key] = value if value }
+    end
+  end
+
+  def pay_unconfigured! = ContaGorda::Pay.reset!
+end

@@ -39,6 +39,13 @@ gem "csv", "~> 3.3", require: false
 # and keeps the claims in the Rails session.
 gem "clowk", "~> 0.6"
 
+# contagorda-pay — how a customer of the HOSTED service buys Pro. Checkout,
+# cancel and resume from the console, and the webhook that moves the plan.
+# Inert everywhere else: with no PAY_SECRET_KEY the upgrade button is not
+# drawn, and a self-hosted box never reads an account's paid plan at all (see
+# Entitlements#plan).
+gem "contagorda-pay", "~> 0.1"
+
 # poller — Go-based NDJSON poller for voodu servers. Ships a compiled
 # binary that the Puma plugin (config/puma.rb) always spawns: it is the only
 # thing that fills the warehouse, and Poller::Railtie refuses to boot without
