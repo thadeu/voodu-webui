@@ -30,6 +30,22 @@ class Account < ApplicationRecord
   # Only consulted when the INSTALLATION is the hosted service. On a
   # self-hosted box the license on the box says what the operator has, and a
   # per-account plan would be a second answer to the same question.
+  #
+  # On the hosted service there are two doors to Pro, and both are read here:
+  # a subscription bought in the console (ContaGorda Pay, written only by the
+  # webhook — see Billing::Apply), and a plan license we issue by hand, for a
+  # courtesy or a deal made outside the checkout. Either one is Pro. Neither
+  # is copied into the other, so each keeps the one writer it already has.
+
+  # The states in which a paid subscription still grants Pro.
+  #
+  # past_due included: the gateway is retrying the card, and taking the plan
+  # away while it does would punish a customer for a bank's timing. canceling
+  # included: they paid until cancel_at, and the webhook that ends it arrives
+  # then. Only `canceled` — or no subscription at all — is Free.
+  PAID_STATUSES = %w[active past_due canceling].freeze
+
+  def paid_plan? = pay_subscription_id.present? && PAID_STATUSES.include?(pay_status)
 
   # The verified plan license, or a free one. Never raises: an account whose
   # stored token stopped verifying — key rotated, row corrupted — falls back to
@@ -40,7 +56,11 @@ class Account < ApplicationRecord
     @plan_license = resolve_plan_license
   end
 
-  def plan = plan_license.entitled? ? plan_license.plan : LicenseToken::DEFAULT_PLAN
+  def plan
+    return "pro" if paid_plan?
+
+    plan_license.entitled? ? plan_license.plan : LicenseToken::DEFAULT_PLAN
+  end
 
   def pro? = plan == "pro"
 

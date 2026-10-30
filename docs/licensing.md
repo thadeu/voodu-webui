@@ -31,8 +31,10 @@ Where each plan comes from:
   is one account, not a license to operate a service of your own on top of
   Voodu. The cap is a default, so a license carrying `ent.accounts` explicitly
   can still sell more.
-- **Hosted** — every account carries its own plan license, bound to that
-  account. See [Plan licenses](#plan-licenses-hosted-only).
+- **Hosted** — every account carries its own plan. A customer buys Pro in the
+  console ([Buying Pro](#buying-pro-in-the-console-hosted-only)), or we issue a
+  plan license bound to that account
+  ([Plan licenses](#plan-licenses-hosted-only)). Either one is Pro.
 
 Counting is always per account. `accounts` is the exception and cannot be
 otherwise: "how many accounts exist on this box" has no per-account version.
@@ -164,6 +166,40 @@ The short_id is looked up rather than merely accepted, so a typo fails at issue
 time instead of when the customer pastes it. Activation refuses a license whose
 subject is not the account activating it, and so does every subsequent read: a
 row written straight to the database grants nothing either.
+
+### Buying Pro in the console (hosted only)
+
+The customer's own door to Pro: **Upgrade to Pro** on the License screen opens a
+ContaGorda Pay checkout, and the subscription is managed on the same screen
+(cancel, keep subscription). There is no billing portal elsewhere.
+
+| Env | Default | |
+|---|---|---|
+| `PAY_SECRET_KEY` | — | the app key (`sk_app_live_…`). Without it the button is not drawn |
+| `PAY_WEBHOOK_SECRET` | — | the webhook endpoint's signing secret (`pwhsec_…`) |
+| `PAY_URL` | `https://pay.contagorda.com` | the broker |
+| `PRO_PLAN_PRICE` | `9.99` | charged per month, set on each new checkout |
+| `PRO_PLAN_CURRENCY` | `USD` | |
+
+The webhook URL to register at the broker is `https://<host>/billing/pay/webhook`.
+
+Only the webhook grants Pro. The page the customer returns to after paying
+says "your plan updates in a few seconds" and changes nothing: its token can
+be replayed. The states:
+
+| Event | Account |
+|---|---|
+| `subscription.activated` | Pro |
+| `subscription.renewed` | Pro, next period |
+| `subscription.past_due` | still Pro while the gateway retries the card |
+| `subscription.canceling` | still Pro until `cancel_at` |
+| `subscription.resumed` | Pro, renews as usual |
+| `subscription.canceled` | Free |
+| `session.refunded` (full) | cancelled at the broker now, then Free |
+
+A plan license is independent of all this: a customer whose subscription ends
+keeps Pro if they also hold a valid plan license. No signing key lives on the
+server for this — the paid plan is a row the webhook writes, not a license.
 
 ### Inspecting
 

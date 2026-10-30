@@ -234,4 +234,33 @@ class AccountPlanTest < ActiveSupport::TestCase
     assert_nil entitlements.limit(:orgs)
     assert_equal 1, entitlements.limit(:accounts), "Enterprise is one account, not a private SaaS"
   end
+
+  # ── Pro from a ContaGorda Pay subscription ─────────────────────────────
+  #
+  # The second door to Pro. Either door is enough, and closing one does not
+  # close the other: a customer who cancels the subscription keeps a courtesy
+  # license we issued by hand.
+
+  test "a paid subscription is Pro, in every state that still has paid time" do
+    Account::PAID_STATUSES.each do |status|
+      @account.update!(pay_subscription_id: "sub_1", pay_status: status)
+
+      assert @account.pro?, "#{status} should be Pro"
+    end
+  end
+
+  test "a canceled subscription is Free" do
+    @account.update!(pay_subscription_id: "sub_1", pay_status: "canceled")
+
+    assert_not @account.pro?
+  end
+
+  test "a license still grants Pro after the subscription ends" do
+    with_test_key do
+      @account.activate_plan!(plan_token)
+      @account.update!(pay_subscription_id: "sub_1", pay_status: "canceled")
+
+      assert Account.find(@account.id).pro?
+    end
+  end
 end

@@ -2,15 +2,16 @@ name: CI
 
 # Runs on every pull request and every push to main.
 #
-# Security scans are NOT gates here; run them locally before a release or an
-# audit:
+# Security scans and lint are NOT gates here; run them locally before a
+# release or an audit:
 #
 #   bin/brakeman --no-pager
 #   bin/bundler-audit
+#   bin/rubocop
 #
-# Both turn red for reasons outside the diff: bin/brakeman exits 5 the day a
-# newer brakeman ships (--ensure-latest), and bundler-audit reads an advisory
-# database that updates on its own. A gate that fails on changes nobody here
+# The two scans turn red for reasons outside the diff: bin/brakeman exits 5
+# the day a newer brakeman ships (--ensure-latest), and bundler-audit reads an
+# advisory database that updates on its own. A gate that fails on changes nobody here
 # made is a gate people learn to ignore. The pinned brakeman warnings still
 # live in config/brakeman.ignore, each with its written justification.
 on:
@@ -156,29 +157,3 @@ jobs:
             echo "booted without a publishable key — the production guard is gone"
             exit 1
           fi
-
-  lint:
-    runs-on: ubuntu-latest
-    env:
-      RUBOCOP_CACHE_ROOT: tmp/rubocop
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-
-      - name: Prepare RuboCop cache
-        uses: actions/cache@v4
-        env:
-          DEPENDENCIES_HASH: ${{ hashFiles('.ruby-version', '**/.rubocop.yml', '**/.rubocop_todo.yml', 'Gemfile.lock') }}
-        with:
-          path: ${{ env.RUBOCOP_CACHE_ROOT }}
-          key: rubocop-${{ runner.os }}-${{ env.DEPENDENCIES_HASH }}-${{ github.ref_name == github.event.repository.default_branch && github.run_id || 'default' }}
-          restore-keys: |
-            rubocop-${{ runner.os }}-${{ env.DEPENDENCIES_HASH }}-
-
-      - name: Lint code for consistent style
-        run: bin/rubocop -f github

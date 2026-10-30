@@ -1,0 +1,114 @@
+# frozen_string_literal: true
+
+# Billing::Apply — what a ContaGorda Pay event does to an account.
+#
+# The ONLY writer of the pay_* columns. The return from the checkout chooses a
+# message and nothing else; the plan moves here, from a signed event.
+#
+#   subscription.activated  Pro starts
+#   subscription.renewed    a new period is paid
+#   subscription.past_due   a renewal failed and the gateway retries — still Pro
+#   subscription.canceling  a cancellation is set for cancel_at — still Pro
+#   subscription.resumed    the cancellation is taken back
+#   subscription.canceled   back to Free
+#   session.refunded        a FULL refund of the current subscription ends it now
+#
+# Everything else (session.paid, ping, …) is accepted and does nothing: there
+# is no payments table here, and the broker's dashboard is the ledger.
+#
+# Every subscription event other than `activated` finds its account by the
+# subscription id, never by customer_ref. After a re-subscription the old
+# subscription still sends its own `canceled`, and it must find nothing rather
+# than take Pro away from the account that just paid for the new one.
+class Billing::Apply
+  PLAN = "pro"
+
+  def initialize(event)
+    @event = event
+  end
+
+  def call
+    case @event.type
+    when "subscription.activated" then activate
+    when "subscription.renewed" then current { |account| account.update!(pay_status: "active", pay_period_end: period_end || account.pay_period_end) }
+    when "subscription.past_due" then current { |account| account.update!(pay_status: "past_due") }
+    when "subscription.canceling" then current { |account| account.update!(pay_status: "canceling", pay_cancel_at: time(subscription[:cancel_at])) }
+    when "subscription.resumed" then current { |account| account.update!(pay_status: "active", pay_cancel_at: nil) }
+    when "subscription.canceled" then current { |account| end_plan(account) }
+    when "session.refunded" then take_plan_back if full_refund?
+    end
+  end
+
+  private
+
+  def subscription = @event.subscription || ContaGorda::Pay::Resource.new
+
+  def session = @event.session || ContaGorda::Pay::Resource.new
+
+  def period_end = time(subscription[:current_period_end])
+
+  # The one event that finds its account by customer_ref: the subscription is
+  # new, so nothing stores its id yet. The plan in the metadata is checked so a
+  # checkout opened for something else one day does not turn into Pro.
+  def activate
+    account = Account.find_by(id: @event.customer_ref)
+
+    return if account.nil? || subscription[:id].blank? || @event.metadata[:plan] != PLAN
+
+    account.update!(
+      pay_subscription_id: subscription[:id],
+      pay_status: "active",
+      pay_period_end: period_end,
+      pay_cancel_at: nil
+    )
+  end
+
+  def current
+    return if subscription[:id].blank?
+
+    account = Account.find_by(pay_subscription_id: subscription[:id])
+
+    yield account if account
+  end
+
+  # The id stays: it is what an old event is matched against, and it names
+  # the subscription in support questions after the fact.
+  def end_plan(account)
+    account.update!(pay_status: "canceled", pay_cancel_at: nil)
+  end
+
+  # session.refunded comes on EVERY refund, with the total refunded so far. A
+  # partial refund is a goodwill gesture and keeps Pro; the one that completes
+  # the refund means the customer has their money back, and the plan ends now.
+  def full_refund?
+    refunded = BigDecimal(session[:refunded_amount].to_s)
+
+    refunded.positive? && refunded >= BigDecimal(session[:amount].to_s)
+  rescue ArgumentError
+    false
+  end
+
+  # Cancelled at the broker FIRST. If that call fails, this raises, the event
+  # is not marked as applied, and the broker's retry tries again — Free here
+  # with the subscription still charging there would be the worse half.
+  # A 422 means the broker already considers it cancelled.
+  def take_plan_back
+    return if session[:subscription_id].blank?
+
+    account = Account.find_by(pay_subscription_id: session[:subscription_id])
+
+    return unless account&.paid_plan?
+
+    begin
+      ContaGorda::Pay::Client.new.cancel_subscription(account.pay_subscription_id, at_period_end: false)
+    rescue ContaGorda::Pay::InvalidRequestError
+      nil
+    end
+
+    end_plan(account)
+  end
+
+  def time(value)
+    Time.zone.parse(value.to_s) if value.present?
+  end
+end

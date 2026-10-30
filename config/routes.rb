@@ -112,7 +112,23 @@ Rails.application.routes.draw do
     get "sso", to: "sso#index"
     post "sso", to: "sso#create"
     delete "sso", to: "sso#destroy"
+
+    # Buying Pro from the console — hosted service only. See
+    # Ops::BillingController for why none of these grants the plan.
+    post "billing/checkout", to: "billing#checkout", as: :billing_checkout
+    get "billing/return", to: "billing#checkout_return", as: :billing_return
+    post "billing/cancel", to: "billing#cancel", as: :billing_cancel
+    post "billing/resume", to: "billing#resume", as: :billing_resume
   end
+
+  # ContaGorda Pay's own POST. A Rack endpoint from the gem, not a controller:
+  # it verifies the signature over the raw body before anything parses it, and
+  # answers 401 without calling the block when it does not verify. No session,
+  # no org, no CSRF token — the signature is the whole authorization, like the
+  # GitHub webhook further down.
+  post "billing/pay/webhook",
+    to: ContaGorda::Pay::Webhook::Endpoint.new { |event| Billing::Receive.new(event).call },
+    as: :pay_webhook
 
   # Same shape and the same reason: installation-wide, not per-server.
 
