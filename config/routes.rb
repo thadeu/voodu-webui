@@ -446,6 +446,7 @@ Rails.application.routes.draw do
     # Settings actions stay under the same server scope so the
     # per-server context (current_server) flows through naturally.
     post "/settings/reconnect", to: "settings#reconnect", as: :reconnect_settings
+    post "/settings/prune_images", to: "settings#prune_images", as: :prune_images_settings
     delete "/settings/pats/:pat_id", to: "settings#revoke_pat", as: :revoke_pat_settings
   end
 end

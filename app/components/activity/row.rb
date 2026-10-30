@@ -25,7 +25,8 @@ class Components::Activity::Row < Components::Base
     "delete" => "var(--voodu-red)",
     "rollback" => "var(--voodu-purple)",
     "config.set" => "var(--voodu-teal)",
-    "config.delete" => "var(--voodu-red)"
+    "config.delete" => "var(--voodu-red)",
+    "image.prune" => "var(--voodu-amber)"
   }.freeze
 
   # Origins as the operator says them, not as the wire spells them.
@@ -34,7 +35,8 @@ class Components::Activity::Row < Components::Base
     "ssh" => "SSH",
     "receive_pack" => "git push",
     "api" => "API",
-    "deploy_plane" => "console"
+    "deploy_plane" => "console",
+    "schedule" => "schedule"
   }.freeze
 
   def initialize(row:)

@@ -57,6 +57,11 @@ module Voodu
     def stats = get("stats")
     def restart(name) = post("pods/#{CGI.escape(name)}/restart")
 
+    # prune_images — remove the images the box no longer needs, now. Answers
+    # {removed, skipped, errors, kept, scanned, reclaimed_bytes}. The box decides
+    # what is safe; the same rules run on its own schedule.
+    def prune_images = post("images/prune")
+
     # system — host-level snapshot: CPU%, memory, disk usage, disk I/O
     # rate, network rate, uptime, kernel. Powers the Overview header
     # and StatCards (replaces the silent-nil reads of @stats.dig("host", ...)

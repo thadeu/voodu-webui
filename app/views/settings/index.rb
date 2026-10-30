@@ -58,6 +58,7 @@ class Views::Settings::Index < Views::Base
       #                        their semantic similarity)
       preferences_card
       pat_card
+      images_card
 
       div(class: "grid grid-cols-1 vmd:grid-cols-2 gap-4 vmd:gap-5 items-start") do
         server_card
@@ -190,6 +191,36 @@ class Views::Settings::Index < Views::Base
     )) do
       render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
       span { "Remove server" }
+    end
+  end
+
+  # images_card — the manual run of the cleanup the agent does twice a day.
+  # Stacks under the breakpoint so the button never squeezes the copy.
+  def images_card
+    render(Components::UI::SectionCard.new(title: "Docker images")) do
+      div(class: "px-4 py-3 flex flex-col vmd:flex-row vmd:items-center gap-3 vmd:justify-between") do
+        p(class: "text-[12.5px] text-voodu-muted") do
+          plain "Unused images are removed automatically twice a day. "
+          plain "Images in use and the last 5 builds of each app always stay."
+        end
+
+        render(Components::UI::Confirmable.new(
+          title: "Clean up images",
+          message: %(Remove unused images from "#{@current_server.name}" now? Running pods and rollback targets are not affected.),
+          confirm_label: "Clean up",
+          danger: true,
+          icon: :TrashOutline,
+          form: {action: prune_images_settings_path, method: :post},
+          trigger: {
+            title: "Clean up images",
+            "aria-label": "Clean up images on #{@current_server.name}",
+            class: "inline-flex items-center justify-center gap-1.5 px-3 h-9 shrink-0 border border-voodu-border bg-voodu-surface text-voodu-text-2 text-[12.5px] font-medium hover:bg-voodu-surface-2 hover:text-voodu-text"
+          }
+        )) do
+          render Icon::TrashOutline.new(class: "w-3.5 h-3.5")
+          span { "Clean up images" }
+        end
+      end
     end
   end
 

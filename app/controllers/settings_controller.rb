@@ -12,6 +12,10 @@ class SettingsController < ApplicationController
   # deploy, exec, logs. Never a member.
   authorize :reveal_pat
 
+  # A prune deletes tag by tag, far past the 6s budget of a page read. If this
+  # runs out the box still finishes: the request's end does not stop the run.
+  PRUNE_TIMEOUT = 120
+
   def index
     render Views::Settings::Index.new(
       **dashboard_context.merge(
@@ -33,6 +37,15 @@ class SettingsController < ApplicationController
     redirect_to settings_path, alert: "Couldn't revoke token: #{e.message}"
   end
 
+  # prune_images — POST /images/prune on the agent. Runs the cleanup the agent
+  # also runs twice a day, for an operator who needs the disk now.
+  def prune_images
+    report = Voodu::Client.new(current_server, timeout: PRUNE_TIMEOUT).prune_images
+    redirect_to settings_path, notice: prune_notice(report)
+  rescue Voodu::Client::Error => e
+    redirect_to settings_path, alert: "Couldn't clean up images: #{e.message}"
+  end
+
   # reconnect — immediately re-probes the agent. refresh! warms the
   # health cache with the result, so the topbar status pill reflects it
   # on the redirect render. Also invalidates ServerSystem so the next
@@ -48,5 +61,16 @@ class SettingsController < ApplicationController
         "Couldn't reach the agent. Check the endpoint + PAT, then try again."
       end
     redirect_to settings_path, notice: notice
+  end
+
+  private
+
+  def prune_notice(report)
+    removed = report["removed"].to_a.size
+    freed = ActiveSupport::NumberHelper.number_to_human_size(report["reclaimed_bytes"].to_i)
+    notice = "Removed #{removed} #{"image tag".pluralize(removed)}, freed #{freed}."
+    errors = report["errors"].to_a.size
+
+    errors.zero? ? notice : "#{notice} #{errors} couldn't be removed."
   end
 end
