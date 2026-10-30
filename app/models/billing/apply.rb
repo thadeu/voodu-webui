@@ -7,6 +7,7 @@
 #
 #   subscription.activated  Pro starts
 #   subscription.renewed    a new period is paid
+#   subscription.updated    the period end or cancel_at changed, the status did not
 #   subscription.past_due   a renewal failed and the gateway retries — still Pro
 #   subscription.canceling  a cancellation is set for cancel_at — still Pro
 #   subscription.resumed    the cancellation is taken back
@@ -31,6 +32,7 @@ class Billing::Apply
     case @event.type
     when "subscription.activated" then activate
     when "subscription.renewed" then current { |account| account.update!(pay_status: "active", pay_period_end: period_end || account.pay_period_end) }
+    when "subscription.updated" then current { |account| sync(account) }
     when "subscription.past_due" then current { |account| account.update!(pay_status: "past_due") }
     when "subscription.canceling" then current { |account| account.update!(pay_status: "canceling", pay_cancel_at: time(subscription[:cancel_at])) }
     when "subscription.resumed" then current { |account| account.update!(pay_status: "active", pay_cancel_at: nil) }
@@ -69,6 +71,22 @@ class Billing::Apply
     account = Account.find_by(pay_subscription_id: subscription[:id])
 
     yield account if account
+  end
+
+  # The fields, as the broker has them now. Most often the period end: a
+  # checkout's `activated` goes out before the gateway reports it, so it
+  # arrives here seconds later. A cancel_at means a cancellation is
+  # scheduled — possibly from the gateway's own dashboard, which sends no
+  # `canceling` — and none means it is not. past_due stays past_due: only a
+  # paid renewal ends that.
+  def sync(account)
+    cancel_at = time(subscription[:cancel_at])
+    status = if account.pay_status == "past_due" then "past_due"
+    elsif cancel_at then "canceling"
+    else "active"
+    end
+
+    account.update!(pay_status: status, pay_period_end: period_end || account.pay_period_end, pay_cancel_at: cancel_at)
   end
 
   # The id stays: it is what an old event is matched against, and it names

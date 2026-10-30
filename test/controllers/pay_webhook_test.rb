@@ -121,6 +121,48 @@ class PayWebhookTest < ActionDispatch::IntegrationTest
     assert_nil @account.pay_cancel_at
   end
 
+  # The activation of a real checkout carries no period end: the broker
+  # learns it from the gateway a moment later and says so with `updated`.
+  test "an update fills in the period end the activation did not have" do
+    deliver("subscription.activated", subscription(current_period_end: nil))
+
+    assert_nil @account.reload.pay_period_end
+
+    deliver("subscription.updated", subscription(current_period_end: 30.days.from_now.iso8601))
+
+    assert_in_delta 30.days.from_now, @account.reload.pay_period_end, 5
+    assert_equal "active", @account.pay_status
+  end
+
+  test "an update with a cancel_at is a cancellation scheduled on the gateway" do
+    activate!
+    ends = 20.days.from_now.change(usec: 0)
+
+    deliver("subscription.updated", subscription(current_period_end: ends.iso8601, cancel_at: ends.iso8601))
+
+    assert_equal "canceling", @account.reload.pay_status
+    assert_equal ends, @account.pay_cancel_at
+    assert @account.pro?
+  end
+
+  test "an update keeps a failed renewal past due" do
+    activate!
+    deliver("subscription.past_due", subscription)
+    deliver("subscription.updated", subscription(current_period_end: 30.days.from_now.iso8601))
+
+    assert_equal "past_due", @account.reload.pay_status
+  end
+
+  test "an update for a replaced subscription changes nothing" do
+    activate!(id: "sub_old")
+    activate!(id: "sub_new")
+
+    deliver("subscription.updated", subscription(id: "sub_old", cancel_at: 1.day.from_now.iso8601))
+
+    assert_equal "active", @account.reload.pay_status
+    assert_nil @account.pay_cancel_at
+  end
+
   test "canceled is Free" do
     activate!
     deliver("subscription.canceled", subscription)
