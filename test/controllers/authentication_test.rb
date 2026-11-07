@@ -146,4 +146,37 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
       assert_match %r{/sign_in}, response.location
     end
   end
+
+  # The PWA case. The token expired while the app was closed, and the refresh
+  # cookie brings the person back with no sign-in page. From then on the
+  # session carries the end Clowk gives, and that end wins over the 12h cap.
+  test "a session with an end from Clowk outlives the local ceiling" do
+    email = AuthenticationTestHelper::DEFAULT_EMAIL
+    sub = "test-#{Digest::SHA256.hexdigest(email)[0, 16]}"
+
+    cookies[Clowk.config.cookie_key] = ClowkDevToken.mint(sub:, email:, ttl: -1.hour)
+    cookies[Clowk.config.refresh_cookie_key] = "clk_rt_first"
+
+    refresher = Object.new
+
+    refresher.define_singleton_method(:refresh) do |_refresh_token|
+      {
+        access_token: ClowkDevToken.mint(sub:, email:),
+        refresh_token: "clk_rt_next",
+        refresh_expires_in: 30.days.to_i
+      }
+    end
+
+    Clowk::TokenRefresher.stub(:new, refresher) do
+      get servers_path
+
+      assert_response :success
+
+      travel(Authentication::SESSION_HARD_CEILING + 1.hour) do
+        get servers_path
+
+        assert_response :success
+      end
+    end
+  end
 end

@@ -37,7 +37,7 @@ gem "csv", "~> 3.3", require: false
 # unless CLOWK_AUTH_ENABLED=1 plus both keys are present; see
 # config/initializers/clowk.rb. No user table: the gem verifies the JWT
 # and keeps the claims in the Rails session.
-gem "clowk", "~> 0.6"
+gem "clowk", "~> 0.11"
 
 # contagorda-pay — how a customer of the HOSTED service buys Pro. Checkout,
 # cancel and resume from the console, and the webhook that moves the plan.

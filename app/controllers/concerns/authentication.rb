@@ -27,12 +27,16 @@
 module Authentication
   extend ActiveSupport::Concern
 
-  # A local cap the broker plays no part in.
+  # A local cap for a session that carries no end from Clowk.
   #
-  # Clowk::Authenticable resolves `stored_user_payload || verified_request_payload`
-  # — so once the Rails session exists, the JWT's `exp` is never re-checked and
-  # the session lives as long as the session cookie. Without a ceiling here, a
-  # token that expired hours ago keeps working in an open tab.
+  # Since clowk 0.11 the sign-in trades its token for a refresh token, and the
+  # gem stores the end of the Clowk session (`expires_at`) and ends the local
+  # session there. That end is what the instance configures, so it wins: a
+  # fixed 12h here signed people out in hours when the instance said 30 days.
+  #
+  # The cap is left for sessions without that end — signed in before the
+  # upgrade, or when the exchange could not reach Clowk — where the gem
+  # resolves `stored_user_payload` and never re-checks the JWT's `exp`.
   SESSION_HARD_CEILING = 12.hours
 
   included do
@@ -188,17 +192,21 @@ module Authentication
   end
 
   def session_beyond_ceiling?
-    started = signed_in_at
+    return false if clowk_session_value(:expires_at).positive?
+
+    started = clowk_session_value(:signed_in_at)
 
     started.positive? && Time.current.to_i - started > SESSION_HARD_CEILING.to_i
   end
 
-  # The gem writes `signed_in_at` at sign-in and never reads it again — this is
-  # the only consumer.
-  def signed_in_at
+  # The gem writes `signed_in_at` and, since 0.11, `expires_at` into its
+  # session entry. It enforces `expires_at` itself; `signed_in_at` is read only
+  # here.
+  def clowk_session_value(key)
     raw = session[Clowk.config.session_key]
+
     return 0 unless raw.respond_to?(:to_h)
 
-    (raw.to_h["signed_in_at"] || raw.to_h[:signed_in_at]).to_i
+    (raw.to_h[key.to_s] || raw.to_h[key]).to_i
   end
 end
