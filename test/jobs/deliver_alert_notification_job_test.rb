@@ -3,7 +3,9 @@
 require "test_helper"
 
 class DeliverAlertNotificationJobTest < ActiveJob::TestCase
-  fixtures :orgs, :servers
+  include ActionMailer::TestHelper
+
+  fixtures :orgs, :servers, :users, :org_memberships
 
   PUBLIC = "93.184.216.34"
 
@@ -21,6 +23,16 @@ class DeliverAlertNotificationJobTest < ActiveJob::TestCase
     @dest = @server.org.alert_destinations.create!(
       name: "hook", kind: "webhook", endpoint: "https://#{PUBLIC}/h"
     )
+  end
+
+  test "an email destination sends the alert by email and records ok" do
+    email = @server.org.alert_destinations.create!(name: "team", kind: "email", recipient_ids: [users(:owner).id])
+
+    assert_emails 1 do
+      DeliverAlertNotificationJob.perform_now(@event.id, email.id, "firing")
+    end
+
+    assert_equal "ok", email.reload.last_status
   end
 
   test "successful POST records last_status ok" do

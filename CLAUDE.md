@@ -174,6 +174,19 @@ Used by `PodDetailData#ingress_eligible?` (stat cards on pod show) and
 `MetricsPageData#ingress_eligible?` (chart grid on /metrics). Both
 surfaces gate on the same predicate so they appear/disappear in lockstep.
 
+## Email (cloud only)
+
+Email goes through 1billion (gem `1billion`), from `Voodu <hello@voodu.clowk.in>`
+(`MAIL_FROM` overrides). It exists only where `ONEBILLION_API_KEY` is set:
+our cloud console. `Mailing.enabled?` gates every path, so a self-hosted
+install keeps working with no mail at all.
+
+- `OrgMailer.invitation`: the invite link, sent on invite (the row still offers it to copy).
+- `AlertMailer.transition`: an alert destination of kind `email` tells the org
+  members picked in `recipient_ids` (owner and active members only).
+- `SupportMailer.contact`: "Email us" on the Enterprise card (`/ops/contact`) to
+  support@voodu.clowk.in, with the person as Reply-To.
+
 ## Drawer pattern
 
 `Components::UI::Drawer` opens a fetched URL in a right-side panel.

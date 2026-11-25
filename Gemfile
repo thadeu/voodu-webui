@@ -69,3 +69,5 @@ group :test do
   # Loaded in test_helper so `stub` is available the way it always was.
   gem "minitest-mock", require: false
 end
+
+gem "1billion", "~> 0.4"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_023830) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_25_132342) do
   create_table "accounts", id: :string, force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "name", null: false
@@ -32,7 +32,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_023830) do
     t.text "body_template"
     t.datetime "created_at", null: false
     t.boolean "enabled", default: true, null: false
-    t.text "endpoint_ciphertext", null: false
+    t.text "endpoint_ciphertext"
     t.string "kind", null: false
     t.datetime "last_delivered_at"
     t.string "last_error"
@@ -41,6 +41,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_023830) do
     t.boolean "on_firing", default: true, null: false
     t.boolean "on_resolved", default: true, null: false
     t.string "org_id", null: false
+    t.text "recipient_ids"
     t.text "secret_ciphertext"
     t.string "secret_header"
     t.datetime "updated_at", null: false

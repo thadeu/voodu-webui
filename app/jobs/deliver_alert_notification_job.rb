@@ -15,6 +15,8 @@ class DeliverAlertNotificationJob < ApplicationJob
   retry_on WebhookClient::TransportError, WebhookClient::ServerError,
     wait: :polynomially_longer, attempts: 5
 
+  retry_on OneBillion::Error, wait: :polynomially_longer, attempts: 5
+
   # Permanent failures: don't burn retries. The reason is recorded on
   # the destination (rescue below) before the raise propagates here.
   discard_on WebhookClient::ClientError
@@ -31,6 +33,8 @@ class DeliverAlertNotificationJob < ApplicationJob
     destination = event.org.alert_destinations.find_by(id: destination_id)
     return if destination.nil?
     return unless destination.enabled?
+
+    return deliver_email(event, transition, destination) if destination.email?
 
     payload = AlertPayload.for(event, transition, destination)
     WebhookClient.post(destination.endpoint, payload, headers: destination.auth_header)
@@ -49,5 +53,19 @@ class DeliverAlertNotificationJob < ApplicationJob
       "failed: #{e.class}: #{e.message}"
     )
     raise # let retry_on / discard_on decide
+  end
+
+  private
+
+  # The mail is sent here, not in a second job, so a failure lands on this
+  # destination's last_error like a webhook's does, and retries the same way.
+  def deliver_email(event, transition, destination)
+    AlertMailer.transition(event, transition, destination).deliver_now
+
+    destination.update_columns(last_delivered_at: Time.current, last_status: "ok", last_error: nil)
+  rescue => e
+    destination.update_columns(last_status: "failed", last_error: e.message.first(240))
+
+    raise
   end
 end

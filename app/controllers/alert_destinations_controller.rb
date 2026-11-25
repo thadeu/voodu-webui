@@ -20,7 +20,7 @@ class AlertDestinationsController < ApplicationController
 
   def new
     @destination = current_org.alert_destinations.new(
-      kind: "webhook", on_firing: true, on_resolved: true, enabled: true
+      kind: requested_kind(params[:kind]), on_firing: true, on_resolved: true, enabled: true
     )
     render_form
   end
@@ -57,6 +57,8 @@ class AlertDestinationsController < ApplicationController
   # (WebhookClient's 10s timeout); fine for an operator-initiated
   # one-off.
   def test
+    return test_email if @destination.email?
+
     WebhookClient.post(
       @destination.endpoint, AlertPayload.for(sample_event, "firing", @destination),
       headers: @destination.auth_header
@@ -69,6 +71,22 @@ class AlertDestinationsController < ApplicationController
   end
 
   private
+
+  # A sample alert by email to the destination's people, sent now so the
+  # operator sees ✓/✗ at once, as the webhook probe does.
+  def test_email
+    AlertMailer.transition(sample_event, "firing", @destination).deliver_now
+    @destination.update_columns(last_delivered_at: Time.current, last_status: "ok", last_error: nil)
+    redirect_to alerts_path(tab: "destinations"), notice: "Test email sent to #{@destination.name}."
+  rescue => e
+    @destination.update_columns(last_status: "failed", last_error: e.message.first(240))
+    redirect_to alerts_path(tab: "destinations"), alert: "Test email to #{@destination.name} failed: #{e.message}"
+  end
+
+  # Email only where this installation sends mail (Mailing); else a webhook.
+  def requested_kind(kind)
+    (kind.to_s == "email" && Mailing.enabled?) ? "email" : "webhook"
+  end
 
   def set_destination
     @destination = current_org.alert_destinations.find_by(id: params[:id])
@@ -90,12 +108,22 @@ class AlertDestinationsController < ApplicationController
 
   def destination_attributes
     attrs = params.require(:alert_destination)
-      .permit(:name, :endpoint, :secret, :secret_header,
-        :body_template, :on_firing, :on_resolved, :enabled)
+      .permit(:name, :kind, :endpoint, :secret, :secret_header,
+        :body_template, :on_firing, :on_resolved, :enabled, recipient_ids: [])
       .to_h
 
-    # Single kind today; force it rather than trusting the form.
-    attrs["kind"] = "webhook"
+    # The kind of a saved destination does not change; a new one is email
+    # only where this installation sends mail.
+    attrs["kind"] = @destination&.persisted? ? @destination.kind : requested_kind(attrs["kind"])
+
+    if attrs["kind"] == "email"
+      attrs.slice!("name", "kind", "on_firing", "on_resolved", "enabled", "recipient_ids")
+      attrs["recipient_ids"] = Array(attrs["recipient_ids"]).compact_blank
+
+      return attrs
+    end
+
+    attrs.delete("recipient_ids")
 
     # Blank ENCRYPTED secret on edit means "keep the stored value" —
     # never overwrite a credential with an empty string just because

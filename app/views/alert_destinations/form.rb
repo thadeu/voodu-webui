@@ -86,7 +86,7 @@ class Views::AlertDestinations::Form < Views::Base
   def page_head
     div(class: "flex flex-col gap-1") do
       h1(class: "text-[17px] font-semibold text-voodu-text") { title }
-      p(class: "text-[12.5px] text-voodu-muted") { "POST a request to this target when an alert fires or resolves" }
+      p(class: "text-[12.5px] text-voodu-muted") { @destination.email? ? "Email people of this org when an alert fires or resolves" : "POST a request to this target when an alert fires or resolves" }
     end
   end
 
@@ -108,26 +108,94 @@ class Views::AlertDestinations::Form < Views::Base
       div(class: "p-3.5") do
         input(type: "hidden", name: "authenticity_token", value: form_authenticity_token)
         input(type: "hidden", name: "_method", value: "patch") if persisted?
-        input(type: "hidden", name: "alert_destination[kind]", value: "webhook")
+        input(type: "hidden", name: "alert_destination[kind]", value: @destination.kind)
         input(type: "hidden", name: "return_to", value: @return_to)
 
-        div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
-          div(class: "flex flex-col gap-4 vmd:w-[320px] vmd:shrink-0") do
-            field(label: "Name", error: @destination.errors[:name].first) do
-              text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
-            end
-            url_field
-            auth_header_field
-            triggers_field
-          end
+        kind_picker
 
-          div(class: "flex flex-col vmd:flex-1 min-w-0") do
-            body_template_field
-          end
+        if @destination.email?
+          email_fields
+        else
+          webhook_fields
         end
       end
 
       form_actions
+    end
+  end
+
+  # Webhook or Email, for a new destination where this installation sends
+  # mail (our cloud). Links, not a client-side toggle: each kind is its own
+  # form, so nothing hidden is ever submitted.
+  def kind_picker
+    return if persisted? || !Mailing.enabled?
+
+    div(class: "flex items-center gap-1.5 mb-4", role: "tablist") do
+      [["webhook", "Webhook"], ["email", "Email"]].each do |kind, label|
+        current = @destination.kind == kind
+
+        a(
+          href: new_alert_destination_path(kind: kind, return_to: @return_to),
+          role: "tab",
+          "aria-selected": current.to_s,
+          class: tokens(
+            "inline-flex items-center px-3 h-8 border text-[12.5px] font-medium",
+            current ? "border-voodu-accent-line bg-voodu-accent-dim text-voodu-text" : "border-voodu-border bg-voodu-surface text-voodu-text-2 hover:bg-voodu-surface-2"
+          )
+        ) { label }
+      end
+    end
+  end
+
+  def email_fields
+    div(class: "flex flex-col gap-4 vmd:max-w-[480px]") do
+      field(label: "Name", error: @destination.errors[:name].first) do
+        text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "On-call team")
+      end
+
+      recipients_field
+      triggers_field
+    end
+  end
+
+  # The owner and the members of this org, picked from a dropdown. Invited
+  # people are left out until they accept.
+  def recipients_field
+    field(label: "People", hint: "Owner and members of this org. Someone who leaves stops getting it.", error: @destination.errors[:recipient_ids].first) do
+      input(type: "hidden", name: "alert_destination[recipient_ids][]", value: "")
+
+      render Components::UI::Multiselect.new(
+        name: "alert_destination[recipient_ids][]",
+        options: member_options,
+        selected: Array(@destination.recipient_ids).map(&:to_s),
+        empty_label: "Pick people",
+        group_label: "People"
+      )
+    end
+  end
+
+  def member_options
+    @destination.org.memberships.active.includes(:user).order(:role, :created_at).map do |membership|
+      user = membership.user
+
+      {value: user.id.to_s, label: user.name.presence || user.email, hint: "#{user.email} · #{membership.role}"}
+    end
+  end
+
+  def webhook_fields
+    div(class: "flex flex-col vmd:flex-row gap-4 vmd:gap-5") do
+      div(class: "flex flex-col gap-4 vmd:w-[320px] vmd:shrink-0") do
+        field(label: "Name", error: @destination.errors[:name].first) do
+          text_input(name: "alert_destination[name]", value: @destination.name, placeholder: "Slack #ops")
+        end
+        url_field
+        auth_header_field
+        triggers_field
+      end
+
+      div(class: "flex flex-col vmd:flex-1 min-w-0") do
+        body_template_field
+      end
     end
   end
 

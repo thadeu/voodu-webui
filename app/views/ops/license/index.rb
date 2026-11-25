@@ -59,7 +59,7 @@ class Views::Ops::License::Index < Views::Base
         "Single sign-on, so people arrive as themselves"
       ],
       primary: {label: "See Enterprise", href: "https://voodu.clowk.in/license/enterprise"},
-      secondary: {label: "Email us", href: "mailto:hello@clowk.in?subject=Voodu%20Enterprise"},
+      secondary: {label: "Email us", href: Mailing.enabled? ? ops_contact_path : "mailto:hello@clowk.in?subject=Voodu%20Enterprise"},
       footnote: "Paste the license into the form on the left — it takes effect immediately, no restart."
     )
   end

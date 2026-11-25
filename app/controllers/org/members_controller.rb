@@ -5,9 +5,9 @@ class Org
   #
   # An invitation IS a membership with status: invited — no second table, no
   # token column, nothing that can disagree with the membership about who
-  # someone is. The admin copies a signed link out of this screen; there is no
-  # SMTP anywhere in this app, and making a self-hosted install configure one
-  # before it can add a teammate is friction we are not imposing.
+  # someone is. The admin copies a signed link out of this screen. Our cloud
+  # console also emails it (Mailing); a self-hosted install never has to
+  # configure mail before it can add a teammate.
   class MembersController < ApplicationController
     skip_before_action :require_server!
 
@@ -31,7 +31,8 @@ class Org
     end
 
     # The row is created `invited` and grants nothing until the person follows
-    # the link and proves they are that row — see InvitesController.
+    # the link and proves they are that row — see InvitesController. Where this
+    # installation sends mail (our cloud), the link also goes by email.
     def create
       unless entitlements.room_for_another_invite?
         return redirect_to org_members_path, alert: invite_limit_message
@@ -51,7 +52,11 @@ class Org
         role: role, status: :invited, invited_at: Time.current, invited_by: Current.user
       )
 
-      redirect_to org_members_path, notice: "Invitation ready for #{email} — copy the link on their row."
+      return redirect_to(org_members_path, notice: "Invitation ready for #{email} — copy the link on their row.") unless Mailing.enabled?
+
+      OrgMailer.invitation(membership).deliver_later
+
+      redirect_to org_members_path, notice: "Invitation sent to #{email}. The link is also on their row."
     rescue ActiveRecord::RecordInvalid => e
       redirect_to org_members_path, alert: e.record.errors.full_messages.to_sentence
     end

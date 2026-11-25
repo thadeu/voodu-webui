@@ -57,7 +57,11 @@ Rails.application.configure do
   # config.action_mailer.raise_delivery_errors = false
 
   # Set host to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = {host: "example.com"}
+  config.action_mailer.default_url_options = {host: URI(ENV.fetch("APP_BASE_URL", "https://voodu.clowk.in")).host, protocol: "https"}
+
+  config.action_mailer.delivery_method = :onebillion
+  config.action_mailer.perform_deliveries = ENV["ONEBILLION_API_KEY"].present?
+  config.action_mailer.raise_delivery_errors = true
 
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.
   # config.action_mailer.smtp_settings = {

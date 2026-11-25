@@ -109,6 +109,9 @@ Rails.application.routes.draw do
     get "license", to: "license#index"
     post "license", to: "license#create"
 
+    get "contact", to: "contact#new"
+    post "contact", to: "contact#create"
+
     get "sso", to: "sso#index"
     post "sso", to: "sso#create"
     delete "sso", to: "sso#destroy"

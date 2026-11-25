@@ -50,7 +50,7 @@ class Components::Alerts::DestinationsTable < Components::Base
             span(class: "text-[12.5px] font-medium text-voodu-text truncate") { dest.name }
             paused_tag unless dest.enabled?
           end
-          span(class: "text-[11px] font-voodu-mono text-voodu-muted truncate") { dest.endpoint_masked }
+          span(class: "text-[11px] font-voodu-mono text-voodu-muted truncate") { dest.target_summary }
         end
       end
 

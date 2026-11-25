@@ -1,0 +1,12 @@
+<%= @tokens["rule"] %> is <%= @tokens["state"] %>.
+
+Target: <%= @tokens["target"] %><% if @tokens["server"].present? %> (server <%= @tokens["server"] %>)<% end %>
+Metric: <%= @tokens["metric"] %>
+Value: <%= @tokens["value"] %><%= @tokens["unit"] %> (threshold <%= @tokens["threshold"] %><%= @tokens["unit"] %>, peak <%= @tokens["peak"] %><%= @tokens["unit"] %>)
+Started: <%= @tokens["started_at"] %>
+<% if @tokens["resolved_at"].present? %>Resolved: <%= @tokens["resolved_at"] %>
+<% end %><% if @tokens["url"].present? %>
+<%= @tokens["url"] %>
+<% end %>
+-- 
+Voodu
