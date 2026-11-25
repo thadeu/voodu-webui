@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# "Email us" from the Enterprise card: a message to support, sent by email
-# (SupportMailer). Only where this installation sends mail; elsewhere the card
-# keeps its mailto link and this screen sends people back.
+# "Write to us" (the account menu) and "Email us" (the Enterprise card): a
+# message to support, sent by email (SupportMailer). Anyone signed in may write.
+# Only where this installation sends mail; elsewhere this screen sends people back.
 class Ops::ContactController < ApplicationController
   skip_before_action :require_server!
 
-  authorize_anywhere :manage_account
+  authorize_anywhere :read
 
   before_action :require_mailing
 
@@ -21,12 +21,12 @@ class Ops::ContactController < ApplicationController
 
     SupportMailer.contact(Current.user, message).deliver_later
 
-    redirect_to ops_license_path, notice: "Thanks! Your message is on its way. We answer at #{Current.user.email}."
+    redirect_to root_path(org_id: nil, server_key: nil), notice: "Thanks! Your message is on its way. We answer at #{Current.user.email}."
   end
 
   private
 
   def require_mailing
-    redirect_to ops_license_path unless Mailing.enabled?
+    redirect_to root_path(org_id: nil, server_key: nil) unless Mailing.enabled?
   end
 end

@@ -10,7 +10,7 @@ class Views::Ops::Contact::New < Views::Base
   def view_template
     render Components::Layouts::Dashboard.new(
       current_path: @current_path, servers: @servers,
-      breadcrumb: [{label: "License", href: ops_license_path}, {label: "Email us"}]
+      breadcrumb: [{label: "Write to us"}]
     ) do
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_head
@@ -23,8 +23,8 @@ class Views::Ops::Contact::New < Views::Base
 
   def page_head
     div(class: "flex flex-col gap-1") do
-      h1(class: "text-[17px] font-semibold text-voodu-text") { "Email us" }
-      p(class: "text-[12.5px] text-voodu-muted") { "Enterprise, a question or a problem. We answer at #{Current.user&.email}." }
+      h1(class: "text-[17px] font-semibold text-voodu-text") { "Write to us" }
+      p(class: "text-[12.5px] text-voodu-muted") { "A question, a problem or Enterprise. We answer at #{Current.user&.email}." }
     end
   end
 
@@ -47,7 +47,7 @@ class Views::Ops::Contact::New < Views::Base
   def contact_actions
     div(class: "flex flex-col vmd:flex-row vmd:items-center gap-2 p-3.5 border-t border-voodu-border") do
       render(Components::UI::Button.new(type: "submit", variant: :primary, class: "w-full vmd:w-auto")) { "Send" }
-      render(Components::UI::Button.new(tag: :a, href: ops_license_path, variant: :secondary, class: "w-full vmd:w-auto")) { "Cancel" }
+      render(Components::UI::Button.new(tag: :a, href: root_path(org_id: nil, server_key: nil), variant: :secondary, class: "w-full vmd:w-auto")) { "Cancel" }
     end
   end
 end

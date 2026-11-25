@@ -19,6 +19,7 @@ class Views::Ops::License::Index < Views::Base
       div(class: "px-3.5 vmd:px-6 py-4 vmd:py-5 flex flex-col gap-4 vmd:gap-5") do
         page_header
         columns
+        help_line
       end
     end
   end
@@ -37,6 +38,17 @@ class Views::Ops::License::Index < Views::Base
                "items-start gap-4 vmd:gap-5 max-w-5xl") do
       plan_card
       upgrade_cta
+    end
+  end
+
+  # Questions about a plan come up on this screen, paid or not, so the way to
+  # ask is here too. Only where this installation sends mail (our cloud).
+  def help_line
+    return unless Mailing.enabled?
+
+    p(id: "license-help", class: "max-w-5xl text-[12.5px] text-voodu-muted") do
+      plain "A question about your plan, a bigger limit or Enterprise? "
+      a(href: ops_contact_path(org_id: nil, server_key: nil), class: "text-voodu-link hover:underline") { "Write to us" }
     end
   end
 

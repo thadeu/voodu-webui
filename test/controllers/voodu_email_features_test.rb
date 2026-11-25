@@ -87,8 +87,42 @@ class VooduEmailFeaturesTest < ActionDispatch::IntegrationTest
       end
     end
 
-    assert_redirected_to ops_license_path
+    assert_redirected_to root_path(org_id: nil, server_key: nil)
     assert_match "Thanks", flash[:notice]
+  end
+
+  test "Write to us is in the account menu of every member, and they can send it" do
+    sign_in_as(email: users(:contractor).email)
+
+    Mailing.stub(:enabled?, true) do
+      get server_root_path(org_id: ACME, server_key: @key)
+
+      assert_select "a[href='/ops/contact']", text: "Write to us"
+
+      get ops_contact_path(org_id: nil)
+
+      assert_response :success
+
+      assert_enqueued_emails 1 do
+        post ops_contact_path(org_id: nil), params: {message: "Help with a deploy"}
+      end
+    end
+
+    Mailing.stub(:enabled?, false) do
+      get server_root_path(org_id: ACME, server_key: @key)
+
+      assert_select "a[href='/ops/contact']", count: 0
+    end
+  end
+
+  test "the License screen offers Write to us even on a paid plan" do
+    Mailing.stub(:enabled?, true) { get ops_license_path(org_id: nil) }
+
+    assert_select "main a[href='/ops/contact'], #license-help a[href='/ops/contact']", text: "Write to us"
+
+    Mailing.stub(:enabled?, false) { get ops_license_path(org_id: nil) }
+
+    assert_select "#license-help", count: 0
   end
 
   test "an empty contact message is asked again" do

@@ -195,10 +195,20 @@ class Components::Layouts::Topbar < Components::Base
         end
       end
 
+      write_to_us_link
+
       sign_out_link
 
       build_row
     end
+  end
+
+  # Support by email, for everyone signed in. Only where this installation sends
+  # mail (our cloud); a self-hosted install has no address of ours to write to.
+  def write_to_us_link
+    return unless Mailing.enabled?
+
+    account_link(ops_contact_path(org_id: nil, server_key: nil), "Write to us")
   end
 
   # Anonymous mode has no sign-in to end: there is one local operator, the

@@ -184,7 +184,8 @@ install keeps working with no mail at all.
 - `OrgMailer.invitation`: the invite link, sent on invite (the row still offers it to copy).
 - `AlertMailer.transition`: an alert destination of kind `email` tells the org
   members picked in `recipient_ids` (owner and active members only).
-- `SupportMailer.contact`: "Email us" on the Enterprise card (`/ops/contact`) to
+- `SupportMailer.contact`: "Write to us" (account menu, License screen) and "Email us"
+  (Enterprise card) open `/ops/contact`, for anyone signed in; it goes to
   support@voodu.clowk.in, with the person as Reply-To.
 
 ## Drawer pattern
